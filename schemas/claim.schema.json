@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/claim.schema.json",
+  "title": "Claim",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "project_id",
+    "statement",
+    "statement_hash",
+    "status",
+    "evidence_level",
+    "assumptions",
+    "domain",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "statement": { "type": "string", "minLength": 1 },
+    "statement_hash": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "conjectural",
+        "literature_supported",
+        "computationally_supported",
+        "symbolically_checked",
+        "lean_skeleton",
+        "formally_checked",
+        "refuted",
+        "blocked",
+        "retracted",
+        "human_accepted"
+      ]
+    },
+    "evidence_level": { "type": "integer", "minimum": 0, "maximum": 5 },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "domain": { "type": "string", "minLength": 1 },
+    "gate_result_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "dependency_closure_status": {
+      "type": "string",
+      "enum": ["unchecked", "partial", "all_dependencies_present", "dependency_blocked", "cycle_detected"]
+    },
+    "formalization_status": {
+      "type": "string",
+      "enum": ["none", "statement_only", "skeleton_with_sorry", "kernel_checked", "failed"]
+    },
+    "audit_state": {
+      "type": "string",
+      "enum": ["not_audited", "under_review", "audit_failed", "audit_passed"]
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}
+

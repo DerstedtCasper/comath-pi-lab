@@ -1,0 +1,11 @@
+.comath/
+.tmp/
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log

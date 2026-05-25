@@ -1,0 +1,459 @@
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { appendAuditEvent, readAuditEvents } from "../audit/jsonl-writer.js";
+import { listArtifactRefs } from "../artifacts/store.js";
+import { applyGatePromotedClaim, getClaim } from "../claim/claim-store.js";
+import { ComathError } from "../errors.js";
+import { readEvidenceRecords } from "../evidence/store.js";
+import { hasSuccessfulCitationConditionMatch } from "../literature/store.js";
+import { assertPathAllowed } from "../security/path-policy.js";
+import {
+  claimSchema,
+  gateResultSchema,
+  type ArtifactRef,
+  type Claim,
+  type ClaimStatus,
+  type Evidence,
+  type GateResult
+} from "../types/schemas.js";
+import { nextSequentialId } from "../utils/id.js";
+import { runnerResultSha256 } from "./runner-contracts.js";
+
+export type ClaimPromotionRequest = {
+  project_id: string;
+  claim_id: string;
+  target_status: ClaimStatus;
+  evidence_ids: string[];
+  artifact_ids: string[];
+  actor: string;
+  external_vetoes?: string[];
+  external_warnings?: string[];
+};
+
+export type ClaimPromotionDecision = {
+  gate: GateResult;
+  claim: Claim;
+};
+
+function gateResultsPath(projectRoot: string): string {
+  return assertPathAllowed(projectRoot, join(".comath", "claims", "gate-results.jsonl"), { purpose: "runtime-write" });
+}
+
+function now(): string {
+  return new Date().toISOString();
+}
+
+function readJsonl(path: string): GateResult[] {
+  if (!existsSync(path)) {
+    return [];
+  }
+  return readFileSync(path, "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => gateResultSchema.parse(JSON.parse(line)));
+}
+
+function writeGateResults(projectRoot: string, gates: GateResult[]): void {
+  const path = gateResultsPath(projectRoot);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${gates.map((gate) => JSON.stringify(gate)).join("\n")}${gates.length ? "\n" : ""}`, "utf8");
+}
+
+export function readGateResults(projectRoot: string, projectId?: string): GateResult[] {
+  const gates = readJsonl(gateResultsPath(projectRoot));
+  return projectId ? gates.filter((gate) => gate.project_id === projectId) : gates;
+}
+
+function sha256FileSync(path: string): { sha256: string; size_bytes: number } {
+  const data = readFileSync(path);
+  return {
+    sha256: createHash("sha256").update(data).digest("hex"),
+    size_bytes: statSync(path).size
+  };
+}
+
+function evidenceForRequest(projectRoot: string, request: ClaimPromotionRequest): Evidence[] {
+  const byId = new Map(readEvidenceRecords(projectRoot, request.project_id).map((record) => [record.id, record]));
+  return request.evidence_ids.map((id) => byId.get(id)).filter((record): record is Evidence => Boolean(record));
+}
+
+function artifactsForRequest(projectRoot: string, request: ClaimPromotionRequest): ArtifactRef[] {
+  const byId = new Map(listArtifactRefs(projectRoot).filter((artifact) => artifact.project_id === request.project_id).map((artifact) => [artifact.id, artifact]));
+  return request.artifact_ids.map((id) => byId.get(id)).filter((artifact): artifact is ArtifactRef => Boolean(artifact));
+}
+
+type RunnerReportResult = {
+  evidence_id: string;
+  artifact_id: string;
+  ok: boolean;
+  runner_id: string;
+  runner_version: string;
+  exactness: string;
+  supports_status: string;
+  result_sha256: string;
+  vetoes: string[];
+  warnings: string[];
+  trusted_audit: boolean;
+};
+
+function hasTrustedRunnerAudit(
+  projectRoot: string,
+  request: Pick<ClaimPromotionRequest, "project_id" | "claim_id">,
+  evidenceId: string,
+  artifact: ArtifactRef,
+  result: Record<string, unknown>,
+  resultSha256: string
+): boolean {
+  return readAuditEvents(projectRoot).some((event) => {
+    if (event.project_id !== request.project_id || event.target_id !== request.claim_id) {
+      return false;
+    }
+    if (event.event_type !== "runner.completed" && event.event_type !== "runner.failed") {
+      return false;
+    }
+    return (
+      event.payload.artifact_id === artifact.id &&
+      event.payload.evidence_id === evidenceId &&
+      event.payload.result_sha256 === resultSha256 &&
+      event.payload.runner_id === result.runner_id &&
+      event.payload.runner_version === result.runner_version
+    );
+  });
+}
+
+function readRunnerReportResult(
+  projectRoot: string,
+  request: Pick<ClaimPromotionRequest, "project_id" | "claim_id">,
+  evidenceId: string,
+  artifact: ArtifactRef
+): RunnerReportResult | null {
+  if (artifact.kind !== "runner_output") {
+    return null;
+  }
+  const path = assertPathAllowed(projectRoot, artifact.path, { purpose: "read", resolveRealpath: true });
+  const report = JSON.parse(readFileSync(path, "utf8")) as { result?: Record<string, unknown>; runner_id?: unknown };
+  const result = report.result;
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+  const expectedHash = runnerResultSha256(result);
+  if (!expectedHash || result.result_sha256 !== expectedHash) {
+    return null;
+  }
+  return {
+    evidence_id: evidenceId,
+    artifact_id: artifact.id,
+    ok: result.ok === true,
+    runner_id: typeof result.runner_id === "string" ? result.runner_id : String(report.runner_id ?? "unknown"),
+    runner_version: typeof result.runner_version === "string" ? result.runner_version : "unknown",
+    exactness: typeof result.exactness === "string" ? result.exactness : "not_applicable",
+    supports_status: typeof result.supports_status === "string" ? result.supports_status : "none",
+    result_sha256: expectedHash,
+    vetoes: Array.isArray(result.vetoes) ? result.vetoes.filter((item): item is string => typeof item === "string") : [],
+    warnings: Array.isArray(result.warnings) ? result.warnings.filter((item): item is string => typeof item === "string") : [],
+    trusted_audit: hasTrustedRunnerAudit(projectRoot, request, evidenceId, artifact, result, expectedHash)
+  };
+}
+
+function runnerReportsForEvidence(
+  projectRoot: string,
+  request: Pick<ClaimPromotionRequest, "project_id" | "claim_id">,
+  evidence: Evidence[],
+  artifacts: ArtifactRef[],
+  expectedEvidenceKinds: Set<Evidence["kind"]>
+): RunnerReportResult[] {
+  const artifactById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+  const reports: RunnerReportResult[] = [];
+  for (const record of evidence) {
+    if (!expectedEvidenceKinds.has(record.kind)) {
+      continue;
+    }
+    for (const artifactId of record.artifact_ids) {
+      const artifact = artifactById.get(artifactId);
+      if (!artifact) {
+        continue;
+      }
+      try {
+        const report = readRunnerReportResult(projectRoot, request, record.id, artifact);
+        if (report) {
+          reports.push(report);
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return reports;
+}
+
+function evidenceBindingVetoes(projectRoot: string, request: ClaimPromotionRequest): string[] {
+  const vetoes: string[] = [];
+  const evidenceById = new Map(readEvidenceRecords(projectRoot, request.project_id).map((record) => [record.id, record]));
+  const artifactsById = new Map(listArtifactRefs(projectRoot).filter((artifact) => artifact.project_id === request.project_id).map((artifact) => [artifact.id, artifact]));
+  const requestedArtifactIds = new Set(request.artifact_ids);
+
+  for (const evidenceId of request.evidence_ids) {
+    const evidence = evidenceById.get(evidenceId);
+    if (!evidence) {
+      vetoes.push(`promotion evidence not found: ${evidenceId}`);
+      continue;
+    }
+    if (evidence.project_id !== request.project_id) {
+      vetoes.push(`promotion evidence project mismatch: ${evidenceId}`);
+    }
+    if (evidence.claim_id !== request.claim_id) {
+      vetoes.push(`promotion evidence claim mismatch: ${evidenceId}`);
+    }
+    for (const artifactId of evidence.artifact_ids) {
+      if (!requestedArtifactIds.has(artifactId)) {
+        vetoes.push(`promotion artifact missing for evidence: ${evidenceId}:${artifactId}`);
+      }
+    }
+  }
+
+  for (const artifactId of request.artifact_ids) {
+    const artifact = artifactsById.get(artifactId);
+    if (!artifact) {
+      vetoes.push(`promotion artifact not found: ${artifactId}`);
+      continue;
+    }
+    if (artifact.project_id !== request.project_id) {
+      vetoes.push(`promotion artifact project mismatch: ${artifactId}`);
+    }
+    try {
+      const path = assertPathAllowed(projectRoot, artifact.path, { purpose: "read", resolveRealpath: true });
+      const hash = sha256FileSync(path);
+      if (hash.sha256 !== artifact.sha256 || (artifact.size_bytes !== undefined && hash.size_bytes !== artifact.size_bytes)) {
+        vetoes.push(`promotion artifact hash mismatch: ${artifactId}`);
+      }
+    } catch {
+      vetoes.push(`promotion artifact unreadable: ${artifactId}`);
+    }
+  }
+
+  return vetoes;
+}
+
+function statusEvidenceVetoes(projectRoot: string, request: ClaimPromotionRequest): string[] {
+  const evidence = evidenceForRequest(projectRoot, request);
+  const artifacts = artifactsForRequest(projectRoot, request);
+  const kinds = new Set(evidence.map((record) => record.kind));
+  const artifactKinds = new Set(artifacts.map((artifact) => artifact.kind));
+  const vetoes: string[] = [];
+
+  if (request.target_status === "symbolically_checked") {
+    if (!kinds.has("symbolic")) {
+      vetoes.push("symbolically_checked requires symbolic evidence");
+    }
+    if (!artifactKinds.has("runner_output")) {
+      vetoes.push("symbolically_checked requires runner_output artifact");
+    }
+    const reports = runnerReportsForEvidence(projectRoot, request, evidence, artifacts, new Set(["symbolic"]));
+    if (reports.some((report) => !report.trusted_audit)) {
+      vetoes.push("runner_output missing trusted runner audit provenance");
+    }
+    if (
+      !reports.some(
+        (report) =>
+          report.trusted_audit &&
+          report.ok &&
+          report.supports_status === "symbolically_checked" &&
+          report.exactness === "exact_symbolic" &&
+          report.vetoes.length === 0
+      )
+    ) {
+      vetoes.push("symbolically_checked requires successful symbolic runner output");
+    }
+  }
+
+  if (request.target_status === "computationally_supported") {
+    if (!kinds.has("computation") && !kinds.has("counterexample")) {
+      vetoes.push("computationally_supported requires computation evidence");
+    }
+    if (!artifactKinds.has("runner_output")) {
+      vetoes.push("computationally_supported requires runner_output artifact");
+    }
+    const reports = runnerReportsForEvidence(projectRoot, request, evidence, artifacts, new Set(["computation", "counterexample"]));
+    if (reports.some((report) => !report.trusted_audit)) {
+      vetoes.push("runner_output missing trusted runner audit provenance");
+    }
+    if (
+      !reports.some(
+        (report) =>
+          report.trusted_audit &&
+          report.ok &&
+          report.supports_status === "computationally_supported" &&
+          (report.exactness === "numeric_search" || report.exactness === "exact_symbolic")
+      )
+    ) {
+      vetoes.push("computationally_supported requires successful computation runner output");
+    }
+  }
+
+  if (request.target_status === "literature_supported") {
+    if (!kinds.has("literature")) {
+      vetoes.push("literature_supported requires literature evidence");
+    }
+    if (![...artifactKinds].some((kind) => kind === "bibtex" || kind === "pdf")) {
+      vetoes.push("literature_supported requires exact literature artifact");
+    }
+  }
+
+  if (request.target_status === "lean_skeleton") {
+    if (!kinds.has("lean") && !kinds.has("audit")) {
+      vetoes.push("lean_skeleton requires lean or audit evidence");
+    }
+  }
+
+  if (request.target_status === "formally_checked") {
+    if (!kinds.has("lean")) {
+      vetoes.push("formally_checked requires lean evidence");
+    }
+    if (!artifactKinds.has("code") && !artifactKinds.has("runner_output")) {
+      vetoes.push("formally_checked requires proof artifact");
+    }
+  }
+
+  return vetoes;
+}
+
+function vetoesForRequest(projectRoot: string, claim: Claim, request: ClaimPromotionRequest): string[] {
+  const vetoes: string[] = [];
+
+  if (request.evidence_ids.length === 0) {
+    vetoes.push("promotion requires linked evidence_ids");
+  }
+  if (request.artifact_ids.length === 0) {
+    vetoes.push("promotion requires linked artifact_ids");
+  }
+  vetoes.push(...evidenceBindingVetoes(projectRoot, request));
+  vetoes.push(...statusEvidenceVetoes(projectRoot, request));
+
+  if (request.target_status === "formally_checked") {
+    if (claim.formalization_status !== "kernel_checked") {
+      vetoes.push("formally_checked requires kernel_checked formalization");
+    }
+    if (claim.dependency_closure_status !== "all_dependencies_present") {
+      vetoes.push("formally_checked requires all_dependencies_present");
+    }
+    if (claim.audit_state !== "audit_passed") {
+      vetoes.push("formally_checked requires audit_passed");
+    }
+  }
+
+  if (request.target_status === "human_accepted") {
+    vetoes.push("human_accepted cannot substitute for mathematical evidence in Phase 4");
+  }
+
+  if (
+    request.target_status === "literature_supported" &&
+    !hasSuccessfulCitationConditionMatch(
+      projectRoot,
+      request.project_id,
+      request.claim_id,
+      request.evidence_ids,
+      request.artifact_ids
+    )
+  ) {
+    vetoes.push("literature_supported requires successful citation condition match");
+  }
+
+  if (!["literature_supported", "computationally_supported", "symbolically_checked", "lean_skeleton", "formally_checked", "human_accepted"].includes(request.target_status)) {
+    vetoes.push(`unsupported promotion target: ${request.target_status}`);
+  }
+
+  return vetoes;
+}
+
+export function runClaimPromotionGate(projectRoot: string, request: ClaimPromotionRequest): GateResult {
+  const claim = getClaim(projectRoot, request.project_id, request.claim_id);
+  if (!claim) {
+    throw new ComathError("claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
+  }
+
+  const existing = readGateResults(projectRoot, request.project_id);
+  const vetoes = [...vetoesForRequest(projectRoot, claim, request), ...(request.external_vetoes ?? [])];
+  const warnings = vetoes.length === 0 ? [...(request.external_warnings ?? [])] : ["promotion gate failed closed", ...(request.external_warnings ?? [])];
+  return gateResultSchema.parse({
+    id: nextSequentialId("GR", existing.map((gate) => gate.id)),
+    project_id: request.project_id,
+    claim_id: request.claim_id,
+    ok: vetoes.length === 0,
+    target_status: request.target_status,
+    vetoes,
+    warnings,
+    evidence_ids: request.evidence_ids,
+    artifact_ids: request.artifact_ids,
+    created_at: now()
+  });
+}
+
+export function applyClaimPromotionDecision(
+  projectRoot: string,
+  claim: Claim,
+  gate: GateResult,
+  actor: string
+): Claim {
+  if (!gate.ok) {
+    appendAuditEvent(projectRoot, {
+      project_id: gate.project_id,
+      event_type: "claim.promotion_rejected",
+      actor,
+      target_id: gate.claim_id,
+      payload: {
+        gate_result_id: gate.id,
+        target_status: gate.target_status,
+        vetoes: gate.vetoes
+      }
+    });
+    return claim;
+  }
+
+  const promoted = claimSchema.parse({
+    ...claim,
+    status: gate.target_status,
+    gate_result_id: gate.id,
+    evidence_level: evidenceLevelForStatus(gate.target_status, claim.evidence_level),
+    updated_at: now()
+  });
+  const stored = applyGatePromotedClaim(projectRoot, promoted);
+  appendAuditEvent(projectRoot, {
+    project_id: gate.project_id,
+    event_type: "claim.promoted",
+    actor,
+    target_id: gate.claim_id,
+    payload: {
+      gate_result_id: gate.id,
+      target_status: gate.target_status
+    }
+  });
+  return stored;
+}
+
+function evidenceLevelForStatus(status: ClaimStatus, current: Claim["evidence_level"]): Claim["evidence_level"] {
+  const levels: Partial<Record<ClaimStatus, Claim["evidence_level"]>> = {
+    literature_supported: 2,
+    computationally_supported: 2,
+    symbolically_checked: 3,
+    lean_skeleton: 3,
+    formally_checked: 5,
+    human_accepted: current
+  };
+  const level = levels[status] ?? current;
+  return level > current ? level : current;
+}
+
+export function promoteClaim(projectRoot: string, request: ClaimPromotionRequest): ClaimPromotionDecision {
+  const claim = getClaim(projectRoot, request.project_id, request.claim_id);
+  if (!claim) {
+    throw new ComathError("claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
+  }
+
+  const gate = runClaimPromotionGate(projectRoot, request);
+  writeGateResults(projectRoot, [...readGateResults(projectRoot), gate]);
+  return {
+    gate,
+    claim: applyClaimPromotionDecision(projectRoot, claim, gate, request.actor)
+  };
+}
