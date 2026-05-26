@@ -19,7 +19,8 @@
     "test": "node scripts/phase0-smoke.mjs && node tests/release/ga-readiness.test.mjs && corepack pnpm -r --if-present test && node tests/evaluation/phase17-integrity-evaluation.test.mjs",
     "ci": "corepack pnpm build && corepack pnpm typecheck && corepack pnpm test",
     "release:check": "node scripts/ga-readiness.mjs",
-    "external:check": "node scripts/external-runtime-validation.mjs"
+    "external:check": "node scripts/external-runtime-validation.mjs",
+    "pi:lean:real": "corepack pnpm build && node scripts/phase24-real-pi-lean-proof.mjs"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

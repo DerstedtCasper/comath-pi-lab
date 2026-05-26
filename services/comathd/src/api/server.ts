@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { URL } from "node:url";
+import { z } from "zod";
 import { appendAuditEvent, readAuditEvents } from "../audit/jsonl-writer.js";
 import { toComathError } from "../errors.js";
 import { getComathdStatus } from "../status.js";
@@ -7,6 +8,7 @@ import { getProjectStatus, initProject, openProject } from "../project/project-s
 import { getClaim, linkClaims, readClaims, registerClaim, updateClaim } from "../claim/claim-store.js";
 import { appendEvidenceRecord, readEvidenceRecords } from "../evidence/store.js";
 import { promoteClaim } from "../verification/gate.js";
+import { runModelLeanProofCheck } from "../verification/formal-proof.js";
 import {
   checkPaper,
   exportPaper,
@@ -15,6 +17,7 @@ import {
   renderClaimBlock,
   updatePaperSection
 } from "../artifacts/paper.js";
+import { importArtifact, listArtifactRefs } from "../artifacts/store.js";
 import { exportSnapshot, restoreSnapshot, verifySnapshot } from "../artifacts/snapshots.js";
 import {
   checkCitationConditions,
@@ -27,6 +30,7 @@ import {
 import { InMemoryResearchMemoryDB } from "../memory/in-memory-research-memory-db.js";
 import { buildGraphPatchFromWorkstream } from "../memory/builder.js";
 import { applyAcceptedGraphPatch, reviewGraphPatch } from "../memory/graph-patch.js";
+import { createMathGraphIndex, type MathGraphIndex } from "../memory/math-graph-index.js";
 import {
   getWorkstreamStatus,
   listWorkstreams,
@@ -51,7 +55,24 @@ type RouteHandler = (body: unknown, url: URL) => unknown | Promise<unknown>;
 
 type RouteContext = {
   memoryDbs: Map<string, InMemoryResearchMemoryDB>;
+  graphIndexes: Map<string, MathGraphIndex>;
 };
+
+const leanCheckRequestSchema = z
+  .object({
+    project_root: z.string().min(1),
+    project_id: z.string().min(1),
+    claim_id: z.string().min(1),
+    lean_source: z.string().min(1).max(256 * 1024),
+    theorem_name: z.string().min(1),
+    dependency_hash: z.string().min(1),
+    model_id: z.string().min(1),
+    model_response_id: z.string().min(1).optional(),
+    tool_call_id: z.string().min(1),
+    actor: z.string().min(1).optional(),
+    timeout_ms: z.number().int().min(1_000).max(120_000).optional()
+  })
+  .strict();
 
 function memoryKey(projectRoot: string, projectId: string): string {
   return `${projectRoot}\0${projectId}`;
@@ -67,6 +88,24 @@ async function getMemoryDb(context: RouteContext, projectRoot: string, projectId
   await db.init(projectRoot, { projectId, backend: "memory" });
   context.memoryDbs.set(key, db);
   return db;
+}
+
+async function getMathGraphIndex(context: RouteContext, projectRoot: string, projectId: string): Promise<MathGraphIndex> {
+  const key = memoryKey(projectRoot, projectId);
+  const existing = context.graphIndexes.get(key);
+  if (existing) {
+    return existing;
+  }
+  const db = await getMemoryDb(context, projectRoot, projectId);
+  const index = createMathGraphIndex({
+    db,
+    backend: "memory",
+    projectRoot,
+    projectId
+  });
+  await index.init(projectRoot, projectId);
+  context.graphIndexes.set(key, index);
+  return index;
 }
 
 function success(body: unknown): InjectResponse {
@@ -191,6 +230,24 @@ async function route(method: string, path: string, body: unknown, context: Route
       }
     ],
     [
+      "POST /lean/check",
+      async (payload) => {
+        const body = leanCheckRequestSchema.parse(payload);
+        return runModelLeanProofCheck(body.project_root, {
+          project_id: body.project_id,
+          claim_id: body.claim_id,
+          lean_source: body.lean_source,
+          theorem_name: body.theorem_name,
+          dependency_hash: body.dependency_hash,
+          model_id: body.model_id,
+          model_response_id: body.model_response_id,
+          tool_call_id: body.tool_call_id,
+          actor: body.actor ?? "api",
+          timeout_ms: body.timeout_ms
+        });
+      }
+    ],
+    [
       "GET /status/snapshot",
       (_payload, parsedUrl) => {
         const projectRoot = parsedUrl.searchParams.get("project_root") ?? "";
@@ -203,6 +260,36 @@ async function route(method: string, path: string, body: unknown, context: Route
           workstreams: listWorkstreams(projectRoot, projectId),
           audit_event_count: readAuditEvents(projectRoot).filter((event) => event.project_id === projectId).length
         };
+      }
+    ],
+    [
+      "POST /artifact/import",
+      async (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          source_path: string;
+          kind: Parameters<typeof importArtifact>[0]["kind"];
+          actor: string;
+        };
+        return {
+          artifact: await importArtifact({
+            projectRoot: body.project_root,
+            project_id: body.project_id,
+            source_path: body.source_path,
+            kind: body.kind,
+            actor: body.actor
+          })
+        };
+      }
+    ],
+    [
+      "GET /artifact/list",
+      (_payload, parsedUrl) => {
+        const projectRoot = parsedUrl.searchParams.get("project_root") ?? "";
+        const projectId = parsedUrl.searchParams.get("project_id") ?? "";
+        const artifacts = listArtifactRefs(projectRoot).filter((artifact) => !projectId || artifact.project_id === projectId);
+        return { artifacts };
       }
     ],
     [
@@ -287,6 +374,65 @@ async function route(method: string, path: string, body: unknown, context: Route
         const body = payload as Omit<Parameters<typeof applyAcceptedGraphPatch>[1], "db"> & { project_root: string };
         const db = await getMemoryDb(context, body.project_root, body.project_id);
         return applyAcceptedGraphPatch(body.project_root, { ...body, db });
+      }
+    ],
+    [
+      "GET /memory/health",
+      async (_payload, parsedUrl) => {
+        const projectRoot = parsedUrl.searchParams.get("project_root") ?? "";
+        const projectId = parsedUrl.searchParams.get("project_id") ?? "";
+        const index = await getMathGraphIndex(context, projectRoot, projectId);
+        return { health: await index.health() };
+      }
+    ],
+    [
+      "POST /memory/rebuild",
+      async (payload) => {
+        const body = payload as { project_root: string; project_id: string };
+        const index = await getMathGraphIndex(context, body.project_root, body.project_id);
+        return { health: await index.rebuildFromLedger() };
+      }
+    ],
+    [
+      "POST /memory/search",
+      async (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          query: string;
+          limit?: number;
+          node_types?: Parameters<InMemoryResearchMemoryDB["search"]>[0]["node_types"];
+        };
+        const db = await getMemoryDb(context, body.project_root, body.project_id);
+        return {
+          results: await db.search({
+            project_id: body.project_id,
+            query: body.query,
+            limit: body.limit,
+            node_types: body.node_types
+          })
+        };
+      }
+    ],
+    [
+      "POST /memory/context-pack",
+      async (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          seed_ids: string[];
+          depth?: number;
+          limit?: number;
+        };
+        const db = await getMemoryDb(context, body.project_root, body.project_id);
+        return {
+          context_pack: await db.contextPack({
+            project_id: body.project_id,
+            seed_ids: body.seed_ids,
+            depth: body.depth,
+            limit: body.limit
+          })
+        };
       }
     ],
     [
@@ -451,7 +597,8 @@ export type ComathServer = {
 export function createComathServer(): ComathServer {
   let server: Server | undefined;
   const context: RouteContext = {
-    memoryDbs: new Map()
+    memoryDbs: new Map(),
+    graphIndexes: new Map()
   };
 
   return {

@@ -1,13 +1,37 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createComathServer } from "../../dist/index.js";
+import { appendProvenanceEvent, createComathServer } from "../../dist/index.js";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-route-project-"));
 const server = createComathServer();
 const escapeName = `escape-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const escapeRoot = join(projectRoot, "..", escapeName);
+const timestamp = "2026-05-26T00:00:00.000Z";
+
+function memoryNode(id, projectId, title, payload = {}) {
+  return {
+    id,
+    project_id: projectId,
+    type: "Claim",
+    title,
+    payload,
+    created_at: timestamp,
+    updated_at: timestamp
+  };
+}
+
+function memoryEdge(id, projectId, sourceId, targetId) {
+  return {
+    id,
+    project_id: projectId,
+    source_id: sourceId,
+    target_id: targetId,
+    label: "depends_on",
+    created_at: timestamp
+  };
+}
 
 try {
   const health = await server.inject({ method: "GET", path: "/health" });
@@ -75,6 +99,38 @@ try {
   assert.equal(evidence.body.evidence.claim_id, claim.body.claim.id);
   assert.equal(evidence.body.evidence.summary, "Route test evidence record.");
 
+  const artifactSource = join(projectRoot, "route-artifact.txt");
+  writeFileSync(artifactSource, "route artifact alpha\n", "utf8");
+  const artifact = await server.inject({
+    method: "POST",
+    path: "/artifact/import",
+    body: {
+      project_root: projectRoot,
+      project_id: init.body.project.project_id,
+      source_path: artifactSource,
+      kind: "log",
+      actor: "route-test"
+    }
+  });
+  assert.equal(artifact.status, 200);
+  assert.equal(artifact.body.artifact.id, "AR-0001");
+  assert.equal(artifact.body.artifact.project_id, init.body.project.project_id);
+  assert.equal(artifact.body.artifact.kind, "log");
+  assert.match(artifact.body.artifact.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(existsSync(join(projectRoot, artifact.body.artifact.path)), true);
+  assert.equal(artifact.body.artifact.path.includes("route-artifact.txt"), false);
+
+  const artifacts = await server.inject({
+    method: "GET",
+    path: `/artifact/list?project_root=${encodeURIComponent(projectRoot)}&project_id=${encodeURIComponent(
+      init.body.project.project_id
+    )}`
+  });
+  assert.equal(artifacts.status, 200);
+  assert.equal(artifacts.body.artifacts.length, 1);
+  assert.equal(artifacts.body.artifacts[0].id, artifact.body.artifact.id);
+  assert.equal(artifacts.body.artifacts[0].sha256, artifact.body.artifact.sha256);
+
   const workstream = await server.inject({
     method: "POST",
     path: "/workstream/spawn",
@@ -88,6 +144,154 @@ try {
   });
   assert.equal(workstream.status, 200);
   assert.equal(workstream.body.workstream.workstream_id, "WS-0001");
+
+  const memoryHealth = await server.inject({
+    method: "GET",
+    path: `/memory/health?project_root=${encodeURIComponent(projectRoot)}&project_id=${encodeURIComponent(
+      init.body.project.project_id
+    )}`
+  });
+  assert.equal(memoryHealth.status, 200);
+  assert.equal(memoryHealth.body.health.backend, "memory");
+  assert.equal(memoryHealth.body.health.truth_source, "provenance-ledger");
+  assert.equal(memoryHealth.body.health.derived_index, true);
+  assert.equal(memoryHealth.body.health.rebuildable, true);
+
+  const proposedPatch = await server.inject({
+    method: "POST",
+    path: "/graph-patch/propose",
+    body: {
+      project_root: projectRoot,
+      project_id: init.body.project.project_id,
+      workstream_id: workstream.body.workstream.workstream_id,
+      created_by: "route-test",
+      new_nodes: [
+        memoryNode("C-0100", init.body.project.project_id, "Route memory alpha", {
+          text: "context pack route alpha"
+        }),
+        memoryNode("C-0101", init.body.project.project_id, "Route memory beta", {
+          text: "context pack route beta"
+        })
+      ],
+      new_edges: [memoryEdge("EDGE-0100", init.body.project.project_id, "C-0100", "C-0101")]
+    }
+  });
+  assert.equal(proposedPatch.status, 200);
+  assert.equal(proposedPatch.body.patch.new_nodes.length, 2);
+
+  const reviewedPatch = await server.inject({
+    method: "POST",
+    path: "/graph-patch/review",
+    body: {
+      project_root: projectRoot,
+      project_id: init.body.project.project_id,
+      workstream_id: workstream.body.workstream.workstream_id,
+      next_state: "under_review",
+      reviewer: "route-reviewer",
+      notes: "route memory seed"
+    }
+  });
+  assert.equal(reviewedPatch.status, 200);
+  assert.equal(reviewedPatch.body.patch.state, "under_review");
+
+  const acceptedPatch = await server.inject({
+    method: "POST",
+    path: "/graph-patch/review",
+    body: {
+      project_root: projectRoot,
+      project_id: init.body.project.project_id,
+      workstream_id: workstream.body.workstream.workstream_id,
+      next_state: "accepted",
+      reviewer: "route-reviewer",
+      notes: "accepted for memory route test"
+    }
+  });
+  assert.equal(acceptedPatch.status, 200);
+  assert.equal(acceptedPatch.body.patch.state, "accepted");
+
+  const appliedPatch = await server.inject({
+    method: "POST",
+    path: "/graph-patch/apply",
+    body: {
+      project_root: projectRoot,
+      project_id: init.body.project.project_id,
+      workstream_id: workstream.body.workstream.workstream_id,
+      reviewer: "route-reviewer"
+    }
+  });
+  assert.equal(appliedPatch.status, 200);
+  assert.equal(appliedPatch.body.applied, true);
+
+  const memorySearch = await server.inject({
+    method: "POST",
+    path: "/memory/search",
+    body: {
+      project_root: projectRoot,
+      project_id: init.body.project.project_id,
+      query: "alpha",
+      limit: 1,
+      node_types: ["Claim"]
+    }
+  });
+  assert.equal(memorySearch.status, 200);
+  assert.equal(memorySearch.body.results.length, 1);
+  assert.equal(memorySearch.body.results[0].node.id, "C-0100");
+  assert.equal(memorySearch.body.results[0].matched_fields.includes("title"), true);
+
+  const contextPack = await server.inject({
+    method: "POST",
+    path: "/memory/context-pack",
+    body: {
+      project_root: projectRoot,
+      project_id: init.body.project.project_id,
+      seed_ids: ["C-0100", "MISSING-0100"],
+      depth: 1,
+      limit: 5
+    }
+  });
+  assert.equal(contextPack.status, 200);
+  assert.equal(contextPack.body.context_pack.project_id, init.body.project.project_id);
+  assert.equal(contextPack.body.context_pack.nodes.some((item) => item.id === "C-0100"), true);
+  assert.equal(contextPack.body.context_pack.nodes.some((item) => item.id === "C-0101"), true);
+  assert.equal(contextPack.body.context_pack.edges.some((item) => item.id === "EDGE-0100"), true);
+  assert.equal(contextPack.body.context_pack.warnings.some((warning) => warning.includes("MISSING-0100")), true);
+
+  appendProvenanceEvent(projectRoot, {
+    project_id: init.body.project.project_id,
+    event_type: "claim.registered",
+    actor: "route-test",
+    target_id: "C-0200",
+    payload: {
+      title: "Ledger route gamma",
+      type: "Claim",
+      text: "ledger rebuild route gamma"
+    }
+  });
+  const rebuiltMemory = await server.inject({
+    method: "POST",
+    path: "/memory/rebuild",
+    body: {
+      project_root: projectRoot,
+      project_id: init.body.project.project_id
+    }
+  });
+  assert.equal(rebuiltMemory.status, 200);
+  assert.equal(rebuiltMemory.body.health.last_rebuild.indexed_nodes, 1);
+  assert.equal(rebuiltMemory.body.health.last_rebuild.indexed_edges, 0);
+  assert.deepEqual(rebuiltMemory.body.health.last_rebuild.warnings, []);
+
+  const rebuiltSearch = await server.inject({
+    method: "POST",
+    path: "/memory/search",
+    body: {
+      project_root: projectRoot,
+      project_id: init.body.project.project_id,
+      query: "gamma",
+      limit: 5
+    }
+  });
+  assert.equal(rebuiltSearch.status, 200);
+  assert.equal(rebuiltSearch.body.results.some((result) => result.node.id === "C-0200"), true);
 
   const snapshot = await server.inject({
     method: "GET",

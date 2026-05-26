@@ -10,12 +10,14 @@
     "port": 48731
   },
   "pi_extension": {
-    "install_mode": "local-package",
+    "install_mode": "project-local-package",
+    "project_settings_package_source": "../extensions/comath-pi",
     "local_install_path": "<repo-root>/extensions/comath-pi"
   },
-  "external_cli": {
-    "pi_runtime_config_path": "fill with the installed Pi runtime config path",
+  "sdk_orchestration": {
+    "pi_runtime_config_path": "fill with the installed Pi runtime config path if needed",
     "comath_lab_project_root": "<repo-root>",
+    "research_start_tool": "comath.research.start",
     "headless": false
   },
   "notes": [

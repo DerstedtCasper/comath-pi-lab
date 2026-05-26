@@ -11,10 +11,11 @@ const officialTools = createOfficialPiToolRegistrations(researchTools);
 
 assert.equal(officialTools.length, researchTools.length);
 
-const claimTool = officialTools.find((tool) => tool.name === "comath.claim.register");
+const claimTool = officialTools.find((tool) => tool.name === "comath_claim_register");
 const researchClaimTool = researchTools.find((tool) => tool.name === "comath.claim.register");
 assert.ok(claimTool, "official claim tool is registered");
 assert.equal(claimTool.label, "comath.claim.register");
+assert.equal(officialTools.every((tool) => /^[a-zA-Z0-9_-]+$/.test(tool.name)), true);
 assert.equal(claimTool.description, researchClaimTool.description);
 assert.deepEqual(claimTool.parameters, researchClaimTool.input_schema);
 assert.equal("input_schema" in claimTool, false);
@@ -55,7 +56,7 @@ assert.equal(result.options.toolCallId, "TOOLCALL-0001");
 assert.equal(result.options.signal, signal);
 assert.equal(onUpdateCalls.length, 1);
 assert.equal(onUpdateCalls[0].toolCallId, "TOOLCALL-0001");
-assert.equal(onUpdateCalls[0].name, "comath.claim.register");
+assert.equal(onUpdateCalls[0].name, "comath_claim_register");
 assert.equal(onUpdateCalls[0].status, "started");
 
 const preAbortedController = new AbortController();

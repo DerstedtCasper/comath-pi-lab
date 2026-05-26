@@ -78,6 +78,7 @@ const readGate = requireMutationConfirmation({ kind: "tool", name: "comath.statu
 assert.equal(readGate.allowed, true);
 
 const tools = createComathTools();
+assert.equal(tools.some((tool) => tool.name === "comath.research.start"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.project.open"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.claim.requestPromotion"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.snapshot.export"), true);
@@ -88,6 +89,11 @@ assert.equal(
   tools.every((tool) => tool.input_schema && tool.input_schema.type === "object"),
   true
 );
+assert.equal(tools.find((tool) => tool.name === "comath.research.start")?.mutates, true);
+assert.deepEqual(tools.find((tool) => tool.name === "comath.research.start")?.input_schema.required, [
+  "root_path",
+  "goal"
+]);
 assert.equal(tools.find((tool) => tool.name === "comath.claim.register")?.mutates, true);
 assert.equal(tools.find((tool) => tool.name === "comath.snapshot.export")?.mutates, true);
 assert.equal(tools.find((tool) => tool.name === "comath.snapshot.verify")?.mutates, false);
