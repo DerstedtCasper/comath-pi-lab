@@ -21,6 +21,11 @@ export type ComathClientOptions = {
   }>;
 };
 
+export type ComathClient = {
+  get(path: string): Promise<any>;
+  post(path: string, body: unknown): Promise<any>;
+};
+
 export type ToolDescriptor = {
   name: string;
   description: string;
@@ -89,7 +94,9 @@ export function parseComathCommand(input: string): ParsedComathCommand | null {
     action === "graph" ||
     action === "paper" ||
     action === "snapshot" ||
-    action === "replay"
+    action === "replay" ||
+    action === "research" ||
+    action === "campaign"
   ) {
     const [subcommand, ...args] = parts.slice(1);
     return {
@@ -143,6 +150,78 @@ export function createComathClient(options: ComathClientOptions) {
       return request("POST", path, body);
     }
   };
+}
+
+function readString(payload: Record<string, unknown>, field: string): string;
+function readString(payload: Record<string, unknown>, field: string, options: { optional: true }): string | undefined;
+function readString(payload: Record<string, unknown>, field: string, options?: { optional?: boolean }): string | undefined {
+  const value = payload[field];
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  if (options?.optional && value === undefined) {
+    return undefined;
+  }
+  throw new Error(`${field} is required`);
+}
+
+function encodeQuery(value: string): string {
+  return encodeURIComponent(value);
+}
+
+function campaignPath(campaignId: string, suffix: string): string {
+  return `/campaign/${encodeURIComponent(campaignId)}${suffix}`;
+}
+
+export async function executeComathTool(client: ComathClient, name: string, input: Record<string, unknown>): Promise<any> {
+  if (name === "comath.research.startCampaign") {
+    return client.post("/campaign/start", {
+      project_root: readString(input, "project_root"),
+      project_name: readString(input, "project_name", { optional: true }),
+      user_goal: readString(input, "user_goal"),
+      domain: readString(input, "domain", { optional: true }),
+      strict_mode: input.strict_mode === undefined ? true : input.strict_mode === true,
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.campaign.status") {
+    const projectRoot = readString(input, "project_root");
+    const campaignId = readString(input, "campaign_id");
+    return client.get(`${campaignPath(campaignId, "/status")}?project_root=${encodeQuery(projectRoot)}`);
+  }
+
+  if (name === "comath.campaign.tick") {
+    const campaignId = readString(input, "campaign_id");
+    return client.post(campaignPath(campaignId, "/tick"), {
+      project_root: readString(input, "project_root"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.campaign.nextActions") {
+    const projectRoot = readString(input, "project_root");
+    const campaignId = readString(input, "campaign_id");
+    return client.get(`${campaignPath(campaignId, "/next-actions")}?project_root=${encodeQuery(projectRoot)}`);
+  }
+
+  if (name === "comath.campaign.finalAudit") {
+    const campaignId = readString(input, "campaign_id");
+    return client.post(campaignPath(campaignId, "/final-audit"), {
+      project_root: readString(input, "project_root"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.campaign.replay") {
+    const campaignId = readString(input, "campaign_id");
+    return client.post(campaignPath(campaignId, "/replay"), {
+      project_root: readString(input, "project_root"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  throw new Error(`unsupported comath tool: ${name}`);
 }
 
 function objectSchema(required: string[], properties: Record<string, unknown>): ToolDescriptor["input_schema"] {
@@ -227,6 +306,67 @@ export function createComathTools(): ToolDescriptor[] {
       description: "Render a status snapshot through comathd or local extension state.",
       mutates: false,
       input_schema: objectSchema(["project_id"], { project_id: stringProp })
+    },
+    {
+      name: "comath.research.startCampaign",
+      description: "Start a bounded ResearchCampaign through comathd's native proof-kernel path.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "user_goal", "actor"], {
+        project_root: stringProp,
+        project_name: stringProp,
+        user_goal: stringProp,
+        domain: stringProp,
+        strict_mode: { type: "boolean" },
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.campaign.status",
+      description: "Read ResearchCampaign status through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "campaign_id"], {
+        project_root: stringProp,
+        campaign_id: stringProp
+      })
+    },
+    {
+      name: "comath.campaign.tick",
+      description: "Advance one bounded ResearchCampaign tick through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "campaign_id", "actor"], {
+        project_root: stringProp,
+        campaign_id: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.campaign.nextActions",
+      description: "Read campaign next actions without mutating trusted state.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "campaign_id"], {
+        project_root: stringProp,
+        campaign_id: stringProp
+      })
+    },
+    {
+      name: "comath.campaign.finalAudit",
+      description: "Run the final proof-kernel audit route through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "campaign_id", "actor"], {
+        project_root: stringProp,
+        campaign_id: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.campaign.replay",
+      description: "Replay the campaign final Lean proof through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "campaign_id", "actor"], {
+        project_root: stringProp,
+        campaign_id: stringProp,
+        actor: stringProp
+      })
     },
     {
       name: "comath.paper.init",
@@ -404,6 +544,8 @@ export function createComathPiExtension(options: { client: ReturnType<typeof cre
       "/cm:evidence",
       "/cm:graph",
       "/cm:paper",
+      "/cm:research",
+      "/cm:campaign",
       "/cm:snapshot",
       "/cm:replay",
       "/cm:dashboard"
