@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "profile": "local-user-override-example",
+  "contains_secrets": false,
+  "copy_to": ".pi/local.user.json",
+  "do_not_commit": true,
+  "comathd": {
+    "baseUrl": "http://127.0.0.1:48731",
+    "host": "127.0.0.1",
+    "port": 48731
+  },
+  "pi_extension": {
+    "install_mode": "local-package",
+    "local_install_path": "<repo-root>/extensions/comath-pi"
+  },
+  "external_cli": {
+    "pi_runtime_config_path": "fill with the installed Pi runtime config path",
+    "comath_lab_project_root": "<repo-root>",
+    "headless": false
+  },
+  "notes": [
+    "Keep credentials in the Pi runtime secret store, OS credential manager, or an untracked file outside this repository.",
+    "Do not place API keys, access tokens, SSH keys, cookies, or private certificates in .pi/*.json files committed to Git."
+  ]
+}

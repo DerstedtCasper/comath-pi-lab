@@ -20,6 +20,8 @@ const requiredCapabilities = [
   "compute_runners",
   "literature_condition_matching",
   "working_paper",
+  "pi_extension_installable_package",
+  "external_cli_control",
   "snapshot_replay"
 ];
 
@@ -31,7 +33,7 @@ for (const capability of requiredCapabilities) {
 
 const requiredResidualRisks = [
   "real_lean_kernel_execution_deferred",
-  "production_pi_runtime_registration_deferred",
+  "installed_pi_runtime_validation_deferred",
   "runner_reexecution_replay_deferred"
 ];
 

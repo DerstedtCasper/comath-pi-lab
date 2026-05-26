@@ -1,9 +1,11 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { URL } from "node:url";
+import { appendAuditEvent, readAuditEvents } from "../audit/jsonl-writer.js";
 import { toComathError } from "../errors.js";
 import { getComathdStatus } from "../status.js";
 import { getProjectStatus, initProject, openProject } from "../project/project-store.js";
-import { getClaim, linkClaims, registerClaim, updateClaim } from "../claim/claim-store.js";
+import { getClaim, linkClaims, readClaims, registerClaim, updateClaim } from "../claim/claim-store.js";
+import { appendEvidenceRecord, readEvidenceRecords } from "../evidence/store.js";
 import { promoteClaim } from "../verification/gate.js";
 import {
   checkPaper,
@@ -154,6 +156,54 @@ async function route(method: string, path: string, body: unknown, context: Route
           parsedUrl.searchParams.get("claim_id") ?? ""
         )
       })
+    ],
+    [
+      "POST /evidence/attach",
+      (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          claim_id?: string;
+          kind: "literature" | "computation" | "symbolic" | "lean" | "counterexample" | "audit" | "other";
+          summary: string;
+          artifact_ids?: string[];
+          actor?: string;
+        };
+        const evidence = appendEvidenceRecord(body.project_root, {
+          project_id: body.project_id,
+          claim_id: body.claim_id,
+          kind: body.kind,
+          summary: body.summary,
+          artifact_ids: body.artifact_ids ?? []
+        });
+        appendAuditEvent(body.project_root, {
+          project_id: body.project_id,
+          event_type: "evidence.attached",
+          actor: body.actor ?? "api",
+          target_id: body.claim_id,
+          payload: {
+            evidence_id: evidence.id,
+            kind: evidence.kind,
+            artifact_ids: evidence.artifact_ids
+          }
+        });
+        return { evidence };
+      }
+    ],
+    [
+      "GET /status/snapshot",
+      (_payload, parsedUrl) => {
+        const projectRoot = parsedUrl.searchParams.get("project_root") ?? "";
+        const projectId = parsedUrl.searchParams.get("project_id") ?? "";
+        return {
+          service: getComathdStatus(),
+          project: getProjectStatus({ root_path: projectRoot }),
+          claims: readClaims(projectRoot, projectId),
+          evidence: readEvidenceRecords(projectRoot, projectId),
+          workstreams: listWorkstreams(projectRoot, projectId),
+          audit_event_count: readAuditEvents(projectRoot).filter((event) => event.project_id === projectId).length
+        };
+      }
     ],
     [
       "POST /workstream/spawn",
