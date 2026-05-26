@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 const piEntry = await import("../dist/pi-extension.js");
+const { toPiSafeToolName } = await import("../dist/index.js");
 
 const registeredTools = [];
 await piEntry.default({
@@ -9,7 +10,7 @@ await piEntry.default({
   }
 });
 
-const byName = new Map(registeredTools.map((tool) => [tool.name, tool]));
+const byLabel = new Map(registeredTools.map((tool) => [tool.label, tool]));
 const projectRoot = "D:/tmp/comath-project";
 const projectId = "PRJ-0001";
 const workstreamId = "WS-0001";
@@ -269,8 +270,10 @@ const cases = [
   }
 ];
 
-const researchStartTool = byName.get("comath.research.start");
+assert.equal(registeredTools.every((tool) => /^[a-zA-Z0-9_-]+$/.test(tool.name)), true);
+const researchStartTool = byLabel.get("comath.research.start");
 assert.ok(researchStartTool, "comath.research.start is registered");
+assert.equal(researchStartTool.name, "comath_research_start");
 const researchStartRequests = [];
 await researchStartTool.execute(
   "TOOLCALL-RESEARCH-START",
@@ -308,13 +311,14 @@ assert.equal(researchStartRequests[1].url, "http://127.0.0.1:48731/workstream/sp
 assert.equal(researchStartRequests[1].init.method, "POST");
 
 assert.deepEqual(
-  [...cases.map((item) => item.tool), "comath.research.start"].sort(),
+  [...cases.map((item) => toPiSafeToolName(item.tool)), toPiSafeToolName("comath.research.start")].sort(),
   registeredTools.map((tool) => tool.name).sort()
 );
 
 for (const item of cases) {
-  const tool = byName.get(item.tool);
+  const tool = byLabel.get(item.tool);
   assert.ok(tool, `${item.tool} is registered`);
+  assert.equal(tool.name, toPiSafeToolName(item.tool), `${item.tool} has an OpenAI-compatible Pi tool name`);
   const requests = [];
   const result = await tool.execute("TOOLCALL-ROUTE", item.payload, undefined, undefined, {
     fetch: async (url, init) => {

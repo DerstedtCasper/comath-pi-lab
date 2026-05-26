@@ -3,6 +3,7 @@ import {
   createComathPiExtension,
   type ToolDescriptor
 } from "./index.js";
+import { toPiSafeToolName } from "./tool-names.js";
 
 type PiRegisterFn = (registration: unknown) => unknown;
 type PiRegisterCommandFn = (name: string, options: unknown) => unknown;
@@ -365,8 +366,9 @@ function validateToolParams(tool: ToolDescriptor, params: unknown): Record<strin
 }
 
 function createComathToolRegistration(tool: ToolDescriptor, baseUrl: string) {
+  const safeName = toPiSafeToolName(tool.name);
   return {
-    name: tool.name,
+    name: safeName,
     label: tool.name,
     description: tool.description,
     mutates: tool.mutates,
@@ -383,7 +385,7 @@ function createComathToolRegistration(tool: ToolDescriptor, baseUrl: string) {
         throw new Error("CoMath Pi tool call aborted before start");
       }
       const parsedParams = validateToolParams(tool, params);
-      await onUpdate?.({ toolCallId, name: tool.name, status: "started" });
+      await onUpdate?.({ toolCallId, name: safeName, status: "started" });
       const legacyCtx = ctx as ToolExecutionContext & LegacyToolExecutionContext;
       if (legacyCtx?.tools?.execute) {
         const payload = await legacyCtx.tools.execute(tool.name, parsedParams, { toolCallId, signal });
@@ -425,18 +427,21 @@ function installMutationConfirmationGate(pi: PiRuntime, tools: ToolDescriptor[])
   if (typeof pi.on !== "function") {
     return;
   }
-  const mutatingTools = new Set(tools.filter((tool) => tool.mutates).map((tool) => tool.name));
+  const mutatingToolsBySafeName = new Map(
+    tools.filter((tool) => tool.mutates).map((tool) => [toPiSafeToolName(tool.name), tool.name])
+  );
   pi.on("tool_call", async (event, ctx) => {
-    const toolName = event.toolName;
-    if (!toolName || !mutatingTools.has(toolName)) {
+    const safeToolName = event.toolName;
+    const canonicalToolName = safeToolName ? mutatingToolsBySafeName.get(safeToolName) : undefined;
+    if (!canonicalToolName) {
       return undefined;
     }
     if (ctx.hasUI === false || !ctx.ui?.confirm) {
-      return { block: true, reason: `CoMath mutating tool ${toolName} requires confirmation` };
+      return { block: true, reason: `CoMath mutating tool ${canonicalToolName} requires confirmation` };
     }
-    const allowed = await ctx.ui.confirm("CoMath mutation", `${toolName} will mutate trusted CoMath state through comathd. Allow?`);
+    const allowed = await ctx.ui.confirm("CoMath mutation", `${canonicalToolName} will mutate trusted CoMath state through comathd. Allow?`);
     if (!allowed) {
-      return { block: true, reason: `CoMath mutating tool ${toolName} was blocked by user` };
+      return { block: true, reason: `CoMath mutating tool ${canonicalToolName} was blocked by user` };
     }
     return undefined;
   });

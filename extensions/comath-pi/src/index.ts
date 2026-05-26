@@ -1,6 +1,7 @@
 import { Type } from "typebox";
 import type { TObject, TProperties, TSchema } from "typebox";
 import { listSubagentDefinitions, type SubagentDefinition } from "./subagents.js";
+export { toPiSafeToolName } from "./tool-names.js";
 
 export * from "./subagents.js";
 export * from "./widgets.js";

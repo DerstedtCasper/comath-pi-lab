@@ -1,4 +1,5 @@
 import type { ToolDescriptor } from "./index.js";
+import { toPiSafeToolName } from "./tool-names.js";
 
 export type OfficialPiToolUpdate = {
   toolCallId: string;
@@ -59,29 +60,32 @@ function validateToolParams(tool: ToolDescriptor, params: unknown): Record<strin
 }
 
 export function createOfficialPiToolRegistrations(tools: ToolDescriptor[]): OfficialPiToolRegistration[] {
-  return tools.map((tool) => ({
-    name: tool.name,
-    label: tool.name,
-    description: tool.description,
-    parameters: tool.input_schema,
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      if (signal?.aborted) {
-        throw new Error("official Pi tool call aborted before start");
-      }
-      const parsedParams = validateToolParams(tool, params);
-      if (!ctx?.tools?.execute) {
-        throw new Error("official Pi tool executor is unavailable");
-      }
+  return tools.map((tool) => {
+    const safeName = toPiSafeToolName(tool.name);
+    return {
+      name: safeName,
+      label: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema,
+      async execute(toolCallId, params, signal, onUpdate, ctx) {
+        if (signal?.aborted) {
+          throw new Error("official Pi tool call aborted before start");
+        }
+        const parsedParams = validateToolParams(tool, params);
+        if (!ctx?.tools?.execute) {
+          throw new Error("official Pi tool executor is unavailable");
+        }
 
-      await onUpdate?.({
-        toolCallId,
-        name: tool.name,
-        status: "started"
-      });
+        await onUpdate?.({
+          toolCallId,
+          name: safeName,
+          status: "started"
+        });
 
-      return ctx.tools.execute(tool.name, parsedParams, { toolCallId, signal });
-    }
-  }));
+        return ctx.tools.execute(tool.name, parsedParams, { toolCallId, signal });
+      }
+    };
+  });
 }
 
 export function validateOfficialPiManifest(manifest: unknown): OfficialPiManifest {

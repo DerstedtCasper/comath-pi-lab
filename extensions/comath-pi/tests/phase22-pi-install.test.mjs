@@ -58,7 +58,9 @@ const installResult = await piEntry.default(fakePi);
 assert.equal(installResult.ok, true);
 assert.equal(installResult.name, "coMath-pi-lab");
 assert.equal(registeredTools.length > 0, true);
-assert.equal(registeredTools.some(([, tool]) => tool.name === "comath.claim.register"), true);
+assert.equal(registeredTools.some(([, tool]) => tool.name === "comath_claim_register"), true);
+assert.equal(registeredTools.every(([, tool]) => /^[a-zA-Z0-9_-]+$/.test(tool.name)), true);
+assert.equal(registeredTools.some(([, tool]) => tool.label === "comath.claim.register"), true);
 assert.equal(registeredTools.every(([, tool]) => IsObject(tool.parameters)), true);
 assert.equal(registeredCommands.length > 0, true);
 assert.equal(registeredCommands.some(([, name, options]) => name === "cm:status" && typeof options.handler === "function"), true);
@@ -69,10 +71,10 @@ const statusCommand = registeredCommands.find(([, name]) => name === "cm:status"
 await statusCommand.handler("--project PRJ-0001", { hasUI: false });
 assert.deepEqual(sentUserMessages, [{ content: "/cm:status --project PRJ-0001", options: undefined }]);
 
-const researchStartTool = registeredTools.find(([, tool]) => tool.name === "comath.research.start")[1];
-const claimRegisterTool = registeredTools.find(([, tool]) => tool.name === "comath.claim.register")[1];
-const evidenceAttachTool = registeredTools.find(([, tool]) => tool.name === "comath.evidence.attach")[1];
-const statusSnapshotTool = registeredTools.find(([, tool]) => tool.name === "comath.status.snapshot")[1];
+const researchStartTool = registeredTools.find(([, tool]) => tool.name === "comath_research_start")[1];
+const claimRegisterTool = registeredTools.find(([, tool]) => tool.name === "comath_claim_register")[1];
+const evidenceAttachTool = registeredTools.find(([, tool]) => tool.name === "comath_evidence_attach")[1];
+const statusSnapshotTool = registeredTools.find(([, tool]) => tool.name === "comath_status_snapshot")[1];
 const requests = [];
 const researchStartResult = await researchStartTool.execute(
   "tool-call-0",
@@ -161,7 +163,7 @@ assert.equal(evidenceAttachTool.mutates, true);
 assert.equal(statusSnapshotTool.mutates, false);
 const confirmationGate = eventHandlers.get("tool_call");
 const blockedMutation = await confirmationGate(
-  { toolName: "comath.research.start", input: { root_path: "D:/tmp/comath-project" } },
+  { toolName: "comath_research_start", input: { root_path: "D:/tmp/comath-project" } },
   { hasUI: false }
 );
 assert.deepEqual(blockedMutation, {
@@ -169,19 +171,19 @@ assert.deepEqual(blockedMutation, {
   reason: "CoMath mutating tool comath.research.start requires confirmation"
 });
 const confirmedMutation = await confirmationGate(
-  { toolName: "comath.research.start", input: { root_path: "D:/tmp/comath-project" } },
+  { toolName: "comath_research_start", input: { root_path: "D:/tmp/comath-project" } },
   { hasUI: true, ui: { confirm: async () => true } }
 );
 assert.equal(confirmedMutation, undefined);
 const rejectedMutation = await confirmationGate(
-  { toolName: "comath.research.start", input: { root_path: "D:/tmp/comath-project" } },
+  { toolName: "comath_research_start", input: { root_path: "D:/tmp/comath-project" } },
   { hasUI: true, ui: { confirm: async () => false } }
 );
 assert.deepEqual(rejectedMutation, {
   block: true,
   reason: "CoMath mutating tool comath.research.start was blocked by user"
 });
-const readonlyCall = await confirmationGate({ toolName: "comath.status.snapshot", input: {} }, { hasUI: false });
+const readonlyCall = await confirmationGate({ toolName: "comath_status_snapshot", input: {} }, { hasUI: false });
 assert.equal(readonlyCall, undefined);
 assert.equal(requests.length, 3);
 assert.equal(requests[2].url, "http://127.0.0.1:48731/claim/register");
