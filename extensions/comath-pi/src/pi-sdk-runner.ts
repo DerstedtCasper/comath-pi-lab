@@ -97,6 +97,14 @@ function normalizeImportTarget(target: string): string {
   return pathToFileURL(target).href;
 }
 
+function extensionPackageRoot(): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), "..");
+}
+
+function localDependencyDistIndex(packageName: string): string {
+  return resolve(extensionPackageRoot(), "node_modules", ...packageName.split("/"), "dist", "index.js");
+}
+
 function resolveImportTarget(target: string): string {
   if (target.startsWith("@")) {
     return realpathSync(require.resolve(target));
@@ -156,6 +164,7 @@ export async function loadPiSdkModules(paths: PiSdkModulePaths = {}): Promise<{
   const codingAgentImport = await importFirstAvailableWithTarget([
     paths.codingAgent ?? "",
     process.env.COMATH_PI_CODING_AGENT_MODULE ?? "",
+    localDependencyDistIndex("@earendil-works/pi-coding-agent"),
     "@earendil-works/pi-coding-agent",
     DEFAULT_PI_CODING_AGENT_PATH
   ].filter(Boolean));
