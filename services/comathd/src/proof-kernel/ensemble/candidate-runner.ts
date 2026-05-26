@@ -23,6 +23,54 @@ function writeJson(projectRoot: string, relativePath: string, value: unknown): s
   return path;
 }
 
+function writeCandidateAuditArtifacts(input: {
+  projectRoot: string;
+  workspaceRel: string;
+  manifest: CandidateManifest;
+  isDirectWinner: boolean;
+}): void {
+  writeJson(input.projectRoot, join(input.workspaceRel, "dependency_delta.json"), {
+    candidate_id: input.manifest.candidate_id,
+    introduced_dependencies: input.manifest.introduced_dependencies,
+    removed_dependencies: [],
+    dependency_closure_required: input.isDirectWinner
+  });
+  writeJson(input.projectRoot, join(input.workspaceRel, "assumption_delta.json"), {
+    candidate_id: input.manifest.candidate_id,
+    introduced_assumptions: input.manifest.introduced_assumptions,
+    hidden_assumption_warnings: []
+  });
+  writeJson(input.projectRoot, join(input.workspaceRel, "replay_commands.json"), {
+    candidate_id: input.manifest.candidate_id,
+    commands: input.isDirectWinner
+      ? [
+          {
+            command: "lake build MathResearch.C0001 Audit.C0001",
+            cwd: ".comath/lean",
+            expected_exit_code: 0
+          }
+        ]
+      : [],
+    replayable: input.isDirectWinner
+  });
+  writeJson(input.projectRoot, join(input.workspaceRel, "failure_routes.json"), {
+    candidate_id: input.manifest.candidate_id,
+    failures: input.manifest.failures,
+    hard_vetoes: input.manifest.hard_vetoes,
+    recovery_hints: input.isDirectWinner ? [] : ["preserve as failed-route memory", "rerun only after new context or theorem repair"]
+  });
+  writeJson(input.projectRoot, join(input.workspaceRel, "graph_patch.json"), {
+    patch_id: null,
+    state: "candidate_output_only",
+    candidate_id: input.manifest.candidate_id,
+    trusted_mutation: false,
+    new_nodes: [],
+    new_edges: [],
+    updated_nodes: [],
+    apply_preconditions: ["reviewed_by_coordinator", "submitted_through_comathd_graph_patch_route"]
+  });
+}
+
 export function runTrivialNatAddZeroCandidates(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
@@ -67,6 +115,12 @@ export function runTrivialNatAddZeroCandidates(input: {
       maintainability_notes: isDirectWinner ? "Readable single theorem using a standard library theorem." : "Preserved as failed-route memory."
     });
     const manifestAbs = writeJson(input.projectRoot, join(workspaceRel, "candidate_manifest.json"), manifest);
+    writeCandidateAuditArtifacts({
+      projectRoot: input.projectRoot,
+      workspaceRel,
+      manifest,
+      isDirectWinner
+    });
     writeFileSync(
       join(workspacePath, "report.md"),
       [

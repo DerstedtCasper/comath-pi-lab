@@ -73,6 +73,24 @@ try {
   assert.equal(finalTick.static_audit?.result, "pass");
   assert.equal(finalTick.ensemble?.candidates.length, 8);
   assert.equal(finalTick.ensemble?.decision.selected_candidate_id, "CAND-0001");
+  const requiredCandidateArtifacts = [
+    "candidate_manifest.json",
+    "report.md",
+    "dependency_delta.json",
+    "assumption_delta.json",
+    "replay_commands.json",
+    "failure_routes.json",
+    "graph_patch.json"
+  ];
+  for (const candidate of finalTick.ensemble.candidates) {
+    for (const artifactName of requiredCandidateArtifacts) {
+      assert.equal(
+        existsSync(join(projectRoot, candidate.workspace_path, artifactName)),
+        true,
+        `${candidate.candidate_id} must persist ${artifactName}`
+      );
+    }
+  }
   assert.equal(seenStages.has("lemma_sprint"), true);
   assert.equal(seenStages.has("final_global_lean_replay"), true);
 
