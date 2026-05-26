@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/mathprove-run-manifest.schema.json",
+  "title": "MathProveRunManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "project_id",
+    "claim_id",
+    "mode",
+    "run_root",
+    "status",
+    "evidence_ids",
+    "artifact_ids",
+    "vetoes",
+    "warnings",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "claim_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "mode": { "type": "string", "enum": ["plan", "route", "final_audit"] },
+    "run_root": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["created", "running", "failed", "approved"] },
+    "target_status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "conjectural",
+        "literature_supported",
+        "computationally_supported",
+        "symbolically_checked",
+        "lean_skeleton",
+        "formally_checked",
+        "refuted",
+        "blocked",
+        "retracted",
+        "human_accepted"
+      ]
+    },
+    "status_json_artifact_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "final_audit_artifact_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "solution_artifact_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "evidence_ids": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" } },
+    "artifact_ids": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" } },
+    "vetoes": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}

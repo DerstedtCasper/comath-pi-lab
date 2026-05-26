@@ -1,0 +1,39 @@
+name: Release Guard
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types:
+      - published
+      - prereleased
+  workflow_dispatch:
+
+jobs:
+  fail-closed-ga-guard:
+    name: fail-closed GA release guard
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Repository release readiness
+        run: corepack pnpm release:check
+
+      - name: External GA blocker evidence
+        run: corepack pnpm external:check

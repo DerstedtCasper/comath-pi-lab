@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/memory-edge.schema.json",
+  "title": "MemoryEdge",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "project_id", "source_id", "target_id", "label", "created_at"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "source_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "target_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "label": {
+      "type": "string",
+      "enum": [
+        "depends_on",
+        "supports",
+        "refutes",
+        "contradicts",
+        "cites",
+        "proved_by",
+        "blocked_by",
+        "same_as",
+        "supersedes",
+        "retracts",
+        "derived_from",
+        "produced_by"
+      ]
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}
+

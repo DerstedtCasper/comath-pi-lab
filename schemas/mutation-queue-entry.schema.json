@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/mutation-queue-entry.schema.json",
+  "title": "MutationQueueEntry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "project_id", "actor", "operation", "payload", "created_at"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "actor": { "type": "string", "minLength": 1 },
+    "operation": { "type": "string", "minLength": 1 },
+    "target_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "audit_event_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "payload": { "type": "object", "additionalProperties": true },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

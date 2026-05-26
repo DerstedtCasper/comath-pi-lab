@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/project-session-lock.schema.json",
+  "title": "ProjectSessionLock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lock_id", "project_id", "owner", "reason", "acquired_at", "expires_at"],
+  "properties": {
+    "lock_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "owner": { "type": "string", "minLength": 1 },
+    "reason": { "type": "string", "minLength": 1 },
+    "acquired_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" }
+  }
+}

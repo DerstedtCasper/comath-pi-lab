@@ -1,0 +1,13 @@
+{
+  "name": "@comath/pi-extension",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "corepack pnpm build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-pi-official-adapter.test.mjs"
+  }
+}

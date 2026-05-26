@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/provenance-event.schema.json",
+  "title": "ProvenanceEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "project_id", "event_type", "actor", "payload", "created_at"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "event_type": { "type": "string", "minLength": 1 },
+    "actor": { "type": "string", "minLength": 1 },
+    "target_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "payload": { "type": "object", "additionalProperties": true },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/paper-span.schema.json",
+  "title": "PaperSpan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "project_id",
+    "paper_id",
+    "section_id",
+    "text_sha256",
+    "margin_note_ids",
+    "evidence_ids",
+    "workstream_ids",
+    "status",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "paper_id": { "type": "string", "pattern": "^PAPER-[0-9]{4,}$" },
+    "section_id": { "type": "string", "minLength": 1 },
+    "claim_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "text_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "margin_note_ids": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" } },
+    "evidence_ids": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" } },
+    "workstream_ids": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" } },
+    "status": { "type": "string", "enum": ["draft", "blocked", "reviewing", "accepted", "stale"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}

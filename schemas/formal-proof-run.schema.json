@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/formal-proof-run.schema.json",
+  "title": "FormalProofRun",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "project_id",
+    "claim_id",
+    "system",
+    "status",
+    "contains_sorry",
+    "contains_admit",
+    "kernel_checked",
+    "vetoes",
+    "warnings",
+    "created_at"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "claim_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "system": { "type": "string", "enum": ["lean4"] },
+    "status": {
+      "type": "string",
+      "enum": ["not_run", "toolchain_missing", "failed", "skeleton_only", "kernel_checked"]
+    },
+    "proof_artifact_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "log_artifact_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "theorem_name": { "type": "string", "minLength": 1 },
+    "statement_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "toolchain_version": { "type": "string", "minLength": 1 },
+    "dependency_hash": { "type": "string", "minLength": 1 },
+    "contains_sorry": { "type": "boolean" },
+    "contains_admit": { "type": "boolean" },
+    "kernel_checked": { "type": "boolean" },
+    "exit_code": { "type": "integer" },
+    "vetoes": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "kernel_checked" } } },
+      "then": {
+        "required": ["proof_artifact_id", "log_artifact_id", "theorem_name", "statement_hash", "dependency_hash"],
+        "properties": {
+          "kernel_checked": { "const": true },
+          "contains_sorry": { "const": false },
+          "contains_admit": { "const": false }
+        }
+      }
+    }
+  ]
+}

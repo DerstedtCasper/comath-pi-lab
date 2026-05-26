@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/math-graph-index-health.schema.json",
+  "title": "MathGraphIndexHealth",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["backend", "truth_source", "derived_index", "degraded", "rebuildable"],
+  "properties": {
+    "backend": { "type": "string", "minLength": 1 },
+    "truth_source": { "const": "provenance-ledger" },
+    "derived_index": { "const": true },
+    "degraded": { "type": "boolean" },
+    "rebuildable": { "type": "boolean" },
+    "last_rebuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["indexed_nodes", "indexed_edges", "warnings"],
+      "properties": {
+        "indexed_nodes": { "type": "integer", "minimum": 0 },
+        "indexed_edges": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

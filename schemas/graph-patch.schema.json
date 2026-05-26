@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comath.local/schemas/graph-patch.schema.json",
+  "title": "GraphPatch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "patch_id",
+    "project_id",
+    "state",
+    "provenance",
+    "new_nodes",
+    "new_edges",
+    "updated_nodes",
+    "candidate_conflicts",
+    "warnings"
+  ],
+  "properties": {
+    "patch_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "project_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "source_workstream_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]{4,}$" },
+    "state": {
+      "type": "string",
+      "enum": ["proposed", "under_review", "accepted", "rejected", "partially_applied", "superseded"]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created_by", "created_at"],
+      "properties": {
+        "created_by": { "type": "string", "minLength": 1 },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "new_nodes": { "type": "array", "items": { "type": "object" } },
+    "new_edges": { "type": "array", "items": { "type": "object" } },
+    "updated_nodes": { "type": "array", "items": { "type": "object" } },
+    "candidate_conflicts": { "type": "array", "items": { "type": "object" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "reviewer_notes": { "type": "string" },
+    "apply_preconditions": { "type": "array", "items": { "type": "string" } }
+  },
+  "not": {
+    "required": ["promotes_claims"]
+  }
+}
+

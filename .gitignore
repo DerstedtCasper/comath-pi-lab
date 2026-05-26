@@ -1,0 +1,13 @@
+.comath/
+.tmp/
+node_modules/
+.pnpm-store/
+.worktrees
+.worktrees/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log
