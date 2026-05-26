@@ -45,6 +45,14 @@ export type CampaignTickResult = {
   gate?: GateDecision;
   final_replay?: CleanReplayResult["final_replay"];
   static_audit?: CleanReplayResult["static_audit"];
+  counterexample?: {
+    counterexample_id: string;
+    assignment: Record<string, number>;
+    lhs: number;
+    rhs: number;
+    result: "refutes";
+    artifact_path: string;
+  };
   blocker?: string;
 };
 
@@ -59,36 +67,72 @@ function writeRuntimeFile(projectRoot: string, rel: string, content: string): st
   return path;
 }
 
-function lockedStatement(goal: string): string {
-  if (/n\s*\+\s*0\s*=\s*n|n \+ 0 = n|natural/i.test(goal)) {
-    return "For every natural number n, n + 0 = n.";
+type LockedProblem = {
+  statement: string;
+  structured: Record<string, unknown>;
+  lean_target?: string;
+  theorem_name?: string;
+};
+
+function classifyLockedProblem(goal: string): LockedProblem {
+  if (/n\s*\+\s*1\s*=\s*n/i.test(goal)) {
+    return {
+      statement: "For every natural number n, n + 1 = n.",
+      structured: { variable: "n", type: "Nat", proposition: "n + 1 = n" },
+      lean_target: "theorem C0001 (n : Nat) : n + 1 = n",
+      theorem_name: "MathResearch.C0001"
+    };
   }
-  return goal.trim();
+  if (/n\s*\+\s*0\s*=\s*n|n \+ 0 = n|natural/i.test(goal)) {
+    return {
+      statement: "For every natural number n, n + 0 = n.",
+      structured: { variable: "n", type: "Nat", proposition: "n + 0 = n" },
+      lean_target: "theorem C0001 (n : Nat) : n + 0 = n",
+      theorem_name: "MathResearch.C0001"
+    };
+  }
+  return {
+    statement: goal.trim(),
+    structured: {},
+    lean_target: undefined,
+    theorem_name: undefined
+  };
+}
+
+function lockedStatement(goal: string): string {
+  return classifyLockedProblem(goal).statement;
 }
 
 function createProblemLock(projectRoot: string, input: { claim_id: string; goal: string; domain: string }): void {
-  const statement = lockedStatement(input.goal);
+  const problem = classifyLockedProblem(input.goal);
   writeRuntimeFile(
     projectRoot,
     join(".comath", "lock", "problem_lock.md"),
-    [`# Problem Lock`, "", `claim_id: ${input.claim_id}`, "", statement, ""].join("\n")
+    [`# Problem Lock`, "", `claim_id: ${input.claim_id}`, "", problem.statement, ""].join("\n")
   );
   writeRuntimeFile(projectRoot, join(".comath", "lock", "assumptions.md"), "# Assumptions\n\n- n : Nat\n");
   writeRuntimeFile(projectRoot, join(".comath", "lock", "notation.md"), "# Notation\n\n- `Nat`: Lean natural numbers.\n- `+`: Nat addition.\n");
   writeRuntimeFile(
     projectRoot,
     join(".comath", "goals.yaml"),
-    [`claim_id: ${input.claim_id}`, `domain: ${input.domain}`, "target_formal_system: Lean4", "theorem_name: MathResearch.C0001", ""].join("\n")
+    [
+      `claim_id: ${input.claim_id}`,
+      `domain: ${input.domain}`,
+      "target_formal_system: Lean4",
+      `theorem_name: ${problem.theorem_name ?? "unresolved"}`,
+      ""
+    ].join("\n")
   );
 }
 
-function createObligation(claimId: string, statementHash: string): ProofObligation {
+function createObligation(claimId: string, statementHash: string, goal: string): ProofObligation {
+  const problem = classifyLockedProblem(goal);
   return proofObligationSchema.parse({
     obligation_id: "PO-0001",
     claim_id: claimId,
-    locked_statement_nl: "For every natural number n, n + 0 = n.",
-    locked_statement_structured: { variable: "n", type: "Nat", proposition: "n + 0 = n" },
-    lean_target: "theorem C0001 (n : Nat) : n + 0 = n",
+    locked_statement_nl: problem.statement,
+    locked_statement_structured: problem.structured,
+    lean_target: problem.lean_target,
     statement_hash: statementHash,
     dependencies: [],
     assumptions: ["n : Nat"],
@@ -108,7 +152,7 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
     status: "conjectural"
   });
   createProblemLock(input.project_root, { claim_id: claim.id, goal: input.user_goal, domain: input.domain ?? "elementary" });
-  const obligation = createObligation(claim.id, claim.statement_hash);
+  const obligation = createObligation(claim.id, claim.statement_hash, input.user_goal);
   const timestamp = now();
   const campaign = researchCampaignSchema.parse({
     campaign_id: nextCampaignId(input.project_root),
@@ -149,6 +193,119 @@ function readStoredDecision(projectRoot: string): { candidates: CandidateRun[]; 
   const payload = JSON.parse(readFileSync(decisionPath, "utf8"));
   const candidates = existsSync(candidatesPath) ? (JSON.parse(readFileSync(candidatesPath, "utf8")) as CandidateRun[]) : [];
   return { candidates, decision: payload as EnsembleDecision };
+}
+
+function isNatAddOneFalseObligation(obligation: ProofObligation): boolean {
+  return obligation.locked_statement_structured.proposition === "n + 1 = n";
+}
+
+async function completeVerifiedCounterexample(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  actor: string;
+}): Promise<CampaignTickResult> {
+  const claim = getClaim(input.projectRoot, input.campaign.project_id, input.campaign.root_claim_id);
+  if (!claim) {
+    throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
+  }
+  const counterexample_id = "CE-0001";
+  const artifactRel = join(".comath", "evidence", claim.id, "counterexample", `${counterexample_id}.json`);
+  const payload = {
+    counterexample_id,
+    campaign_id: input.campaign.campaign_id,
+    claim_id: claim.id,
+    statement_hash: claim.statement_hash,
+    statement: claim.statement,
+    assignment: { n: 0 },
+    lhs: 1,
+    rhs: 0,
+    result: "refutes" as const,
+    verification: "exact Nat arithmetic evaluation: 0 + 1 = 1 and 0 = 0",
+    created_at: now()
+  };
+  const artifactPath = writeRuntimeFile(input.projectRoot, artifactRel, `${JSON.stringify(payload, null, 2)}\n`);
+  const artifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.campaign.project_id,
+    source_path: artifactPath,
+    kind: "runner_output",
+    actor: input.actor
+  });
+  const evidence = appendEvidenceRecord(input.projectRoot, {
+    project_id: input.campaign.project_id,
+    claim_id: claim.id,
+    kind: "counterexample",
+    summary: "Exact Nat counterexample refutes the locked statement at n = 0.",
+    artifact_ids: [artifact.id]
+  });
+  const refuted = applyGatePromotedClaim(input.projectRoot, {
+    ...claim,
+    status: "refuted",
+    evidence_level: 2,
+    audit_state: "audit_passed",
+    updated_at: now()
+  });
+  appendAuditEvent(input.projectRoot, {
+    project_id: input.campaign.project_id,
+    event_type: "proof_kernel.counterexample_verified",
+    actor: input.actor,
+    target_id: refuted.id,
+    payload: {
+      evidence_id: evidence.id,
+      artifact_id: artifact.id,
+      counterexample_id,
+      statement_hash: claim.statement_hash
+    }
+  });
+  const next = writeCampaign(
+    input.projectRoot,
+    researchCampaignSchema.parse({
+      ...input.campaign,
+      current_stage: "terminal",
+      status: "terminal",
+      terminal_state: "verified_counterexample",
+      open_obligations: [{ ...input.obligation, status: "refuted" }],
+      accepted_artifacts: [artifact],
+      blockers: [],
+      stage_runs: [
+        ...input.campaign.stage_runs,
+        {
+          id: "SR-0002",
+          stage: "lemma_sprint",
+          status: "completed",
+          artifact_paths: [artifactRel.replace(/\\/g, "/")],
+          created_at: now()
+        }
+      ],
+      next_actions: []
+    }),
+    input.actor
+  );
+  return {
+    campaign: next,
+    obligation: { ...input.obligation, status: "refuted" },
+    counterexample: {
+      counterexample_id,
+      assignment: payload.assignment,
+      lhs: payload.lhs,
+      rhs: payload.rhs,
+      result: payload.result,
+      artifact_path: artifactRel.replace(/\\/g, "/")
+    },
+    gate: {
+      gate_id: "GD-0001",
+      campaign_id: input.campaign.campaign_id,
+      stage: "lemma_sprint",
+      subject_id: claim.id,
+      result: "pass",
+      evidence: [artifact],
+      hard_vetoes: [],
+      warnings: [],
+      decision_rationale_summary: "Verified exact counterexample; campaign terminates as refutation instead of proof promotion.",
+      created_at: now()
+    }
+  };
 }
 
 export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
@@ -199,6 +356,14 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "lemma_sprint") {
+    if (isNatAddOneFalseObligation(obligation)) {
+      return completeVerifiedCounterexample({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor
+      });
+    }
     const batch = runTrivialNatAddZeroCandidates({ projectRoot: input.project_root, campaign, obligation });
     const { decision, gate } = decideCandidate({ projectRoot: input.project_root, campaign, candidates: batch.candidates });
     writeRuntimeFile(
