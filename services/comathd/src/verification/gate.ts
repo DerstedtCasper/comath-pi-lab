@@ -10,6 +10,7 @@ import { hasSuccessfulCitationConditionMatch } from "../literature/store.js";
 import { assertPathAllowed } from "../security/path-policy.js";
 import {
   claimSchema,
+  finalLeanReplaySchema,
   gateResultSchema,
   type ArtifactRef,
   type Claim,
@@ -187,6 +188,33 @@ function runnerReportsForEvidence(
   return reports;
 }
 
+function hasPassedProofKernelReplay(
+  projectRoot: string,
+  request: Pick<ClaimPromotionRequest, "claim_id">,
+  artifacts: ArtifactRef[]
+): boolean {
+  for (const artifact of artifacts) {
+    if (artifact.kind !== "runner_output") {
+      continue;
+    }
+    try {
+      const path = assertPathAllowed(projectRoot, artifact.path, { purpose: "read", resolveRealpath: true });
+      const replay = finalLeanReplaySchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
+      if (
+        replay.success &&
+        replay.data.claim_id === request.claim_id &&
+        replay.data.result === "pass" &&
+        replay.data.exit_code === 0
+      ) {
+        return true;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return false;
+}
+
 function evidenceBindingVetoes(projectRoot: string, request: ClaimPromotionRequest): string[] {
   const vetoes: string[] = [];
   const evidenceById = new Map(readEvidenceRecords(projectRoot, request.project_id).map((record) => [record.id, record]));
@@ -312,6 +340,9 @@ function statusEvidenceVetoes(projectRoot: string, request: ClaimPromotionReques
     }
     if (!artifactKinds.has("code") && !artifactKinds.has("runner_output")) {
       vetoes.push("formally_checked requires proof artifact");
+    }
+    if (!hasPassedProofKernelReplay(projectRoot, request, artifacts)) {
+      vetoes.push("formally_checked requires passed proof-kernel final replay manifest");
     }
   }
 

@@ -265,6 +265,198 @@ export const gateResultSchema = z
   })
   .strict();
 
+export const campaignStageSchema = z.enum([
+  "initialized",
+  "problem_lock",
+  "context_built",
+  "planning",
+  "running_stage",
+  "candidate_generation",
+  "candidate_verification",
+  "candidate_arbitration",
+  "lemma_sprint",
+  "integration",
+  "adversarial_review",
+  "repair",
+  "final_static_audit",
+  "final_global_lean_replay",
+  "final_report_and_memory_update",
+  "terminal"
+]);
+
+export const campaignStatusSchema = z.enum(["running", "paused", "blocked", "repairing", "terminal"]);
+
+export const campaignTerminalStateSchema = z.enum([
+  "formal_proof_verified",
+  "verified_counterexample",
+  "user_visible_theorem_repair_required",
+  "replayable_environment_blocker",
+  "user_cancelled"
+]);
+
+export const proofObligationStatusSchema = z.enum([
+  "queued",
+  "candidate_search",
+  "candidate_selected",
+  "kernel_checked",
+  "refuted",
+  "blocked",
+  "integrated"
+]);
+
+export const proofObligationSchema = z
+  .object({
+    obligation_id: stableId,
+    claim_id: stableId,
+    parent_obligation_id: stableId.optional(),
+    locked_statement_nl: z.string().min(1),
+    locked_statement_structured: z.record(z.string(), z.unknown()).default({}),
+    lean_target: z.string().min(1).optional(),
+    statement_hash: z.string().min(1),
+    dependencies: z.array(stableId).default([]),
+    assumptions: z.array(z.string()).default([]),
+    status: proofObligationStatusSchema
+  })
+  .strict();
+
+export const candidateVariantIdSchema = z.enum(["V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8"]);
+
+export const candidateStateSchema = z.enum([
+  "running",
+  "submitted",
+  "candidate_failed",
+  "candidate_plausible_only",
+  "candidate_skeleton_checked",
+  "candidate_kernel_checked",
+  "candidate_refutes_step",
+  "candidate_blocked"
+]);
+
+export const candidateRunSchema = z
+  .object({
+    candidate_id: stableId,
+    campaign_id: stableId,
+    stage: campaignStageSchema,
+    obligation_id: stableId,
+    variant_id: candidateVariantIdSchema,
+    workspace_path: z.string().min(1),
+    locked_statement_hash: z.string().min(1),
+    candidate_statement_hash: z.string().min(1).optional(),
+    state: candidateStateSchema,
+    manifest_path: z.string().min(1).optional(),
+    score: z.number().optional(),
+    hard_vetoes: z.array(z.string()).default([]),
+    artifacts: z.array(artifactRefSchema).default([]),
+    replay_command: z.string().min(1).optional()
+  })
+  .strict();
+
+export const candidateManifestSchema = z
+  .object({
+    candidate_id: stableId,
+    variant_id: candidateVariantIdSchema,
+    stage: campaignStageSchema,
+    obligation_id: stableId,
+    locked_statement_hash: z.string().min(1),
+    candidate_statement_hash: z.string().min(1).optional(),
+    statement_equivalence_claim: z.enum(["exact", "equivalent", "weaker", "stronger", "different", "unknown"]),
+    introduced_assumptions: z.array(z.string()).default([]),
+    introduced_dependencies: z.array(z.string()).default([]),
+    lean_files: z.array(z.string()).default([]),
+    logs: z.array(z.string()).default([]),
+    evidence: z.array(z.string()).default([]),
+    hard_vetoes: z.array(z.string()).default([]),
+    failures: z.array(z.string()).default([]),
+    replay_command: z.string().default(""),
+    summary: z.string().default(""),
+    maintainability_notes: z.string().default("")
+  })
+  .strict();
+
+export const gateDecisionSchema = z
+  .object({
+    gate_id: stableId,
+    campaign_id: stableId,
+    stage: campaignStageSchema,
+    subject_id: stableId,
+    result: z.enum(["pass", "fail", "blocked", "repair_required"]),
+    selected_candidate_id: stableId.optional(),
+    evidence: z.array(artifactRefSchema).default([]),
+    hard_vetoes: z.array(z.string()).default([]),
+    warnings: z.array(z.string()).default([]),
+    decision_rationale_summary: z.string().min(1),
+    created_at: isoTimestamp
+  })
+  .strict();
+
+export const finalLeanReplaySchema = z
+  .object({
+    replay_id: stableId,
+    campaign_id: stableId,
+    claim_id: stableId,
+    theorem_name: z.string().min(1),
+    clean_workspace_path: z.string().min(1),
+    lean_toolchain: z.string().min(1),
+    lakefile_hash: sha256,
+    local_file_hashes: z.record(z.string(), sha256),
+    command: z.string().min(1),
+    exit_code: z.number().int(),
+    stdout_path: z.string().min(1),
+    stderr_path: z.string().min(1),
+    static_audit_path: z.string().min(1),
+    axiom_profile_path: z.string().min(1),
+    dependency_closure_path: z.string().min(1),
+    statement_equivalence_path: z.string().min(1),
+    result: z.enum(["pass", "fail"])
+  })
+  .strict();
+
+export const stageRunRefSchema = z
+  .object({
+    id: stableId,
+    stage: campaignStageSchema,
+    status: z.enum(["completed", "blocked", "failed"]),
+    artifact_paths: z.array(z.string()).default([]),
+    created_at: isoTimestamp
+  })
+  .strict();
+
+export const researchCampaignSchema = z
+  .object({
+    campaign_id: stableId,
+    project_id: stableId,
+    root_claim_id: stableId,
+    user_goal: z.string().min(1),
+    current_stage: campaignStageSchema,
+    status: campaignStatusSchema,
+    strict_mode: z.boolean(),
+    terminal_state: campaignTerminalStateSchema.optional(),
+    stage_runs: z.array(stageRunRefSchema).default([]),
+    open_obligations: z.array(proofObligationSchema).default([]),
+    accepted_artifacts: z.array(artifactRefSchema).default([]),
+    blockers: z.array(z.record(z.string(), z.unknown())).default([]),
+    next_actions: z.array(z.string()).default([]),
+    created_at: isoTimestamp,
+    updated_at: isoTimestamp
+  })
+  .strict()
+  .superRefine((campaign, ctx) => {
+    if (campaign.status === "terminal" && !campaign.terminal_state) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "terminal campaign requires terminal_state",
+        path: ["terminal_state"]
+      });
+    }
+    if (campaign.status !== "terminal" && campaign.terminal_state) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "non-terminal campaign cannot carry terminal_state",
+        path: ["terminal_state"]
+      });
+    }
+  });
+
 export const citationRecordSchema = z
   .object({
     id: stableId,
@@ -370,6 +562,17 @@ export type PathPolicyDecision = z.infer<typeof pathPolicyDecisionSchema>;
 export type RunnerPermissionEnvelope = z.infer<typeof runnerPermissionEnvelopeSchema>;
 export type StableIdMapEntry = z.infer<typeof stableIdMapEntrySchema>;
 export type GateResult = z.infer<typeof gateResultSchema>;
+export type CampaignStage = z.infer<typeof campaignStageSchema>;
+export type CampaignStatus = z.infer<typeof campaignStatusSchema>;
+export type CampaignTerminalState = z.infer<typeof campaignTerminalStateSchema>;
+export type ProofObligation = z.infer<typeof proofObligationSchema>;
+export type CandidateVariantId = z.infer<typeof candidateVariantIdSchema>;
+export type CandidateRun = z.infer<typeof candidateRunSchema>;
+export type CandidateManifest = z.infer<typeof candidateManifestSchema>;
+export type GateDecision = z.infer<typeof gateDecisionSchema>;
+export type FinalLeanReplay = z.infer<typeof finalLeanReplaySchema>;
+export type StageRunRef = z.infer<typeof stageRunRefSchema>;
+export type ResearchCampaign = z.infer<typeof researchCampaignSchema>;
 export type CitationRecord = z.infer<typeof citationRecordSchema>;
 export type PaperMarginNote = z.infer<typeof paperMarginNoteSchema>;
 export type GraphPatchUpdatedNode = z.infer<typeof graphPatchUpdatedNodeSchema>;

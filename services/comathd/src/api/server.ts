@@ -33,6 +33,8 @@ import {
   transitionWorkstreamStatus,
   writeWorkstreamReport
 } from "../workstream/workstream-store.js";
+import { getCampaign, writeCampaign } from "../proof-kernel/campaign/research-campaign.js";
+import { replayCampaign, startCampaign, tickCampaign } from "../proof-kernel/campaign/campaign-tick.js";
 
 export type InjectRequest = {
   method: "GET" | "POST";
@@ -84,6 +86,20 @@ async function route(method: string, path: string, body: unknown, context: Route
       })
     ],
     ["POST /project/init", (payload) => initProject(payload as { name?: string; root_path: string })],
+    [
+      "POST /campaign/start",
+      (payload) =>
+        startCampaign(
+          payload as {
+            project_root: string;
+            project_name?: string;
+            user_goal: string;
+            domain?: string;
+            strict_mode?: boolean;
+            actor?: string;
+          }
+        )
+    ],
     ["POST /project/open", (payload) => openProject(payload as { root_path: string })],
     [
       "GET /project/status",
@@ -354,6 +370,146 @@ async function route(method: string, path: string, body: unknown, context: Route
       }
     ]
   ]);
+
+  const getCampaignOr404 = (projectRoot: string, campaignId: string) => {
+    const campaign = getCampaign(projectRoot, campaignId);
+    if (!campaign) {
+      return null;
+    }
+    return campaign;
+  };
+
+  const dynamicRouteError = (error: unknown): InjectResponse => {
+    const comathError = toComathError(error);
+    return {
+      status: comathError.statusCode,
+      body: {
+        ok: false,
+        code: comathError.code,
+        error: comathError.message
+      }
+    };
+  };
+
+  if (method.toUpperCase() === "GET") {
+    const statusMatch = /^\/campaign\/([^/]+)\/status$/.exec(url.pathname);
+    if (statusMatch) {
+      try {
+        const campaign = getCampaignOr404(
+          url.searchParams.get("project_root") ?? "",
+          decodeURIComponent(statusMatch[1] ?? "")
+        );
+        return campaign
+          ? success({ campaign })
+          : { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const nextActionsMatch = /^\/campaign\/([^/]+)\/next-actions$/.exec(url.pathname);
+    if (nextActionsMatch) {
+      try {
+        const campaign = getCampaignOr404(
+          url.searchParams.get("project_root") ?? "",
+          decodeURIComponent(nextActionsMatch[1] ?? "")
+        );
+        return campaign
+          ? success({ campaign_id: campaign.campaign_id, next_actions: campaign.next_actions })
+          : { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+  }
+
+  if (method.toUpperCase() === "POST") {
+    const tickMatch = /^\/campaign\/([^/]+)\/tick$/.exec(url.pathname);
+    if (tickMatch) {
+      try {
+        const request = body as { project_root: string; actor?: string };
+        return success(
+          await tickCampaign({
+            project_root: request.project_root,
+            campaign_id: decodeURIComponent(tickMatch[1] ?? ""),
+            actor: request.actor
+          })
+        );
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const replayMatch = /^\/campaign\/([^/]+)\/replay$/.exec(url.pathname);
+    if (replayMatch) {
+      try {
+        const request = body as { project_root: string; actor?: string };
+        return success(
+          await replayCampaign({
+            project_root: request.project_root,
+            campaign_id: decodeURIComponent(replayMatch[1] ?? ""),
+            actor: request.actor
+          })
+        );
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const finalAuditMatch = /^\/campaign\/([^/]+)\/final-audit$/.exec(url.pathname);
+    if (finalAuditMatch) {
+      try {
+        const request = body as { project_root: string; actor?: string };
+        return success(
+          await replayCampaign({
+            project_root: request.project_root,
+            campaign_id: decodeURIComponent(finalAuditMatch[1] ?? ""),
+            actor: request.actor
+          })
+        );
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const pauseMatch = /^\/campaign\/([^/]+)\/pause$/.exec(url.pathname);
+    if (pauseMatch) {
+      try {
+        const request = body as { project_root: string; actor?: string };
+        const campaign = getCampaignOr404(request.project_root, decodeURIComponent(pauseMatch[1] ?? ""));
+        if (!campaign) {
+          return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
+        }
+        if (campaign.status === "terminal") {
+          return success({ campaign });
+        }
+        return success({
+          campaign: writeCampaign(request.project_root, { ...campaign, status: "paused" }, request.actor ?? "api")
+        });
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const resumeMatch = /^\/campaign\/([^/]+)\/resume$/.exec(url.pathname);
+    if (resumeMatch) {
+      try {
+        const request = body as { project_root: string; actor?: string };
+        const campaign = getCampaignOr404(request.project_root, decodeURIComponent(resumeMatch[1] ?? ""));
+        if (!campaign) {
+          return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
+        }
+        if (campaign.status === "terminal") {
+          return success({ campaign });
+        }
+        return success({
+          campaign: writeCampaign(request.project_root, { ...campaign, status: "running" }, request.actor ?? "api")
+        });
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+  }
 
   const handler = handlers.get(`${method.toUpperCase()} ${url.pathname}`);
   if (!handler) {
