@@ -21,6 +21,11 @@ function assertIncludes(path, needle) {
 
 assertFile(".github/workflows/ci.yml");
 assertFile(".github/workflows/release-guard.yml");
+assertFile("python/requirements.txt");
+assertIncludes("python/requirements.txt", "sympy==1.14.0");
+assertIncludes(".github/workflows/ci.yml", "actions/setup-python@v5");
+assertIncludes(".github/workflows/ci.yml", "python-version: \"3.13\"");
+assertIncludes(".github/workflows/ci.yml", "python -m pip install -r python/requirements.txt");
 assertIncludes(".github/workflows/ci.yml", "corepack pnpm install --frozen-lockfile");
 assertIncludes(".github/workflows/ci.yml", "corepack pnpm build");
 assertIncludes(".github/workflows/ci.yml", "corepack pnpm typecheck");

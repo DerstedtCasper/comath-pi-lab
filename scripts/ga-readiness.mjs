@@ -36,7 +36,12 @@ function assertRootScripts() {
 function assertCiWorkflow() {
   assertFile(".github/workflows/ci.yml");
   assertFile(".github/workflows/release-guard.yml");
+  assertFile("python/requirements.txt");
+  assertContains("python/requirements.txt", "sympy==1.14.0");
   for (const command of [
+    "actions/setup-python@v5",
+    "python-version: \"3.13\"",
+    "python -m pip install -r python/requirements.txt",
     "corepack pnpm install --frozen-lockfile",
     "corepack pnpm build",
     "corepack pnpm typecheck",
