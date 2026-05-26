@@ -37,10 +37,15 @@ function assertCiWorkflow() {
   assertFile(".github/workflows/ci.yml");
   assertFile(".github/workflows/release-guard.yml");
   assertFile("python/requirements.txt");
+  assertFile("lean-toolchain");
   assertContains("python/requirements.txt", "sympy==1.14.0");
+  assertContains("lean-toolchain", "leanprover/lean4:v4.27.0");
   for (const command of [
     "actions/setup-python@v5",
     "python-version: \"3.13\"",
+    "https://elan.lean-lang.org/elan-init.ps1",
+    "lean-toolchain",
+    "lean.exe\" --version",
     "python -m pip install -r python/requirements.txt",
     "corepack pnpm install --frozen-lockfile",
     "corepack pnpm build",

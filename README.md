@@ -11,6 +11,7 @@ It is **not GA** and must not be tagged or announced as GA until target-runtime 
 - Node.js: `>=22.19.0`
 - Package manager: `pnpm@11.3.0` via Corepack
 - Python: `>=3.13` with `python/requirements.txt`
+- Lean: `lean-toolchain` via elan for CI formal-proof authority fixtures
 - Root validation:
   - `corepack pnpm install --frozen-lockfile`
   - `python -m pip install -r python/requirements.txt`

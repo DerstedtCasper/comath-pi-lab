@@ -22,9 +22,14 @@ function assertIncludes(path, needle) {
 assertFile(".github/workflows/ci.yml");
 assertFile(".github/workflows/release-guard.yml");
 assertFile("python/requirements.txt");
+assertFile("lean-toolchain");
 assertIncludes("python/requirements.txt", "sympy==1.14.0");
+assertIncludes("lean-toolchain", "leanprover/lean4:v4.27.0");
 assertIncludes(".github/workflows/ci.yml", "actions/setup-python@v5");
 assertIncludes(".github/workflows/ci.yml", "python-version: \"3.13\"");
+assertIncludes(".github/workflows/ci.yml", "https://elan.lean-lang.org/elan-init.ps1");
+assertIncludes(".github/workflows/ci.yml", "lean-toolchain");
+assertIncludes(".github/workflows/ci.yml", "lean.exe\" --version");
 assertIncludes(".github/workflows/ci.yml", "python -m pip install -r python/requirements.txt");
 assertIncludes(".github/workflows/ci.yml", "corepack pnpm install --frozen-lockfile");
 assertIncludes(".github/workflows/ci.yml", "corepack pnpm build");

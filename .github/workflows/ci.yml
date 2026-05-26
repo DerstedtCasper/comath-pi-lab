@@ -28,6 +28,17 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install Lean
+        run: |
+          $ErrorActionPreference = "Stop"
+          $toolchain = (Get-Content -Raw lean-toolchain).Trim()
+          Invoke-WebRequest -Uri "https://elan.lean-lang.org/elan-init.ps1" -OutFile "elan-init.ps1"
+          Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+          .\elan-init.ps1 -NoPrompt 1 -DefaultToolchain $toolchain
+          Remove-Item -LiteralPath "elan-init.ps1"
+          "$env:USERPROFILE\.elan\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "$env:USERPROFILE\.elan\bin\lean.exe" --version
+
       - name: Enable Corepack
         run: |
           corepack enable
