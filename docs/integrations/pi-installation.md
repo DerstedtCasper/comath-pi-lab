@@ -60,6 +60,14 @@ For Node/TypeScript harnesses, use Pi SDK `createAgentSession()` with a `Default
 pi --mode rpc
 ```
 
+There are three distinct endpoints in the product flow:
+
+- Pi model API: `http://127.0.0.1:6005/v1`, configured in the Pi model registry as provider `comath-local`.
+- Pi SDK/RPC control plane: the caller creates or drives a Pi agent session and lets the model choose registered CoMath tools.
+- CoMath service API: `comathd`, which owns project state, artifacts, provenance, and Lean execution.
+
+The model must submit Lean source by making a Pi tool call to `comath_lean_check`; direct host-side translation or a direct host call to `/lean/check` is not accepted as autonomous Pi workflow evidence.
+
 The CoMath extension exposes `comath.research.start` as the SDK-oriented entry tool. A Pi SDK/RPC caller can invoke that tool with:
 
 ```json
@@ -89,6 +97,21 @@ Other registered tools cover the full daemon research surface rather than a sepa
 - research memory and literature: memory health/rebuild/search/context-pack, BibTeX/PDF import, citation registration, citation-condition check, literature list.
 
 All trusted mutations go through `comathd`. The Pi SDK/RPC layer is therefore the product control plane, while `comathd` remains the auditable mutation gateway and local service boundary.
+
+## Autonomous Lean Proof Validation
+
+Repository regression uses `phase24-pi-sdk-autonomous-lean.test.mjs`. It creates a real Pi `AgentSession`, loads the CoMath extension, lets Pi's faux provider emit a `comath_lean_check` tool call, and accepts only `turn_end.toolResults` containing a CoMath Lean kernel result. This test guards the workflow shape without requiring a network model.
+
+For a real model run through the local 6005 endpoint:
+
+```powershell
+$env:COMATH_LAB_API_KEY = "<runtime key>"
+$env:COMATH_PI_PROVIDER = "comath-local"
+$env:COMATH_PI_MODEL = "官方/deepseek-v4-pro"
+corepack pnpm pi:lean:real
+```
+
+The command starts a temporary local `comathd`, creates a claim, creates a Pi SDK session with only `comath_lean_check` active, and asks `官方/deepseek-v4-pro` to generate Lean source and call the tool itself. It fails if no Pi tool result is produced, if the model returns plain JSON/text instead of a tool call, or if Lean is not kernel checked.
 
 ## Development CLI Fallback
 

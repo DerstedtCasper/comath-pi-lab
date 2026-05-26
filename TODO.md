@@ -275,6 +275,8 @@
 - [x] Validate official package manifest keys: `extensions`, `skills`, `prompts`, and `themes`.
 - [x] Preserve Research Alpha descriptors while adding official adapter tests.
 - [x] Enforce headless mode requirement: no UI calls unless `ctx.hasUI`.
+- [x] Add Pi SDK autonomous Lean workflow regression: a Pi `AgentSession` receives a model-authored `comath_lean_check` tool call and the only accepted result is `turn_end.toolResults` containing the CoMath Lean kernel-check payload.
+- [ ] Run external real-model validation with `COMATH_LAB_API_KEY`, provider `comath-local`, and model `官方/deepseek-v4-pro`; current repository validation intentionally does not commit credentials.
 
 ### P5: Session Lock And Mutation Queue
 
@@ -302,7 +304,7 @@
 ## Known Deferred Items
 
 - [ ] Full MathProve workspace runner integration beyond the fail-closed bridge manifest.
-- [ ] Production Pi extension runtime registration, after official API assumptions are revalidated against the installed Pi version.
+- [ ] Production Pi extension runtime registration with real-model proof evidence after `COMATH_LAB_API_KEY` is available for the local 6005 model endpoint.
 - [ ] Dedicated service read routes for claim/evidence/gate listing so the dashboard no longer uses degraded paper-derived read models.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Runner re-execution replay under an OS/network sandbox with dependency/version checks.

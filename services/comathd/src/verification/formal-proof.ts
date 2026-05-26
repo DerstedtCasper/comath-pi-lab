@@ -1,14 +1,15 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { importArtifact, listArtifactRefs } from "../artifacts/store.js";
 import { applyGatePromotedClaim, getClaim } from "../claim/claim-store.js";
 import { ComathError } from "../errors.js";
-import { readEvidenceRecords } from "../evidence/store.js";
+import { appendEvidenceRecord, readEvidenceRecords } from "../evidence/store.js";
 import { appendProvenanceEvent, readProvenanceEvents } from "../provenance/ledger.js";
 import { assertPathAllowed } from "../security/path-policy.js";
-import { claimSchema, formalProofRunSchema, type ArtifactRef, type Claim, type FormalProofRun } from "../types/schemas.js";
+import { claimSchema, formalProofRunSchema, type ArtifactRef, type Claim, type Evidence, type FormalProofRun } from "../types/schemas.js";
 import { nextSequentialId } from "../utils/id.js";
 
 const execFileAsync = promisify(execFile);
@@ -36,6 +37,38 @@ export type LeanProofCheckInput = {
   timeout_ms?: number;
 };
 
+export type ModelLeanProofCheckInput = {
+  project_id: string;
+  claim_id: string;
+  lean_source: string;
+  theorem_name: string;
+  dependency_hash: string;
+  actor: string;
+  model_id: string;
+  model_response_id?: string;
+  tool_call_id: string;
+  timeout_ms?: number;
+};
+
+export type ModelLeanSourceSubmission = {
+  origin: "model_tool_call";
+  project_id: string;
+  claim_id: string;
+  theorem_name: string;
+  model_id: string;
+  model_response_id?: string;
+  tool_call_id: string;
+  source_sha256: string;
+  source_bytes: number;
+};
+
+export type ModelLeanProofCheckResult = {
+  run: FormalProofRun;
+  evidence: Evidence;
+  proof_path: string;
+  submission: ModelLeanSourceSubmission;
+};
+
 function formalProofRunsPath(projectRoot: string): string {
   return assertPathAllowed(projectRoot, join(".comath", "evidence", "formal-proof-runs.jsonl"), {
     purpose: "runtime-write"
@@ -50,6 +83,19 @@ function leanLogPath(projectRoot: string, claimId: string, existingIds: readonly
       purpose: "runtime-write"
     })
   };
+}
+
+function safeProofName(input: string): string {
+  const normalized = input.replace(/[^A-Za-z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+  return normalized.slice(0, 80) || "model_lean_proof";
+}
+
+function modelLeanProofPath(projectRoot: string, claimId: string, theoremName: string): string {
+  return assertPathAllowed(
+    projectRoot,
+    join(".comath", "formal-proofs", claimId, `${Date.now()}-${safeProofName(theoremName)}.lean`),
+    { purpose: "runtime-write" }
+  );
 }
 
 export function readFormalProofRuns(projectRoot: string, projectId?: string): FormalProofRun[] {
@@ -261,7 +307,29 @@ export function hasFormalProofAuditCertification(
 }
 
 export function containsLeanPlaceholders(source: string): boolean {
-  return /(^|[^A-Za-z0-9_])(sorry|admit)([^A-Za-z0-9_]|$)/.test(source);
+  return /(^|[^A-Za-z0-9_])(sorry|admit|axiom|constant|unsafe|opaque)([^A-Za-z0-9_]|$)/.test(source);
+}
+
+function sha256Text(input: string): string {
+  return createHash("sha256").update(input, "utf8").digest("hex");
+}
+
+function requireNonEmptyString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ComathError(`${field} is required`, { statusCode: 400, code: "MODEL_LEAN_SUBMISSION_INVALID" });
+  }
+  return value;
+}
+
+function assertTheoremNameAppears(source: string, theoremName: string): void {
+  const escaped = theoremName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`(^|\\s)(theorem|lemma)\\s+${escaped}([^A-Za-z0-9_']|$)`);
+  if (!pattern.test(source)) {
+    throw new ComathError("lean_source must define theorem_name", {
+      statusCode: 400,
+      code: "LEAN_THEOREM_NAME_MISSING"
+    });
+  }
 }
 
 export function isLean4VersionOutput(output: string): boolean {
@@ -405,6 +473,83 @@ export async function runLeanProofCheck(projectRoot: string, input: LeanProofChe
     vetoes,
     warnings
   });
+}
+
+export async function runModelLeanProofCheck(
+  projectRoot: string,
+  input: ModelLeanProofCheckInput
+): Promise<ModelLeanProofCheckResult> {
+  if (!input.lean_source || typeof input.lean_source !== "string") {
+    throw new ComathError("lean_source is required", { statusCode: 400, code: "LEAN_SOURCE_REQUIRED" });
+  }
+  const theoremName = requireNonEmptyString(input.theorem_name, "theorem_name");
+  const dependencyHash = requireNonEmptyString(input.dependency_hash, "dependency_hash");
+  const modelId = requireNonEmptyString(input.model_id, "model_id");
+  const toolCallId = requireNonEmptyString(input.tool_call_id, "tool_call_id");
+  if (Buffer.byteLength(input.lean_source, "utf8") > 256 * 1024) {
+    throw new ComathError("lean_source exceeds 256 KiB limit", {
+      statusCode: 413,
+      code: "LEAN_SOURCE_TOO_LARGE"
+    });
+  }
+  assertTheoremNameAppears(input.lean_source, theoremName);
+  const sourceSha256 = sha256Text(input.lean_source);
+  const proofPath = modelLeanProofPath(projectRoot, input.claim_id, input.theorem_name);
+  mkdirSync(dirname(proofPath), { recursive: true });
+  writeFileSync(proofPath, input.lean_source, "utf8");
+
+  const run = await runLeanProofCheck(projectRoot, {
+    project_id: input.project_id,
+    claim_id: input.claim_id,
+    proof_path: proofPath,
+    theorem_name: theoremName,
+    dependency_hash: dependencyHash,
+    actor: input.actor,
+    timeout_ms: Math.min(Math.max(input.timeout_ms ?? 30_000, 1_000), 120_000)
+  });
+  const submission: ModelLeanSourceSubmission = {
+    origin: "model_tool_call",
+    project_id: input.project_id,
+    claim_id: input.claim_id,
+    theorem_name: theoremName,
+    model_id: modelId,
+    model_response_id: input.model_response_id,
+    tool_call_id: toolCallId,
+    source_sha256: sourceSha256,
+    source_bytes: Buffer.byteLength(input.lean_source, "utf8")
+  };
+  appendProvenanceEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "formal_proof.model_source_submitted",
+    actor: input.actor,
+    target_id: input.claim_id,
+    payload: {
+      ...submission,
+      formal_proof_run_id: run.id,
+      proof_path: proofPath,
+      proof_artifact_id: run.proof_artifact_id,
+      log_artifact_id: run.log_artifact_id,
+      status: run.status,
+      kernel_checked: run.kernel_checked
+    }
+  });
+  const evidence = appendEvidenceRecord(projectRoot, {
+    project_id: input.project_id,
+    claim_id: input.claim_id,
+    kind: "lean",
+    summary: [
+      `Model tool-call Lean source checked by CoMath Lean authority.`,
+      `origin=${submission.origin}`,
+      `model_id=${modelId}`,
+      `tool_call_id=${toolCallId}`,
+      `source_sha256=${sourceSha256}`,
+      `formal_proof_run_id=${run.id}`,
+      `status=${run.status}`,
+      `kernel_checked=${run.kernel_checked}`
+    ].join(" "),
+    artifact_ids: [run.proof_artifact_id, run.log_artifact_id].filter((id): id is string => typeof id === "string")
+  });
+  return { run, evidence, proof_path: proofPath, submission };
 }
 
 export function certifyClaimForFormalProof(

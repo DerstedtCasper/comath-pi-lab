@@ -14,6 +14,10 @@
     "./toolkit": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./sdk-runner": {
+      "types": "./dist/pi-sdk-runner.d.ts",
+      "default": "./dist/pi-sdk-runner.js"
     }
   },
   "files": [
@@ -49,7 +53,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-pi-official-adapter.test.mjs && node tests/phase22-pi-install.test.mjs && node tests/phase23-pi-control-surface.test.mjs"
+    "test": "npm run build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-pi-official-adapter.test.mjs && node tests/phase22-pi-install.test.mjs && node tests/phase23-pi-control-surface.test.mjs && node tests/phase24-pi-sdk-autonomous-lean.test.mjs"
   },
   "dependencies": {
     "typebox": "1.1.38"

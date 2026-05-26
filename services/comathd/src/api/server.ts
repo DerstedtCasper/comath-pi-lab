@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { URL } from "node:url";
+import { z } from "zod";
 import { appendAuditEvent, readAuditEvents } from "../audit/jsonl-writer.js";
 import { toComathError } from "../errors.js";
 import { getComathdStatus } from "../status.js";
@@ -7,6 +8,7 @@ import { getProjectStatus, initProject, openProject } from "../project/project-s
 import { getClaim, linkClaims, readClaims, registerClaim, updateClaim } from "../claim/claim-store.js";
 import { appendEvidenceRecord, readEvidenceRecords } from "../evidence/store.js";
 import { promoteClaim } from "../verification/gate.js";
+import { runModelLeanProofCheck } from "../verification/formal-proof.js";
 import {
   checkPaper,
   exportPaper,
@@ -55,6 +57,22 @@ type RouteContext = {
   memoryDbs: Map<string, InMemoryResearchMemoryDB>;
   graphIndexes: Map<string, MathGraphIndex>;
 };
+
+const leanCheckRequestSchema = z
+  .object({
+    project_root: z.string().min(1),
+    project_id: z.string().min(1),
+    claim_id: z.string().min(1),
+    lean_source: z.string().min(1).max(256 * 1024),
+    theorem_name: z.string().min(1),
+    dependency_hash: z.string().min(1),
+    model_id: z.string().min(1),
+    model_response_id: z.string().min(1).optional(),
+    tool_call_id: z.string().min(1),
+    actor: z.string().min(1).optional(),
+    timeout_ms: z.number().int().min(1_000).max(120_000).optional()
+  })
+  .strict();
 
 function memoryKey(projectRoot: string, projectId: string): string {
   return `${projectRoot}\0${projectId}`;
@@ -209,6 +227,24 @@ async function route(method: string, path: string, body: unknown, context: Route
           }
         });
         return { evidence };
+      }
+    ],
+    [
+      "POST /lean/check",
+      async (payload) => {
+        const body = leanCheckRequestSchema.parse(payload);
+        return runModelLeanProofCheck(body.project_root, {
+          project_id: body.project_id,
+          claim_id: body.claim_id,
+          lean_source: body.lean_source,
+          theorem_name: body.theorem_name,
+          dependency_hash: body.dependency_hash,
+          model_id: body.model_id,
+          model_response_id: body.model_response_id,
+          tool_call_id: body.tool_call_id,
+          actor: body.actor ?? "api",
+          timeout_ms: body.timeout_ms
+        });
       }
     ],
     [

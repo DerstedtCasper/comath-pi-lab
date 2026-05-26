@@ -1095,3 +1095,41 @@ Result: False; no worktree-root runtime state was left behind.
 ### Residual Risks
 
 Lean kernel acceptance is now a gate authority when concrete proof artifacts are checked, but informal paper prose equivalence still requires mathematical review. MathProve is still a fail-closed bridge/manifest producer until the full skill workspace runner is integrated. TriviumDB native behavior remains target-platform dependent. Pi adapter compatibility is tested at descriptor/manifest level and still needs validation against an installed official Pi runtime. Session locks coordinate local project writers; they are not a distributed lock.
+
+## Pi SDK Autonomous Lean Workflow Review Log
+
+### Scope
+
+This slice closes the control-plane gap for Lean proof submission. The accepted product path is now: Pi SDK `AgentSession` loads the CoMath extension, the model emits a `comath_lean_check` tool call with its own Lean source, the Pi extension injects the Pi `toolCallId`, and `comathd` records the model-submitted source, artifacts, provenance, evidence, and Lean kernel result.
+
+Directly passing host-authored Lean source to `/lean/check` remains useful as a route test, but it is not accepted as autonomous CoMath workflow evidence.
+
+### Changes
+
+- Added `comath.lean.check` / `comath_lean_check` to the Pi tool surface.
+- Added `/lean/check` to `comathd` with strict request validation and required `model_id` plus `tool_call_id`.
+- Added `runModelLeanProofCheck()` to persist model-authored Lean source under `.comath/formal-proofs/`, hash it, reject placeholder/bypass constructs, execute service-owned Lean checking, and record `formal_proof.model_source_submitted`.
+- Added `pi-sdk-runner` to create a real Pi `AgentSession`, bind the CoMath extension, set a headless confirmation policy, activate only selected tools, and collect `turn_end.toolResults` as the evidence surface.
+- Added `phase24-pi-sdk-autonomous-lean.test.mjs`, using Pi's faux provider to emit a real `comath_lean_check` tool call and accepting only the returned Pi tool result.
+- Added `scripts/phase24-real-pi-lean-proof.mjs` and root `corepack pnpm pi:lean:real` for real-model validation through provider `comath-local`, model `官方/deepseek-v4-pro`, and the local 6005 OpenAI-compatible model API.
+- Updated Pi docs to distinguish the 6005 model API, Pi SDK/RPC control plane, and `comathd` state/Lean service.
+
+### Focused Validation
+
+```text
+corepack pnpm --filter @comath/pi-extension build
+Result: exit 0; TypeScript build completed.
+
+node extensions/comath-pi/tests/phase24-pi-sdk-autonomous-lean.test.mjs
+Result: exit 0; Pi AgentSession received model-authored comath_lean_check and returned a Lean kernel-checked CoMath tool result.
+
+Invoke-WebRequest http://127.0.0.1:6005/v1/models without COMATH_LAB_API_KEY
+Result: HTTP 401; the local 6005 model endpoint is reachable but requires credentials.
+
+Environment credential probe
+Result: COMATH_LAB_API_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY, and GITEE_API_KEY were not set in process, user, or machine environment during this run.
+```
+
+### Residual Risks
+
+The repository now proves the autonomous Pi SDK tool-call shape with Pi's faux provider, not with the real `官方/deepseek-v4-pro` model. The real-model proof run is blocked in this environment until `COMATH_LAB_API_KEY` is supplied for the `comath-local` provider at `http://127.0.0.1:6005/v1`.

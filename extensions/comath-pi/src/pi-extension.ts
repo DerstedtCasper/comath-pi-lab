@@ -230,6 +230,8 @@ function routeForTool(name: string, payload: Record<string, unknown>): ComathRou
       return { method: "POST", path: "/claim/promote", body: payload };
     case "comath.evidence.attach":
       return { method: "POST", path: "/evidence/attach", body: payload };
+    case "comath.lean.check":
+      return { method: "POST", path: "/lean/check", body: payload };
     case "comath.artifact.import":
       return { method: "POST", path: "/artifact/import", body: payload };
     case "comath.artifact.list":
@@ -365,6 +367,16 @@ function validateToolParams(tool: ToolDescriptor, params: unknown): Record<strin
   return params as Record<string, unknown>;
 }
 
+function enrichToolParams(tool: ToolDescriptor, params: Record<string, unknown>, toolCallId: string): Record<string, unknown> {
+  if (tool.name !== "comath.lean.check") {
+    return params;
+  }
+  return {
+    ...params,
+    tool_call_id: params.tool_call_id ?? toolCallId
+  };
+}
+
 function createComathToolRegistration(tool: ToolDescriptor, baseUrl: string) {
   const safeName = toPiSafeToolName(tool.name);
   return {
@@ -384,7 +396,7 @@ function createComathToolRegistration(tool: ToolDescriptor, baseUrl: string) {
       if (signal?.aborted) {
         throw new Error("CoMath Pi tool call aborted before start");
       }
-      const parsedParams = validateToolParams(tool, params);
+      const parsedParams = enrichToolParams(tool, validateToolParams(tool, params), toolCallId);
       await onUpdate?.({ toolCallId, name: safeName, status: "started" });
       const legacyCtx = ctx as ToolExecutionContext & LegacyToolExecutionContext;
       if (legacyCtx?.tools?.execute) {

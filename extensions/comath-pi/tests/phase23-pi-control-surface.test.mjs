@@ -82,6 +82,34 @@ const cases = [
     path: "/evidence/attach"
   },
   {
+    tool: "comath.lean.check",
+    payload: {
+      project_root: projectRoot,
+      project_id: projectId,
+      claim_id: claimId,
+      theorem_name: "model_submitted_true",
+      dependency_hash: "route-dependency-hash",
+      lean_source: "theorem model_submitted_true : True := by\n  trivial\n",
+      model_id: "official/deepseek-v4-pro",
+      model_response_id: "resp-route-0001",
+      actor: "pi"
+    },
+    method: "POST",
+    path: "/lean/check",
+    body: {
+      project_root: projectRoot,
+      project_id: projectId,
+      claim_id: claimId,
+      theorem_name: "model_submitted_true",
+      dependency_hash: "route-dependency-hash",
+      lean_source: "theorem model_submitted_true : True := by\n  trivial\n",
+      model_id: "official/deepseek-v4-pro",
+      model_response_id: "resp-route-0001",
+      tool_call_id: "TOOLCALL-ROUTE",
+      actor: "pi"
+    }
+  },
+  {
     tool: "comath.artifact.import",
     payload: { project_root: projectRoot, project_id: projectId, source_path: "notes/result.txt", kind: "log", actor: "pi" },
     method: "POST",

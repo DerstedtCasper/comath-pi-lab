@@ -14,6 +14,9 @@ The current installation entry point is [Pi Installation And SDK Orchestration](
 - Registered Pi tools use TypeBox-backed JSON Schema parameters, matching Pi's documented `ToolDefinition.parameters` contract while keeping the emitted schema inspectable as ordinary JSON Schema.
 - Registered Pi tools cover the daemon research route groups for service health, project lifecycle, claims, evidence, artifacts, workstreams, GraphPatch review/apply, memory index, literature, working paper, snapshots, replay, and status snapshots.
 - Pi SDK orchestration should use `createAgentSession()` with `DefaultResourceLoader`, `.pi/settings.json`, `additionalExtensionPaths`, or `extensionFactories`.
+- The local model API is distinct from `comathd`: `http://127.0.0.1:6005/v1` is the OpenAI-compatible Pi model endpoint, while `comathd` is the CoMath state, artifact, provenance, and Lean-execution service.
+- The default real-model validation target is Pi provider `comath-local`, model `官方/deepseek-v4-pro`, with the runtime key supplied via `COMATH_LAB_API_KEY`.
+- Autonomous Lean workflow evidence must come from Pi `turn_end.toolResults` for `comath_lean_check`; manually passing Lean source to `/lean/check` is only a route-level test, not product workflow evidence.
 - Non-Node controllers should use `pi --mode rpc` instead of a CoMath-specific external control plane.
 - Mutating CoMath tools call `comathd` and are guarded by a Pi `tool_call` confirmation gate. Headless contexts without an explicit confirmation mechanism fail closed.
 - Headless contexts expose no usable UI surface; adapters must avoid UI calls when `ctx.hasUI=false`.

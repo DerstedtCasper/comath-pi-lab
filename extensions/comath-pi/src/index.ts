@@ -355,6 +355,27 @@ export function createComathTools(): ToolDescriptor[] {
       })
     },
     {
+      name: "comath.lean.check",
+      description: "Submit model-authored Lean source from this Pi tool call to comathd for service-owned Lean kernel checking.",
+      mutates: true,
+      input_schema: objectSchema(
+        ["project_root", "project_id", "claim_id", "lean_source", "theorem_name", "dependency_hash", "model_id", "actor"],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          claim_id: stringProp,
+          lean_source: stringProp,
+          theorem_name: stringProp,
+          dependency_hash: stringProp,
+          model_id: stringProp,
+          model_response_id: stringProp,
+          tool_call_id: stringProp,
+          actor: stringProp,
+          timeout_ms: numberProp
+        }
+      )
+    },
+    {
       name: "comath.artifact.import",
       description: "Import a policy-approved artifact through comathd with secret scanning and content hashing.",
       mutates: true,

@@ -19,6 +19,7 @@ import {
   readFormalProofRuns,
   readProvenanceEvents,
   registerClaim,
+  runModelLeanProofCheck,
   runLeanProofCheck,
   updateClaim
 } from "../../dist/index.js";
@@ -296,6 +297,8 @@ try {
 
   assert.equal(containsLeanPlaceholders("theorem t : True := by trivial"), false);
   assert.equal(containsLeanPlaceholders("theorem t : True := by\n  sorry"), true);
+  assert.equal(containsLeanPlaceholders("axiom bad : False\ntheorem t : True := by trivial"), true);
+  assert.equal(containsLeanPlaceholders("unsafe theorem t : True := by trivial"), true);
   assert.equal(isLean4VersionOutput("Lean (version 4.27.0, x86_64-w64-windows-gnu, commit abc, Release)"), true);
   assert.equal(isLean4VersionOutput("fake lean-compatible checker version 4.0"), false);
 
@@ -450,6 +453,66 @@ try {
     });
     assert.equal(runtimePromotion.gate.ok, true);
     assert.equal(runtimePromotion.claim.status, "formally_checked");
+
+    const modelLeanClaim = registerClaim(projectRoot, {
+      project_id: project.project_id,
+      statement: "A model-submitted Lean source can be checked by CoMath without manual translation.",
+      assumptions: [],
+      domain: "Lean4",
+      actor: "phase18-test"
+    });
+    const modelLeanCheck = await runModelLeanProofCheck(projectRoot, {
+      project_id: project.project_id,
+      claim_id: modelLeanClaim.id,
+      theorem_name: "model_submitted_true",
+      dependency_hash: "model-direct-dependency-hash",
+      lean_source: "theorem model_submitted_true : True := by\n  trivial\n",
+      model_id: "official/deepseek-v4-pro",
+      model_response_id: "resp-model-lean-0001",
+      tool_call_id: "tool-call-model-lean-0001",
+      actor: "phase18-test"
+    });
+    assert.equal(modelLeanCheck.run.status, "kernel_checked");
+    assert.equal(modelLeanCheck.run.kernel_checked, true);
+    assert.equal(modelLeanCheck.evidence.kind, "lean");
+    assert.equal(modelLeanCheck.evidence.claim_id, modelLeanClaim.id);
+    assert.deepEqual(modelLeanCheck.evidence.artifact_ids, [
+      modelLeanCheck.run.proof_artifact_id,
+      modelLeanCheck.run.log_artifact_id
+    ]);
+    assert.equal(modelLeanCheck.proof_path.endsWith(".lean"), true);
+    assert.equal(modelLeanCheck.proof_path.includes(".comath"), true);
+    assert.equal(modelLeanCheck.submission.origin, "model_tool_call");
+    assert.equal(modelLeanCheck.submission.tool_call_id, "tool-call-model-lean-0001");
+    assert.equal(modelLeanCheck.submission.model_response_id, "resp-model-lean-0001");
+    assert.equal(modelLeanCheck.submission.model_id, "official/deepseek-v4-pro");
+    assert.equal(modelLeanCheck.submission.source_sha256.length, 64);
+
+    await assert.rejects(
+      () =>
+        runModelLeanProofCheck(projectRoot, {
+          project_id: project.project_id,
+          claim_id: modelLeanClaim.id,
+          theorem_name: "manual_source",
+          dependency_hash: "model-direct-dependency-hash",
+          lean_source: "theorem manual_source : True := by\n  trivial\n",
+          actor: "phase18-test"
+        }),
+      /model_id is required/
+    );
+    await assert.rejects(
+      () =>
+        runModelLeanProofCheck(projectRoot, {
+          project_id: project.project_id,
+          claim_id: modelLeanClaim.id,
+          theorem_name: "missing_tool_call",
+          dependency_hash: "model-direct-dependency-hash",
+          lean_source: "theorem missing_tool_call : True := by\n  trivial\n",
+          model_id: "official/deepseek-v4-pro",
+          actor: "phase18-test"
+        }),
+      /tool_call_id is required/
+    );
   }
 
   const provenance = readProvenanceEvents(projectRoot, project.project_id);
@@ -458,6 +521,16 @@ try {
   assert.equal(provenance.some((event) => event.event_type === "formal_proof.dependencies_certified"), true);
   assert.equal(provenance.some((event) => event.event_type === "formal_proof.audit_certified"), true);
   assert.equal(provenance.some((event) => event.event_type === "formal_proof.claim_certified"), true);
+  assert.equal(
+    provenance.some(
+      (event) =>
+        event.event_type === "formal_proof.model_source_submitted" &&
+        event.payload.origin === "model_tool_call" &&
+        event.payload.tool_call_id === "tool-call-model-lean-0001" &&
+        typeof event.payload.source_sha256 === "string"
+    ),
+    true
+  );
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }
