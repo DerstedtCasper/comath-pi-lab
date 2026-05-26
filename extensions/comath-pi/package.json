@@ -1,13 +1,54 @@
 {
   "name": "@comath/pi-extension",
   "version": "0.0.0",
-  "private": true,
+  "description": "CoMath Pi Lab extension package for auditable mathematical research workflows in Pi.",
+  "license": "MIT",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/pi-extension.js",
+  "types": "dist/pi-extension.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/pi-extension.d.ts",
+      "default": "./dist/pi-extension.js"
+    },
+    "./toolkit": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DerstedtCasper/comath-pi-lab.git",
+    "directory": "extensions/comath-pi"
+  },
+  "keywords": [
+    "comath",
+    "mathematics",
+    "formal-methods",
+    "pi-package",
+    "pi"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/pi-extension.js"
+    ]
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "corepack pnpm build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-pi-official-adapter.test.mjs"
+    "test": "npm run build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-pi-official-adapter.test.mjs && node tests/phase22-pi-install.test.mjs"
   }
 }

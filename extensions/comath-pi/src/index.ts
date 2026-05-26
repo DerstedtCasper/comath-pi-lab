@@ -201,33 +201,40 @@ export function createComathTools(): ToolDescriptor[] {
     },
     {
       name: "comath.evidence.attach",
-      description: "Attach evidence through comathd when evidence routes become available.",
+      description: "Attach evidence through comathd.",
       mutates: true,
-      input_schema: objectSchema(["project_root", "project_id", "kind", "summary"], {
+      input_schema: objectSchema(["project_root", "project_id", "kind", "summary", "actor"], {
         project_root: stringProp,
         project_id: stringProp,
         claim_id: stringProp,
         kind: stringProp,
         summary: stringProp,
-        artifact_ids: stringArrayProp
+        artifact_ids: stringArrayProp,
+        actor: stringProp
       })
     },
     {
       name: "comath.graph.proposePatch",
       description: "Propose a graph patch for later review.",
       mutates: true,
-      input_schema: objectSchema(["project_id", "new_nodes", "new_edges"], {
+      input_schema: objectSchema(["project_root", "project_id", "workstream_id", "new_nodes", "new_edges"], {
+        project_root: stringProp,
         project_id: stringProp,
+        workstream_id: stringProp,
         source_workstream_id: stringProp,
+        created_by: stringProp,
         new_nodes: { type: "array" },
-        new_edges: { type: "array" }
+        new_edges: { type: "array" },
+        updated_nodes: { type: "array" },
+        updated_edges: { type: "array" },
+        warnings: stringArrayProp
       })
     },
     {
       name: "comath.status.snapshot",
-      description: "Render a status snapshot through comathd or local extension state.",
+      description: "Render an aggregate status snapshot through comathd.",
       mutates: false,
-      input_schema: objectSchema(["project_id"], { project_id: stringProp })
+      input_schema: objectSchema(["project_root", "project_id"], { project_root: stringProp, project_id: stringProp })
     },
     {
       name: "comath.paper.init",

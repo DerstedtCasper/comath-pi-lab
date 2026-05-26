@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "profile": "local-production-formal-workbench",
+  "secrets_policy": {
+    "contains_secrets": false,
+    "secret_files_must_not_be_committed": true,
+    "local_override_example": ".pi/local.user.example.json",
+    "recommended_local_override": ".pi/local.user.json"
+  },
+  "comathd": {
+    "baseUrl": "http://127.0.0.1:48731",
+    "serve_command_assumption": "comathd serve --host 127.0.0.1 --port 48731",
+    "mutation_gateway": "all trusted project mutations go through comathd"
+  },
+  "pi_extension": {
+    "package_name": "@comath/pi-extension",
+    "local_install_path": "./extensions/comath-pi",
+    "package_manifest": "extensions/comath-pi/package.json#pi.extensions",
+    "extension_entry": "./dist/pi-extension.js",
+    "tool_execution": "default Pi entry maps supported tools to local comathd HTTP routes",
+    "resource_roots": {
+      "agents": "./.pi/agents",
+      "prompts": "./.pi/prompts",
+      "skills": "./skills"
+    }
+  },
+  "external_cli": {
+    "expected_commands": [
+      "comathd serve",
+      "comath-lab project init",
+      "comath-lab research start"
+    ],
+    "expected_config_files": [
+      ".pi/config.json",
+      ".pi/local.user.json"
+    ],
+    "headless_harness": {
+      "enabled_by_default": false,
+      "expected_entrypoint": "comath-lab research start --headless",
+      "ui_policy": "headless contexts must not call Pi UI APIs"
+    }
+  },
+  "safety_boundaries": {
+    "pi_packages_have_local_machine_permissions": true,
+    "no_secrets_in_repo_config": true,
+    "triviumdb": "optional derived index only; fall back when unavailable",
+    "mathprove": "evidence producer and gate runner; not proof authority",
+    "promotion_gate": "fail closed without required evidence"
+  }
+}

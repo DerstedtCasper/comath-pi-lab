@@ -1,0 +1,5 @@
+local.user.json
+*.local.json
+*.secret.json
+*.secrets.json
+secrets*.json

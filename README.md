@@ -25,6 +25,10 @@ It is **not GA** and must not be tagged or announced as GA until target-runtime 
 
 `corepack pnpm release:check` is a repository readiness contract check. It is not a GA certification and does not replace installed Pi, MathProve, TriviumDB, package, DLP, replay, or locking-stress evidence.
 
+## Pi Local Installation
+
+See [Pi Installation And Local Integration](docs/integrations/pi-installation.md) for local package install, npm package install, external CLI/headless harness assumptions, and the no-secret `.pi/` configuration shape.
+
 ## License
 
 CoMath Pi Lab is open source under the [MIT License](LICENSE).
