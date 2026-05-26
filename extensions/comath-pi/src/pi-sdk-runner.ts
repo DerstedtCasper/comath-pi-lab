@@ -33,6 +33,7 @@ export type CoMathPiSdkRunnerOptions = {
   comathdBaseUrl?: string;
   extensionPath?: string;
   model?: unknown;
+  authMode?: "pi-config" | "memory";
   thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   prompt?: string;
   activeTools?: string[];
@@ -175,6 +176,15 @@ function isLeanToolResult(result: unknown): boolean {
   return candidate.toolName === "comath_lean_check" || candidate.toolName === "comath.lean.check";
 }
 
+function pushUniqueMessage(messages: unknown[], message: unknown): void {
+  if (!message || typeof message !== "object") {
+    return;
+  }
+  if (!messages.includes(message)) {
+    messages.push(message);
+  }
+}
+
 export async function runCoMathPiSdkWorkflow(options: CoMathPiSdkRunnerOptions): Promise<CoMathPiSdkRunnerResult> {
   const previousBaseUrl = process.env.COMATHD_BASE_URL;
   const previousLabBaseUrl = process.env.COMATH_LAB_BASE_URL;
@@ -190,11 +200,12 @@ export async function runCoMathPiSdkWorkflow(options: CoMathPiSdkRunnerOptions):
 
   try {
     const { codingAgent } = await loadPiSdkModules(options.modulePaths);
-    const authStorage = codingAgent.AuthStorage.inMemory();
+    const usePiConfig = options.authMode !== "memory";
+    const authStorage = usePiConfig ? codingAgent.AuthStorage.create() : codingAgent.AuthStorage.inMemory();
     if (options.apiKey?.value) {
       authStorage.setRuntimeApiKey(options.apiKey.provider, options.apiKey.value);
     }
-    const modelRegistry = codingAgent.ModelRegistry.inMemory(authStorage);
+    const modelRegistry = usePiConfig ? codingAgent.ModelRegistry.create(authStorage) : codingAgent.ModelRegistry.inMemory(authStorage);
     const agentDir = codingAgent.getAgentDir();
     const resourceLoader = new codingAgent.DefaultResourceLoader({
       cwd: options.cwd,
@@ -243,7 +254,12 @@ export async function runCoMathPiSdkWorkflow(options: CoMathPiSdkRunnerOptions):
           const turnToolResults = Array.isArray(typed.toolResults) ? typed.toolResults : [];
           toolResults.push(...turnToolResults);
           if (typed.message) {
-            assistantMessages.push(typed.message);
+            pushUniqueMessage(assistantMessages, typed.message);
+          }
+        } else if (typed.type === "message_end" && typed.message && typeof typed.message === "object") {
+          const message = typed.message as Record<string, unknown>;
+          if (message.role === "assistant") {
+            pushUniqueMessage(assistantMessages, message);
           }
         }
       }
@@ -339,6 +355,7 @@ export async function runFakeModelLeanProofFlow(input: FakeLeanProofFlowInput): 
       activeTools: ["comath_lean_check"],
       modulePaths: input.modulePaths,
       allowMutations: true,
+      authMode: "memory",
       prompt: [
         "Prove the requested theorem in Lean4.",
         "Submit the Lean source by calling comath_lean_check yourself.",

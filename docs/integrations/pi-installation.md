@@ -105,13 +105,14 @@ Repository regression uses `phase24-pi-sdk-autonomous-lean.test.mjs`. It creates
 For a real model run through the local 6005 endpoint:
 
 ```powershell
-$env:COMATH_LAB_API_KEY = "<runtime key>"
 $env:COMATH_PI_PROVIDER = "comath-local"
 $env:COMATH_PI_MODEL = "官方/deepseek-v4-pro"
 corepack pnpm pi:lean:real
 ```
 
-The command starts a temporary local `comathd`, creates a claim, creates a Pi SDK session with only `comath_lean_check` active, and asks `官方/deepseek-v4-pro` to generate Lean source and call the tool itself. It fails if no Pi tool result is produced, if the model returns plain JSON/text instead of a tool call, or if Lean is not kernel checked.
+The command starts a temporary local `comathd`, creates a claim, creates a Pi SDK session with only `comath_lean_check` active, and asks `官方/deepseek-v4-pro` to generate Lean source and call the tool itself. It uses Pi's own provider authentication from `~/.pi/agent/models.json` or `~/.pi/agent/auth.json`, not a repository-owned API key. It fails if no Pi tool result is produced, if the model returns plain JSON/text instead of a tool call, or if Lean is not kernel checked.
+
+On this workstation, `comath-local` points Pi at `http://127.0.0.1:6005/v1`. That endpoint is VCPToolBox's OpenAI-compatible gateway, so its inbound credential and model routing stay in local Pi/VCP configuration. If upstream model package availability changes, update the local VCP redirect instead of changing CoMath's SDK control path.
 
 ## Development CLI Fallback
 

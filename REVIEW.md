@@ -1123,13 +1123,13 @@ Result: exit 0; TypeScript build completed.
 node extensions/comath-pi/tests/phase24-pi-sdk-autonomous-lean.test.mjs
 Result: exit 0; Pi AgentSession received model-authored comath_lean_check and returned a Lean kernel-checked CoMath tool result.
 
-Invoke-WebRequest http://127.0.0.1:6005/v1/models without COMATH_LAB_API_KEY
-Result: HTTP 401; the local 6005 model endpoint is reachable but requires credentials.
+Pi provider auth probe for `comath-local/官方/deepseek-v4-pro`
+Result: model found through Pi's own model registry; provider auth resolved from local Pi/VCP configuration without committing credentials.
 
-Environment credential probe
-Result: COMATH_LAB_API_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY, and GITEE_API_KEY were not set in process, user, or machine environment during this run.
+corepack pnpm pi:lean:real
+Result: exit 0; real Pi SDK workflow used provider `comath-local`, model `官方/deepseek-v4-pro`, produced one `comath_lean_check` Pi tool result, and CoMath recorded `status=kernel_checked`, `kernel_checked=true`, `contains_sorry=false`, `contains_admit=false`, Lean version 4.27.0.
 ```
 
 ### Residual Risks
 
-The repository now proves the autonomous Pi SDK tool-call shape with Pi's faux provider, not with the real `官方/deepseek-v4-pro` model. The real-model proof run is blocked in this environment until `COMATH_LAB_API_KEY` is supplied for the `comath-local` provider at `http://127.0.0.1:6005/v1`.
+The autonomous Pi SDK tool-call shape is covered both by Pi's faux provider regression and by a real local run through `官方/deepseek-v4-pro`. The local 6005 endpoint is VCPToolBox's OpenAI-compatible gateway, so its inbound credential and any upstream model redirect remain machine-local operational configuration and are intentionally not committed.
