@@ -18,6 +18,7 @@ assert.equal(packageJson.keywords.includes("pi-package"), true);
 assert.equal(packageJson.keywords.includes("pi"), true);
 assert.deepEqual(packageJson.files, ["dist/**/*.js", "dist/**/*.d.ts", "package.json"]);
 assert.equal(packageJson.peerDependencies?.["@earendil-works/pi-coding-agent"], "*");
+assert.equal(packageJson.peerDependenciesMeta?.["@earendil-works/pi-coding-agent"]?.optional, true);
 assert.deepEqual(packageJson.pi?.extensions, ["./dist/pi-extension.js"]);
 
 const piEntry = await import("../dist/pi-extension.js");
