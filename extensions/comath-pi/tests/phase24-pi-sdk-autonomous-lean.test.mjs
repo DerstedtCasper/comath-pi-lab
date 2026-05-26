@@ -51,11 +51,7 @@ try {
     modelResponseId: "resp-phase24-autonomous-lean",
     toolCallId: "tool-call-phase24-autonomous-lean",
     comathdBaseUrl: baseUrl,
-    extensionPath,
-    modulePaths: {
-      codingAgent: "C:/Program Files/nodejs/node_global/node_modules/@earendil-works/pi-coding-agent/dist/index.js",
-      piAi: "C:/Program Files/nodejs/node_global/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/index.js"
-    }
+    extensionPath
   });
 
   assert.equal(result.error, undefined);

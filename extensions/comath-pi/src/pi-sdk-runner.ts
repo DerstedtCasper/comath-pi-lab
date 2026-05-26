@@ -1,4 +1,7 @@
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 type ImportedModule = Record<string, any>;
 
@@ -77,6 +80,7 @@ const DEFAULT_PI_CODING_AGENT_PATH =
   "C:/Program Files/nodejs/node_global/node_modules/@earendil-works/pi-coding-agent/dist/index.js";
 const DEFAULT_PI_AI_PATH =
   "C:/Program Files/nodejs/node_global/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/index.js";
+const require = createRequire(import.meta.url);
 
 function dynamicImport(specifier: string): Promise<ImportedModule> {
   const importer = new Function("specifier", "return import(specifier)") as (value: string) => Promise<ImportedModule>;
@@ -93,6 +97,19 @@ function normalizeImportTarget(target: string): string {
   return pathToFileURL(target).href;
 }
 
+function resolveImportTarget(target: string): string {
+  if (target.startsWith("@")) {
+    return realpathSync(require.resolve(target));
+  }
+  if (/^[a-zA-Z]:[\\/]/.test(target)) {
+    return realpathSync(target);
+  }
+  if (target.startsWith("file:")) {
+    return realpathSync(fileURLToPath(target));
+  }
+  return target;
+}
+
 async function importFirstAvailable(candidates: string[]): Promise<ImportedModule> {
   const errors: string[] = [];
   for (const candidate of candidates) {
@@ -105,20 +122,50 @@ async function importFirstAvailable(candidates: string[]): Promise<ImportedModul
   throw new Error(`Unable to load Pi SDK module. Tried: ${errors.join("; ")}`);
 }
 
+async function importFirstAvailableWithTarget(candidates: string[]): Promise<{
+  module: ImportedModule;
+  target: string;
+}> {
+  const errors: string[] = [];
+  for (const candidate of candidates) {
+    try {
+      return {
+        module: await dynamicImport(normalizeImportTarget(candidate)),
+        target: resolveImportTarget(candidate)
+      };
+    } catch (error) {
+      errors.push(`${candidate}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  throw new Error(`Unable to load Pi SDK module. Tried: ${errors.join("; ")}`);
+}
+
+function localPiAiCandidateFromCodingAgent(target: string): string | undefined {
+  const normalized = normalizeImportTarget(target);
+  if (!normalized.startsWith("file:") || !normalized.endsWith("/dist/index.js")) {
+    return undefined;
+  }
+  const codingAgentPackageRoot = resolve(dirname(fileURLToPath(normalized)), "..");
+  return resolve(codingAgentPackageRoot, "..", "..", "@earendil-works", "pi-ai", "dist", "index.js");
+}
+
 export async function loadPiSdkModules(paths: PiSdkModulePaths = {}): Promise<{
   codingAgent: PiSdkModule;
   piAi: PiAiModule;
 }> {
-  const codingAgent = (await importFirstAvailable([
+  const codingAgentImport = await importFirstAvailableWithTarget([
     paths.codingAgent ?? "",
     process.env.COMATH_PI_CODING_AGENT_MODULE ?? "",
     "@earendil-works/pi-coding-agent",
     DEFAULT_PI_CODING_AGENT_PATH
-  ].filter(Boolean))) as PiSdkModule;
+  ].filter(Boolean));
+  const codingAgent = codingAgentImport.module as PiSdkModule;
+  const localPiAiCandidate = localPiAiCandidateFromCodingAgent(codingAgentImport.target);
 
   const piAi = (await importFirstAvailable([
     paths.piAi ?? "",
     process.env.COMATH_PI_AI_MODULE ?? "",
+    localPiAiCandidate ?? "",
     "@earendil-works/pi-ai",
     DEFAULT_PI_AI_PATH
   ].filter(Boolean))) as PiAiModule;
