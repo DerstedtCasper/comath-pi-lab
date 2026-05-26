@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { IsObject } from "typebox";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
@@ -26,7 +27,12 @@ assert.equal(typeof piEntry.default, "function");
 
 const registeredTools = [];
 const registeredCommands = [];
+const eventHandlers = new Map();
+const sentUserMessages = [];
 const fakePi = {
+  on(event, handler) {
+    eventHandlers.set(event, handler);
+  },
   registerTool(tool) {
     registeredTools.push(["top-level", tool]);
   },
@@ -35,13 +41,16 @@ const fakePi = {
       registeredTools.push(["namespace", tool]);
     }
   },
-  registerCommand(command) {
-    registeredCommands.push(["top-level", command]);
+  registerCommand(name, options) {
+    registeredCommands.push(["top-level", name, options]);
   },
   commands: {
-    register(command) {
-      registeredCommands.push(["namespace", command]);
+    register(name, options) {
+      registeredCommands.push(["namespace", name, options]);
     }
+  },
+  sendUserMessage(content, options) {
+    sentUserMessages.push({ content, options });
   }
 };
 
@@ -50,13 +59,79 @@ assert.equal(installResult.ok, true);
 assert.equal(installResult.name, "coMath-pi-lab");
 assert.equal(registeredTools.length > 0, true);
 assert.equal(registeredTools.some(([, tool]) => tool.name === "comath.claim.register"), true);
+assert.equal(registeredTools.every(([, tool]) => IsObject(tool.parameters)), true);
 assert.equal(registeredCommands.length > 0, true);
-assert.equal(registeredCommands.some(([, command]) => command.name === "/cm:status"), true);
+assert.equal(registeredCommands.some(([, name, options]) => name === "cm:status" && typeof options.handler === "function"), true);
+assert.equal(registeredCommands.some(([, name]) => name.startsWith("/")), false);
+assert.equal(typeof eventHandlers.get("tool_call"), "function");
 
+const statusCommand = registeredCommands.find(([, name]) => name === "cm:status")[2];
+await statusCommand.handler("--project PRJ-0001", { hasUI: false });
+assert.deepEqual(sentUserMessages, [{ content: "/cm:status --project PRJ-0001", options: undefined }]);
+
+const researchStartTool = registeredTools.find(([, tool]) => tool.name === "comath.research.start")[1];
 const claimRegisterTool = registeredTools.find(([, tool]) => tool.name === "comath.claim.register")[1];
 const evidenceAttachTool = registeredTools.find(([, tool]) => tool.name === "comath.evidence.attach")[1];
 const statusSnapshotTool = registeredTools.find(([, tool]) => tool.name === "comath.status.snapshot")[1];
 const requests = [];
+const researchStartResult = await researchStartTool.execute(
+  "tool-call-0",
+  {
+    root_path: "D:/tmp/comath-project",
+    name: "SDK Directed Project",
+    goal: "Start a Pi SDK directed braid-statistics workflow.",
+    kind: "proof_route",
+    actor: "pi-sdk-test",
+    headless: true
+  },
+  undefined,
+  undefined,
+  {
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      if (String(url).endsWith("/project/init")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            project: { project_id: "PRJ-0001", root_path: "D:/tmp/comath-project" },
+            runtime_root: "D:/tmp/comath-project/.comath"
+          })
+        };
+      }
+      if (String(url).endsWith("/workstream/spawn")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ workstream: { workstream_id: "WS-0001", status: "queued" } })
+        };
+      }
+      throw new Error(`unexpected research start URL: ${url}`);
+    }
+  }
+);
+assert.equal(researchStartResult.details.ok, true);
+assert.equal(researchStartResult.details.headless, true);
+assert.equal(researchStartResult.details.project.project_id, "PRJ-0001");
+assert.equal(researchStartResult.details.workstream.workstream_id, "WS-0001");
+assert.equal(researchStartResult.content[0].type, "text");
+assert.equal(requests[0].url, "http://127.0.0.1:48731/project/init");
+assert.equal(requests[0].init.method, "POST");
+assert.deepEqual(JSON.parse(requests[0].init.body), {
+  root_path: "D:/tmp/comath-project",
+  name: "SDK Directed Project"
+});
+assert.equal(requests[1].url, "http://127.0.0.1:48731/workstream/spawn");
+assert.equal(requests[1].init.method, "POST");
+assert.deepEqual(JSON.parse(requests[1].init.body), {
+  project_root: "D:/tmp/comath-project",
+  project_id: "PRJ-0001",
+  kind: "proof_route",
+  goal: "Start a Pi SDK directed braid-statistics workflow.",
+  actor: "pi-sdk-test",
+  created_by: "pi-sdk-test"
+});
+
 const toolResult = await claimRegisterTool.execute(
   "tool-call-1",
   {
@@ -79,14 +154,39 @@ const toolResult = await claimRegisterTool.execute(
     }
   }
 );
-assert.equal(toolResult.claim.id, "CLM-0001");
+assert.equal(toolResult.details.claim.id, "CLM-0001");
 assert.equal(claimRegisterTool.mutates, true);
+assert.equal(researchStartTool.mutates, true);
 assert.equal(evidenceAttachTool.mutates, true);
 assert.equal(statusSnapshotTool.mutates, false);
-assert.equal(requests.length, 1);
-assert.equal(requests[0].url, "http://127.0.0.1:48731/claim/register");
-assert.equal(requests[0].init.method, "POST");
-assert.deepEqual(JSON.parse(requests[0].init.body), {
+const confirmationGate = eventHandlers.get("tool_call");
+const blockedMutation = await confirmationGate(
+  { toolName: "comath.research.start", input: { root_path: "D:/tmp/comath-project" } },
+  { hasUI: false }
+);
+assert.deepEqual(blockedMutation, {
+  block: true,
+  reason: "CoMath mutating tool comath.research.start requires confirmation"
+});
+const confirmedMutation = await confirmationGate(
+  { toolName: "comath.research.start", input: { root_path: "D:/tmp/comath-project" } },
+  { hasUI: true, ui: { confirm: async () => true } }
+);
+assert.equal(confirmedMutation, undefined);
+const rejectedMutation = await confirmationGate(
+  { toolName: "comath.research.start", input: { root_path: "D:/tmp/comath-project" } },
+  { hasUI: true, ui: { confirm: async () => false } }
+);
+assert.deepEqual(rejectedMutation, {
+  block: true,
+  reason: "CoMath mutating tool comath.research.start was blocked by user"
+});
+const readonlyCall = await confirmationGate({ toolName: "comath.status.snapshot", input: {} }, { hasUI: false });
+assert.equal(readonlyCall, undefined);
+assert.equal(requests.length, 3);
+assert.equal(requests[2].url, "http://127.0.0.1:48731/claim/register");
+assert.equal(requests[2].init.method, "POST");
+assert.deepEqual(JSON.parse(requests[2].init.body), {
   project_root: "D:/tmp/comath-project",
   project_id: "PRJ-0001",
   statement: "A directly registered Pi tool reaches comathd.",
@@ -117,10 +217,10 @@ const evidenceResult = await evidenceAttachTool.execute(
     }
   }
 );
-assert.equal(evidenceResult.evidence.id, "EV-0001");
-assert.equal(requests[1].url, "http://127.0.0.1:48731/evidence/attach");
-assert.equal(requests[1].init.method, "POST");
-assert.deepEqual(JSON.parse(requests[1].init.body), {
+assert.equal(evidenceResult.details.evidence.id, "EV-0001");
+assert.equal(requests[3].url, "http://127.0.0.1:48731/evidence/attach");
+assert.equal(requests[3].init.method, "POST");
+assert.deepEqual(JSON.parse(requests[3].init.body), {
   project_root: "D:/tmp/comath-project",
   project_id: "PRJ-0001",
   claim_id: "CLM-0001",
@@ -148,13 +248,13 @@ const statusResult = await statusSnapshotTool.execute(
     }
   }
 );
-assert.equal(statusResult.project.initialized, true);
+assert.equal(statusResult.details.project.initialized, true);
 assert.equal(
-  requests[2].url,
+  requests[4].url,
   "http://127.0.0.1:48731/status/snapshot?project_root=D%3A%2Ftmp%2Fcomath-project&project_id=PRJ-0001"
 );
-assert.equal(requests[2].init.method, "GET");
-assert.equal(requests[2].init.body, undefined);
+assert.equal(requests[4].init.method, "GET");
+assert.equal(requests[4].init.body, undefined);
 
 const noApiResult = await piEntry.default({});
 assert.deepEqual(noApiResult, {

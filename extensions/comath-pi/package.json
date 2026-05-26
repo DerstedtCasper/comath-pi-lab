@@ -49,6 +49,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-pi-official-adapter.test.mjs && node tests/phase22-pi-install.test.mjs"
+    "test": "npm run build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-pi-official-adapter.test.mjs && node tests/phase22-pi-install.test.mjs && node tests/phase23-pi-control-surface.test.mjs"
+  },
+  "dependencies": {
+    "typebox": "1.1.38"
   }
 }

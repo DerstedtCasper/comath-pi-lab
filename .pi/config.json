@@ -9,14 +9,20 @@
   },
   "comathd": {
     "baseUrl": "http://127.0.0.1:48731",
-    "serve_command_assumption": "comathd serve --host 127.0.0.1 --port 48731",
+    "serve_command_dev_fallback": "node ./services/comathd/dist/cli.js serve --host 127.0.0.1 --port 48731",
     "mutation_gateway": "all trusted project mutations go through comathd"
   },
   "pi_extension": {
     "package_name": "@comath/pi-extension",
+    "project_settings_package_source": "../extensions/comath-pi",
     "local_install_path": "./extensions/comath-pi",
     "package_manifest": "extensions/comath-pi/package.json#pi.extensions",
     "extension_entry": "./dist/pi-extension.js",
+    "registration_api": [
+      "pi.registerTool",
+      "pi.registerCommand",
+      "pi.on(tool_call)"
+    ],
     "tool_execution": "default Pi entry maps supported tools to local comathd HTTP routes",
     "resource_roots": {
       "agents": "./.pi/agents",
@@ -24,21 +30,40 @@
       "skills": "./skills"
     }
   },
-  "external_cli": {
-    "expected_commands": [
+  "sdk_orchestration": {
+    "preferred_entrypoints": [
+      "Pi SDK createAgentSession with DefaultResourceLoader",
+      "Pi RPC mode"
+    ],
+    "research_start_tool": "comath.research.start",
+    "research_start_routes": [
+      "POST /project/init",
+      "POST /workstream/spawn"
+    ],
+    "control_surface": [
+      "service",
+      "project",
+      "claim",
+      "evidence",
+      "artifact",
+      "workstream",
+      "graph-patch",
+      "memory",
+      "literature",
+      "paper",
+      "snapshot",
+      "replay",
+      "status"
+    ],
+    "headless_policy": "headless contexts must not call Pi UI APIs and must fail closed without an explicit confirmation policy"
+  },
+  "development_cli_fallback": {
+    "product_contract": false,
+    "expected_commands_after_install_or_link": [
       "comathd serve",
-      "comath-lab project init",
       "comath-lab research start"
     ],
-    "expected_config_files": [
-      ".pi/config.json",
-      ".pi/local.user.json"
-    ],
-    "headless_harness": {
-      "enabled_by_default": false,
-      "expected_entrypoint": "comath-lab research start --headless",
-      "ui_policy": "headless contexts must not call Pi UI APIs"
-    }
+    "checkout_entrypoint": "node ./services/comathd/dist/cli.js"
   },
   "safety_boundaries": {
     "pi_packages_have_local_machine_permissions": true,

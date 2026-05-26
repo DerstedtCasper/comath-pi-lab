@@ -27,7 +27,7 @@ It is **not GA** and must not be tagged or announced as GA until target-runtime 
 
 ## Pi Local Installation
 
-See [Pi Installation And Local Integration](docs/integrations/pi-installation.md) for local package install, npm package install, external CLI/headless harness assumptions, and the no-secret `.pi/` configuration shape.
+See [Pi Installation And SDK Orchestration](docs/integrations/pi-installation.md) for simplified local package install, npm package install, Pi SDK/RPC orchestration, and the no-secret `.pi/` configuration shape.
 
 ## License
 

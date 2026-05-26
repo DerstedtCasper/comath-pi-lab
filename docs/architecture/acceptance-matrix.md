@@ -23,7 +23,7 @@
 | 3 Artifact/audit | hash stability, safe copy, path traversal, audit JSONL tests pass. |
 | 4 Claims/gate | promotion route fails closed; direct `formally_checked` assignment impossible. |
 | 5 Memory | in-memory adapter and StableIdMap tests pass; Trivium shim fails clearly if unavailable. |
-| 6 Pi extension | typecheck passes; commands/tools/resources are runtime-tested; mutating descriptors require confirmation and call `comathd`. |
+| 6 Pi extension | typecheck passes; package manifest points to an installable Pi extension entry; Pi tools/commands register through official APIs; `comath.research.start` drives project init plus workstream spawn; mutating tools are guarded by Pi `tool_call` confirmation and call `comathd`. |
 | 7 Workstreams | workstream lifecycle tests pass; GraphPatch does not auto-apply. |
 | 8 Subagents | agent prompts constrain write scope; safe parallelism docs exist. |
 | 9 MathProve bridge | bridge mock returns structured fail-closed JSON and gate consumes vetoes. |

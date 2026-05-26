@@ -1,3 +1,5 @@
+import { Type } from "typebox";
+import type { TObject, TProperties, TSchema } from "typebox";
 import { listSubagentDefinitions, type SubagentDefinition } from "./subagents.js";
 
 export * from "./subagents.js";
@@ -26,10 +28,10 @@ export type ToolDescriptor = {
   name: string;
   description: string;
   mutates: boolean;
-  input_schema: {
+  input_schema: TObject & {
     type: "object";
     required?: string[];
-    properties: Record<string, unknown>;
+    properties: Record<string, TSchema>;
   };
 };
 
@@ -146,23 +148,130 @@ export function createComathClient(options: ComathClientOptions) {
   };
 }
 
-function objectSchema(required: string[], properties: Record<string, unknown>): ToolDescriptor["input_schema"] {
-  return {
-    type: "object",
-    required,
-    properties
-  };
+function enumString(values: string[]): TSchema {
+  return Type.Unsafe({ type: "string", enum: values });
+}
+
+function optionalizeProperties(required: string[], properties: Record<string, TSchema>): TProperties {
+  const requiredSet = new Set(required);
+  const result: Record<string, TSchema> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    result[key] = requiredSet.has(key) ? value : Type.Optional(value);
+  }
+  return result as unknown as TProperties;
+}
+
+function objectSchema(required: string[], properties: Record<string, TSchema>): ToolDescriptor["input_schema"] {
+  return Type.Object(optionalizeProperties(required, properties)) as ToolDescriptor["input_schema"];
 }
 
 export function createComathTools(): ToolDescriptor[] {
-  const stringProp = { type: "string" };
-  const stringArrayProp = { type: "array", items: stringProp };
+  const stringProp = Type.String();
+  const stringArrayProp = Type.Array(stringProp);
+  const numberProp = Type.Number();
+  const booleanProp = Type.Boolean();
+  const arrayProp = Type.Array(Type.Any());
+  const claimStatusProp = enumString([
+      "draft",
+      "conjectural",
+      "literature_supported",
+      "computationally_supported",
+      "symbolically_checked",
+      "lean_skeleton",
+      "formally_checked",
+      "refuted",
+      "blocked",
+      "retracted",
+      "human_accepted"
+    ]);
+  const workstreamKindProp = enumString(["literature", "computation", "proof_route", "formalization", "review", "domain", "other"]);
+  const workstreamStatusProp = enumString(["queued", "running", "reviewing", "accepted", "failed", "blocked", "archived"]);
+  const graphPatchReviewStateProp = enumString(["under_review", "accepted", "rejected", "superseded"]);
+  const artifactKindProp = enumString([
+    "log",
+    "paper",
+    "tex",
+    "bibtex",
+    "pdf",
+    "notebook",
+    "code",
+    "screenshot",
+    "runner_output",
+    "snapshot",
+    "other"
+  ]);
+  const memoryNodeTypesProp = Type.Array(
+    enumString([
+      "Claim",
+      "Definition",
+      "Notation",
+      "TheoremReference",
+      "ProofStep",
+      "Evidence",
+      "Counterexample",
+      "FailureRoute",
+      "Workstream",
+      "ReflectionReport",
+      "Artifact",
+      "Citation",
+      "DomainObject"
+    ])
+  );
+  const memoryEdgeLabelProp = enumString([
+      "depends_on",
+      "supports",
+      "refutes",
+      "contradicts",
+      "cites",
+      "proved_by",
+      "blocked_by",
+      "same_as",
+      "supersedes",
+      "retracts",
+      "derived_from",
+      "produced_by"
+    ]);
   return [
+    {
+      name: "comath.service.health",
+      description: "Read comathd health, phase, and runtime capability metadata.",
+      mutates: false,
+      input_schema: objectSchema([], {})
+    },
+    {
+      name: "comath.research.start",
+      description: "Initialize a CoMath project and spawn the first bounded research workstream through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["root_path", "goal"], {
+        root_path: stringProp,
+        name: stringProp,
+        project_id: stringProp,
+        goal: stringProp,
+        kind: workstreamKindProp,
+        actor: stringProp,
+        headless: booleanProp
+      })
+    },
+    {
+      name: "comath.project.init",
+      description: "Initialize the trusted service-owned runtime tree for a project.",
+      mutates: true,
+      input_schema: objectSchema(["root_path"], {
+        root_path: stringProp,
+        name: stringProp
+      })
+    },
     {
       name: "comath.project.open",
       description: "Open an initialized CoMath project through comathd.",
       mutates: false,
       input_schema: objectSchema(["root_path"], { root_path: stringProp })
+    },
+    {
+      name: "comath.project.status",
+      description: "Read project initialization status through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root"], { project_root: stringProp })
     },
     {
       name: "comath.claim.register",
@@ -187,6 +296,37 @@ export function createComathTools(): ToolDescriptor[] {
       })
     },
     {
+      name: "comath.claim.update",
+      description: "Update a non-privileged claim patch through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "claim_id", "patch", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        claim_id: stringProp,
+        patch: objectSchema([], {
+          statement: stringProp,
+          assumptions: stringArrayProp,
+          domain: stringProp,
+          status: claimStatusProp,
+          evidence_level: numberProp
+        }),
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.claim.link",
+      description: "Link two claims with an auditable graph edge through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "source_id", "target_id", "label", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        source_id: stringProp,
+        target_id: stringProp,
+        label: memoryEdgeLabelProp,
+        actor: stringProp
+      })
+    },
+    {
       name: "comath.claim.requestPromotion",
       description: "Request a fail-closed promotion gate decision through comathd.",
       mutates: true,
@@ -194,7 +334,7 @@ export function createComathTools(): ToolDescriptor[] {
         project_root: stringProp,
         project_id: stringProp,
         claim_id: stringProp,
-        target_status: stringProp,
+        target_status: claimStatusProp,
         evidence_ids: stringArrayProp,
         artifact_ids: stringArrayProp
       })
@@ -214,6 +354,95 @@ export function createComathTools(): ToolDescriptor[] {
       })
     },
     {
+      name: "comath.artifact.import",
+      description: "Import a policy-approved artifact through comathd with secret scanning and content hashing.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "source_path", "kind", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        source_path: stringProp,
+        kind: artifactKindProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.artifact.list",
+      description: "List hashed artifact references recorded under the trusted service runtime.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id"], {
+        project_root: stringProp,
+        project_id: stringProp
+      })
+    },
+    {
+      name: "comath.workstream.spawn",
+      description: "Spawn a bounded research workstream through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "kind", "goal"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        kind: workstreamKindProp,
+        goal: stringProp,
+        created_by: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.workstream.status",
+      description: "Read one workstream status through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id", "workstream_id"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        workstream_id: stringProp
+      })
+    },
+    {
+      name: "comath.workstream.list",
+      description: "List workstreams for a project through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id"], {
+        project_root: stringProp,
+        project_id: stringProp
+      })
+    },
+    {
+      name: "comath.workstream.bundle",
+      description: "Read a workstream status, spec, report, and GraphPatch bundle through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id", "workstream_id"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        workstream_id: stringProp
+      })
+    },
+    {
+      name: "comath.workstream.report",
+      description: "Write or update a workstream report through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "workstream_id", "report_markdown"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        workstream_id: stringProp,
+        report_markdown: stringProp,
+        status: workstreamStatusProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.workstream.transition",
+      description: "Transition a workstream status through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "workstream_id", "next_status", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        workstream_id: stringProp,
+        next_status: workstreamStatusProp,
+        actor: stringProp,
+        notes: stringProp
+      })
+    },
+    {
       name: "comath.graph.proposePatch",
       description: "Propose a graph patch for later review.",
       mutates: true,
@@ -223,11 +452,142 @@ export function createComathTools(): ToolDescriptor[] {
         workstream_id: stringProp,
         source_workstream_id: stringProp,
         created_by: stringProp,
-        new_nodes: { type: "array" },
-        new_edges: { type: "array" },
-        updated_nodes: { type: "array" },
-        updated_edges: { type: "array" },
-        warnings: stringArrayProp
+        new_nodes: arrayProp,
+        new_edges: arrayProp,
+        updated_nodes: arrayProp,
+        candidate_conflicts: arrayProp,
+        warnings: stringArrayProp,
+        apply_preconditions: stringArrayProp
+      })
+    },
+    {
+      name: "comath.graph.reviewPatch",
+      description: "Review, accept, reject, or supersede a proposed GraphPatch through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "workstream_id", "next_state", "reviewer"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        workstream_id: stringProp,
+        next_state: graphPatchReviewStateProp,
+        reviewer: stringProp,
+        notes: stringProp
+      })
+    },
+    {
+      name: "comath.graph.applyPatch",
+      description: "Apply an accepted GraphPatch into the ResearchMemoryDB through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "workstream_id", "reviewer"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        workstream_id: stringProp,
+        reviewer: stringProp
+      })
+    },
+    {
+      name: "comath.memory.health",
+      description: "Read MathGraphIndex health and derived-index status through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id"], {
+        project_root: stringProp,
+        project_id: stringProp
+      })
+    },
+    {
+      name: "comath.memory.rebuild",
+      description: "Rebuild the derived MathGraphIndex from provenance ledger events through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id"], {
+        project_root: stringProp,
+        project_id: stringProp
+      })
+    },
+    {
+      name: "comath.memory.search",
+      description: "Search ResearchMemoryDB nodes through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id", "query"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        query: stringProp,
+        limit: numberProp,
+        node_types: memoryNodeTypesProp
+      })
+    },
+    {
+      name: "comath.memory.contextPack",
+      description: "Build a bounded context pack from ResearchMemoryDB seed nodes through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id", "seed_ids"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        seed_ids: stringArrayProp,
+        depth: numberProp,
+        limit: numberProp
+      })
+    },
+    {
+      name: "comath.literature.importBibTeX",
+      description: "Import BibTeX literature records and artifact metadata through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "bibtex", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        bibtex: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.literature.importPdf",
+      description: "Import a literature PDF as a hashed artifact through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "source_path", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        source_path: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.literature.registerCitation",
+      description: "Register a citation record through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "title", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        title: stringProp,
+        authors: stringArrayProp,
+        year: numberProp,
+        venue: stringProp,
+        doi: stringProp,
+        arxiv_id: stringProp,
+        url: stringProp,
+        artifact_id: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.literature.checkCondition",
+      description: "Check a citation support condition through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "citation_id", "claim_id", "condition", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        citation_id: stringProp,
+        claim_id: stringProp,
+        condition: stringProp,
+        result: stringProp,
+        notes: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.literature.list",
+      description: "List citations and citation-condition matches through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id"], {
+        project_root: stringProp,
+        project_id: stringProp
       })
     },
     {
@@ -277,7 +637,7 @@ export function createComathTools(): ToolDescriptor[] {
         project_root: stringProp,
         project_id: stringProp,
         claim_id: stringProp,
-        wording: { type: "string", enum: ["theorem", "lemma", "proposition", "conjecture", "claim", "remark"] },
+        wording: enumString(["theorem", "lemma", "proposition", "conjecture", "claim", "remark"]),
         evidence_ids: stringArrayProp,
         source_workstreams: stringArrayProp,
         warnings: stringArrayProp,
@@ -301,7 +661,7 @@ export function createComathTools(): ToolDescriptor[] {
       input_schema: objectSchema(["project_root", "project_id", "format", "actor"], {
         project_root: stringProp,
         project_id: stringProp,
-        format: { type: "string", enum: ["md", "tex"] },
+        format: enumString(["md", "tex"]),
         actor: stringProp
       })
     },

@@ -15,6 +15,7 @@ import {
   renderClaimBlock,
   updatePaperSection
 } from "../artifacts/paper.js";
+import { importArtifact, listArtifactRefs } from "../artifacts/store.js";
 import { exportSnapshot, restoreSnapshot, verifySnapshot } from "../artifacts/snapshots.js";
 import {
   checkCitationConditions,
@@ -27,6 +28,7 @@ import {
 import { InMemoryResearchMemoryDB } from "../memory/in-memory-research-memory-db.js";
 import { buildGraphPatchFromWorkstream } from "../memory/builder.js";
 import { applyAcceptedGraphPatch, reviewGraphPatch } from "../memory/graph-patch.js";
+import { createMathGraphIndex, type MathGraphIndex } from "../memory/math-graph-index.js";
 import {
   getWorkstreamStatus,
   listWorkstreams,
@@ -51,6 +53,7 @@ type RouteHandler = (body: unknown, url: URL) => unknown | Promise<unknown>;
 
 type RouteContext = {
   memoryDbs: Map<string, InMemoryResearchMemoryDB>;
+  graphIndexes: Map<string, MathGraphIndex>;
 };
 
 function memoryKey(projectRoot: string, projectId: string): string {
@@ -67,6 +70,24 @@ async function getMemoryDb(context: RouteContext, projectRoot: string, projectId
   await db.init(projectRoot, { projectId, backend: "memory" });
   context.memoryDbs.set(key, db);
   return db;
+}
+
+async function getMathGraphIndex(context: RouteContext, projectRoot: string, projectId: string): Promise<MathGraphIndex> {
+  const key = memoryKey(projectRoot, projectId);
+  const existing = context.graphIndexes.get(key);
+  if (existing) {
+    return existing;
+  }
+  const db = await getMemoryDb(context, projectRoot, projectId);
+  const index = createMathGraphIndex({
+    db,
+    backend: "memory",
+    projectRoot,
+    projectId
+  });
+  await index.init(projectRoot, projectId);
+  context.graphIndexes.set(key, index);
+  return index;
 }
 
 function success(body: unknown): InjectResponse {
@@ -206,6 +227,36 @@ async function route(method: string, path: string, body: unknown, context: Route
       }
     ],
     [
+      "POST /artifact/import",
+      async (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          source_path: string;
+          kind: Parameters<typeof importArtifact>[0]["kind"];
+          actor: string;
+        };
+        return {
+          artifact: await importArtifact({
+            projectRoot: body.project_root,
+            project_id: body.project_id,
+            source_path: body.source_path,
+            kind: body.kind,
+            actor: body.actor
+          })
+        };
+      }
+    ],
+    [
+      "GET /artifact/list",
+      (_payload, parsedUrl) => {
+        const projectRoot = parsedUrl.searchParams.get("project_root") ?? "";
+        const projectId = parsedUrl.searchParams.get("project_id") ?? "";
+        const artifacts = listArtifactRefs(projectRoot).filter((artifact) => !projectId || artifact.project_id === projectId);
+        return { artifacts };
+      }
+    ],
+    [
       "POST /workstream/spawn",
       (payload) => {
         const body = payload as Parameters<typeof spawnWorkstream>[1] & { project_root: string; actor?: string };
@@ -287,6 +338,65 @@ async function route(method: string, path: string, body: unknown, context: Route
         const body = payload as Omit<Parameters<typeof applyAcceptedGraphPatch>[1], "db"> & { project_root: string };
         const db = await getMemoryDb(context, body.project_root, body.project_id);
         return applyAcceptedGraphPatch(body.project_root, { ...body, db });
+      }
+    ],
+    [
+      "GET /memory/health",
+      async (_payload, parsedUrl) => {
+        const projectRoot = parsedUrl.searchParams.get("project_root") ?? "";
+        const projectId = parsedUrl.searchParams.get("project_id") ?? "";
+        const index = await getMathGraphIndex(context, projectRoot, projectId);
+        return { health: await index.health() };
+      }
+    ],
+    [
+      "POST /memory/rebuild",
+      async (payload) => {
+        const body = payload as { project_root: string; project_id: string };
+        const index = await getMathGraphIndex(context, body.project_root, body.project_id);
+        return { health: await index.rebuildFromLedger() };
+      }
+    ],
+    [
+      "POST /memory/search",
+      async (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          query: string;
+          limit?: number;
+          node_types?: Parameters<InMemoryResearchMemoryDB["search"]>[0]["node_types"];
+        };
+        const db = await getMemoryDb(context, body.project_root, body.project_id);
+        return {
+          results: await db.search({
+            project_id: body.project_id,
+            query: body.query,
+            limit: body.limit,
+            node_types: body.node_types
+          })
+        };
+      }
+    ],
+    [
+      "POST /memory/context-pack",
+      async (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          seed_ids: string[];
+          depth?: number;
+          limit?: number;
+        };
+        const db = await getMemoryDb(context, body.project_root, body.project_id);
+        return {
+          context_pack: await db.contextPack({
+            project_id: body.project_id,
+            seed_ids: body.seed_ids,
+            depth: body.depth,
+            limit: body.limit
+          })
+        };
       }
     ],
     [
@@ -451,7 +561,8 @@ export type ComathServer = {
 export function createComathServer(): ComathServer {
   let server: Server | undefined;
   const context: RouteContext = {
-    memoryDbs: new Map()
+    memoryDbs: new Map(),
+    graphIndexes: new Map()
   };
 
   return {
