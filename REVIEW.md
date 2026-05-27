@@ -1,3 +1,45 @@
+## Phase 49 Scheduler-Backed AgentRun Operator Cancellation Review Log
+
+Scope: Phase 49 turns the Phase 48 operator panel's cancellation placeholder into a real same-process control path. The service now keeps an active scheduler registry for launched AgentRuns, exposes `cancelAgentRunFromOperator()` plus `POST /agent/run/:id/cancel`, and enables panel cancellation only while the active registry can prove that the run is cancellable. Pi exposes the control as a host-confirmed mutation via `comath.agent.cancelRun` and `/cm:agent cancel`.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/unit/phase49-agent-operator-cancel.test.mjs
+Result: exit 1; `cancelAgentRunFromOperator` was not exported before implementation.
+
+node extensions/comath-pi/tests/phase49-agent-operator-cancel-tools.test.mjs
+Result: exit 1; `comath.agent.cancelRun` was not registered before implementation.
+```
+
+Focused GREEN evidence:
+
+```text
+node services/comathd/tests/unit/phase49-agent-operator-cancel.test.mjs
+Result: exit 0; long-running adapter execution became cancellable through the active scheduler registry, `POST /agent/run/:id/cancel` returned `proof_authority=none`, persisted the run as `cancelled`, emitted audit events, and panel cancellation disabled after terminal state.
+
+node extensions/comath-pi/tests/phase49-agent-operator-cancel-tools.test.mjs
+Result: exit 0; Pi cancel tool schema, required host confirmation, POST route payload, runtime registration, `/cm:agent cancel`, and operator notification output passed.
+```
+
+Implementation summary:
+
+- Added an active scheduler registry in `agent-run-scheduler.ts` keyed by project root, project id, and AgentRun id.
+- Added `isAgentRunCancellableByOperator()` and `cancelAgentRunFromOperator()` with fail-closed terminal/non-registry rejection.
+- Added `POST /agent/run/:id/cancel` and service status capability `agent_run_operator_cancel`.
+- Updated operator panels so `cancel.enabled=true` only for same-process active registry runs.
+- Added Pi `comath.agent.cancelRun` and `/cm:agent cancel` behind host confirmation.
+- Wired Phase 49 focused tests into the default `@comath/comathd` and `@comath/pi-extension` test chains.
+
+Boundary notes:
+
+Phase 49 is not cross-process cancellation, a persistent operator session, a terminal emulator, or a proof-authority path. Cancellation requires the active scheduler registry in the current `comathd` process; stale, terminal, or non-registry AgentRuns fail closed. Cancellation results remain runtime control metadata with `proof_authority=none` and cannot certify claims, apply GraphPatch, or replace Lean replay/static audit.
+
+Residual risks:
+
+- Cross-process cancellation and durable scheduler recovery remain deferred.
+- Persistent multi-event WebSocket/SSE operator sessions remain deferred.
+- Production Codex CLI/API validation and OS-enforced adapter isolation remain deferred.
 ## Phase 48 AgentRun Operator Panel Review Log
 
 Scope: Phase 48 adds a service-owned AgentRun operator panel read model on top of Phase 46/47 log observability. The panel aggregates AgentRun status, cursor log stream metadata, SSE subscription snapshot metadata, endpoint hints, and action availability while keeping `proof_authority=none`. Cancellation is explicitly reported as unavailable unless a future real scheduler registry can prove live cancellability; this phase does not fake cross-process cancellation.

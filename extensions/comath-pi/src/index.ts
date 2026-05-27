@@ -143,6 +143,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.agent.streamLogs",
   "comath.agent.subscribeLogs",
   "comath.agent.operatorPanel",
+  "comath.agent.cancelRun",
   "comath.agent.health",
   "comath.agent.adapterPackageList",
   "comath.agent.prepareAdapterPackage",
@@ -561,6 +562,15 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.agent.cancelRun") {
+    const runId = readString(input, "run_id");
+    return client.post(`/agent/run/${encodeURIComponent(runId)}/cancel`, {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      actor: readString(input, "actor")
+    });
+  }
+
   if (name === "comath.agent.health") {
     const timeoutMs = readNumber(input, "timeout_ms");
     return client.post("/agent/adapter/health", {
@@ -926,6 +936,18 @@ export function createComathTools(): ToolDescriptor[] {
         stderr_cursor: { type: "number", minimum: 0 },
         max_bytes: { type: "number", minimum: 1 },
         actor: stringProp
+      })
+    },
+    {
+      name: "comath.agent.cancelRun",
+      description: "Request scheduler-backed cancellation for an active AgentRun through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "run_id", "actor", "confirmation_id"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        run_id: stringProp,
+        actor: stringProp,
+        confirmation_id: stringProp
       })
     },
     {
@@ -1598,6 +1620,29 @@ async function handleAgentCommand(
         max_bytes: numberOptionValue(parsed.args, "--max-bytes"),
         actor: actorFrom(options, parsed.args)
       })
+    );
+    return;
+  }
+  if (subcommand === "cancel") {
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const runId = requiredOption(optionValue(parsed.args, "--run-id") ?? firstPositional(parsed.args), "run_id");
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.agent.cancelRun");
+    if (!tool) {
+      throw new Error("agent cancel tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: projectId,
+          run_id: runId,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
     );
     return;
   }

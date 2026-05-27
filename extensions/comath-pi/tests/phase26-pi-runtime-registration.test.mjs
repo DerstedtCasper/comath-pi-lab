@@ -170,6 +170,7 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.agent.streamLogs",
       "comath.agent.subscribeLogs",
       "comath.agent.operatorPanel",
+      "comath.agent.cancelRun",
       "comath.agent.health",
       "comath.agent.adapterPackageList",
       "comath.agent.prepareAdapterPackage",

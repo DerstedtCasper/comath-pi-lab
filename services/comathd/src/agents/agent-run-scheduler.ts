@@ -50,6 +50,20 @@ export type AgentRunProcessResult = {
   report_path?: string;
 };
 
+export type OperatorCancelAgentRunInput = {
+  project_id: string;
+  run_id: string;
+  actor: string;
+};
+
+export type OperatorCancelAgentRunResult = {
+  project_id: string;
+  run_id: string;
+  cancelled: boolean;
+  proof_authority: "none";
+  reason?: string;
+};
+
 type QueuedLaunch = {
   projectRoot: string;
   input: AgentRunLaunchInput;
@@ -61,6 +75,12 @@ type QueuedLaunch = {
 type RunningLaunch = {
   child: ChildProcessWithoutNullStreams;
   cancel_actor?: string;
+};
+
+type ActiveSchedulerEntry = {
+  projectRoot: string;
+  projectId: string;
+  scheduler: AgentRunScheduler;
 };
 
 type BoundedOutputCollector = {
@@ -123,6 +143,64 @@ const explicitNonSecretEnvironmentKeys = new Set([
   "COMATH_CODEX_EXTERNAL_PROGRAM",
   "COMATH_CODEX_EXTERNAL_PREFIX_ARGS"
 ]);
+
+const activeSchedulerRegistry = new Map<string, ActiveSchedulerEntry>();
+
+function registryKey(projectRoot: string, projectId: string, runId: string): string {
+  return `${resolve(projectRoot)}\0${projectId}\0${runId}`;
+}
+
+function registerActiveScheduler(projectRoot: string, projectId: string, runId: string, scheduler: AgentRunScheduler): void {
+  activeSchedulerRegistry.set(registryKey(projectRoot, projectId, runId), { projectRoot: resolve(projectRoot), projectId, scheduler });
+}
+
+function unregisterActiveScheduler(projectRoot: string, projectId: string, runId: string): void {
+  activeSchedulerRegistry.delete(registryKey(projectRoot, projectId, runId));
+}
+
+function getActiveScheduler(projectRoot: string, projectId: string, runId: string): ActiveSchedulerEntry | undefined {
+  return activeSchedulerRegistry.get(registryKey(projectRoot, projectId, runId));
+}
+
+export function isAgentRunCancellableByOperator(projectRoot: string, projectId: string, runId: string): boolean {
+  return Boolean(getActiveScheduler(projectRoot, projectId, runId));
+}
+
+export function cancelAgentRunFromOperator(projectRoot: string, input: OperatorCancelAgentRunInput): OperatorCancelAgentRunResult {
+  const run = getAgentRun(projectRoot, input.project_id, input.run_id);
+  if (["succeeded", "failed", "cancelled"].includes(run.status)) {
+    throw new ComathError("terminal AgentRun cannot be cancelled", {
+      statusCode: 409,
+      code: "AGENT_RUN_NOT_CANCELLABLE"
+    });
+  }
+  const active = getActiveScheduler(projectRoot, input.project_id, input.run_id);
+  if (!active) {
+    throw new ComathError("AgentRun is not cancellable in this service process", {
+      statusCode: 409,
+      code: "AGENT_RUN_NOT_CANCELLABLE"
+    });
+  }
+  const cancelled = active.scheduler.cancel(input.run_id, input.actor);
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_run.operator_cancel_requested",
+    actor: input.actor,
+    target_id: input.run_id,
+    payload: {
+      cancelled,
+      status: run.status,
+      proof_authority: "none"
+    }
+  });
+  return {
+    project_id: input.project_id,
+    run_id: input.run_id,
+    cancelled,
+    proof_authority: "none",
+    reason: cancelled ? undefined : "scheduler did not accept cancellation"
+  };
+}
 
 function fallbackReport(exitReason: string): string {
   return [...reportHeadings, "", `Exit reason: ${exitReason}`, ""].join("\n");
@@ -347,7 +425,20 @@ export class AgentRunScheduler {
       return Promise.reject(error);
     }
     return new Promise((resolve, reject) => {
-      this.queue.push({ projectRoot, input, command, resolve, reject });
+      registerActiveScheduler(projectRoot, input.project_id, input.run_id, this);
+      this.queue.push({
+        projectRoot,
+        input,
+        command,
+        resolve: (result) => {
+          unregisterActiveScheduler(projectRoot, input.project_id, input.run_id);
+          resolve(result);
+        },
+        reject: (error) => {
+          unregisterActiveScheduler(projectRoot, input.project_id, input.run_id);
+          reject(error);
+        }
+      });
       this.pump();
     });
   }

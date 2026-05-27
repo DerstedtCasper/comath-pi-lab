@@ -55,6 +55,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_run_log_stream_cursor",
       "agent_run_log_subscription_sse",
       "agent_run_operator_panel",
+      "agent_run_operator_cancel",
       "agent_adapter_package_registry",
       "codex_cli_external_adapter_invocation"
     ],

@@ -42,6 +42,7 @@ import {
   createAgentRunForProfile,
   executeAgentAdapterPackage,
   executeProfileAgentRun,
+  cancelAgentRunFromOperator,
   getAgentProfile,
   listAgentAdapterPackages,
   readAgentRunOperatorPanel,
@@ -797,6 +798,22 @@ async function route(method: string, path: string, body: unknown, context: Route
             actor: request.actor
           })
         );
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const agentRunCancelMatch = /^\/agent\/run\/([^/]+)\/cancel$/.exec(url.pathname);
+    if (agentRunCancelMatch) {
+      try {
+        const request = body as { project_root: string; project_id: string; actor: string };
+        return success({
+          cancellation: cancelAgentRunFromOperator(request.project_root, {
+            project_id: request.project_id,
+            run_id: decodeURIComponent(agentRunCancelMatch[1] ?? ""),
+            actor: request.actor
+          })
+        });
       } catch (error) {
         return dynamicRouteError(error);
       }

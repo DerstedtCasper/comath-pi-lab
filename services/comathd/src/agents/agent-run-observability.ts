@@ -5,6 +5,7 @@ import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
 import { getAgentRun } from "./agent-run-store.js";
 import { getAgentProfile, type AgentProfileId } from "./agent-profiles.js";
+import { isAgentRunCancellableByOperator } from "./agent-run-scheduler.js";
 
 export type ReadAgentRunLogsInput = {
   project_id: string;
@@ -89,7 +90,7 @@ export type AgentRunOperatorPanel = {
     read_logs: { enabled: true; endpoint: string };
     stream_logs: { enabled: true; endpoint: string };
     subscribe_logs: { enabled: true; endpoint: string };
-    cancel: { enabled: false; reason: string };
+    cancel: { enabled: boolean; endpoint: string; reason?: string };
   };
   log_stream: AgentRunLogStream;
   log_subscription: AgentRunLogSseSnapshot;
@@ -427,14 +428,18 @@ export function readAgentRunOperatorPanel(projectRoot: string, input: ReadAgentR
   const endpoints = {
     logs: `/agent/run/${encodedRunId}/logs`,
     log_stream: `/agent/run/${encodedRunId}/log-stream`,
-    log_subscription: `/agent/run/${encodedRunId}/log-subscription`
+    log_subscription: `/agent/run/${encodedRunId}/log-subscription`,
+    cancel: `/agent/run/${encodedRunId}/cancel`
   };
   const stream = streamAgentRunLogs(projectRoot, input);
   const subscription = formatAgentRunLogSseSnapshot(projectRoot, input);
   const terminal = ["succeeded", "failed", "cancelled"].includes(run.status);
-  const cancelReason = terminal
-    ? "terminal AgentRun cannot be cancelled"
-    : "cancel requires an active scheduler registry in the current service process";
+  const cancellable = !terminal && isAgentRunCancellableByOperator(projectRoot, input.project_id, run.id);
+  const cancelReason = cancellable
+    ? undefined
+    : terminal
+      ? "terminal AgentRun cannot be cancelled"
+      : "cancel requires an active scheduler registry in the current service process";
   appendAuditEvent(projectRoot, {
     project_id: input.project_id,
     event_type: "agent_run.operator_panel_read",
@@ -445,7 +450,7 @@ export function readAgentRunOperatorPanel(projectRoot: string, input: ReadAgentR
       cursor: stream.cursor,
       next_cursor: stream.next_cursor,
       actions: ["read_logs", "stream_logs", "subscribe_logs"],
-      cancel_enabled: false,
+      cancel_enabled: cancellable,
       cancel_reason: cancelReason,
       proof_authority: "none"
     }
@@ -459,7 +464,7 @@ export function readAgentRunOperatorPanel(projectRoot: string, input: ReadAgentR
       read_logs: { enabled: true, endpoint: endpoints.logs },
       stream_logs: { enabled: true, endpoint: endpoints.log_stream },
       subscribe_logs: { enabled: true, endpoint: endpoints.log_subscription },
-      cancel: { enabled: false, reason: cancelReason }
+      cancel: { enabled: cancellable, endpoint: endpoints.cancel, reason: cancelReason }
     },
     log_stream: stream,
     log_subscription: subscription
