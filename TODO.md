@@ -526,13 +526,21 @@
 - [x] Add Pi `comath.agent.logSession` and `/cm:agent log-session` as read-only operator log-session surfaces without host mutation confirmation or direct `.comath/` access.
 - [x] Wire Phase 50 into default `@comath/comathd` and `@comath/pi-extension` test chains and smoke status capabilities.
 
+## Phase 51: Service-Configured Codex API Backend Contract
+
+- [x] Add `codex-api` backend selection for the service-owned `codex-cli` adapter package without exposing API keys, base URLs, or executable paths to Pi/model input.
+- [x] Add service-owned Responses-compatible Codex API backend execution with injectable HTTP client tests, `COMATH_CODEX_API_KEY` service configuration, fail-closed missing-key behavior, and `proof_authority=none` report wrapping.
+- [x] Keep prepare-launch payloads secret-free by exposing only `COMATH_CODEX_API_KEY_REF`, configured flags, model metadata, and backend enum.
+- [x] Add Pi `/cm:agent prepare-package|execute-package --backend codex-api` and tool schema coverage without any API-key or base-URL fields.
+- [x] Wire Phase 51 into default `@comath/comathd` and `@comath/pi-extension` test chains and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`), and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
-- [ ] Production Codex/Pi adapter hardening beyond the Phase 41-50 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, and service-configured external CLI invocation slices: real Codex API backend, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, OS-enforced adapter isolation, and validation against an installed production Codex CLI.
+- [ ] Production Codex/Pi adapter hardening beyond the Phase 41-51 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, and service-configured Codex API backend contract slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, OS-enforced adapter isolation, and validation against an installed production Codex CLI.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance: OS-level isolation, enforced network denial, and cross-machine replay validation.
 - [ ] OS-level process sandboxing beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, Phase 39 project-level lock primitive, and Phase 40 AgentRun scheduler lock integration.

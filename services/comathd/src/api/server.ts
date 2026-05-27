@@ -364,7 +364,7 @@ async function route(method: string, path: string, body: unknown, context: Route
           run_id: string;
           profile_id: string;
           adapter_id: string;
-          backend?: "bundled" | "external";
+          backend?: "bundled" | "external" | "codex-api";
           goal: string;
           context_path: string;
           actor: string;
@@ -393,7 +393,7 @@ async function route(method: string, path: string, body: unknown, context: Route
           workstream_id: string;
           profile_id: string;
           adapter_id: string;
-          backend?: "bundled" | "external";
+          backend?: "bundled" | "external" | "codex-api";
           goal: string;
           context_path: string;
           actor: string;

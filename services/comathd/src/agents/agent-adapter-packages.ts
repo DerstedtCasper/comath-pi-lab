@@ -1,10 +1,11 @@
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
 import type { AgentRun } from "../types/schemas.js";
-import { createAgentRunScheduler, type AgentRunProcessResult } from "./agent-run-scheduler.js";
+import { assertAgentRunWriteAllowed, startAgentRun, submitAgentRunReport } from "./agent-run-store.js";
+import { createAgentRunScheduler, type AgentRunProcessResult, type AgentRunProcessStatus } from "./agent-run-scheduler.js";
 import {
   buildAgentProfileLaunch,
   createAgentRunForProfile,
@@ -34,12 +35,14 @@ export type AgentAdapterPackage = {
   };
 };
 
+export type AgentAdapterBackend = "bundled" | "external" | "codex-api";
+
 export type BuildAgentAdapterPackageLaunchInput = {
   project_id: string;
   run_id: string;
   profile_id: AgentProfileId;
   adapter_id: AgentAdapterPackageId;
-  backend?: "bundled" | "external";
+  backend?: AgentAdapterBackend;
   goal: string;
   context_path: string;
   actor: string;
@@ -57,7 +60,7 @@ export type ExecuteAgentAdapterPackageInput = {
   workstream_id: string;
   profile_id: AgentProfileId;
   adapter_id: AgentAdapterPackageId;
-  backend?: "bundled" | "external";
+  backend?: AgentAdapterBackend;
   goal: string;
   context_path: string;
   actor: string;
@@ -72,6 +75,32 @@ export type ExecuteAgentAdapterPackageResult = {
 };
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
+
+export type CodexApiBackendRequest = {
+  url: string;
+  headers: {
+    authorization: string;
+    "content-type": "application/json";
+  };
+  body: {
+    model: string;
+    input: string;
+    metadata: Record<string, string>;
+  };
+};
+
+export type CodexApiBackendResponse = {
+  status: number;
+  json: unknown;
+};
+
+export type CodexApiBackendClient = (request: CodexApiBackendRequest) => Promise<CodexApiBackendResponse>;
+
+let codexApiBackendClientForTests: CodexApiBackendClient | undefined;
+
+export function setCodexApiBackendClientForTests(client: CodexApiBackendClient | undefined): void {
+  codexApiBackendClientForTests = client;
+}
 
 function adapterScriptPath(): string {
   const distCandidate = join(moduleDir, "adapters", "codex-cli-adapter.mjs");
@@ -205,15 +234,348 @@ function resolveExternalCodexProgram(): { program: string; prefixArgs: string[] 
   };
 }
 
+function normalizeCodexApiBaseUrl(rawValue: string | undefined): string {
+  const value = rawValue ?? "https://api.openai.com/v1";
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new ComathError("COMATH_CODEX_API_BASE_URL must be a valid https URL", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_CODEX_API_BASE_URL_INVALID"
+    });
+  }
+  if (parsed.protocol !== "https:") {
+    throw new ComathError("COMATH_CODEX_API_BASE_URL must use https", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_CODEX_API_BASE_URL_INVALID"
+    });
+  }
+  return value.replace(/\/+$/, "");
+}
+
+function codexApiModel(): string {
+  return process.env.COMATH_CODEX_API_MODEL ?? "gpt-5-codex";
+}
+
+function codexApiKeyConfigured(): boolean {
+  return Boolean(process.env.COMATH_CODEX_API_KEY);
+}
+
+function assertCodexApiConfigured(): { apiKey: string; baseUrl: string; model: string } {
+  const apiKey = process.env.COMATH_CODEX_API_KEY;
+  if (!apiKey) {
+    throw new ComathError("Codex API key is not configured", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_CODEX_API_KEY_MISSING"
+    });
+  }
+  if (apiKey.includes("\u0000")) {
+    throw new ComathError("Codex API key is invalid", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_CODEX_API_KEY_INVALID"
+    });
+  }
+  return {
+    apiKey,
+    baseUrl: normalizeCodexApiBaseUrl(process.env.COMATH_CODEX_API_BASE_URL),
+    model: codexApiModel()
+  };
+}
+
+function extractCodexApiOutputText(json: unknown): { responseId: string; text: string } {
+  if (!json || typeof json !== "object") {
+    return { responseId: "<unknown>", text: "" };
+  }
+  const record = json as Record<string, unknown>;
+  const responseId = typeof record.id === "string" ? record.id : "<unknown>";
+  if (typeof record.output_text === "string") {
+    return { responseId, text: record.output_text };
+  }
+  const output = record.output;
+  if (Array.isArray(output)) {
+    const text = output
+      .flatMap((entry) => {
+        if (!entry || typeof entry !== "object") {
+          return [];
+        }
+        const content = (entry as Record<string, unknown>).content;
+        if (!Array.isArray(content)) {
+          return [];
+        }
+        return content.flatMap((contentEntry) => {
+          if (!contentEntry || typeof contentEntry !== "object") {
+            return [];
+          }
+          const textValue = (contentEntry as Record<string, unknown>).text;
+          return typeof textValue === "string" ? [textValue] : [];
+        });
+      })
+      .join("\n");
+    return { responseId, text };
+  }
+  return { responseId, text: "" };
+}
+
+async function defaultCodexApiBackendClient(request: CodexApiBackendRequest): Promise<CodexApiBackendResponse> {
+  const response = await fetch(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(request.body)
+  });
+  let json: unknown;
+  try {
+    json = await response.json();
+  } catch {
+    json = { error: { message: "Codex API returned non-JSON response" } };
+  }
+  return { status: response.status, json };
+}
+
+function renderCodexApiPrompt(input: ExecuteAgentAdapterPackageInput, run: AgentRun, profile: AgentProfile): string {
+  return [
+    "# CoMath Pi Lab Codex API Adapter Request",
+    "",
+    `profile: ${profile.id}`,
+    `role: ${profile.role}`,
+    `project_id: ${input.project_id}`,
+    `agent_run_id: ${run.id}`,
+    `workstream_id: ${input.workstream_id}`,
+    `context_path: ${input.context_path}`,
+    "proof_authority: none",
+    "",
+    "The Codex API backend may draft research or implementation notes only.",
+    "It must not claim proof authority, mutate trusted state directly, or promote claims.",
+    "",
+    "## Goal",
+    input.goal
+  ].join("\n");
+}
+
+function renderCodexApiReport(input: ExecuteAgentAdapterPackageInput, run: AgentRun, profile: AgentProfile, responseId: string, outputText: string): string {
+  return [
+    "# Agent Report",
+    "",
+    "## Input Context",
+    "adapter_package: codex-cli",
+    "adapter_backend: codex-api",
+    `profile: ${profile.id}`,
+    `role: ${profile.role}`,
+    `context_path: ${input.context_path}`,
+    `codex_api_response_id: ${responseId}`,
+    "external_prompt_file: <none>",
+    "external_program: <none>",
+    "",
+    "## Actions Taken",
+    "Service-configured Codex API backend produced a bounded non-authoritative AgentRun draft.",
+    "",
+    "## Claims Proposed",
+    "No trusted claim promotion.",
+    "proof_authority: none",
+    "supports_claim_status: none",
+    "",
+    "## Evidence Produced",
+    "codex_api_output_untrusted: true",
+    outputText.trimEnd() ? "" : undefined,
+    outputText.trimEnd() || undefined,
+    "",
+    "## Graph Patch",
+    "No GraphPatch authority.",
+    "",
+    "## Blockers",
+    "None reported by Codex API backend.",
+    "",
+    "## Failed Routes",
+    "No proof route certified by this adapter.",
+    "",
+    "## Self-Review",
+    "The Codex API backend is service-configured runtime output and does not claim proof authority.",
+    "",
+    "## Next Actions",
+    "Route any useful output through independent review and Lean-backed proof-kernel gates.",
+    ""
+  ]
+    .filter((line) => line !== undefined)
+    .join("\n");
+}
+
+function processResultForApiRun(
+  run: AgentRun,
+  status: AgentRunProcessStatus,
+  startedAtMs: number,
+  stdoutPath: string,
+  stderrPath: string,
+  reportPath?: string
+): AgentRunProcessResult {
+  return {
+    run_id: run.id,
+    project_id: run.project_id,
+    status,
+    exit_code: status === "succeeded" ? 0 : 1,
+    signal: null,
+    timed_out: false,
+    cancelled: false,
+    started_at_ms: startedAtMs,
+    completed_at_ms: Date.now(),
+    stdout_path: stdoutPath,
+    stderr_path: stderrPath,
+    ...(reportPath ? { report_path: reportPath } : {})
+  };
+}
+
+async function executeCodexApiAdapterPackage(
+  projectRoot: string,
+  input: ExecuteAgentAdapterPackageInput,
+  pkg: AgentAdapterPackage,
+  profile: AgentProfile,
+  run: AgentRun
+): Promise<ExecuteAgentAdapterPackageResult> {
+  const startedAtMs = Date.now();
+  const running = startAgentRun(projectRoot, { project_id: input.project_id, run_id: run.id, actor: input.actor });
+  const logsDir = `.tmp/comath/${run.id}/logs`;
+  mkdirSync(assertAgentRunWriteAllowed(projectRoot, running, logsDir), { recursive: true });
+  const stdoutPath = `${logsDir}/stdout.log`;
+  const stderrPath = `${logsDir}/stderr.log`;
+  const absoluteStdoutPath = assertAgentRunWriteAllowed(projectRoot, running, stdoutPath);
+  const absoluteStderrPath = assertAgentRunWriteAllowed(projectRoot, running, stderrPath);
+  try {
+    const config = assertCodexApiConfigured();
+    const request: CodexApiBackendRequest = {
+      url: `${config.baseUrl}/responses`,
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        "content-type": "application/json"
+      },
+      body: {
+        model: config.model,
+        input: renderCodexApiPrompt(input, running, profile),
+        metadata: {
+          project_id: input.project_id,
+          agent_run_id: run.id,
+          workstream_id: input.workstream_id,
+          profile_id: profile.id,
+          proof_authority: "none"
+        }
+      }
+    };
+    const client = codexApiBackendClientForTests ?? defaultCodexApiBackendClient;
+    const response = await client(request);
+    if (response.status < 200 || response.status >= 300) {
+      writeFileSync(absoluteStdoutPath, "", "utf8");
+      writeFileSync(absoluteStderrPath, `Codex API backend failed with status ${response.status}\n`, "utf8");
+      const failed = submitAgentRunReport(projectRoot, {
+        project_id: input.project_id,
+        run_id: run.id,
+        status: "failed",
+        report_markdown: renderCodexApiReport(input, running, profile, "<failed>", ""),
+        exit_reason: "codex_api_backend_failed",
+        actor: input.actor
+      });
+      return {
+        package: clonePackage(pkg),
+        profile,
+        run: failed,
+        launch: buildAgentAdapterPackageLaunch(projectRoot, {
+          project_id: input.project_id,
+          run_id: run.id,
+          profile_id: input.profile_id,
+          adapter_id: input.adapter_id,
+          backend: input.backend,
+          goal: input.goal,
+          context_path: input.context_path,
+          actor: input.actor
+        }).launch,
+        result: processResultForApiRun(failed, "failed", startedAtMs, stdoutPath, stderrPath, failed.report_path)
+      };
+    }
+    const extracted = extractCodexApiOutputText(response.json);
+    const report = renderCodexApiReport(input, running, profile, extracted.responseId, extracted.text);
+    writeFileSync(absoluteStdoutPath, `${report.trimEnd()}\n`, "utf8");
+    writeFileSync(absoluteStderrPath, "", "utf8");
+    const submitted = submitAgentRunReport(projectRoot, {
+      project_id: input.project_id,
+      run_id: run.id,
+      status: "succeeded",
+      report_markdown: report,
+      actor: input.actor
+    });
+    appendAuditEvent(projectRoot, {
+      project_id: input.project_id,
+      event_type: "agent_adapter.codex_api_invoked",
+      actor: input.actor,
+      target_id: run.id,
+      payload: {
+        adapter_id: pkg.id,
+        profile_id: profile.id,
+        model: config.model,
+        base_url_configured: true,
+        response_id: extracted.responseId,
+        proof_authority: "none"
+      }
+    });
+    return {
+      package: clonePackage(pkg),
+      profile,
+      run: submitted,
+      launch: buildAgentAdapterPackageLaunch(projectRoot, {
+        project_id: input.project_id,
+        run_id: run.id,
+        profile_id: input.profile_id,
+        adapter_id: input.adapter_id,
+        backend: input.backend,
+        goal: input.goal,
+        context_path: input.context_path,
+        actor: input.actor
+      }).launch,
+      result: processResultForApiRun(submitted, "succeeded", startedAtMs, stdoutPath, stderrPath, submitted.report_path)
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    writeFileSync(absoluteStdoutPath, "", "utf8");
+    writeFileSync(absoluteStderrPath, `${message}\n`, "utf8");
+    const failed = submitAgentRunReport(projectRoot, {
+      project_id: input.project_id,
+      run_id: run.id,
+      status: "failed",
+      report_markdown: renderCodexApiReport(input, running, profile, "<failed>", ""),
+      exit_reason: "codex_api_backend_failed",
+      actor: input.actor
+    });
+    return {
+      package: clonePackage(pkg),
+      profile,
+      run: failed,
+      launch: buildAgentAdapterPackageLaunch(projectRoot, {
+        project_id: input.project_id,
+        run_id: run.id,
+        profile_id: input.profile_id,
+        adapter_id: input.adapter_id,
+        backend: input.backend,
+        goal: input.goal,
+        context_path: input.context_path,
+        actor: input.actor
+      }).launch,
+      result: processResultForApiRun(failed, "failed", startedAtMs, stdoutPath, stderrPath, failed.report_path)
+    };
+  }
+}
+
 export function buildAgentAdapterPackageLaunch(
   projectRoot: string,
   input: BuildAgentAdapterPackageLaunchInput
 ): AgentAdapterPackageLaunch {
   const pkg = getAgentAdapterPackage(input.adapter_id);
   const backend = input.backend ?? "bundled";
+  if (!(["bundled", "external", "codex-api"] as const).includes(backend)) {
+    throw new ComathError(`unsupported adapter backend: ${backend}`, {
+      statusCode: 400,
+      code: "AGENT_ADAPTER_PACKAGE_BACKEND_UNSUPPORTED"
+    });
+  }
   const profile = getAgentProfile(input.profile_id);
   assertProfileSupported(pkg, profile.id);
   const externalCodex = backend === "external" ? resolveExternalCodexProgram() : undefined;
+  const codexApiConfigured = backend === "codex-api" ? codexApiKeyConfigured() : false;
   const launch = buildAgentProfileLaunch(projectRoot, {
     project_id: input.project_id,
     run_id: input.run_id,
@@ -242,6 +604,11 @@ export function buildAgentAdapterPackageLaunch(
       launch.launch_input.command.env.COMATH_CODEX_EXTERNAL_PREFIX_ARGS = JSON.stringify(externalCodex.prefixArgs);
     }
   }
+  if (backend === "codex-api") {
+    launch.launch_input.command.env.COMATH_CODEX_API_KEY_REF = "COMATH_CODEX_API_KEY";
+    launch.launch_input.command.env.COMATH_CODEX_API_BASE_URL_CONFIGURED = String(Boolean(process.env.COMATH_CODEX_API_BASE_URL));
+    launch.launch_input.command.env.COMATH_CODEX_API_MODEL = codexApiModel();
+  }
   appendAuditEvent(projectRoot, {
     project_id: input.project_id,
     event_type: "agent_adapter.package_launch_prepared",
@@ -254,6 +621,7 @@ export function buildAgentAdapterPackageLaunch(
       program: pkg.program,
       adapter_script: pkg.adapter_script,
       external_program_configured: Boolean(externalCodex),
+      codex_api_configured: codexApiConfigured,
       rpm: launch.scheduler_options.rpm,
       proof_authority: pkg.proof_authority
     }
@@ -272,6 +640,12 @@ export async function executeAgentAdapterPackage(
     profile_id: input.profile_id,
     actor: input.actor
   });
+  if ((input.backend ?? "bundled") === "codex-api") {
+    const pkg = getAgentAdapterPackage(input.adapter_id);
+    const profile = getAgentProfile(input.profile_id);
+    assertProfileSupported(pkg, profile.id);
+    return executeCodexApiAdapterPackage(projectRoot, input, pkg, profile, run);
+  }
   const prepared = buildAgentAdapterPackageLaunch(projectRoot, {
     project_id: input.project_id,
     run_id: run.id,

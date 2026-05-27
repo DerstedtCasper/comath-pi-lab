@@ -1,3 +1,45 @@
+## Phase 51 Service-Configured Codex API Backend Contract Review Log
+
+Scope: Phase 51 adds a `codex-api` backend option to the service-owned `codex-cli` adapter package. The backend is configured by `comathd` environment (`COMATH_CODEX_API_KEY`, optional base URL/model), exposes only secret-free launch metadata, executes through a Responses-compatible client boundary with test injection, and wraps output as non-authoritative AgentRun report/log material. Pi can select `--backend codex-api`, but cannot supply API keys, base URLs, executable paths, or proof authority.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/unit/phase51-codex-api-backend.test.mjs
+Result: exit 1; `setCodexApiBackendClientForTests` was not exported before implementation.
+
+node extensions/comath-pi/tests/phase51-codex-api-backend-tools.test.mjs
+Result: exit 1; `codex-api` was not present in packaged-adapter backend tool schemas before implementation.
+```
+
+Focused GREEN evidence:
+
+```text
+node services/comathd/tests/unit/phase51-codex-api-backend.test.mjs
+Result: exit 0; service-configured Codex API backend execution, secret-free prepare payloads, injected Responses-compatible request shape, missing-key fail-closed behavior, audit events, and `proof_authority=none` report wrapping passed.
+
+node extensions/comath-pi/tests/phase51-codex-api-backend-tools.test.mjs
+Result: exit 0; Pi backend enum, prepare/execute POST payloads, command dispatch, host confirmation path, and absence of API-key/base-URL fields passed.
+```
+
+Implementation summary:
+
+- Added `codex-api` as an `AgentAdapterBackend` for the service-owned `codex-cli` package.
+- Added `setCodexApiBackendClientForTests()` and a default HTTPS `/responses` client boundary for service-configured API execution.
+- Kept launch envelopes secret-free: they expose `COMATH_CODEX_API_KEY_REF`, configured flags, model metadata, and `proof_authority=none`, but not the API key value.
+- Executed Codex API backend runs through AgentRun lifecycle (`startAgentRun()`/`submitAgentRunReport()`), `.tmp/comath/<ARUN>/logs`, audit events, and non-authoritative report wrapping.
+- Added Pi `codex-api` backend selection for packaged adapter prepare/execute tools and `/cm:agent prepare-package|execute-package --backend codex-api`.
+
+Boundary notes:
+
+Phase 51 is not a proof-authority backend and not a production account/network validation claim. The API response is untrusted AgentRun material with `proof_authority=none`; it cannot certify claims, apply GraphPatch, select proof candidates as authoritative, or replace Lean replay/static audit. Real production API credential validation, streaming API UX, retry/backoff policy, and provider-specific quota/error observability remain future hardening work.
+
+Residual risks:
+
+- No live production OpenAI account/network call was run in this phase; tests use an injected Responses-compatible client.
+- Retry/backoff, rate-limit telemetry, streaming Responses API handling, and credential-rotation UX remain deferred.
+- OS-enforced adapter isolation and production installed Codex CLI validation remain deferred.
+
 ## Phase 50 Bounded Multi-Event AgentRun Log Session Review Log
 
 Scope: Phase 50 extends the Phase 46/47 log surfaces from single cursor reads and one-frame SSE snapshots to a bounded multi-event SSE response. The service emits multiple `agent_run.log_chunk` frames by advancing stdout/stderr cursors through `streamAgentRunLogs()`, stops at `max_events`, terminal completion, or no cursor progress, and records `agent_run.logs_sse_session`. Pi exposes the read-only surface as `comath.agent.logSession` and `/cm:agent log-session` through `getText()`.

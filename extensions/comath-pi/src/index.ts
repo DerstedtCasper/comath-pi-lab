@@ -688,7 +688,7 @@ function toolLabel(name: string): string {
 export function createComathTools(): ToolDescriptor[] {
   const stringProp = { type: "string" };
   const stringArrayProp = { type: "array", items: stringProp };
-  const agentAdapterBackendProp = { type: "string", enum: ["bundled", "external"] };
+  const agentAdapterBackendProp = { type: "string", enum: ["bundled", "external", "codex-api"] };
   return [
     {
       name: "comath.project.open",
