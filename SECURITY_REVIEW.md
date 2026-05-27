@@ -161,6 +161,7 @@ Remaining security requirements:
 22. **Scheduled AgentRuns respect project writer locks.** Phase 40 makes scheduler execution acquire the writer session before child-process mutation, reject active-lock conflicts before spawn, preserve the queued run on blocked launch, and release the scheduler-owned lock after terminal report handling.
 23. **Live profile adapters execute only through the scheduler boundary.** Phase 41 exposes profile-backed adapter execution through `executeProfileAgentRun()`, `/agent/run/profile/execute`, and Pi host-confirmed `comath.agent.executeProfile`, preserving program allowlists, scoped writes, writer locks, and non-authoritative report wrapping.
 24. **AgentRun observability is bounded and non-promotional.** Phase 42 exposes capped AgentRun stdout/stderr reads and adapter health probes through `comathd`; health probes use absolute program validation, `shell:false`, bounded timeout/output, a minimal environment, `COMATH_PROOF_AUTHORITY=none`, Pi host confirmation, and audit events.
+25. **Packaged adapters are resolved by comathd, not model-supplied shell strings.** Phase 43 adds a service-owned `codex-cli` adapter package registry and bundled launcher script. Pi can request package prepare/execute, but the executable, prefix arguments, rpm, profile support, and `proof_authority=none` environment are resolved by `comathd` and launched through the existing scheduler/writer-lock boundary.
 
 ### Validation Commands
 
@@ -305,7 +306,7 @@ Result: exit 0; Pi agent execute tool tests passed for runtime tool/command regi
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
 - Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, Phase 24 reruns the implemented Python compute runners through strict replay, and Phase 36 records sandbox/dependency provenance with fail-closed integrity checks. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but OS-level sandboxing, enforced network denial, and cross-machine replay validation remain deferred.
 - Phase 40 integrates the project writer lock into the service-side AgentRun scheduler mutation path, but true OS-level multi-process sandboxing, network-denial enforcement, and mandatory external-process lock enforcement remain deferred.
-- Phase 41-42 execute live adapters through the scheduler boundary and add capped log readback plus bounded health probes, but production Codex CLI/API adapter packaging, streaming/subscription log UI, richer operator controls, OS-level sandboxing, and enforced network denial remain deferred.
+- Phase 41-43 execute live adapters through the scheduler boundary, add capped log readback plus bounded health probes, and add a service-owned packaged adapter launcher. Real external Codex CLI/API invocation, streaming/subscription log UI, richer operator controls, OS-level sandboxing, and enforced network denial remain deferred.
 - Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, but a full interactive Pi/comathd install-session e2e and richer runtime permission model remain separate hardening targets.
 - Phase 27 validates AgentRun persistence and scoped writes; Phase 28 adds service-side process launch and scheduler controls on top of that boundary.
 - Phase 28 validates absolute-realpath allowlisted process launch, minimal env inheritance, timeout/cancel, process-tree termination attempts, output byte caps, non-authoritative scheduler envelopes, and rpm/concurrency controls, and Phase 42 adds capped log read APIs. It still does not provide OS-level sandboxing, network-denial enforcement, production Pi/Codex agent adapters, streaming log subscriptions, or multi-process writer locks.
@@ -315,5 +316,12 @@ Phase 42 targeted validation:
 - `node services/comathd/tests/unit/phase42-agent-run-observability.test.mjs`
 
 Result: exit 0; AgentRun log readback, service log route, adapter health probe, health route, audit events, and non-authoritative metadata passed for an allowlisted fixture adapter.
+
+Phase 43 targeted validation:
+
+- `node services/comathd/tests/unit/phase43-agent-adapter-package.test.mjs`
+- `node extensions/comath-pi/tests/phase43-agent-adapter-package-tools.test.mjs`
+
+Result: both exited 0; packaged adapter registry, bundled launcher execution, service routes, Pi tools/commands, host confirmation, and non-authoritative audit boundaries passed.
 - Phase 37 registers alias equivalence data in-process and does not add a new external execution boundary; richer Lean parser/logical-equivalence machinery remains a future proof-authority hardening target.
 - Phase 38 loads native TriviumDB only through dynamic adapter probing and explicit evaluation. Broader multi-platform native benchmarking and production default-backend rollout remain separate decisions.

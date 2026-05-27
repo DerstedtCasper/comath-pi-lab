@@ -167,7 +167,10 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.agent.prepareLaunch",
       "comath.agent.executeProfile",
       "comath.agent.logs",
-      "comath.agent.health"
+      "comath.agent.health",
+      "comath.agent.adapterPackageList",
+      "comath.agent.prepareAdapterPackage",
+      "comath.agent.executeAdapterPackage"
     ].includes(toolName),
     true,
     `${toolName} is not wired through executeComathTool yet`

@@ -157,7 +157,7 @@ function commandMetadata(command: string): Pick<
   }
   if (command === "/cm:agent") {
     return {
-      subcommands: ["profiles", "profile", "run", "prepare-launch"],
+      subcommands: ["profiles", "profile", "packages", "run", "prepare-launch", "execute", "logs", "health", "prepare-package", "execute-package"],
       dispatch_tool: "comath.agent.runForProfile",
       mutates: true,
       goal_compatible: true

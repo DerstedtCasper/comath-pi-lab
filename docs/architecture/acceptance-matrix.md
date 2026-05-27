@@ -60,6 +60,7 @@
 | 40 AgentRun scheduler writer lock integration | `phase40-agent-scheduler-session-lock.test.mjs` verifies scheduled AgentRun process execution fails closed when another active project writer exists, starts no child process, preserves the queued run, acquires/releases the lock for allowed runs, and records lock audit events. |
 | 41 Live agent adapter execution | `phase41-live-agent-adapter-execution.test.mjs` and `phase41-agent-execute-tool.test.mjs` verify profile-bound AgentRun creation, real allowlisted adapter process execution through the scheduler, service route execution, Pi runtime tool/command execution, writer-lock integration, and non-authoritative report wrapping. |
 | 42 AgentRun observability | `phase42-agent-run-observability.test.mjs` and `phase42-agent-observability-tools.test.mjs` verify capped AgentRun stdout/stderr readback, `GET /agent/run/:id/logs`, bounded adapter health probes, `POST /agent/adapter/health`, Pi `comath.agent.logs`/`comath.agent.health`, and `/cm:agent logs` plus `/cm:agent health`. |
+| 43 Agent adapter package registry | `phase43-agent-adapter-package.test.mjs` and `phase43-agent-adapter-package-tools.test.mjs` verify the service-owned `codex-cli` adapter package registry, bundled launcher script, package prepare/execute routes, package health compatibility, Pi package tools, and `/cm:agent packages`, `/cm:agent prepare-package`, `/cm:agent execute-package`. |
 
 ## Security Acceptance
 
@@ -75,6 +76,7 @@
 | Scheduled AgentRuns respect writer locks | Phase 40 makes the process scheduler acquire the project writer lock before mutating run state/logs/reports and reject launches when another active writer owns the project. |
 | Live adapters remain allowlisted and scoped | Phase 41 executes profile-backed adapters only through scheduler allowlists, scoped AgentRun write paths, host confirmation on Pi, and service-owned audit/report paths. |
 | Agent adapter health probes remain non-authoritative | Phase 42 health checks use absolute program validation, `shell:false`, a minimal environment, bounded timeout/output, `COMATH_PROOF_AUTHORITY=none`, host confirmation on Pi, and audit events without trusted-state promotion. |
+| Packaged adapters remain service-owned and allowlisted | Phase 43 resolves adapter launch commands from a service-owned package registry and bundled launcher script, preserving absolute program validation, scheduler allowlists, host confirmation on Pi, rpm=4, scoped writes, and audit events. |
 
 ## Mathematical Integrity Acceptance
 
@@ -110,6 +112,7 @@
 | Scheduler lock ownership is non-authoritative | Phase 40 scheduler-held locks coordinate AgentRun mutation, but child-process completion and lock ownership remain non-proof-authority surfaces. |
 | Live adapter execution is non-authoritative | Phase 41 adapter output is wrapped as untrusted child stdout with `proof_authority: none`; adapter success cannot promote claims or bypass proof/evidence gates. |
 | AgentRun logs are observability artifacts | Phase 42 log reads expose capped stdout/stderr/report paths for inspection only; logs and health results retain `proof_authority: none` and cannot certify claims, GraphPatch application, or final replay. |
+| Packaged adapters are not proof authority | Phase 43 packaged adapters emit AgentRun reports with `proof_authority: none`; package selection, health, and successful execution cannot certify claims, apply GraphPatch, or bypass Lean replay. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -143,5 +146,6 @@
 | AgentRun scheduler writer-lock integration | `phase40-agent-scheduler-session-lock.test.mjs` covers active-lock launch rejection, no child/log side effects on blocked launch, queued-run preservation, scheduler-owned acquire/release around successful process execution, and lock audit events. | Covered for the service-side AgentRun scheduler mutation path; OS-level process sandboxing and mandatory external-process locks remain deferred. |
 | Live agent adapter execution | `phase41-live-agent-adapter-execution.test.mjs` covers service-side live adapter execution and route behavior; `phase41-agent-execute-tool.test.mjs` covers Pi tool registration, host confirmation, route payloads, runtime registration, and `/cm:agent execute`. | Covered for allowlisted local adapter execution through `comathd`; production Codex CLI/API packaging and interactive operator controls remain deferred. |
 | AgentRun observability and adapter health | `phase42-agent-run-observability.test.mjs` covers `readAgentRunLogs()`, `probeAgentAdapterHealth()`, service routes, audit events, and non-authoritative metadata; `phase42-agent-observability-tools.test.mjs` covers Pi tools, host confirmation for health probes, runtime registration, `/cm:agent logs`, and `/cm:agent health`. | Covered for capped readback and bounded health probes; streaming/subscription UI, production adapter lifecycle packaging, and OS/network sandboxing remain deferred. |
+| Agent adapter package registry | `phase43-agent-adapter-package.test.mjs` covers `listAgentAdapterPackages()`, `buildAgentAdapterPackageLaunch()`, `executeAgentAdapterPackage()`, package routes, health compatibility, audit events, and bundled adapter script copy into `dist`; `phase43-agent-adapter-package-tools.test.mjs` covers Pi tools, host confirmation, runtime registration, `/cm:agent packages`, `/cm:agent prepare-package`, and `/cm:agent execute-package`. | Covered for service-owned packaged launcher lifecycle; real external Codex CLI/API invocation, richer operator controls, streaming UI, and OS/network sandboxing remain deferred. |
 | Global GA readiness | Current test evidence does not cover arbitrary theorem planning, broad MathProve proof search/final-audit semantics, OS-enforced network replay sandboxing, full interactive Pi/comathd install-session e2e, production Codex/Pi adapter packaging, or broad theorem synthesis. | Not achieved; blocked by deferred generalization work. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the registered Phase 23 theorem families. | Deferred. |

@@ -96,6 +96,7 @@ Remaining mathematical work:
 - Phase 40 scheduler-held writer locks coordinate AgentRun process mutation only. A scheduler-owned lock, process exit code, or child report remains non-authoritative for mathematical truth and cannot promote claims.
 - Phase 41 live adapter execution remains an AgentRun evidence-production surface only. Adapter output is untrusted child stdout wrapped with `proof_authority: none`; it cannot promote claims, apply GraphPatch directly, or replace proof-kernel replay.
 - Phase 42 AgentRun observability remains inspection-only. Capped stdout/stderr reads and adapter health results carry `proof_authority: none`; they cannot promote claims, certify candidate correctness, apply GraphPatch, or replace Lean replay/static audit.
+- Phase 43 packaged adapter launch remains runtime orchestration only. The service-owned `codex-cli` launcher emits an AgentRun report with `proof_authority: none`; package selection and successful execution cannot certify claims, select proof candidates as authoritative, apply GraphPatch, or replace Lean replay/static audit.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -259,6 +260,7 @@ Phase 41 adds coverage for:
 - Phase 40 reduces writer-race risk in the service-side AgentRun scheduler path, but mathematical consistency still depends on ordinary evidence, replay, and promotion gates; OS-level sandboxing and external-process enforcement remain deferred.
 - Phase 41 makes agent execution product-real for an allowlisted adapter slice, but broad autonomous mathematical discovery remains blocked by proof planning, proof replay, MathProve semantics, and independent review gates.
 - Phase 42 makes runtime inspection product-real for capped logs and bounded adapter health probes, but these artifacts remain non-evidential for formal proof authority.
+- Phase 43 makes packaged adapter selection product-real for a service-owned Codex launcher, but the launcher remains non-evidential for formal proof authority.
 
 Phase 42 mathematical-integrity validation:
 
@@ -266,3 +268,10 @@ Phase 42 mathematical-integrity validation:
 - `node extensions/comath-pi/tests/phase42-agent-observability-tools.test.mjs`
 
 Result: both exited 0; logs and health probes are exposed through service/Pi surfaces while preserving `proof_authority: none` and host-confirmed mutation for health execution.
+
+Phase 43 mathematical-integrity validation:
+
+- `node services/comathd/tests/unit/phase43-agent-adapter-package.test.mjs`
+- `node extensions/comath-pi/tests/phase43-agent-adapter-package-tools.test.mjs`
+
+Result: both exited 0; packaged adapter launches preserve `proof_authority: none`, host-confirmed Pi mutation, and scheduler report boundaries.

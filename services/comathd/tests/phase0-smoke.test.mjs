@@ -34,7 +34,8 @@ const requiredCapabilities = [
   "project_writer_session_lock",
   "agent_run_scheduler_writer_lock_integration",
   "live_agent_adapter_execution",
-  "agent_run_observability"
+  "agent_run_observability",
+  "agent_adapter_package_registry"
 ];
 
 for (const capability of requiredCapabilities) {

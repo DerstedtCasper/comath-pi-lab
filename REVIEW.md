@@ -1029,6 +1029,80 @@ Logs and health responses carry `proof_authority: none`. They cannot promote cla
 - OS-level process sandboxing and network-denial enforcement remain deferred.
 - Global GA remains blocked by the deferred items in `TODO.md`.
 
+## Phase 43 Agent Adapter Package Registry Review Log
+
+### Scope
+
+Added a service-owned packaged adapter lifecycle for the first built-in `codex-cli` adapter. Phase 43 reduces the production adapter packaging blocker by replacing model/user-supplied arbitrary fixture paths with a comathd-resolved package registry, bundled launcher script, package prepare/execute routes, and Pi package commands.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase43-agent-adapter-package.test.mjs
+Initial RED result: exit 1; `../../dist/index.js` did not export `buildAgentAdapterPackageLaunch`.
+
+node extensions/comath-pi/tests/phase43-agent-adapter-package-tools.test.mjs
+Initial RED result: exit 1; `comath.agent.adapterPackageList` was not registered.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build and bundled adapter copy completed after service implementation.
+
+corepack pnpm --filter @comath/pi-extension build
+Result: exit 0; TypeScript build completed after Pi implementation.
+
+node services/comathd/tests/unit/phase43-agent-adapter-package.test.mjs
+Result: exit 0; Phase 43 Agent adapter package tests passed.
+
+node extensions/comath-pi/tests/phase43-agent-adapter-package-tools.test.mjs
+Result: exit 0; Phase 43 Pi agent adapter package tool tests passed.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/agents/agent-adapter-packages.ts`.
+- Added bundled launcher `services/comathd/src/agents/adapters/codex-cli-adapter.mjs` and build-time copy script `services/comathd/scripts/copy-agent-adapters.mjs`.
+- Added `GET /agent/adapter/package/list`, `POST /agent/adapter/package/prepare-launch`, and `POST /agent/adapter/package/execute`.
+- Added Pi tools `comath.agent.adapterPackageList`, `comath.agent.prepareAdapterPackage`, and `comath.agent.executeAdapterPackage` plus `/cm:agent packages`, `/cm:agent prepare-package`, and `/cm:agent execute-package`.
+- Added `agent_adapter_package_registry` to service status and wired Phase 43 tests into default package test chains.
+- Updated README, TODO, acceptance matrix, security, math-integrity, and handoff notes.
+
+### Boundary And Integrity Notes
+
+The packaged adapter registry is service-owned. The current `codex-cli` package resolves to `process.execPath` plus a bundled launcher script copied into `dist`, applies package prefix args before the profile launch args, caps rpm at 4, and injects `COMATH_ADAPTER_PACKAGE_ID`, `COMATH_ADAPTER_PACKAGE_KIND`, and `COMATH_PROOF_AUTHORITY=none`. Pi package prepare/execute tools are mutating and require host confirmation.
+
+The built-in launcher emits a structured AgentRun report but does not call an external Codex CLI/API backend yet. Package selection, health, and successful execution are runtime orchestration only; they cannot promote claims, apply GraphPatch, certify proof candidates, or replace final Lean replay.
+
+### Residual Risks
+
+- Real external Codex CLI/API invocation remains deferred behind the package contract.
+- Streaming/subscription log UI and richer interactive operator controls remain deferred.
+- OS-level process sandboxing and network-denial enforcement remain deferred.
+- Global GA remains blocked by the deferred items in `TODO.md`.
+
+### Final Phase 43 Validation
+
+Fresh Phase 43 validation completed on 2026-05-28:
+
+```text
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-43 package tests passed.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed with Phase 43 wired into the default test chain.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed.
+
+corepack pnpm test
+Result: exit 0; root smoke, workspace tests, Phase 43 tests, and Phase 17 integrity evaluation passed.
+
+git diff --check
+Result: exit 0; no whitespace errors. Git reported Windows LF-to-CRLF normalization warnings only.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repository-root runtime state was left behind.
+```
+
 ### Final Phase 42 Validation
 
 Fresh Phase 42 validation completed on 2026-05-28:

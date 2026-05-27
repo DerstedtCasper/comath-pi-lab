@@ -38,9 +38,12 @@ import { getCampaign, writeCampaign } from "../proof-kernel/campaign/research-ca
 import { replayCampaign, startCampaign, tickCampaign } from "../proof-kernel/campaign/campaign-tick.js";
 import {
   buildAgentProfileLaunch,
+  buildAgentAdapterPackageLaunch,
   createAgentRunForProfile,
+  executeAgentAdapterPackage,
   executeProfileAgentRun,
   getAgentProfile,
+  listAgentAdapterPackages,
   listAgentProfiles,
   probeAgentAdapterHealth,
   readAgentRunLogs,
@@ -106,6 +109,10 @@ async function route(method: string, path: string, body: unknown, context: Route
           validation: validateAgentProfiles(profiles, { global_rpm: globalRpm })
         };
       }
+    ],
+    [
+      "GET /agent/adapter/package/list",
+      () => ({ packages: listAgentAdapterPackages() })
     ],
     ["POST /project/init", (payload) => initProject(payload as { name?: string; root_path: string })],
     [
@@ -337,6 +344,60 @@ async function route(method: string, path: string, body: unknown, context: Route
             program: body.program,
             adapter_args: body.adapter_args,
             timeout_ms: body.timeout_ms,
+            actor: body.actor
+          })
+        };
+      }
+    ],
+    [
+      "POST /agent/adapter/package/prepare-launch",
+      (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          run_id: string;
+          profile_id: string;
+          adapter_id: string;
+          goal: string;
+          context_path: string;
+          actor: string;
+        };
+        return {
+          prepared: buildAgentAdapterPackageLaunch(body.project_root, {
+            project_id: body.project_id,
+            run_id: body.run_id,
+            profile_id: body.profile_id as Parameters<typeof buildAgentAdapterPackageLaunch>[1]["profile_id"],
+            adapter_id: body.adapter_id as Parameters<typeof buildAgentAdapterPackageLaunch>[1]["adapter_id"],
+            goal: body.goal,
+            context_path: body.context_path,
+            actor: body.actor
+          })
+        };
+      }
+    ],
+    [
+      "POST /agent/adapter/package/execute",
+      async (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          campaign_id?: string;
+          workstream_id: string;
+          profile_id: string;
+          adapter_id: string;
+          goal: string;
+          context_path: string;
+          actor: string;
+        };
+        return {
+          execution: await executeAgentAdapterPackage(body.project_root, {
+            project_id: body.project_id,
+            campaign_id: body.campaign_id,
+            workstream_id: body.workstream_id,
+            profile_id: body.profile_id as Parameters<typeof executeAgentAdapterPackage>[1]["profile_id"],
+            adapter_id: body.adapter_id as Parameters<typeof executeAgentAdapterPackage>[1]["adapter_id"],
+            goal: body.goal,
+            context_path: body.context_path,
             actor: body.actor
           })
         };

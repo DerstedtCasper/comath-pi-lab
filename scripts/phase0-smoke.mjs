@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-42")) {
-  invariantFailures.push("README must describe the current Phase 18-42 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-43")) {
+  invariantFailures.push("README must describe the current Phase 18-43 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -120,6 +120,10 @@ if (!acceptanceMatrix.includes("42 AgentRun observability")) {
   invariantFailures.push("acceptance matrix must include Phase 42 AgentRun observability acceptance");
 }
 
+if (!acceptanceMatrix.includes("43 Agent adapter package registry")) {
+  invariantFailures.push("acceptance matrix must include Phase 43 agent adapter package registry acceptance");
+}
+
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
 }
@@ -152,6 +156,10 @@ if (!acceptanceMatrix.includes("Agent adapter health probes remain non-authorita
   invariantFailures.push("acceptance matrix must include Phase 42 adapter-health security acceptance");
 }
 
+if (!acceptanceMatrix.includes("Packaged adapters remain service-owned and allowlisted")) {
+  invariantFailures.push("acceptance matrix must include Phase 43 packaged-adapter security acceptance");
+}
+
 if (!acceptanceMatrix.includes("Native memory backend evidence is non-promotional")) {
   invariantFailures.push("acceptance matrix must include Phase 38 native memory mathematical-integrity boundary");
 }
@@ -170,6 +178,10 @@ if (!acceptanceMatrix.includes("Live adapter execution is non-authoritative")) {
 
 if (!acceptanceMatrix.includes("AgentRun logs are observability artifacts")) {
   invariantFailures.push("acceptance matrix must include Phase 42 log observability mathematical-integrity boundary");
+}
+
+if (!acceptanceMatrix.includes("Packaged adapters are not proof authority")) {
+  invariantFailures.push("acceptance matrix must include Phase 43 packaged-adapter mathematical-integrity boundary");
 }
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
@@ -206,6 +218,10 @@ if (!acceptanceMatrix.includes("/cm:agent execute")) {
 
 if (!acceptanceMatrix.includes("/cm:agent logs") || !acceptanceMatrix.includes("/cm:agent health")) {
   invariantFailures.push("acceptance matrix must include Phase 42 Pi command observability coverage language");
+}
+
+if (!acceptanceMatrix.includes("/cm:agent prepare-package") || !acceptanceMatrix.includes("/cm:agent execute-package")) {
+  invariantFailures.push("acceptance matrix must include Phase 43 Pi packaged-adapter command coverage language");
 }
 
 for (const [content, label] of [

@@ -137,7 +137,10 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.agent.prepareLaunch",
   "comath.agent.executeProfile",
   "comath.agent.logs",
-  "comath.agent.health"
+  "comath.agent.health",
+  "comath.agent.adapterPackageList",
+  "comath.agent.prepareAdapterPackage",
+  "comath.agent.executeAdapterPackage"
 ]);
 
 const COMATH_EXTENSION_COMMANDS = [
@@ -500,6 +503,37 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     });
   }
 
+  if (name === "comath.agent.adapterPackageList") {
+    return client.get("/agent/adapter/package/list");
+  }
+
+  if (name === "comath.agent.prepareAdapterPackage") {
+    return client.post("/agent/adapter/package/prepare-launch", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      run_id: readString(input, "run_id"),
+      profile_id: readString(input, "profile_id"),
+      adapter_id: readString(input, "adapter_id"),
+      goal: readString(input, "goal"),
+      context_path: readString(input, "context_path"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.agent.executeAdapterPackage") {
+    return client.post("/agent/adapter/package/execute", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      campaign_id: readString(input, "campaign_id", { optional: true }),
+      workstream_id: readString(input, "workstream_id"),
+      profile_id: readString(input, "profile_id"),
+      adapter_id: readString(input, "adapter_id"),
+      goal: readString(input, "goal"),
+      context_path: readString(input, "context_path"),
+      actor: readString(input, "actor")
+    });
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -786,6 +820,49 @@ export function createComathTools(): ToolDescriptor[] {
         timeout_ms: { type: "number", minimum: 1 },
         actor: stringProp
       })
+    },
+    {
+      name: "comath.agent.adapterPackageList",
+      description: "List service-owned packaged agent adapters through comathd.",
+      mutates: false,
+      input_schema: objectSchema([], {})
+    },
+    {
+      name: "comath.agent.prepareAdapterPackage",
+      description: "Prepare a launch envelope for a service-owned packaged agent adapter.",
+      mutates: true,
+      input_schema: objectSchema(
+        ["project_root", "project_id", "run_id", "profile_id", "adapter_id", "goal", "context_path", "actor"],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          run_id: stringProp,
+          profile_id: stringProp,
+          adapter_id: stringProp,
+          goal: stringProp,
+          context_path: stringProp,
+          actor: stringProp
+        }
+      )
+    },
+    {
+      name: "comath.agent.executeAdapterPackage",
+      description: "Create and execute a service-owned packaged agent adapter through comathd.",
+      mutates: true,
+      input_schema: objectSchema(
+        ["project_root", "project_id", "workstream_id", "profile_id", "adapter_id", "goal", "context_path", "actor"],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          campaign_id: stringProp,
+          workstream_id: stringProp,
+          profile_id: stringProp,
+          adapter_id: stringProp,
+          goal: stringProp,
+          context_path: stringProp,
+          actor: stringProp
+        }
+      )
     },
     {
       name: "comath.paper.init",
@@ -1168,12 +1245,79 @@ async function handleAgentCommand(
     await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.agent.profileList", { global_rpm: globalRpm }));
     return;
   }
+  if (subcommand === "packages") {
+    await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.agent.adapterPackageList", {}));
+    return;
+  }
   if (subcommand === "profile") {
     const profileId = optionValue(parsed.args, "--profile") ?? firstPositional(parsed.args);
     if (!profileId) {
       throw new Error("profile_id is required");
     }
     await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.agent.profileGet", { profile_id: profileId }));
+    return;
+  }
+  if (subcommand === "prepare-package") {
+    const adapterId = requiredOption(optionValue(parsed.args, "--adapter") ?? firstPositional(parsed.args), "adapter_id");
+    const profileId = requiredOption(optionValue(parsed.args, "--profile"), "profile_id");
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const runId = requiredOption(optionValue(parsed.args, "--run-id"), "run_id");
+    const goal = requiredOption(optionValue(parsed.args, "--goal"), "goal");
+    const contextPath = requiredOption(optionValue(parsed.args, "--context"), "context_path");
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.agent.prepareAdapterPackage");
+    if (!tool) {
+      throw new Error("agent adapter package prepare tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: projectId,
+          run_id: runId,
+          profile_id: profileId,
+          adapter_id: adapterId,
+          goal,
+          context_path: contextPath,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "execute-package") {
+    const adapterId = requiredOption(optionValue(parsed.args, "--adapter") ?? firstPositional(parsed.args), "adapter_id");
+    const profileId = requiredOption(optionValue(parsed.args, "--profile"), "profile_id");
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const workstreamId = requiredOption(optionValue(parsed.args, "--workstream-id"), "workstream_id");
+    const goal = requiredOption(optionValue(parsed.args, "--goal"), "goal");
+    const contextPath = requiredOption(optionValue(parsed.args, "--context"), "context_path");
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.agent.executeAdapterPackage");
+    if (!tool) {
+      throw new Error("agent adapter package execute tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: projectId,
+          campaign_id: optionValue(parsed.args, "--campaign-id"),
+          workstream_id: workstreamId,
+          profile_id: profileId,
+          adapter_id: adapterId,
+          goal,
+          context_path: contextPath,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
     return;
   }
   if (subcommand === "run") {
