@@ -63,7 +63,7 @@ Remaining mathematical work:
 
 - Claim schema and GraphPatch protected fields: `services/comathd/src/types/schemas.ts`.
 - Claim registry and promotion application: `services/comathd/src/claim/claim-store.ts`, `services/comathd/src/verification/gate.ts`.
-- MathProve bridge mock and compute runners: `services/comathd/src/verification/`, `python/mathprove_bridge.py`, `python/exact_compute.py`, `python/counterexample_search.py`.
+- MathProve bridge mock, external MathProve evidence runner, and compute runners: `services/comathd/src/verification/`, `python/mathprove_bridge.py`, `python/exact_compute.py`, `python/counterexample_search.py`.
 - Literature condition matching: `services/comathd/src/literature/`.
 - Working paper checks: `services/comathd/src/artifacts/paper.ts`.
 - Snapshot/replay stale-output checks: `services/comathd/src/artifacts/replay.ts`, `services/comathd/src/artifacts/snapshots.ts`.
@@ -76,6 +76,7 @@ Remaining mathematical work:
 - Phase 22 Pi research-loop coverage: `extensions/comath-pi/tests/phase22-research-loop.test.mjs`.
 - Phase 23 theorem-family registry and integrity-boundary coverage: `services/comathd/src/proof-kernel/lean/theorem-family.ts`, `services/comathd/tests/integration/phase23-ga-theorem-family-generalization.test.mjs`, and `services/comathd/tests/integration/phase23-ga-integrity-boundaries.test.mjs`.
 - Phase 24 runner re-execution replay coverage: `services/comathd/src/artifacts/replay.ts`, `services/comathd/src/artifacts/snapshots.ts`, `services/comathd/tests/unit/phase10-compute-runners.test.mjs`, and `services/comathd/tests/unit/phase16-snapshot-replay.test.mjs`.
+- Phase 25 external MathProve evidence-runner coverage: `services/comathd/src/verification/mathprove.ts` and `services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs`.
 
 ### Current Invariants
 
@@ -89,6 +90,7 @@ Remaining mathematical work:
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
 - Strict replay now re-executes replayable `sympy-exact` and `counterexample-search` reports from service-owned canonical input, reconstructs commands from the fixed runner registry, and rejects script/input/argv/result drift. This is integrity evidence only; it does not add proof authority beyond the existing promotion gates.
+- External MathProve output is archived as runner evidence and gate input only. A Phase 25 external `ok=true` result from `verify_sympy.py` still returns `gate_result=failed` and cannot promote `formally_checked` without CoMath proof-kernel replay evidence.
 
 ### Evaluation Coverage
 
@@ -163,10 +165,18 @@ Phase 24 adds coverage for:
 - placeholder runners remaining explicitly skipped rather than silently treated as replayable;
 - fail-closed detection for replay/report drift, static snapshot vetoes before Python execution, script hash drift, canonical input hash drift, oversized replay timeout, report-local stdio hash drift, untrusted replay argv, and result-hash mismatch paths.
 
+Phase 25 adds coverage for:
+
+- controlled invocation of the external `MathProve-Skill` `verify_sympy.py` runner from a CoMath-owned workspace;
+- fail-closed archival when the external runner is unavailable;
+- statement-hash mismatch detection before invoking external MathProve;
+- stdout/stderr/result/replay-input hashes and fixed argv template metadata for external runner reports;
+- promotion-gate rejection of `formally_checked` even when the external runner returns `ok=true`.
+
 ### Residual Risks
 
-- Real Lean kernel checking is implemented for the registered Phase 18-24 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
-- MathProve bridge output is still a fail-closed mock and should not be interpreted as proof search performance or proof authority.
+- Real Lean kernel checking is implemented for the registered Phase 18-25 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
+- MathProve now has both the Phase 9 fail-closed mock and the Phase 25 external `verify_sympy.py` evidence-runner bridge. Neither path should be interpreted as broad MathProve proof search, final-audit proof authority, or direct claim-status authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
 - Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, and Phase 24 reruns the implemented deterministic Python compute runners. Stronger OS/network sandboxing, dependency locks, cross-machine replay, and broader runner families remain unimplemented.
 - Braid domain scripts provide exact/combinatorial evidence and risk flags; they do not prove physical interpretations or category-level equivalences.

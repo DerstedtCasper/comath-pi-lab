@@ -126,6 +126,7 @@ Remaining security requirements:
 - Artifact, audit, paper, snapshot, and replay paths: `services/comathd/src/artifacts/`, `services/comathd/src/audit/jsonl-writer.ts`.
 - Secret scanning: `services/comathd/src/security/secret-scan.ts`.
 - Runner envelopes: `services/comathd/src/verification/runner-contracts.ts`, `python/exact_compute.py`, `python/counterexample_search.py`.
+- MathProve bridge execution boundary: `services/comathd/src/verification/mathprove.ts` and `services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs`.
 - Claim promotion gate: `services/comathd/src/verification/gate.ts`.
 - Native proof-kernel campaign and Lean replay: `services/comathd/src/proof-kernel/`.
 - Pi extension boundary: `extensions/comath-pi/src/`.
@@ -146,6 +147,7 @@ Remaining security requirements:
 10. **Phase 18 proof-kernel replay remains service-owned.** Campaign routes, candidate artifacts, Lean replay outputs, and counterexample evidence write only under path-policy-controlled `.comath/` directories; Pi campaign tools call `comathd` and do not mutate trusted files directly.
 11. **Formal promotion requires replay evidence.** The gate rejects preloaded kernel metadata unless the requested artifacts include a passed proof-kernel `final_replay_manifest.json` for the same claim.
 12. **Compute runner replay no longer trusts manifest descriptors alone.** Strict `/replay/verify-manifest` reconstructs allowlisted runner commands from service code, uses persisted canonical runner input, and fails closed on replay/report drift, static snapshot vetoes before Python execution, script hash drift, input hash drift, oversized replay timeout, report-local stdio hash drift, untrusted replay argv, runner-version drift, nonzero exit, timeout, invalid JSON, runner ID mismatch, and result hash mismatch.
+13. **External MathProve runner is service-owned and non-authoritative.** Phase 25 invokes only the sibling `MathProve-Skill` `scripts/verify_sympy.py` through a fixed argv template, controlled `.comath/evidence/<claim>/mathprove` workspace, bounded timeout, explicit `shell:false`, and `network=false` metadata. Untrusted runner roots, missing runner, and statement-hash mismatch paths are archived fail-closed before promotion is attempted.
 
 ### Validation Commands
 
@@ -181,10 +183,17 @@ corepack pnpm --filter @comath/pi-extension test
 Result: exit 0; includes Pi research/campaign command and tool descriptor tests.
 ```
 
+Phase 25 targeted validation added after the Research Alpha audit:
+
+```text
+node services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs
+Result: exit 0; real MathProve external bridge tests passed, including missing-runner fail-closed behavior, controlled external `verify_sympy.py` invocation, statement-hash mismatch vetoes, metadata hashes, and no formal promotion from external runner output alone.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
-- Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, and Phase 24 reruns the implemented Python compute runners through strict replay. Stronger OS-level sandboxing, network-denial enforcement, dependency lock capture, and cross-machine replay validation remain deferred.
+- Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, and Phase 24 reruns the implemented Python compute runners through strict replay. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but stronger OS-level sandboxing, enforced network denial, dependency lock capture, and cross-machine replay validation remain deferred.
 - `comathd` still lacks lock/session semantics for multi-process writers; current tests exercise single-process Research Alpha behavior.
 - Production Pi runtime permissions must be revalidated before enabling installed runtime registration.

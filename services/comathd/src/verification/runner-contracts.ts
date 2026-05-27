@@ -166,6 +166,8 @@ export function runnerResultSha256(result: {
 
 export function scrubHostPaths(text: string): string {
   return text
+    .replace(/\\\\\?\\[A-Za-z]:\\(?:[^\\/"'`\r\n]+\\)*[^\\/"'`\r\n]+\.[A-Za-z0-9_~-]+/g, "<host-path>")
+    .replace(/[A-Za-z]:[\\/](?:[^\\/"'`\r\n]+[\\/])*[^\\/"'`\r\n]+\.[A-Za-z0-9_~-]+/g, "<host-path>")
     .replace(/\\\\\?\\[A-Za-z]:\\[^\s"'`]+/g, "<host-path>")
     .replace(/\\\\[^\s"'`]+/g, "<host-path>")
     .replace(/[A-Za-z]:[\\/][^\s"'`]+/g, "<host-path>")

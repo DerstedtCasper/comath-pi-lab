@@ -304,12 +304,23 @@
 - [x] Keep ordinary `/snapshot/verify` and restore on static snapshot integrity semantics; strict runner re-execution is owned by `/replay/verify-manifest`.
 - [x] Wire Phase 24 coverage through the existing Phase 10 and Phase 16 tests in the default `@comath/comathd` test chain.
 
+## Phase 25: Real MathProve External Bridge
+
+- [x] Add `runMathProveBridgeExternal()` as a service-owned external MathProve evidence runner.
+- [x] Invoke the sibling `<MathProve-Skill>/scripts/verify_sympy.py` through a fixed argv template, controlled workspace, bounded timeout, and `shell:false`.
+- [x] Archive external bridge reports under `.comath/evidence/<claim>/mathprove`, import them as `runner_output`, and record audit evidence.
+- [x] Bind the external run to the current claim statement hash and fail closed before invocation on statement-hash mismatch.
+- [x] Return structured fail-closed reports when the external MathProve runner is unavailable or returns invalid/failed output.
+- [x] Preserve proof-authority separation: even an external `ok=true` runner result remains gate input and cannot certify `formally_checked` without CoMath proof-kernel replay evidence.
+- [x] Add Phase 25 tests for missing runner, real external runner smoke, statement-hash mismatch, runner metadata hashes, and promotion-gate non-authority.
+- [x] Wire Phase 25 coverage into the default `@comath/comathd` test chain and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond registered theorem families (`Nat.add_zero`, `Nat.mul_zero`) and exact `n + 1 = n` refutation.
-- [ ] Real MathProve execution beyond the fail-closed bridge mock and native CoMath proof-kernel slices.
+- [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
 - [ ] Real agent runner/scheduler that launches and rate-limits persistent Pi/Codex child agents rather than only static definitions and service-owned campaign ticks.
 - [ ] Production Pi extension runtime registration, after official API assumptions are revalidated against the installed Pi version.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.

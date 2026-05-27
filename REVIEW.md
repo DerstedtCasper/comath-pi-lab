@@ -1078,6 +1078,86 @@ Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
 
+## Phase 25 Real MathProve External Bridge Review Log
+
+### Scope
+
+Added a service-owned external MathProve evidence-runner bridge for `MathProve-Skill` `verify_sympy.py`. Phase 25 upgrades the earlier mock-only MathProve boundary in a narrow executable sense: CoMath can now invoke the sibling MathProve skill package, archive the result, and feed the resulting vetoes into the normal gate.
+
+This is not broad MathProve proof search and not a MathProve proof-authority path. `formally_checked` still requires CoMath proof-kernel replay evidence and the ordinary promotion gate.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs
+Initial RED result: exit 1; `runMathProveBridgeExternal` was not exported.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding the external bridge.
+
+node services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs
+Debugging RED result: exit 1; external MathProve invocation failed because `verify_sympy.py` wrote a relative `logs/tool_calls.log` path without the log directory existing.
+
+python <MathProve-Skill>/scripts/verify_sympy.py --workspace-dir <temp> --run-dir run --log <temp>/logs/tool_calls.log --timeout 5 --code "x=symbols('x'); emit({'ok': bool(expand((x+1)**2) == x**2 + 2*x + 1)})"
+Result: exit 0; MathProve-Skill `verify_sympy.py` returned `status=success` and `output.ok=true` when given a controlled absolute log path.
+
+node services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs
+Result: exit 0; Phase 25 real MathProve bridge tests passed.
+
+Code-review hardening RED result: exit 1; `scrubHostPaths()` only removed the drive-prefix portion of Windows paths containing spaces, leaving a host-specific suffix.
+
+Code-review hardening RED result: exit 1; arbitrary `mathprove_root` overrides were treated as unavailable runners rather than rejected as untrusted command roots before invocation.
+
+node services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs
+Result: exit 0; Phase 25 tests passed after pinning the external root, improving Windows path scrubbing, and rejecting MathProve authority escalation.
+```
+
+### Changed Surfaces
+
+- Added `runMathProveBridgeExternal()` and `phase25-external-v1` result metadata to `services/comathd/src/verification/mathprove.ts`.
+- Refactored MathProve bridge report archival so mock and external backends both persist reports under `.comath/evidence/<claim>/mathprove`, import them as `runner_output`, record audit evidence, and append `mathprove.bridge_ran`.
+- Added external-run metadata: runner id/version, MathProve root, script path/hash, controlled workspace, fixed argv template, timeout, network flag, exit code, stdout/stderr/result hashes, and replay input hash.
+- Added fail-closed external paths for missing runner and claim statement-hash mismatch before invocation.
+- Pinned `mathprove_root` overrides to the realpath-equivalent sibling `MathProve-Skill` root and reject untrusted roots before Python invocation.
+- Scrubbed host paths from persisted external MathProve metadata and nested stdout/stderr/result payloads.
+- Extended `promoteClaimWithMathProveBridge()` with `{ backend: "external" }` while preserving the mock default.
+- Added `services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added `mathprove_external_evidence_runner` to `getComathdStatus()` and smoke coverage.
+
+### Boundary And Integrity Notes
+
+The external bridge invokes only `MathProve-Skill` `scripts/verify_sympy.py` through `execFile` with a fixed argv shape and `shell:false`. CoMath owns the workspace under `.comath/evidence/<claim>/mathprove/external-workspace`, pre-creates the log directory, and hashes stdout, stderr, parsed result, script, and replay input.
+
+The SymPy check is a deterministic external-runner smoke and carries the current claim id plus statement hash as binding metadata. It is not a proof of the claim statement. Even when MathProve returns `status=success` and `output.ok=true`, the bridge result keeps `gate_result=failed` and emits vetoes such as `mathprove_external_not_claim_proof`, `mathprove_external_not_formal_authority`, and `missing_kernel_checked_artifact`.
+
+### Residual Risks
+
+- Phase 25 covers only the external `verify_sympy.py` runner path, not MathProve `final_audit.py`, Lean checking through MathProve, route synthesis, or broad proof search.
+- The external bridge records `network=false` intent and uses fixed argv/timeouts, but it is not yet an OS-enforced sandbox or dependency-locked replay environment.
+- External root overrides are accepted only when they resolve to the realpath-equivalent sibling `MathProve-Skill` root; broader MathProve runner configuration remains deferred.
+- Broad proof planning, production Pi runtime registration, native TriviumDB validation, persistent child-agent scheduling, and richer statement equivalence remain global GA blockers.
+
+### Final Root Validation
+
+Fresh Phase 25 validation completed on 2026-05-27:
+
+```text
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-25 package tests passed, including the real MathProve bridge, authority-boundary, host-path scrub, and theorem-family integration coverage.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed after Phase 25 status/doc updates.
+
+corepack pnpm build
+Result: exit 0; root recursive build passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; Phase 0/design smoke, workspace package tests, Phase 25 comathd bridge tests, proof-kernel integrations, Pi extension regressions, and Phase 17 integrity evaluation passed.
+```
+
 ## Phase 24 Runner Re-Execution Replay Review Log
 
 ### Scope

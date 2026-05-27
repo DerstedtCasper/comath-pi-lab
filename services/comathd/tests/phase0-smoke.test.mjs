@@ -22,7 +22,8 @@ const requiredCapabilities = [
   "working_paper",
   "snapshot_replay",
   "proof_kernel_ga_vertical_slice",
-  "runner_reexecution_replay"
+  "runner_reexecution_replay",
+  "mathprove_external_evidence_runner"
 ];
 
 for (const capability of requiredCapabilities) {
@@ -33,6 +34,7 @@ for (const capability of requiredCapabilities) {
 
 const requiredResidualRisks = [
   "generic_proof_planning_deferred",
+  "broad_mathprove_proof_search_deferred",
   "production_pi_runtime_registration_deferred",
   "stronger_runner_reexecution_sandbox_deferred"
 ];

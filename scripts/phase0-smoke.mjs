@@ -76,6 +76,14 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
+if (!readme.includes("Phase 18-25")) {
+  invariantFailures.push("README must describe the current Phase 18-25 GA vertical-slice evidence");
+}
+
+if (!acceptanceMatrix.includes("25 Real MathProve external bridge")) {
+  invariantFailures.push("acceptance matrix must include Phase 25 real MathProve external bridge acceptance");
+}
+
 for (const [content, label] of [
   [readme, "README.md"],
   [devPlan, "COMATH_PI_LAB_DEV_PLAN.md"]

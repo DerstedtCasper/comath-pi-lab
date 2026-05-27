@@ -34,10 +34,12 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "claim_evidence_gate_read_models",
       "pi_research_campaign_loop",
       "proof_kernel_theorem_family_registry",
-      "runner_reexecution_replay"
+      "runner_reexecution_replay",
+      "mathprove_external_evidence_runner"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",
+      "broad_mathprove_proof_search_deferred",
       "real_agent_runner_scheduler_deferred",
       "production_pi_runtime_registration_deferred",
       "native_trivium_performance_evaluation_deferred",
