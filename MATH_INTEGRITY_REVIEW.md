@@ -93,6 +93,7 @@ Remaining mathematical work:
 - Phase 37 registered statement-alias equivalence accepts non-identical Lean target signatures only with an explicit definitional-alias witness; missing, ambiguous, or unregistered mismatches remain hard vetoes.
 - Phase 38 native TriviumDB target-platform evaluation validates memory persistence/performance explicitly and records fail-closed native-unavailable reports; it is not mathematical evidence and cannot promote claims.
 - Phase 39 project writer session locks are mutation-coordination metadata only. A held lock does not certify artifacts, evidence, proof replay, theorem equivalence, or claim-promotion eligibility.
+- Phase 40 scheduler-held writer locks coordinate AgentRun process mutation only. A scheduler-owned lock, process exit code, or child report remains non-authoritative for mathematical truth and cannot promote claims.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -228,6 +229,13 @@ Phase 39 adds coverage for:
 - malformed lock fail-closed behavior that preserves the unreadable lock file instead of overwriting it;
 - an explicit boundary that writer locks coordinate mutations but are not proof, evidence, or promotion authority.
 
+Phase 40 adds coverage for:
+
+- service-side AgentRun scheduler rejection when another active project writer session exists;
+- no child-process/log side effects and queued-run preservation on blocked scheduler launch;
+- scheduler-owned writer-lock acquire/release around a successful child-process run;
+- audit visibility for blocked, acquired, and released writer-lock events without adding proof authority.
+
 ### Residual Risks
 
 - Real Lean kernel checking is implemented for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. Phase 33 adds native planning artifacts for those slices, but general lemma decomposition, theorem synthesis, richer line-map provenance, and broader domain automation remain unimplemented.
@@ -239,4 +247,4 @@ Phase 39 adds coverage for:
 - Phase 21 read models improve inspection fidelity but are not mathematical authorities; claim promotion remains gated by evidence, artifacts, and proof-kernel replay where applicable.
 - Phase 22 improves Pi-side orchestration, Phase 26 validates Pi 0.75.5-compatible runtime registration, Phase 27 adds an AgentRun report/failure-memory boundary, and Phase 28 adds allowlisted process scheduling. None of these surfaces are proof authority, AgentRun reports cannot self-review their own GraphPatch proposals, child-process completion cannot promote claims, and production Pi/Codex agent profile integration plus full interactive Pi/comathd install-session e2e remain unimplemented.
 - Phase 38 validates native memory persistence and performance only for the current target platform; it does not make native memory content proof authority or enable default native backend selection without explicit configuration.
-- Phase 39 reduces writer-race risk for future mutation sessions but does not by itself verify mathematical consistency after concurrent AgentRun scheduling; scheduler integration remains a separate engineering and integrity task.
+- Phase 40 reduces writer-race risk in the service-side AgentRun scheduler path, but mathematical consistency still depends on ordinary evidence, replay, and promotion gates; OS-level sandboxing and external-process enforcement remain deferred.

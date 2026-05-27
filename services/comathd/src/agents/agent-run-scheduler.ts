@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
+import { acquireProjectSessionLock, releaseProjectSessionLock, type ProjectSessionLock } from "../project/session-lock.js";
 import {
   cancelQueuedAgentRun,
   getAgentRun,
@@ -442,6 +443,71 @@ export class AgentRunScheduler {
   private async execute(task: QueuedLaunch): Promise<AgentRunProcessResult> {
     const { projectRoot, input } = task;
     task.command = this.assertLaunchAllowed(projectRoot, input);
+    const writerLock = this.acquireWriterSession(projectRoot, input);
+    try {
+      return await this.executeWithWriterSession(task, writerLock);
+    } finally {
+      this.releaseWriterSession(projectRoot, input, writerLock);
+    }
+  }
+
+  private acquireWriterSession(projectRoot: string, input: AgentRunLaunchInput): ProjectSessionLock {
+    const acquired = acquireProjectSessionLock(projectRoot, {
+      owner: `agent-run-scheduler:${input.run_id}`
+    });
+    if (!acquired.acquired) {
+      appendAuditEvent(projectRoot, {
+        project_id: input.project_id,
+        event_type: "agent_run.writer_lock_blocked",
+        actor: input.actor,
+        target_id: input.run_id,
+        payload: {
+          reason: acquired.reason,
+          active_session_id: acquired.lock.session_id,
+          active_owner: acquired.lock.owner,
+          lock_path: acquired.lock_path
+        }
+      });
+      throw new ComathError("active writer session lock exists", {
+        statusCode: 409,
+        code: "AGENT_RUN_WRITER_LOCK_ACTIVE"
+      });
+    }
+    appendAuditEvent(projectRoot, {
+      project_id: input.project_id,
+      event_type: "agent_run.writer_lock_acquired",
+      actor: input.actor,
+      target_id: input.run_id,
+      payload: {
+        session_id: acquired.lock.session_id,
+        owner: acquired.lock.owner,
+        lock_path: acquired.lock_path,
+        replaced_stale_session_id: acquired.replaced_stale_session_id
+      }
+    });
+    return acquired.lock;
+  }
+
+  private releaseWriterSession(projectRoot: string, input: AgentRunLaunchInput, writerLock: ProjectSessionLock): void {
+    const released = releaseProjectSessionLock(projectRoot, {
+      sessionId: writerLock.session_id,
+      token: writerLock.token
+    });
+    appendAuditEvent(projectRoot, {
+      project_id: input.project_id,
+      event_type: "agent_run.writer_lock_released",
+      actor: input.actor,
+      target_id: input.run_id,
+      payload: {
+        session_id: released.lock.session_id,
+        lock_path: released.lock_path,
+        released_at: released.lock.released_at
+      }
+    });
+  }
+
+  private async executeWithWriterSession(task: QueuedLaunch, writerLock: ProjectSessionLock): Promise<AgentRunProcessResult> {
+    const { projectRoot, input } = task;
     const run = startAgentRun(projectRoot, {
       project_id: input.project_id,
       run_id: input.run_id,
@@ -463,6 +529,7 @@ export class AgentRunScheduler {
         program: task.command.program,
         args: task.command.args ?? [],
         timeout_ms: input.timeout_ms,
+        writer_session_id: writerLock.session_id,
         stdout_path: stdoutPathRel,
         stderr_path: stderrPathRel
       }

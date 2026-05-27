@@ -31,7 +31,8 @@ const requiredCapabilities = [
   "runner_replay_sandbox_dependency_provenance",
   "lean_statement_alias_equivalence",
   "trivium_target_platform_evaluation",
-  "project_writer_session_lock"
+  "project_writer_session_lock",
+  "agent_run_scheduler_writer_lock_integration"
 ];
 
 for (const capability of requiredCapabilities) {
@@ -45,8 +46,7 @@ const requiredResidualRisks = [
   "broad_mathprove_proof_search_deferred",
   "full_interactive_pi_e2e_install_flow_deferred",
   "runner_os_network_sandbox_enforcement_deferred",
-  "lean_parser_logical_equivalence_deferred",
-  "agent_process_multi_process_lock_integration_deferred"
+  "lean_parser_logical_equivalence_deferred"
 ];
 
 for (const risk of requiredResidualRisks) {

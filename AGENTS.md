@@ -52,8 +52,9 @@ Current implementation frontier:
 - Phase 37 is complete.
 - Phase 38 is complete.
 - Phase 39 is complete.
+- Phase 40 is complete.
 
-Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-39 vertical slices as a claim of broad mathematical discovery capability.
+Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-40 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
 
@@ -114,6 +115,8 @@ Phase 37 Lean statement-alias equivalence is a conservative extension of Phase 3
 Phase 38 native TriviumDB target-platform evaluation keeps TriviumDB optional and behind the adapter boundary. `triviumdb` may exist only as a root optional dependency; `services/comathd` must not add it to ordinary dependencies or top-level imports. Target-platform validation must use `evaluateTriviumTargetPlatform()` or `corepack pnpm --filter @comath/comathd eval:trivium`, record capability/performance/persistence evidence, and fail closed when native loading is unavailable. Passing Phase 38 does not make TriviumDB the default backend.
 
 Phase 39 project writer session locks provide the primitive for single-writer coordination under `.comath/sessions/writer.lock.json`. A writer must acquire a session id and token, concurrent active locks must fail closed, malformed locks must not be overwritten, and stale takeover must preserve the previous session id. Phase 39 does not yet wire every AgentRun scheduler launch through this lock and does not provide OS-level process sandboxing.
+
+Phase 40 wires the service-side AgentRun scheduler process execution path through the project writer session lock. A scheduled run must acquire the project writer lock before starting child-process mutation, must fail closed without starting the child when another active writer owns the project, and must release the lock after terminal report handling. Phase 40 still does not provide OS-level process sandboxing or mandatory external-process locking.
 
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 

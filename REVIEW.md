@@ -1416,6 +1416,74 @@ Phase 33 does not implement broad lemma decomposition or arbitrary theorem synth
 - Generic theorem synthesis and production proof-route agent execution remain deferred.
 - Skeleton artifacts are not built as final Lean targets; they are auditable planning outputs whose placeholders must be discharged later.
 
+## Phase 40 AgentRun Scheduler Writer Lock Integration Review Log
+
+### Scope
+
+Wired the service-side AgentRun process scheduler through the Phase 39 project writer session lock. A scheduled process run now acquires a project writer lock before starting run-state/log/report mutation, rejects launch while another active writer owns the project, preserves the queued run on blocked launch, and releases the scheduler-owned lock after terminal report handling.
+
+This still does not provide OS-level process sandboxing, enforced network denial, or mandatory external-process locks.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase40-agent-scheduler-session-lock.test.mjs
+Initial RED result: exit 1; missing expected rejection because the scheduler ignored an existing active writer lock and launched the child process.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding scheduler acquire/release integration.
+
+node services/comathd/tests/unit/phase40-agent-scheduler-session-lock.test.mjs
+Result: exit 0; Phase 40 scheduler writer-lock integration tests passed.
+
+node tests/unit/phase28-agent-run-scheduler.test.mjs
+Result: exit 0 from `services/comathd`; Phase 28 scheduler regression tests remained compatible with writer-lock integration.
+```
+
+### Changed Surfaces
+
+- Updated `services/comathd/src/agents/agent-run-scheduler.ts` so `execute()` acquires/releases project writer sessions.
+- Added scheduler audit events `agent_run.writer_lock_blocked`, `agent_run.writer_lock_acquired`, and `agent_run.writer_lock_released`.
+- Added `services/comathd/tests/unit/phase40-agent-scheduler-session-lock.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added `agent_run_scheduler_writer_lock_integration` to service status and removed the narrower lock-integration residual risk.
+- Updated README, TODO, acceptance, smoke, security, mathematical-integrity, and handoff notes.
+
+### Boundary And Security Notes
+
+Blocked launches fail before `startAgentRun()` and before child process spawn, preserving the queued AgentRun and avoiding log/report side effects. Allowed launches hold the session through terminal report submission and release in a `finally` path so success, failure, timeout, cancellation, and invalid-report handling all relinquish the scheduler-owned lock.
+
+The lock is still a CoMath-owned coordination file, not an OS mandatory lock. External processes that bypass `comathd` remain outside the guarantee.
+
+### Residual Risks
+
+- OS-level process sandboxing and network-denial enforcement remain deferred.
+- Live Pi/Codex adapter execution remains deferred.
+- Mandatory cross-process filesystem locks for arbitrary external writers remain outside Phase 40.
+
+### Final Root Validation
+
+Fresh Phase 40 validation completed on 2026-05-28:
+
+```text
+node scripts/phase0-smoke.mjs
+Result: exit 0; Phase 0/design smoke check passed for 25 required entries and 28 invariants.
+
+node services/comathd/tests/phase0-smoke.test.mjs
+Result: exit 0; comathd Research Alpha smoke accepted `agent_run_scheduler_writer_lock_integration`.
+
+node services/comathd/tests/unit/phase40-agent-scheduler-session-lock.test.mjs
+Result: exit 0; Phase 40 AgentRun scheduler session-lock tests passed.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-40 package tests passed with Phase 40 wired into the default test chain.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests through Phase 40, and Phase 17 integrity evaluation passed.
+```
+
 ## Phase 39 Project Writer Session Lock Review Log
 
 ### Scope
