@@ -353,14 +353,23 @@
 - [x] Add Phase 29 tests for profile validation, unknown-profile rejection, profile-backed AgentRun creation, launch-envelope preparation, audit events, and service route coverage.
 - [x] Add `agent_profile_service_api` to service status capabilities.
 
+## Phase 30: Pi Agent Profile Runtime UX
+
+- [x] Add executable Pi runtime tools for `comath.agent.profileList`, `comath.agent.profileGet`, `comath.agent.runForProfile`, and `comath.agent.prepareLaunch`.
+- [x] Route all agent profile tools through `comathd`; the Pi extension still does not read or write `.comath/` directly.
+- [x] Register `/cm:agent` in the Pi runtime registration with profile list/get, profile-backed AgentRun creation, and launch-envelope preparation subcommands.
+- [x] Keep mutating agent tools host-confirmed and strip model-supplied `confirmation_id` from runtime schemas.
+- [x] Add local command argument validation so missing project/run/workstream/profile fields fail before prompting for mutation confirmation.
+- [x] Add Phase 30 Pi extension tests and wire them into the default `@comath/pi-extension` test chain.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond registered theorem families (`Nat.add_zero`, `Nat.mul_zero`) and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
-- [ ] Live Pi/Codex agent adapter execution beyond the Phase 29 service profile API and Phase 28 allowlisted process scheduler fixtures.
-- [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
+- [ ] Live Pi/Codex agent adapter execution beyond the Phase 30 Pi agent profile tools, Phase 29 service profile API, and Phase 28 allowlisted process scheduler fixtures.
+- [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Stronger runner re-execution sandboxing: OS-level isolation, network-denial enforcement, dependency lock capture, and cross-machine replay validation beyond the Phase 24 service-owned re-execution checks.
 - [ ] OS-level process sandboxing and multi-process writer/session locks for scheduled AgentRuns beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, and scoped-write controls.

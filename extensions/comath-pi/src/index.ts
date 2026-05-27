@@ -130,7 +130,11 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.campaign.tick",
   "comath.campaign.nextActions",
   "comath.campaign.finalAudit",
-  "comath.campaign.replay"
+  "comath.campaign.replay",
+  "comath.agent.profileList",
+  "comath.agent.profileGet",
+  "comath.agent.runForProfile",
+  "comath.agent.prepareLaunch"
 ]);
 
 const COMATH_EXTENSION_COMMANDS = [
@@ -143,6 +147,7 @@ const COMATH_EXTENSION_COMMANDS = [
   "/cm:paper",
   "/cm:research",
   "/cm:campaign",
+  "/cm:agent",
   "/cm:audit",
   "/cm:snapshot",
   "/cm:replay",
@@ -152,6 +157,7 @@ const COMATH_EXTENSION_COMMANDS = [
 const PI_RUNTIME_COMMANDS = [
   "/cm:research",
   "/cm:campaign",
+  "/cm:agent",
   "/cm:audit",
   "/cm:replay"
 ];
@@ -223,7 +229,8 @@ export function parseComathCommand(input: string): ParsedComathCommand | null {
     action === "replay" ||
     action === "audit" ||
     action === "research" ||
-    action === "campaign"
+    action === "campaign" ||
+    action === "agent"
   ) {
     const [subcommand, ...args] = parts.slice(1);
     return {
@@ -309,6 +316,10 @@ function readNumber(payload: Record<string, unknown>, field: string): number | u
 
 function campaignPath(campaignId: string, suffix: string): string {
   return `/campaign/${encodeURIComponent(campaignId)}${suffix}`;
+}
+
+function agentProfilePath(profileId: string): string {
+  return `/agent/profile/${encodeURIComponent(profileId)}`;
 }
 
 function withoutConfirmationSchema(schema: ToolDescriptor["input_schema"]): ToolDescriptor["input_schema"] {
@@ -410,6 +421,39 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     const campaignId = readString(input, "campaign_id");
     return client.post(campaignPath(campaignId, "/replay"), {
       project_root: readString(input, "project_root"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.agent.profileList") {
+    const globalRpm = readNumber(input, "global_rpm") ?? 4;
+    return client.get(`/agent/profile/list?global_rpm=${encodeURIComponent(String(globalRpm))}`);
+  }
+
+  if (name === "comath.agent.profileGet") {
+    return client.get(agentProfilePath(readString(input, "profile_id")));
+  }
+
+  if (name === "comath.agent.runForProfile") {
+    return client.post("/agent/run/profile", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      campaign_id: readString(input, "campaign_id", { optional: true }),
+      workstream_id: readString(input, "workstream_id"),
+      profile_id: readString(input, "profile_id"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.agent.prepareLaunch") {
+    return client.post("/agent/run/profile/prepare-launch", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      run_id: readString(input, "run_id"),
+      profile_id: readString(input, "profile_id"),
+      program: readString(input, "program"),
+      goal: readString(input, "goal"),
+      context_path: readString(input, "context_path"),
       actor: readString(input, "actor")
     });
   }
@@ -608,6 +652,53 @@ export function createComathTools(): ToolDescriptor[] {
         campaign_id: stringProp,
         actor: stringProp
       })
+    },
+    {
+      name: "comath.agent.profileList",
+      description: "List validated CoMath GA agent profiles through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["global_rpm"], {
+        global_rpm: { type: "number", minimum: 1 }
+      })
+    },
+    {
+      name: "comath.agent.profileGet",
+      description: "Read one CoMath GA agent profile through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["profile_id"], {
+        profile_id: stringProp
+      })
+    },
+    {
+      name: "comath.agent.runForProfile",
+      description: "Create an AgentRun bound to a validated CoMath agent profile through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "workstream_id", "profile_id", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        campaign_id: stringProp,
+        workstream_id: stringProp,
+        profile_id: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.agent.prepareLaunch",
+      description: "Prepare a scheduler launch envelope for a profile-bound AgentRun through comathd.",
+      mutates: true,
+      input_schema: objectSchema(
+        ["project_root", "project_id", "run_id", "profile_id", "program", "goal", "context_path", "actor"],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          run_id: stringProp,
+          profile_id: stringProp,
+          program: stringProp,
+          goal: stringProp,
+          context_path: stringProp,
+          actor: stringProp
+        }
+      )
     },
     {
       name: "comath.paper.init",
@@ -814,6 +905,13 @@ function firstPositional(args: string[]): string | undefined {
   return undefined;
 }
 
+function requiredOption(value: string | undefined, field: string): string {
+  if (value) {
+    return value;
+  }
+  throw new Error(`${field} is required`);
+}
+
 function runtimeCtx(ctx: unknown): PiRuntimeContext {
   return ctx && typeof ctx === "object" ? ctx as PiRuntimeContext : {};
 }
@@ -950,6 +1048,90 @@ async function handleResearchCommand(
       max_ticks: numberOptionValue(parsed.args, "--max-ticks") ?? options.max_ticks
     })
   );
+}
+
+async function handleAgentCommand(
+  client: ComathClient,
+  options: RegisterComathPiRuntimeOptions,
+  args: string,
+  ctx: unknown
+): Promise<void> {
+  const parsed = parseComathCommand(`/cm:agent ${args}`.trim());
+  if (!parsed || parsed.action !== "agent") {
+    throw new Error("agent command is required");
+  }
+  const subcommand = parsed.subcommand ?? "profiles";
+  if (subcommand === "profiles") {
+    const globalRpm = numberOptionValue(parsed.args, "--global-rpm") ?? 4;
+    await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.agent.profileList", { global_rpm: globalRpm }));
+    return;
+  }
+  if (subcommand === "profile") {
+    const profileId = optionValue(parsed.args, "--profile") ?? firstPositional(parsed.args);
+    if (!profileId) {
+      throw new Error("profile_id is required");
+    }
+    await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.agent.profileGet", { profile_id: profileId }));
+    return;
+  }
+  if (subcommand === "run") {
+    const profileId = requiredOption(optionValue(parsed.args, "--profile") ?? firstPositional(parsed.args), "profile_id");
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const workstreamId = requiredOption(optionValue(parsed.args, "--workstream-id"), "workstream_id");
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.agent.runForProfile");
+    if (!tool) {
+      throw new Error("agent profile run tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: projectId,
+          campaign_id: optionValue(parsed.args, "--campaign-id"),
+          workstream_id: workstreamId,
+          profile_id: profileId,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "prepare-launch") {
+    const profileId = requiredOption(optionValue(parsed.args, "--profile") ?? firstPositional(parsed.args), "profile_id");
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const runId = requiredOption(optionValue(parsed.args, "--run-id"), "run_id");
+    const program = requiredOption(optionValue(parsed.args, "--program"), "program");
+    const goal = requiredOption(optionValue(parsed.args, "--goal"), "goal");
+    const contextPath = requiredOption(optionValue(parsed.args, "--context"), "context_path");
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.agent.prepareLaunch");
+    if (!tool) {
+      throw new Error("agent profile launch tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: projectId,
+          run_id: runId,
+          profile_id: profileId,
+          program,
+          goal,
+          context_path: contextPath,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  throw new Error(`unsupported agent command: ${subcommand}`);
 }
 
 async function handleAuditCommand(
@@ -1117,6 +1299,13 @@ export default function registerComathPiRuntime(pi: PiExtensionApi, options: Reg
     description: "Inspect or tick a CoMath ResearchCampaign through comathd.",
     handler: async (args, ctx) => {
       await handleCampaignCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.registerCommand("cm:agent", {
+    description: "Inspect CoMath agent profiles and prepare profile-bound AgentRuns through comathd.",
+    handler: async (args, ctx) => {
+      await handleAgentCommand(client, options, args, ctx);
     }
   });
 

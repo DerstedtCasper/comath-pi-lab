@@ -76,12 +76,12 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-29")) {
-  invariantFailures.push("README must describe the current Phase 18-29 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-30")) {
+  invariantFailures.push("README must describe the current Phase 18-30 GA vertical-slice evidence");
 }
 
-if (!acceptanceMatrix.includes("29 Agent profile service integration")) {
-  invariantFailures.push("acceptance matrix must include Phase 29 Agent profile service integration acceptance");
+if (!acceptanceMatrix.includes("30 Pi agent profile runtime UX")) {
+  invariantFailures.push("acceptance matrix must include Phase 30 Pi agent profile runtime UX acceptance");
 }
 
 for (const [content, label] of [

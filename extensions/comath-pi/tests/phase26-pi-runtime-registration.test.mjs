@@ -143,11 +143,12 @@ assert.equal(fakePi.tools.has("comath.evidence.attach"), false);
 assert.equal(fakePi.tools.has("comath.status.snapshot"), false);
 assert.equal(fakePi.commands.has("cm:research"), true);
 assert.equal(fakePi.commands.has("cm:campaign"), true);
+assert.equal(fakePi.commands.has("cm:agent"), true);
 assert.equal(fakePi.commands.has("cm:audit"), true);
 assert.equal(fakePi.commands.has("cm:replay"), true);
 assert.deepEqual(
   runtime_registration.commands.map((command) => command.command).sort(),
-  ["/cm:audit", "/cm:campaign", "/cm:replay", "/cm:research"].sort()
+  ["/cm:agent", "/cm:audit", "/cm:campaign", "/cm:replay", "/cm:research"].sort()
 );
 assert.equal(fakePi.handlers.has("resources_discover"), true);
 for (const toolName of fakePi.tools.keys()) {
@@ -159,7 +160,11 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.campaign.tick",
       "comath.campaign.nextActions",
       "comath.campaign.finalAudit",
-      "comath.campaign.replay"
+      "comath.campaign.replay",
+      "comath.agent.profileList",
+      "comath.agent.profileGet",
+      "comath.agent.runForProfile",
+      "comath.agent.prepareLaunch"
     ].includes(toolName),
     true,
     `${toolName} is not wired through executeComathTool yet`

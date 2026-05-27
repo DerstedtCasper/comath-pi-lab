@@ -155,6 +155,14 @@ function commandMetadata(command: string): Pick<
       goal_compatible: true
     };
   }
+  if (command === "/cm:agent") {
+    return {
+      subcommands: ["profiles", "profile", "run", "prepare-launch"],
+      dispatch_tool: "comath.agent.runForProfile",
+      mutates: true,
+      goal_compatible: true
+    };
+  }
   if (command === "/cm:audit") {
     return {
       subcommands: ["final"],

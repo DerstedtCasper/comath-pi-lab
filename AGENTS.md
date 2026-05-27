@@ -42,8 +42,9 @@ Current implementation frontier:
 - Phase 27 is complete.
 - Phase 28 is complete.
 - Phase 29 is complete.
+- Phase 30 is complete.
 
-Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-29 vertical slices as a claim of broad mathematical discovery capability.
+Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-30 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
 
@@ -84,6 +85,8 @@ Phase 17 evaluation and audit code is verification infrastructure. It may create
 Phase 18 proof-kernel code is native GA vertical-slice infrastructure. It may create and replay service-owned campaign proof artifacts under `.comath/`, but it must not promote a claim without a passed proof-kernel final replay manifest for the same claim. Candidate voting, reviewer approval, MathProve bridge output, natural-language plausibility, or preloaded kernel metadata cannot substitute for replay evidence. Pi research/campaign tools remain thin `comathd` clients and must not write `.comath/` directly.
 
 Phase 29 agent profile code is service-owned AgentRun orchestration infrastructure. It may list validated profiles, create profile-bound AgentRuns, and prepare scheduler launch envelopes, but profile metadata, child-process completion, or agent reports do not certify claims. Agent profiles must keep `may_mutate_trusted_state=false`, `proof_authority=none`, `rpm<=4`, and scoped write templates.
+
+Phase 30 Pi agent profile UX is a thin-client runtime surface over `comathd` only. `/cm:agent` and `comath.agent.*` tools may inspect profiles and request profile-bound AgentRuns or launch envelopes through service routes, but they must not read/write `.comath/` directly, bypass host confirmation for mutations, or turn profile metadata into proof authority.
 
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 

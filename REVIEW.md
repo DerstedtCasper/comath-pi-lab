@@ -1339,8 +1339,55 @@ Profile-backed AgentRuns inherit the profile role/model/tool profile but still u
 
 - Live Pi/Codex agent adapter execution remains deferred; Phase 29 provides the service contract, not an end-to-end remote model worker pool.
 - OS-level sandboxing and enforced network denial remain deferred beyond the Phase 28 process-shape controls.
-- Rich profile UI and `/cm:agent` Pi commands are not yet implemented.
+- Rich profile UI remains deferred beyond the Phase 30 `/cm:agent` command/tool harness.
 - Multi-process writer locks/session semantics and log streaming APIs remain deferred.
+
+## Phase 30 Pi Agent Profile Runtime UX Review Log
+
+### Scope
+
+Added a Pi runtime-facing agent profile UX over the Phase 29 `comathd` profile API. Phase 30 exposes `comath.agent.profileList`, `comath.agent.profileGet`, `comath.agent.runForProfile`, `comath.agent.prepareLaunch`, and `/cm:agent` command dispatch while keeping Pi as a thin client.
+
+This phase does not execute a live Pi/Codex remote worker pool and does not make agent profiles proof authorities. Mutating profile actions still require Pi host confirmation and route through `comathd`; the extension still does not read or write `.comath/` directly.
+
+### TDD Evidence
+
+```text
+corepack pnpm --filter @comath/pi-extension exec node tests/phase30-agent-profile-tools.test.mjs
+Initial RED result: exit 1; `comath.agent.profileList` was not registered.
+
+corepack pnpm --filter @comath/pi-extension exec node tests/phase30-agent-profile-tools.test.mjs
+Parser RED result: exit 1; `/cm:agent profile proof-route` was parsed as the default `profiles` action until `agent` joined the subcommand-aware command list.
+
+corepack pnpm --filter @comath/pi-extension exec node tests/phase30-agent-profile-tools.test.mjs
+UX RED result: exit 1; missing `workstream_id` prompted for mutation confirmation before local argument validation.
+
+corepack pnpm --filter @comath/pi-extension exec node tests/phase30-agent-profile-tools.test.mjs
+Result: exit 0; Phase 30 Pi agent profile tool tests passed.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed with Phase 30 wired into the default package test chain.
+```
+
+### Changed Surfaces
+
+- Added `extensions/comath-pi/tests/phase30-agent-profile-tools.test.mjs`.
+- Added agent profile tool descriptors and `executeComathTool()` routing in `extensions/comath-pi/src/index.ts`.
+- Added `/cm:agent` runtime command handling in `extensions/comath-pi/src/index.ts`.
+- Added `/cm:agent` metadata in `extensions/comath-pi/src/runtime-registration.ts`.
+- Updated `extensions/comath-pi/package.json` and Phase 26 registration tests so Phase 30 is part of the default Pi extension verification chain.
+
+### Boundary And Integrity Notes
+
+Read-only profile actions call `GET /agent/profile/list` and `GET /agent/profile/:id`. Mutating actions call `POST /agent/run/profile` and `POST /agent/run/profile/prepare-launch` only after Pi host confirmation. Runtime schemas continue to hide `confirmation_id` from model-supplied parameters.
+
+Local command parsing validates required `project_id`, `workstream_id`, `run_id`, `program`, `goal`, and `context_path` before asking the host to confirm a mutation.
+
+### Residual Risks
+
+- Live Pi/Codex agent adapter execution remains deferred; Phase 30 provides product-facing controls for service-owned profile/run/launch contracts.
+- Rich widgets/status UI and a full interactive Pi/comathd install-session e2e remain deferred.
+- OS-level process sandboxing, network denial, multi-process writer locks, and log streaming APIs remain deferred.
 
 ## Phase 25 Real MathProve External Bridge Review Log
 
