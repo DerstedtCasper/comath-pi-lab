@@ -91,6 +91,7 @@ export type CodexApiBackendRequest = {
 
 export type CodexApiBackendResponse = {
   status: number;
+  headers?: Record<string, string>;
   json: unknown;
 };
 
@@ -329,7 +330,87 @@ async function defaultCodexApiBackendClient(request: CodexApiBackendRequest): Pr
   } catch {
     json = { error: { message: "Codex API returned non-JSON response" } };
   }
-  return { status: response.status, json };
+  return { status: response.status, headers: Object.fromEntries(response.headers.entries()), json };
+}
+
+function codexApiMaxAttempts(): number {
+  const rawValue = process.env.COMATH_CODEX_API_MAX_ATTEMPTS;
+  if (!rawValue) {
+    return 2;
+  }
+  const parsed = Number(rawValue);
+  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 5) {
+    return parsed;
+  }
+  throw new ComathError("COMATH_CODEX_API_MAX_ATTEMPTS must be an integer between 1 and 5", {
+    statusCode: 500,
+    code: "AGENT_ADAPTER_PACKAGE_CODEX_API_ATTEMPTS_INVALID"
+  });
+}
+
+function isCodexApiRetryableStatus(status: number): boolean {
+  return status === 429 || (status >= 500 && status <= 599);
+}
+
+function parseRetryAfterMs(headers: Record<string, string> | undefined): number {
+  if (!headers) {
+    return 0;
+  }
+  const rawValue = headers["retry-after"] ?? headers["Retry-After"];
+  if (!rawValue) {
+    return 0;
+  }
+  const seconds = Number(rawValue);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1000, 2_000);
+  }
+  const dateMs = Date.parse(rawValue);
+  if (Number.isFinite(dateMs)) {
+    return Math.min(Math.max(dateMs - Date.now(), 0), 2_000);
+  }
+  return 0;
+}
+
+async function sleep(ms: number): Promise<void> {
+  if (ms <= 0) {
+    return;
+  }
+  await new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+}
+
+type CodexApiAttemptResult = {
+  response: CodexApiBackendResponse;
+  attempts: number;
+  statuses: number[];
+  rateLimited: boolean;
+};
+
+async function invokeCodexApiWithRetry(client: CodexApiBackendClient, request: CodexApiBackendRequest): Promise<CodexApiAttemptResult> {
+  const maxAttempts = codexApiMaxAttempts();
+  const statuses: number[] = [];
+  let rateLimited = false;
+  let response: CodexApiBackendResponse | undefined;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    response = await client(request);
+    statuses.push(response.status);
+    if (response.status === 429) {
+      rateLimited = true;
+    }
+    if (response.status >= 200 && response.status < 300) {
+      return { response, attempts: attempt, statuses, rateLimited };
+    }
+    if (attempt >= maxAttempts || !isCodexApiRetryableStatus(response.status)) {
+      return { response, attempts: attempt, statuses, rateLimited };
+    }
+    await sleep(parseRetryAfterMs(response.headers));
+  }
+  if (!response) {
+    throw new ComathError("Codex API backend produced no response", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_CODEX_API_EMPTY_RESPONSE"
+    });
+  }
+  return { response, attempts: maxAttempts, statuses, rateLimited };
 }
 
 function renderCodexApiPrompt(input: ExecuteAgentAdapterPackageInput, run: AgentRun, profile: AgentProfile): string {
@@ -352,7 +433,14 @@ function renderCodexApiPrompt(input: ExecuteAgentAdapterPackageInput, run: Agent
   ].join("\n");
 }
 
-function renderCodexApiReport(input: ExecuteAgentAdapterPackageInput, run: AgentRun, profile: AgentProfile, responseId: string, outputText: string): string {
+function renderCodexApiReport(
+  input: ExecuteAgentAdapterPackageInput,
+  run: AgentRun,
+  profile: AgentProfile,
+  responseId: string,
+  outputText: string,
+  telemetry?: { attempts: number; rateLimited: boolean; statuses: number[] }
+): string {
   return [
     "# Agent Report",
     "",
@@ -363,6 +451,9 @@ function renderCodexApiReport(input: ExecuteAgentAdapterPackageInput, run: Agent
     `role: ${profile.role}`,
     `context_path: ${input.context_path}`,
     `codex_api_response_id: ${responseId}`,
+    telemetry ? `codex_api_attempts: ${telemetry.attempts}` : undefined,
+    telemetry ? `codex_api_rate_limited: ${telemetry.rateLimited}` : undefined,
+    telemetry ? `codex_api_statuses: ${telemetry.statuses.join(",")}` : undefined,
     "external_prompt_file: <none>",
     "external_program: <none>",
     "",
@@ -459,17 +550,42 @@ async function executeCodexApiAdapterPackage(
       }
     };
     const client = codexApiBackendClientForTests ?? defaultCodexApiBackendClient;
-    const response = await client(request);
+    const attemptResult = await invokeCodexApiWithRetry(client, request);
+    const response = attemptResult.response;
     if (response.status < 200 || response.status >= 300) {
       writeFileSync(absoluteStdoutPath, "", "utf8");
-      writeFileSync(absoluteStderrPath, `Codex API backend failed with status ${response.status}\n`, "utf8");
+      writeFileSync(
+        absoluteStderrPath,
+        `Codex API backend failed after ${attemptResult.attempts} attempts; last_status=${response.status}\n`,
+        "utf8"
+      );
       const failed = submitAgentRunReport(projectRoot, {
         project_id: input.project_id,
         run_id: run.id,
         status: "failed",
-        report_markdown: renderCodexApiReport(input, running, profile, "<failed>", ""),
+        report_markdown: renderCodexApiReport(input, running, profile, "<failed>", "", {
+          attempts: attemptResult.attempts,
+          rateLimited: attemptResult.rateLimited,
+          statuses: attemptResult.statuses
+        }),
         exit_reason: "codex_api_backend_failed",
         actor: input.actor
+      });
+      appendAuditEvent(projectRoot, {
+        project_id: input.project_id,
+        event_type: "agent_adapter.codex_api_failed",
+        actor: input.actor,
+        target_id: run.id,
+        payload: {
+          adapter_id: pkg.id,
+          profile_id: profile.id,
+          model: config.model,
+          attempts: attemptResult.attempts,
+          statuses: attemptResult.statuses,
+          last_status: response.status,
+          rate_limited: attemptResult.rateLimited,
+          proof_authority: "none"
+        }
       });
       return {
         package: clonePackage(pkg),
@@ -489,7 +605,11 @@ async function executeCodexApiAdapterPackage(
       };
     }
     const extracted = extractCodexApiOutputText(response.json);
-    const report = renderCodexApiReport(input, running, profile, extracted.responseId, extracted.text);
+    const report = renderCodexApiReport(input, running, profile, extracted.responseId, extracted.text, {
+      attempts: attemptResult.attempts,
+      rateLimited: attemptResult.rateLimited,
+      statuses: attemptResult.statuses
+    });
     writeFileSync(absoluteStdoutPath, `${report.trimEnd()}\n`, "utf8");
     writeFileSync(absoluteStderrPath, "", "utf8");
     const submitted = submitAgentRunReport(projectRoot, {
@@ -510,6 +630,10 @@ async function executeCodexApiAdapterPackage(
         model: config.model,
         base_url_configured: true,
         response_id: extracted.responseId,
+        attempts: attemptResult.attempts,
+        statuses: attemptResult.statuses,
+        status: response.status,
+        rate_limited: attemptResult.rateLimited,
         proof_authority: "none"
       }
     });

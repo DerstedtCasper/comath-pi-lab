@@ -1,3 +1,39 @@
+## Phase 52 Codex API Retry And Rate-Limit Telemetry Review Log
+
+Scope: Phase 52 hardens the Phase 51 `codex-api` backend with bounded retry behavior and operator-visible telemetry. The backend retries only retryable statuses (`429`, `5xx`), honors capped `Retry-After`, records attempt counts/status sequences/rate-limit detection in report and audit payloads, and fails closed after exhausted attempts without exposing service API keys.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/unit/phase52-codex-api-retry-telemetry.test.mjs
+Result: exit 1; the first injected 429 caused the Codex API backend AgentRun to fail instead of retrying and succeeding on the second attempt.
+```
+
+Focused GREEN evidence:
+
+```text
+node services/comathd/tests/unit/phase52-codex-api-retry-telemetry.test.mjs
+Result: exit 0; 429 recovery, attempt/status telemetry, rate-limit report fields, exhausted 503 fail-closed behavior, `agent_adapter.codex_api_invoked` and `agent_adapter.codex_api_failed` audit events, and API-key non-disclosure passed.
+```
+
+Implementation summary:
+
+- Added `COMATH_CODEX_API_MAX_ATTEMPTS` parsing with a conservative bounded range.
+- Added retry handling for `429` and `5xx` Codex API backend responses with capped `Retry-After` delays.
+- Added attempt/status/rate-limit telemetry to Codex API reports and audit events.
+- Added fail-closed exhausted-attempt stderr diagnostics and `agent_adapter.codex_api_failed` audit events.
+- Wired Phase 52 into the default `@comath/comathd` test chain and smoke status capability `codex_api_retry_telemetry`.
+
+Boundary notes:
+
+Phase 52 improves production reliability semantics, but it is still not live production API/network validation, streaming Responses API support, credential rotation UX, or proof authority. API output and retry telemetry remain AgentRun runtime material with `proof_authority=none`.
+
+Residual risks:
+
+- No live production OpenAI account/network call was run in this phase; tests use an injected client.
+- Streaming Responses API handling, production quota dashboards, credential rotation UX, and installed production Codex CLI validation remain deferred.
+- OS-enforced adapter isolation and network-denial policy remain deferred.
+
 ## Phase 51 Service-Configured Codex API Backend Contract Review Log
 
 Scope: Phase 51 adds a `codex-api` backend option to the service-owned `codex-cli` adapter package. The backend is configured by `comathd` environment (`COMATH_CODEX_API_KEY`, optional base URL/model), exposes only secret-free launch metadata, executes through a Responses-compatible client boundary with test injection, and wraps output as non-authoritative AgentRun report/log material. Pi can select `--backend codex-api`, but cannot supply API keys, base URLs, executable paths, or proof authority.
@@ -37,7 +73,7 @@ Phase 51 is not a proof-authority backend and not a production account/network v
 Residual risks:
 
 - No live production OpenAI account/network call was run in this phase; tests use an injected Responses-compatible client.
-- Retry/backoff, rate-limit telemetry, streaming Responses API handling, and credential-rotation UX remain deferred.
+- Streaming Responses API handling, credential-rotation UX, and production quota dashboards remain deferred.
 - OS-enforced adapter isolation and production installed Codex CLI validation remain deferred.
 
 ## Phase 50 Bounded Multi-Event AgentRun Log Session Review Log

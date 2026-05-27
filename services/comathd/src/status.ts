@@ -59,7 +59,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_run_operator_cancel",
       "agent_adapter_package_registry",
       "codex_cli_external_adapter_invocation",
-      "codex_api_adapter_backend"
+      "codex_api_adapter_backend",
+      "codex_api_retry_telemetry"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",
