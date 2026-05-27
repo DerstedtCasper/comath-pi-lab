@@ -39,15 +39,15 @@ Before every phase, read:
 
 ## 2.1 Parallelism Budget And Discipline
 
-The current user-approved concurrency budget is high: up to `rpm=1000`, with subagent reasoning effort set to `high` for substantial engineering, review, and planning tasks.
+The current user-approved concurrency budget is `rpm=4`, with subagent reasoning effort set to `high` for substantial engineering, review, and planning tasks.
 
-This budget permits large-scale delegation, but it does not relax file ownership or safety boundaries:
+This budget permits bounded delegation, but it does not relax file ownership or safety boundaries:
 
-- use many subagents for read-only review, planning, audit, and disjoint implementation;
+- use only a few subagents at a time for read-only review, planning, audit, and disjoint implementation;
 - do not let multiple subagents edit the same core file;
 - do not merge a child result until the parent coordinator inspects files and runs relevant tests;
 - keep Phase 0-7 mutation-heavy work mostly serialized around public contracts, path policy, routes, gates, and graph patch application;
-- use broad parallelism most aggressively after Phase 8, when subagent workstream directories and mutation gateways exist.
+- after Phase 8, use workstream directories and mutation gateways for isolation rather than increasing the global rate budget.
 
 ## 3. Phase Goal Template
 
@@ -480,6 +480,30 @@ Definition of Done:
 
 Stop after Phase 17.
 
+### Phase 18: GA Proof-Kernel Vertical Slices
+
+Allowed:
+
+- `services/comathd/src/proof-kernel`
+- proof-kernel tests under `services/comathd/tests`
+- campaign routes in `services/comathd/src/api/server.ts`
+- gate/schema changes required to bind final replay evidence
+- Pi research/campaign command and tool descriptors under `extensions/comath-pi`
+- audit, review, and progress documentation
+
+Definition of Done:
+
+- `ResearchCampaign` start/status/next-actions/tick/final-audit/replay routes exist through `comathd`;
+- `formally_checked` requires a passed proof-kernel final replay manifest for the same claim;
+- positive `Nat.add_zero` campaign reaches `formal_proof_verified`;
+- fake formal metadata, static Lean cheat constructs, and statement drift fail closed;
+- false `n + 1 = n` campaign terminates as `verified_counterexample`;
+- snapshot restore followed by campaign proof replay passes;
+- Pi exposes campaign tools as thin `comathd` client calls only;
+- TODO, REVIEW, security, math-integrity, and handoff docs state evidence and limits.
+
+Stop after Phase 18 unless the user opens a new generalization goal.
+
 ## 5. Long-Running Research Alpha Goal
 
 Use only after Phases 0-6 are complete:
@@ -504,6 +528,29 @@ Constraints:
 - Do not add unsafe shell execution.
 - Do not weaken gates.
 - Stop if tests cannot be made to pass without weakening safety.
+```
+
+## 5.1 Phase 18 GA Vertical-Slice Goal
+
+Use only after Phases 0-17 are complete:
+
+```text
+/goal Bring CoMath Pi Lab through the GA proof-kernel vertical slices.
+
+Definition of Done:
+- Native `services/comathd/src/proof-kernel` path exists.
+- One elementary Lean theorem has a clean replay manifest and gate-mediated `formally_checked` promotion.
+- Statement drift and cheat constructs are rejected.
+- One false elementary theorem has exact counterexample evidence and `refuted` status.
+- Snapshot restore then proof replay passes.
+- Pi campaign tools call `comathd` and do not write `.comath/`.
+- Documentation records exact tests, evidence, commits, and remaining limits.
+
+Constraints:
+- Do not claim arbitrary theorem proving.
+- Do not promote by voting, reviewer approval, natural language, or MathProve bridge output alone.
+- Respect global `rpm=4`; prefer local deterministic tools.
+- Stop if a gate must be weakened to make a proof pass.
 ```
 
 ## 6. Subagent Matrix
@@ -647,6 +694,7 @@ Use this order unless a later architectural discovery proves it wrong:
 15. TUI dashboard
 16. Snapshot/replay
 17. Evaluation + security/math integrity audit
+18. GA proof-kernel vertical slices
 ```
 
 Near-term engineering sequence:

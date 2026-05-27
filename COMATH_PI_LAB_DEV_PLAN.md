@@ -5,14 +5,15 @@
 
 ## 0. Design Status
 
-This document defines the complete target design and implementation goals. The current repository has implemented the Phase 0-17 Research Alpha slice; later Research Beta work remains explicitly out of scope until a new goal is opened.
+This document defines the complete target design and implementation goals. The current repository has implemented the Phase 0-17 Research Alpha slice plus the Phase 18 GA proof-kernel vertical slices; later generalization work remains explicitly out of scope until a new goal is opened.
 
-Current repository state after Phase 17:
+Current repository state after Phase 18:
 
 - Repo bootstrap, contracts, service foundation, artifact/audit kernel, claim registry, fail-closed gate, in-memory memory adapter, workstreams, GraphPatch review, MathProve bridge mock, compute runners, literature condition checks, working paper, optional TriviumDB adapter boundary, braid-statistics domain pack, read-only dashboard, snapshot/replay, and Phase 17 audits are implemented and verified.
+- Native CoMath proof-kernel campaign routes, 8-candidate GA audit artifacts, clean Lean replay for the `Nat.add_zero` vertical slice, statement-drift/cheat rejection, exact `n + 1 = n` refutation, snapshot restore plus proof replay, and Pi research/campaign tools are implemented as Phase 18 vertical slices.
 - Full design, roadmap, agent model, risk register, acceptance matrix, runbook, TODO, REVIEW, security review, mathematical-integrity review, and Research Alpha retrospective are documented.
-- Research Alpha is a local auditable prototype, not a production mathematical proof authority.
-- Real Lean/MathProve kernel execution, production Pi runtime registration, native TriviumDB performance validation, full DLP-grade secret scanning, and runner re-execution replay remain Research Beta candidates.
+- Research Alpha plus Phase 18 is a local auditable prototype with narrow executable proof-kernel slices, not a production arbitrary theorem prover.
+- Generic proof planning, real MathProve execution, production Pi runtime registration, native TriviumDB performance validation, full DLP-grade secret scanning, and runner re-execution replay remain later candidates.
 
 ## 1. Product Thesis
 
@@ -814,6 +815,22 @@ Deliverables:
 - math integrity audit;
 - research alpha retrospective.
 
+### Phase 18: GA Proof-Kernel Vertical Slices
+
+Goal: close the GA-critical gap between fail-closed proof metadata and executable native CoMath proof-kernel evidence for bounded vertical slices.
+
+Deliverables:
+
+- service-owned `ResearchCampaign` routes;
+- native proof-kernel modules under `services/comathd/src/proof-kernel`;
+- 8-candidate ensemble artifacts with failure-route preservation;
+- clean Lean replay, static audit, dependency closure, axiom profile, and statement-equivalence gates;
+- positive `Nat.add_zero` formal proof vertical slice;
+- negative statement-drift, fake metadata, and cheat-construct tests;
+- exact counterexample refutation path for `n + 1 = n`;
+- snapshot restore followed by campaign proof replay;
+- Pi `/cm:research` and `/cm:campaign` thin-client tool surfaces.
+
 ## 18. Milestones
 
 ### Research Alpha
@@ -831,12 +848,25 @@ Research Alpha is complete when:
 - Snapshot basic works.
 - security and math-integrity reviews exist.
 
+### GA Vertical Slice
+
+The GA vertical slice is complete when:
+
+- `comathd` starts and ticks a bounded `ResearchCampaign`;
+- `formally_checked` requires a passed proof-kernel final replay manifest for the same claim;
+- 8 candidates are generated and their manifests/audit artifacts are preserved;
+- statement drift and static Lean cheats are rejected;
+- one Lean theorem replay passes from a clean workspace;
+- one false theorem is refuted by exact counterexample evidence;
+- snapshot restore followed by proof replay passes;
+- Pi exposes campaign tools without direct `.comath/` writes.
+
 ### Research Beta
 
 Research Beta is complete when:
 
 - real TriviumDB adapter is stable on target platform;
-- at least one real MathProve final audit path exists;
+- generic proof planning and/or real MathProve final audit paths exist beyond the Phase 18 native proof-kernel vertical slices;
 - compute runners produce replayable evidence;
 - literature condition matching supports exact citation artifacts;
 - working paper can export LaTeX with margin provenance.

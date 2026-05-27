@@ -400,8 +400,7 @@ try {
   const dashboardSources = [
     "extensions/comath-pi/src/widgets.ts",
     "extensions/comath-pi/src/renderers.ts",
-    "extensions/comath-pi/src/tools/review.ts",
-    "extensions/comath-pi/src/index.ts"
+    "extensions/comath-pi/src/tools/review.ts"
   ].map((file) => join(process.cwd(), file));
   for (const file of dashboardSources) {
     assert.equal(existsSync(file), true);
@@ -409,6 +408,15 @@ try {
     assert.equal(/client\.post|writeFile|appendFile|mkdir|rmSync|\.comath/.test(text), false, `${file} must stay read-only`);
     assert.equal(/services\/comathd\/src/i.test(text), false, `${file} must not import service internals`);
   }
+  const extensionEntrypoint = join(process.cwd(), "extensions/comath-pi/src/index.ts");
+  assert.equal(existsSync(extensionEntrypoint), true);
+  const extensionEntrypointText = source(extensionEntrypoint);
+  assert.equal(
+    /writeFile|appendFile|mkdir|rmSync|node:fs|from "fs"|from 'fs'|\.comath/.test(extensionEntrypointText),
+    false,
+    `${extensionEntrypoint} must not write runtime files directly`
+  );
+  assert.equal(/services\/comathd\/src/i.test(extensionEntrypointText), false, `${extensionEntrypoint} must not import service internals`);
 
   assert.equal(/scanForSecrets\(/.test(source(join(process.cwd(), "services/comathd/src/artifacts/snapshots.ts"))), true);
   assert.equal(/scanForSecretsStub\(/.test(source(join(process.cwd(), "services/comathd/src/artifacts/snapshots.ts"))), false);

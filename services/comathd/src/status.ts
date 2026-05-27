@@ -27,10 +27,11 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_extension_thin_client",
       "read_only_dashboard",
       "snapshot_replay",
-      "phase17_integrity_evaluation"
+      "phase17_integrity_evaluation",
+      "proof_kernel_ga_vertical_slice"
     ],
     residualRisks: [
-      "real_lean_kernel_execution_deferred",
+      "generic_proof_planning_deferred",
       "production_pi_runtime_registration_deferred",
       "native_trivium_performance_evaluation_deferred",
       "runner_reexecution_replay_deferred",

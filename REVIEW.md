@@ -96,6 +96,8 @@ Phase 1 should still be treated as a separate implementation goal. Do not infer 
 
 The user explicitly allowed high concurrency: `rpm=1000`, reasoning effort `high`.
 
+Superseded on 2026-05-27: the active GA goal uses global `rpm=4` with reasoning effort `high`. Current coordination docs (`AGENTS.md`, `CODEX_GOAL_RUNBOOK.md`, `docs/architecture/agent-operating-model.md`, `docs/architecture/risk-register.md`, and `docs/progress/design-handoff.md`) now treat `rpm=4` as authoritative for Phase 18 and later work.
+
 This has been written into:
 
 - `CODEX_GOAL_RUNBOOK.md`
@@ -1005,3 +1007,75 @@ The Phase 17 evaluation suite covers mathematical safety, failed-runner promotio
 ### Residual Risks
 
 Research Alpha remains an auditable local prototype. Real Lean kernel proof checking, production Pi runtime registration, native TriviumDB performance evaluation, full DLP-grade secret scanning, and runner re-execution replay are Research Beta candidates rather than completed Phase 17 capabilities.
+
+## Phase 18 GA Proof-Kernel Vertical Slice Review Log
+
+### Scope
+
+Implemented a native CoMath proof-kernel GA vertical slice under `services/comathd/src/proof-kernel`, rather than treating the MathProve bridge as proof authority. Phase 18 adds service-owned `ResearchCampaign` state, proof-kernel campaign routes, 8-candidate ensemble artifacts, Lean clean replay gates, statement-drift rejection, exact refutation, snapshot restore/replay coverage, and Pi extension campaign tools.
+
+This phase upgrades the earlier "real Lean kernel checking is not implemented" limitation in a narrow but executable sense: the repository now has a tested Lean proof-kernel path for the elementary `Nat.add_zero` vertical slice and a tested counterexample path for `n + 1 = n`. It does not implement arbitrary theorem proving, broad Lean proof synthesis, production Pi runtime registration, real MathProve execution, or a persistent child-agent scheduler.
+
+### Implementation Checkpoints
+
+```text
+6fe58fe Add GA proof kernel campaign gates
+a4319f1 Expose GA research campaign tools in Pi extension
+5e3af2f Add GA refutation and snapshot replay slices
+ab32780 Persist GA candidate audit artifacts
+```
+
+### Changed Surfaces
+
+- Added proof-kernel campaign orchestration in `services/comathd/src/proof-kernel/campaign/`.
+- Added candidate ensemble generation, decision filtering, and failure aggregation in `services/comathd/src/proof-kernel/ensemble/`.
+- Added Lean project generation, static cheat scan, statement equivalence, dependency closure, axiom profile, and clean replay in `services/comathd/src/proof-kernel/lean/`.
+- Added campaign routes in `services/comathd/src/api/server.ts` and exported proof-kernel APIs from `services/comathd/src/index.ts`.
+- Hardened `services/comathd/src/verification/gate.ts` so `formally_checked` requires a passed proof-kernel `final_replay_manifest.json` artifact for the requested claim.
+- Extended `services/comathd/src/types/schemas.ts` with campaign, candidate, decision, and final Lean replay schemas.
+- Added Pi extension `/cm:research`, `/cm:campaign`, `executeComathTool()`, and six campaign tool descriptors in `extensions/comath-pi/src/index.ts`.
+- Added Phase 18 comathd and Pi extension tests.
+
+### Targeted Coverage
+
+- `services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs`: starts a campaign for `n + 0 = n`, locks the problem, runs 8 candidates, persists candidate audit artifacts, performs final Lean replay, promotes the claim to `formally_checked`, and calls the replay route.
+- `services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs`: rejects fake/preloaded formal metadata without proof-kernel replay, detects `sorry` and `axiom`, and rejects a high-scoring statement-drift candidate.
+- `services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs`: keeps the locked statement `n + 1 = n`, records exact counterexample `n=0`, marks the claim `refuted`, and terminates as `verified_counterexample`.
+- `services/comathd/tests/integration/phase18-ga-snapshot-replay.test.mjs`: exports a snapshot after proof verification, restores it into a fresh root, removes replay byproducts, and verifies proof-kernel replay passes from restored state.
+- `extensions/comath-pi/tests/phase18-research-campaign-tools.test.mjs`: verifies campaign tool descriptors, mutability flags, required inputs, and `comathd` route mapping.
+
+### Boundary And Integrity Notes
+
+`formally_checked` is now evidence-level 5 only when the normal claim promotion gate sees bound Lean evidence, proof artifacts, kernel metadata, dependency closure, audit pass, and a passed proof-kernel replay manifest matching the claim. A Lean source file, reviewer approval, agent consensus, MathProve bridge output, preloaded metadata, or candidate score is not enough.
+
+Candidate selection filters hard vetoes and requires `candidate_statement_hash === locked_statement_hash` before score ranking. Voting or reviewer preference cannot promote a drifted theorem. Failed candidates are retained as route memory and candidate artifacts rather than being discarded.
+
+Pi remains a thin client. Campaign tools call `comathd` routes and mutating descriptors require confirmation; the extension still does not write `.comath/` directly or import service internals.
+
+### Residual Risks
+
+- The positive proof path is intentionally narrow and currently generated by `createNatAddZeroLeanProject()`.
+- Statement equivalence and axiom/dependency trust profiles are conservative file/output checks, not a full Lean AST equivalence engine.
+- The 8-candidate ensemble is implemented for the Phase 18 vertical slice; a general proof-route scheduler and real persistent child-agent runner remain deferred.
+- MathProve is still a fail-closed bridge mock outside this native proof-kernel slice.
+- Snapshot replay reruns the Lean proof-kernel replay for the campaign proof, but generic runner re-execution under OS/network sandbox remains deferred.
+
+### Final Root Validation
+
+Fresh Phase 18 documentation-boundary validation completed on 2026-05-27:
+
+```text
+corepack pnpm build
+Result: exit 0; root recursive build passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; Phase 0/design smoke, all workspace tests, Phase 18 comathd proof-kernel tests, Phase 18 Pi campaign tool tests, and Phase 17 integrity evaluation passed.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repository-root runtime state was left behind.
+```
+
+One Phase 17 evaluation assertion was updated after root-cause analysis: dashboard-only files still forbid `client.post`, filesystem writes, service-internal imports, and direct `.comath` access, while the extension entrypoint is checked separately so Phase 18 thin-client mutating campaign tools may call `comathd` without direct runtime-file writes.

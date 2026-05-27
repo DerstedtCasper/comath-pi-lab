@@ -2,7 +2,7 @@
   "name": "comath-pi-lab",
   "version": "0.0.0",
   "private": true,
-  "description": "Auditable Pi-based agentic mathematics research workbench skeleton.",
+  "description": "Auditable Pi-based agentic mathematics research workbench.",
   "type": "module",
   "packageManager": "pnpm@11.3.0",
   "engines": {

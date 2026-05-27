@@ -15,15 +15,15 @@ The coordinator must not trust a child agent's success claim without checking fi
 
 ## Concurrency Budget
 
-The current allowed concurrency budget is `rpm=1000` with reasoning effort `high` for substantial subagent work.
+The current allowed concurrency budget is `rpm=4` with reasoning effort `high` for substantial subagent work.
 
-Use that budget to accelerate:
+Use that budget to selectively accelerate:
 
 - read-only architecture/security/math-integrity reviews;
 - independent implementation slices with disjoint write sets;
 - late-stage domain/paper/dashboard work after workstream boundaries exist.
 
-Do not use that budget to create write conflicts. A high RPM budget increases responsibility for merge discipline.
+Do not use that budget to create write conflicts. A low global RPM means the coordinator should prefer local deterministic commands and reserve subagents for bounded review or disjoint work.
 
 ## Agent Roles
 
@@ -35,6 +35,7 @@ Do not use that budget to create write conflicts. A high RPM budget increases re
 | pi-extension-engineer | Pi commands, tools, resources, renderers | `extensions`, `skills`, `prompts` | Pi API compatibility |
 | memory-db-engineer | memory adapters, StableIdMap, retrieval | `services/comathd/src/memory`, `db` | adapter and fallback tests |
 | verification-engineer | gates, MathProve, Lean/SymPy/Sage/SAT runners | `claim`, `verification`, `python` | gate and runner tests |
+| proof-kernel-engineer | ResearchCampaign, Lean clean replay, candidate ensembles, final replay artifacts | `services/comathd/src/proof-kernel`, proof-kernel tests | GA proof-kernel replay and gate tests |
 | artifact-paper-engineer | artifact store, paper, BibTeX, snapshot | `artifacts`, paper tools | artifact/paper tests |
 | security-auditor | path, shell, secrets, replay, native deps | read-only or `SECURITY_REVIEW.md` | severity findings |
 | math-integrity-auditor | claim promotion, proof status, paper wording | read-only or `MATH_INTEGRITY_REVIEW.md` | integrity findings |

@@ -35,6 +35,7 @@
 | 15 Dashboard | read-only/degraded text/TUI renderer tests pass; dashboard does not read/write `.comath/` directly or repair state. |
 | 16 Snapshot/replay | service routes, export/verify/restore smoke tests, replay manifest verification, tamper checks, and secret scan gates pass. |
 | 17 Evaluation/audits | security review, math integrity review, and evaluation suite exist. |
+| 18 GA proof-kernel vertical slices | ResearchCampaign routes, proof-kernel replay manifest gate, 8-candidate artifacts, statement-drift/cheat rejection, exact refutation, snapshot restore/replay, and Pi campaign tool tests pass. |
 
 ## Security Acceptance
 
@@ -56,3 +57,15 @@
 | Literature support requires exact artifact-grounded citation | literature/gate tests require quoted statements present in source artifacts. |
 | Failed routes preserved | workstream/evidence tests. |
 | Paper wording cannot overclaim | paper check tests require block-bound margin provenance and reject theorem-like unsupported syntax. |
+| GA proof promotion is replay-bound | Phase 18 proof-kernel gate tests require passed final replay manifest for the same claim and reject fake metadata, statement drift, `sorry`, and `axiom`. |
+
+## GA V3 Vertical-Slice Coverage
+
+| Slice | Current Evidence | Status |
+| --- | --- | --- |
+| Trivial formal proof | `phase18-ga-campaign-vertical-slice.test.mjs` runs `Nat.add_zero` through campaign, 8 candidates, clean replay, and promotion. | Covered for the implemented elementary slice. |
+| Statement drift and cheat rejection | `phase18-ga-proof-kernel-gates.test.mjs` rejects drift, fake metadata, `sorry`, and `axiom`. | Covered for current static checks. |
+| Refutation path | `phase18-ga-refutation-path.test.mjs` records exact `n=0` counterexample for `n + 1 = n`. | Covered for the implemented Nat false theorem slice. |
+| Snapshot restore plus proof replay | `phase18-ga-snapshot-replay.test.mjs` restores a snapshot and reruns campaign replay. | Covered for campaign proof replay. |
+| General theorem synthesis | No broad proof planner or Lean project generator beyond the Phase 18 slices. | Deferred. |
+| Production Pi runtime registration | Extension descriptors and tool mappings exist; installed runtime API registration is not validated. | Deferred. |

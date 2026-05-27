@@ -22,6 +22,7 @@ The repository has completed:
 - Phase 15 TUI dashboard;
 - Phase 16 snapshot and replay;
 - Phase 17 evaluation, security, and mathematical-integrity audit;
+- Phase 18 GA proof-kernel vertical slices;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -30,7 +31,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete. Final root validation is recorded in `REVIEW.md`.
+Phase 0-17 Research Alpha implementation is complete, and Phase 18 adds native GA proof-kernel vertical slices. Final validation evidence is recorded in `REVIEW.md`.
 
 ## Authoritative Files
 
@@ -49,10 +50,10 @@ Phase 0-17 Research Alpha implementation is complete. Final root validation is r
 Next correct action:
 
 ```text
-/goal Start Research Beta planning for real MathProve/Lean kernel integration, Pi runtime registration, TriviumDB native evaluation, and runner re-execution replay.
+/goal Start the next generalization phase for generic proof planning, real MathProve execution, Pi runtime registration, TriviumDB native evaluation, and runner re-execution replay.
 ```
 
-Do not start Research Beta implementation without opening a new explicit goal. Research Alpha validation evidence is recorded in `REVIEW.md`.
+Do not start generalization implementation without opening a new explicit goal. Research Alpha and Phase 18 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -170,6 +171,17 @@ Apply it as follows:
 - Kept reviewer approval, agent consensus, summary-only literature, float-only computation, failed runner output, and unreplayable runner output out of privileged claim states.
 - Updated `SECURITY_REVIEW.md` and `MATH_INTEGRITY_REVIEW.md` with inspected files, findings, residual risk, and validation commands.
 - Preserved `docs/progress/research-alpha-retrospective.md` as the handoff summary for the completed Research Alpha slice.
+
+## Phase 18 Completion Notes
+
+- Added native proof-kernel modules under `services/comathd/src/proof-kernel` for campaign ticks, candidate ensembles, Lean project generation, static cheat scanning, statement equivalence, dependency closure, axiom profile, and clean replay.
+- Added service-owned campaign routes for start, status, next-actions, tick, final-audit, replay, pause, and resume.
+- Hardened `formally_checked` so a passed proof-kernel `final_replay_manifest.json` for the same claim is required.
+- Added a positive `Nat.add_zero` campaign vertical slice with 8 candidate artifacts and gate-mediated formal promotion.
+- Added negative coverage for fake formal metadata, static Lean cheats, statement drift, and high-scoring drifted candidates.
+- Added exact counterexample refutation for `n + 1 = n` and snapshot restore followed by proof replay.
+- Added Pi `/cm:research`, `/cm:campaign`, and campaign tool descriptors that call `comathd` without direct `.comath/` writes.
+- Remaining generalization work: broader proof planning, real MathProve execution, production Pi registration, native TriviumDB target validation, generic runner re-execution, richer statement equivalence, and a real persistent child-agent runner.
 
 ## Verification To Run At Phase Boundary
 

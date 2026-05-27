@@ -127,6 +127,7 @@ Remaining security requirements:
 - Secret scanning: `services/comathd/src/security/secret-scan.ts`.
 - Runner envelopes: `services/comathd/src/verification/runner-contracts.ts`, `python/exact_compute.py`, `python/counterexample_search.py`.
 - Claim promotion gate: `services/comathd/src/verification/gate.ts`.
+- Native proof-kernel campaign and Lean replay: `services/comathd/src/proof-kernel/`.
 - Pi extension boundary: `extensions/comath-pi/src/`.
 - Native dependency boundary: `services/comathd/src/memory/trivium-*.ts`.
 - Evaluation coverage: `tests/evaluation/phase17-integrity-evaluation.test.mjs`.
@@ -142,6 +143,8 @@ Remaining security requirements:
 7. **TriviumDB remains optional.** No ordinary dependency or eager native import exists; native loading stays behind capability probing and adapter boundaries.
 8. **Replay integrity checks include internal run hashes.** Snapshot verification validates replay manifest `runs_sha256` values so hand-edited replay metadata fails closed.
 9. **Snapshot/replay are exposed only through `comathd`.** HTTP routes now cover snapshot export, verify, restore, and replay-manifest verification; Pi extension entries are descriptors/commands only and do not read or write `.comath/` directly.
+10. **Phase 18 proof-kernel replay remains service-owned.** Campaign routes, candidate artifacts, Lean replay outputs, and counterexample evidence write only under path-policy-controlled `.comath/` directories; Pi campaign tools call `comathd` and do not mutate trusted files directly.
+11. **Formal promotion requires replay evidence.** The gate rejects preloaded kernel metadata unless the requested artifacts include a passed proof-kernel `final_replay_manifest.json` for the same claim.
 
 ### Validation Commands
 
@@ -167,10 +170,20 @@ Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state remained after validation.
 ```
 
+Phase 18 targeted validation added after the Research Alpha audit:
+
+```text
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; includes proof-kernel gate, GA campaign, refutation, and snapshot replay tests.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; includes Pi research/campaign command and tool descriptor tests.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
-- Snapshot/replay verifies deterministic envelopes and stale outputs, but does not re-execute runner commands.
+- Snapshot/replay verifies deterministic envelopes and stale outputs, and Phase 18 reruns the campaign Lean proof replay after restore. Generic computation runner re-execution remains deferred.
 - `comathd` still lacks lock/session semantics for multi-process writers; current tests exercise single-process Research Alpha behavior.
 - Production Pi runtime permissions must be revalidated before enabling installed runtime registration.

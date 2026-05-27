@@ -6,6 +6,8 @@ Date: 2026-05-25
 
 This retrospective summarizes the Phase 0-17 Research Alpha implementation of CoMath Pi Lab. It is an engineering and audit record, not a claim of mathematical discovery or proof capability.
 
+Postscript: Phase 18, completed after this retrospective, adds native CoMath proof-kernel GA vertical slices. The retrospective below remains the Phase 0-17 record; current status and Phase 18 evidence are tracked in `REVIEW.md`, `TODO.md`, and `docs/progress/design-handoff.md`.
+
 ## Completed Capabilities
 
 - Repository bootstrap, canonical development plan, runbook, agent model, risk register, and acceptance matrix.
@@ -54,7 +56,7 @@ Final recorded validation on 2026-05-25 passed build, typecheck, root test, and 
 
 ## Residual Risks
 
-- Real MathProve/Lean kernel execution remains deferred; current MathProve bridge is a fail-closed mock.
+- As of Phase 18, native Lean proof-kernel replay exists for bounded GA vertical slices. Generic proof planning and real MathProve execution remain deferred; the current MathProve bridge is still a fail-closed mock.
 - Pi runtime registration is still descriptor/thin-client level and must be revalidated against the installed Pi API before production use.
 - Secret scanning is pattern-based and conservative. It is a fail-closed Research Alpha import/export gate, not a full DLP system.
 - Snapshot/replay records deterministic envelopes and verifies stale outputs, but does not re-execute runner commands.

@@ -241,13 +241,29 @@
 - [x] Add Research Alpha retrospective under `docs/progress/`.
 - [x] Record final root validation evidence and confirm no repository-root `.comath/` state remains.
 
+## Phase 18: GA Proof-Kernel Vertical Slices
+
+- [x] Add native `services/comathd/src/proof-kernel` campaign, ensemble, Lean replay, static audit, dependency closure, axiom profile, and statement-equivalence modules.
+- [x] Add service-owned `ResearchCampaign` routes for start, status, next-actions, tick, final-audit, replay, pause, and resume.
+- [x] Require `formally_checked` promotion to bind to a passed proof-kernel `final_replay_manifest.json` for the requested claim.
+- [x] Add a positive Lean vertical slice for `Nat.add_zero`: problem lock, 8 candidate manifests, candidate audit artifacts, final clean replay, gate promotion, and replay route.
+- [x] Add negative proof-kernel gates for fake/preloaded formal metadata, `sorry`/`axiom` static cheats, and statement drift.
+- [x] Add exact refutation path for `n + 1 = n` with `n=0` counterexample evidence and terminal `verified_counterexample` campaign state.
+- [x] Add snapshot restore then proof-kernel replay coverage for restored projects.
+- [x] Expose Pi extension `/cm:research`, `/cm:campaign`, and six campaign tool descriptors as thin `comathd` client calls.
+- [x] Persist candidate `dependency_delta.json`, `assumption_delta.json`, `replay_commands.json`, `failure_routes.json`, and `graph_patch.json` artifacts.
+- [x] Preserve the Pi extension boundary: no direct `.comath/` writes, no service-internal imports, mutating tools require confirmation.
+
 ## Known Deferred Items
 
-- [ ] Real MathProve/Lean execution, after the mock bridge is replaced by verified kernel/audit artifact checks.
+- [ ] Generic proof planning, stage gates, and Lean project generation beyond the implemented Phase 18 `Nat.add_zero` and `n + 1 = n` vertical slices.
+- [ ] Real MathProve execution beyond the fail-closed bridge mock and native CoMath proof-kernel slices.
+- [ ] Real agent runner/scheduler that launches and rate-limits persistent Pi/Codex child agents rather than only static definitions and service-owned campaign ticks.
 - [ ] Production Pi extension runtime registration, after official API assumptions are revalidated against the installed Pi version.
 - [ ] Dedicated service read routes for claim/evidence/gate listing so the dashboard no longer uses degraded paper-derived read models.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Runner re-execution replay under an OS/network sandbox with dependency/version checks.
+- [ ] Richer statement equivalence, Lean parser integration, and configurable trust profiles for broader mathematical domains.
 
 ## Design Documentation Goal
 

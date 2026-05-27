@@ -1,12 +1,12 @@
 # CoMath Pi Lab
 
-CoMath Pi Lab is a Pi-based, auditable, memory-native research workbench for mathematical projects. Pi is the interaction shell; `comathd` is the local single-write service; MathProve acts as an evidence producer and gate runner; TriviumDB remains an optional embedded memory backend behind an adapter.
+CoMath Pi Lab is a Pi-based, auditable, memory-native research workbench for mathematical projects. Pi is the interaction shell; `comathd` is the local single-write service; the native proof-kernel owns GA proof replay evidence; MathProve remains an evidence producer and gate runner rather than a proof authority; TriviumDB remains an optional embedded memory backend behind an adapter.
 
-This repository is at Research Alpha after Phase 0-17 implementation. It provides a working local prototype for project initialization, claim registration, fail-closed promotion gates, artifacts/audit logs, in-memory research memory, workstreams, GraphPatch review, MathProve bridge mock, exact/numeric compute runners, literature condition checks, working paper provenance, braid-statistics domain scaffolding, read-only Pi extension renderers, and snapshot/replay verification.
+This repository is at Research Alpha plus a Phase 18 GA vertical-slice implementation. It provides a working local prototype for project initialization, claim registration, fail-closed promotion gates, artifacts/audit logs, in-memory research memory, workstreams, GraphPatch review, MathProve bridge mock, exact/numeric compute runners, literature condition checks, working paper provenance, braid-statistics domain scaffolding, read-only Pi extension renderers, snapshot/replay verification, and service-owned ResearchCampaign proof-kernel routes.
 
-It is not yet Research Beta or production. Real Lean/MathProve kernel execution, production Pi runtime registration, native TriviumDB performance validation, full DLP-grade secret scanning, and runner re-execution replay remain deferred.
+The Phase 18 proof-kernel slice can lock and replay the elementary Lean theorem `n + 0 = n`, reject statement drift and cheat constructs, preserve 8 candidate audit artifacts, refute `n + 1 = n` by exact counterexample, expose Pi campaign tools as thin `comathd` clients, and replay after snapshot restore. It is still not a production arbitrary theorem prover. Generic proof planning beyond the implemented vertical slices, real MathProve execution, production Pi runtime registration, native TriviumDB performance validation, full DLP-grade secret scanning, and runner re-execution replay remain deferred.
 
-## Research Alpha Runtime Baseline
+## Runtime Baseline
 
 - Node.js: `>=22.19.0`
 - Package manager: `pnpm@11.3.0` via Corepack
@@ -15,6 +15,12 @@ It is not yet Research Beta or production. Real Lean/MathProve kernel execution,
   - `corepack pnpm build`
   - `corepack pnpm typecheck`
   - `corepack pnpm test`
+
+## Phase 18 GA Evidence
+
+- `corepack pnpm --filter @comath/comathd test` includes proof-kernel gate, campaign, refutation, and snapshot replay tests.
+- `corepack pnpm --filter @comath/pi-extension test` includes research/campaign command and tool descriptor tests.
+- The proof authority is the service-owned replay artifact path under `services/comathd/src/proof-kernel`; Pi and MathProve do not promote claims by themselves.
 
 ## Non-Negotiable Invariants
 

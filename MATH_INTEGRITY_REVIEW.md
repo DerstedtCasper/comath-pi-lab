@@ -69,6 +69,7 @@ Remaining mathematical work:
 - Snapshot/replay stale-output checks: `services/comathd/src/artifacts/replay.ts`, `services/comathd/src/artifacts/snapshots.ts`.
 - Braid statistics domain pack: `services/comathd/src/domain/braid-statistics/`, `python/braid/check_braid.py`.
 - Phase 17 evaluation: `tests/evaluation/phase17-integrity-evaluation.test.mjs`.
+- Phase 18 native proof-kernel slice: `services/comathd/src/proof-kernel/`, `services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs`, `services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs`, `services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs`, and `services/comathd/tests/integration/phase18-ga-snapshot-replay.test.mjs`.
 
 ### Current Invariants
 
@@ -77,7 +78,7 @@ Remaining mathematical work:
 - `symbolically_checked` requires symbolic evidence, a successful bound runner output artifact with `ok=true`, `supports_status=symbolically_checked`, `exactness=exact_symbolic`, no runner vetoes, and trusted `runner.completed` / `runner.failed` audit provenance; numeric/search evidence, forged runner reports, and failed symbolic runs are rejected for symbolic promotion.
 - `computationally_supported` requires computation or counterexample evidence, a successful bound computation runner output artifact, and trusted runner audit provenance; failed computation/counterexample runs remain evidence records but cannot promote claims.
 - `literature_supported` requires literature evidence, exact literature artifacts, quoted statement grounding inside the source artifact, and a successful citation-condition match.
-- `formally_checked` remains blocked unless Lean evidence, proof artifacts, kernel metadata, dependency closure, and audit pass are present.
+- `formally_checked` remains blocked unless Lean evidence, proof artifacts, kernel metadata, dependency closure, audit pass, and a passed proof-kernel final replay manifest for the same claim are present.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -101,10 +102,20 @@ Remaining mathematical work:
 - dashboard read-only boundary;
 - in-memory retrieval fixture top-hit and context-pack behavior.
 
+Phase 18 adds coverage for:
+
+- a native proof-kernel ResearchCampaign that promotes the locked `Nat.add_zero` claim only after final clean Lean replay;
+- rejection of fake formal metadata when no proof-kernel replay manifest exists;
+- static cheat rejection for `sorry` and `axiom`;
+- statement-drift rejection before candidate score ranking;
+- preservation of 8 candidate manifests and candidate audit artifacts;
+- exact counterexample refutation of `n + 1 = n` at `n=0`;
+- snapshot restore followed by fresh campaign proof replay.
+
 ### Residual Risks
 
-- Real Lean kernel checking is not implemented; `formally_checked` remains a guarded future state rather than an achieved capability.
-- MathProve bridge output is still a fail-closed mock and should not be interpreted as proof search performance.
+- Real Lean kernel checking is implemented for the Phase 18 `Nat.add_zero` vertical slice and its clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
+- MathProve bridge output is still a fail-closed mock and should not be interpreted as proof search performance or proof authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
-- Snapshot replay records reproducibility metadata and stale-output checks, but does not yet rerun computations.
+- Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, but generic computation runner re-execution remains deferred.
 - Braid domain scripts provide exact/combinatorial evidence and risk flags; they do not prove physical interpretations or category-level equivalences.
