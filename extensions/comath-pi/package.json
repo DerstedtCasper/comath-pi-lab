@@ -1,13 +1,34 @@
 {
   "name": "@comath/pi-extension",
   "version": "0.0.0",
-  "private": true,
+  "private": false,
+  "description": "CoMath Pi Lab runtime extension for bounded formal research campaign control.",
+  "license": "UNLICENSED",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "runtime_policy": {
+      "registration_export": "runtime_registration",
+      "global_rpm": 4
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "corepack pnpm build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-research-campaign-tools.test.mjs && node tests/phase22-research-loop.test.mjs"
+    "test": "corepack pnpm build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-research-campaign-tools.test.mjs && node tests/phase22-research-loop.test.mjs && node tests/phase26-pi-runtime-registration.test.mjs"
   }
 }

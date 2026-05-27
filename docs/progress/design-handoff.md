@@ -30,6 +30,7 @@ The repository has completed:
 - Phase 23 proof-kernel theorem-family registry;
 - Phase 24 runner re-execution replay;
 - Phase 25 real MathProve external evidence-runner bridge;
+- Phase 26 Pi runtime registration against installed Pi 0.75.5 loader behavior;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -38,7 +39,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, and Phase 25 adds a controlled external MathProve evidence-runner bridge. Phase 18-25 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, and Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, and installed-loader smoke. Phase 18-26 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -57,10 +58,10 @@ Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA pr
 Next correct action:
 
 ```text
-/goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, Pi runtime registration, TriviumDB native evaluation, stronger runner replay sandboxing, and persistent child-agent scheduling.
+/goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, and persistent child-agent scheduling.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-25 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-26 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -189,7 +190,7 @@ Apply it as follows:
 - Added negative coverage for fake formal metadata, static Lean cheats, statement drift, and high-scoring drifted candidates.
 - Added exact counterexample refutation for `n + 1 = n` and snapshot restore followed by proof replay.
 - Added Pi `/cm:research`, `/cm:campaign`, and campaign tool descriptors that call `comathd` without direct `.comath/` writes.
-- Remaining generalization work: broader proof planning, broad MathProve proof search/final-audit semantics, production Pi registration, native TriviumDB target validation, stronger OS/network runner replay sandboxing, richer statement equivalence, and a real persistent child-agent runner.
+- Remaining generalization work: broader proof planning, broad MathProve proof search/final-audit semantics, full interactive Pi/comathd install-session e2e, native TriviumDB target validation, stronger OS/network runner replay sandboxing, richer statement equivalence, and a real persistent child-agent runner.
 
 ## Phase 19 Completion Notes
 
@@ -224,7 +225,7 @@ Apply it as follows:
 - Added scoped campaign-loop capability checks for project root, actor, token presence, and tick budget.
 - Added `extensions/comath-pi/tests/phase22-research-loop.test.mjs`.
 - Kept proof authority and trusted state mutation in `comathd`; the loop starts and ticks campaigns through service routes and returns the service-backed dashboard.
-- Production Pi runtime registration and a real persistent child-agent scheduler remain deferred.
+- Full interactive Pi/comathd install-session e2e and a real persistent child-agent scheduler remain deferred.
 
 ## Phase 23 Completion Notes
 
@@ -233,7 +234,7 @@ Apply it as follows:
 - Added `services/comathd/tests/integration/phase23-ga-theorem-family-generalization.test.mjs` for the `n * 0 = 0` proof campaign and replay route.
 - Added `services/comathd/tests/integration/phase23-ga-integrity-boundaries.test.mjs` for family/proposition mismatch blocking, stale ensemble prevention, and completed-refutation replay immutability.
 - Final replay manifests now include theorem family, canonical proposition, normalized statement, primary dependency, and locked statement hash; promotion requires replay hash binding to the promoted claim.
-- Broad theorem synthesis, broad MathProve proof search/final-audit semantics, production Pi runtime registration, native TriviumDB validation, and stronger runner replay sandboxing remain deferred.
+- Broad theorem synthesis, broad MathProve proof search/final-audit semantics, full interactive Pi/comathd install-session e2e, native TriviumDB validation, and stronger runner replay sandboxing remain deferred.
 
 ## Phase 24 Completion Notes
 
@@ -253,6 +254,15 @@ Apply it as follows:
 - Missing external runner and statement-hash mismatch paths are archived as fail-closed bridge reports rather than unhandled errors.
 - `promoteClaimWithMathProveBridge(..., { backend: "external" })` feeds external vetoes into the ordinary gate; an external `ok=true` runner result still cannot promote `formally_checked` without CoMath proof-kernel replay evidence.
 - Added `services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs` and `mathprove_external_evidence_runner` status capability.
+
+## Phase 26 Completion Notes
+
+- Added `extensions/comath-pi/src/runtime-registration.ts` as a CoMath runtime-registration contract for package metadata, `global_rpm=4`, command/tool policy, `comathd_only` trusted-state access, and no Pi proof authority.
+- Updated `@comath/pi-extension` package metadata so installed Pi 0.75.5 sees `pi.extensions` as `["./dist/index.js"]`; CoMath-specific metadata lives under `pi.runtime_policy` and the named `runtime_registration` export.
+- Added a default export runtime factory that registers only currently executable research/campaign tools through Pi while leaving descriptor-only tools out of the production runtime factory.
+- Kept `confirmation_id` host-injected on the Pi runtime path: mutating runtime tools prompt through `ctx.ui.confirm()` and do not expose `confirmation_id` as a model-supplied parameter.
+- Added `extensions/comath-pi/tests/phase26-pi-runtime-registration.test.mjs` and `pi_runtime_registration_v0755` status capability.
+- Remaining Pi hardening: full interactive Pi/comathd install-session e2e, richer runtime permission UX, and persistent child-agent scheduling.
 
 ## Verification To Run At Phase Boundary
 

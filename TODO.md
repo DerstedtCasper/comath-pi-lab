@@ -283,7 +283,7 @@
 - [x] Add a scoped campaign-loop capability envelope so unattended loop execution is limited by project root, actor, and tick budget.
 - [x] Add `runResearchCampaignLoop()` to start a service-owned campaign, advance bounded ticks through `comathd`, and return a dashboard snapshot.
 - [x] Add Phase 22 Pi extension coverage for start/tick/dashboard flow, capability fail-closed behavior, and no direct trusted-state mutation from the extension.
-- [x] Keep production Pi runtime registration and real child-agent scheduling deferred; the loop is a tested thin-client product path over `comathd`.
+- [x] Keep runtime registration outside the Phase 22 loop scope and real child-agent scheduling deferred; the loop is a tested thin-client product path over `comathd`. Runtime registration is superseded by Phase 26.
 
 ## Phase 23: Proof-Kernel Theorem-Family Registry
 
@@ -315,6 +315,16 @@
 - [x] Add Phase 25 tests for missing runner, real external runner smoke, statement-hash mismatch, runner metadata hashes, and promotion-gate non-authority.
 - [x] Wire Phase 25 coverage into the default `@comath/comathd` test chain and smoke status capabilities.
 
+## Phase 26: Pi Runtime Registration
+
+- [x] Add a Pi 0.75.5-compatible package manifest with `pi.extensions` as a path array and CoMath runtime policy metadata under `pi.runtime_policy`.
+- [x] Export a CoMath `runtime_registration` contract that records `global_rpm=4`, `comathd_only` trusted-state access, no Pi proof authority, goal-compatible research commands, and host-side mutating-tool confirmation requirements.
+- [x] Register the executable research/campaign tools through the Pi default export while leaving descriptor-only tools out of the production runtime factory until they have executable handlers.
+- [x] Keep `confirmation_id` host-injected in the Pi runtime path: mutating runtime tools prompt through `ctx.ui.confirm()` and do not expose `confirmation_id` as a model-supplied parameter.
+- [x] Add Phase 26 tests for package manifest shape, runtime registration validation, dynamic entrypoint import, fake Pi API registration, command dispatch, host-side confirmation, and mutating-tool execution gates.
+- [x] Smoke-test the built extension with the installed `@earendil-works/pi-coding-agent@0.75.5` extension loader.
+- [x] Wire Phase 26 coverage into the default `@comath/pi-extension` test chain and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -322,7 +332,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Broad proof planning and theorem synthesis beyond registered theorem families (`Nat.add_zero`, `Nat.mul_zero`) and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
 - [ ] Real agent runner/scheduler that launches and rate-limits persistent Pi/Codex child agents rather than only static definitions and service-owned campaign ticks.
-- [ ] Production Pi extension runtime registration, after official API assumptions are revalidated against the installed Pi version.
+- [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Stronger runner re-execution sandboxing: OS-level isolation, network-denial enforcement, dependency lock capture, and cross-machine replay validation beyond the Phase 24 service-owned re-execution checks.
 - [ ] Richer statement equivalence, Lean parser integration, and configurable trust profiles for broader mathematical domains.

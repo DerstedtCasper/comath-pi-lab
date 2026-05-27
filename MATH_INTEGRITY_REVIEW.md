@@ -175,10 +175,10 @@ Phase 25 adds coverage for:
 
 ### Residual Risks
 
-- Real Lean kernel checking is implemented for the registered Phase 18-25 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
+- Real Lean kernel checking is implemented for the registered Phase 18-26 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
 - MathProve now has both the Phase 9 fail-closed mock and the Phase 25 external `verify_sympy.py` evidence-runner bridge. Neither path should be interpreted as broad MathProve proof search, final-audit proof authority, or direct claim-status authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
 - Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, and Phase 24 reruns the implemented deterministic Python compute runners. Stronger OS/network sandboxing, dependency locks, cross-machine replay, and broader runner families remain unimplemented.
 - Braid domain scripts provide exact/combinatorial evidence and risk flags; they do not prove physical interpretations or category-level equivalences.
 - Phase 21 read models improve inspection fidelity but are not mathematical authorities; claim promotion remains gated by evidence, artifacts, and proof-kernel replay where applicable.
-- Phase 22 improves Pi-side orchestration, but the loop is not a proof authority and does not validate production Pi runtime registration or a real child-agent scheduler.
+- Phase 22 improves Pi-side orchestration, and Phase 26 validates Pi 0.75.5-compatible runtime registration. Neither Pi surface is proof authority, and a real child-agent scheduler plus full interactive Pi/comathd install-session e2e remain unimplemented.

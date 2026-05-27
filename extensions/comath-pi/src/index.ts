@@ -1,4 +1,5 @@
 import { listSubagentDefinitions, type SubagentDefinition } from "./subagents.js";
+import { createPiRuntimeRegistration } from "./runtime-registration.js";
 import {
   buildResearchCampaignLoopInput,
   issueCampaignLoopCapability,
@@ -9,6 +10,7 @@ export * from "./subagents.js";
 export * from "./widgets.js";
 export * from "./renderers.js";
 export * from "./research-loop.js";
+export * from "./runtime-registration.js";
 export * from "./tools/review.js";
 
 export type ParsedComathCommand = {
@@ -30,6 +32,47 @@ export type ComathClientOptions = {
 export type ComathClient = {
   get(path: string): Promise<any>;
   post(path: string, body: unknown): Promise<any>;
+};
+
+type PiExtensionApi = {
+  registerTool(tool: {
+    name: string;
+    label: string;
+    description: string;
+    parameters: Record<string, unknown>;
+    executionMode?: "sequential" | "parallel";
+    execute(
+      toolCallId: string,
+      params: Record<string, unknown>,
+      signal?: AbortSignal,
+      onUpdate?: unknown,
+      ctx?: unknown
+    ): Promise<{
+      content: Array<{ type: "text"; text: string }>;
+      details: unknown;
+      isError?: boolean;
+    }>;
+  }): void;
+  registerCommand(name: string, options: {
+    description?: string;
+    handler(args: string, ctx: unknown): Promise<void> | void;
+  }): void;
+  on(event: "resources_discover", handler: (event: unknown, ctx: unknown) => unknown): void;
+};
+
+type PiRuntimeContext = {
+  ui?: {
+    confirm?(title: string, body?: string): Promise<boolean> | boolean;
+    notify?(message: string, level?: "info" | "warning" | "error"): Promise<void> | void;
+  };
+};
+
+type RegisterComathPiRuntimeOptions = {
+  client?: ComathClient;
+  actor?: string;
+  project_root?: string;
+  project_name?: string;
+  max_ticks?: number;
 };
 
 export type ToolDescriptor = {
@@ -77,6 +120,41 @@ export type DashboardInput = {
   }>;
   blockers?: string[];
 };
+
+const DEFAULT_COMATHD_BASE_URL = "http://127.0.0.1:3867";
+
+const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
+  "comath.research.startCampaign",
+  "comath.research.runCampaignLoop",
+  "comath.campaign.status",
+  "comath.campaign.tick",
+  "comath.campaign.nextActions",
+  "comath.campaign.finalAudit",
+  "comath.campaign.replay"
+]);
+
+const COMATH_EXTENSION_COMMANDS = [
+  "/cm:init",
+  "/cm:open",
+  "/cm:status",
+  "/cm:claim",
+  "/cm:evidence",
+  "/cm:graph",
+  "/cm:paper",
+  "/cm:research",
+  "/cm:campaign",
+  "/cm:audit",
+  "/cm:snapshot",
+  "/cm:replay",
+  "/cm:dashboard"
+];
+
+const PI_RUNTIME_COMMANDS = [
+  "/cm:research",
+  "/cm:campaign",
+  "/cm:audit",
+  "/cm:replay"
+];
 
 function splitCommand(input: string): string[] {
   const parts: string[] = [];
@@ -143,6 +221,7 @@ export function parseComathCommand(input: string): ParsedComathCommand | null {
     action === "paper" ||
     action === "snapshot" ||
     action === "replay" ||
+    action === "audit" ||
     action === "research" ||
     action === "campaign"
   ) {
@@ -232,7 +311,35 @@ function campaignPath(campaignId: string, suffix: string): string {
   return `/campaign/${encodeURIComponent(campaignId)}${suffix}`;
 }
 
+function withoutConfirmationSchema(schema: ToolDescriptor["input_schema"]): ToolDescriptor["input_schema"] {
+  if (!schema.required?.includes("confirmation_id") && !Object.hasOwn(schema.properties, "confirmation_id")) {
+    return schema;
+  }
+  const { confirmation_id: _confirmationId, ...properties } = schema.properties;
+  return {
+    ...schema,
+    required: schema.required?.filter((field) => field !== "confirmation_id"),
+    properties
+  };
+}
+
+function isMutatingTool(name: string): boolean {
+  return createComathTools().some((tool) => tool.name === name && tool.mutates);
+}
+
+function requireToolExecutionConfirmation(name: string, input: Record<string, unknown>): void {
+  if (!isMutatingTool(name)) {
+    return;
+  }
+  const confirmationId = readString(input, "confirmation_id", { optional: true });
+  if (!confirmationId) {
+    throw new Error(`confirmed mutation permission is required for ${name}`);
+  }
+}
+
 export async function executeComathTool(client: ComathClient, name: string, input: Record<string, unknown>): Promise<any> {
+  requireToolExecutionConfirmation(name, input);
+
   if (name === "comath.research.startCampaign") {
     return client.post("/campaign/start", {
       project_root: readString(input, "project_root"),
@@ -316,6 +423,39 @@ function objectSchema(required: string[], properties: Record<string, unknown>): 
     required,
     properties
   };
+}
+
+function requireConfirmationSchema(schema: ToolDescriptor["input_schema"]): ToolDescriptor["input_schema"] {
+  return {
+    ...schema,
+    required: [...new Set([...(schema.required ?? []), "confirmation_id"])],
+    properties: {
+      ...schema.properties,
+      confirmation_id: { type: "string" }
+    }
+  };
+}
+
+function objectParameterSchema(schema: ToolDescriptor["input_schema"]): Record<string, unknown> {
+  return {
+    type: "object",
+    required: schema.required ?? [],
+    properties: schema.properties,
+    additionalProperties: false
+  };
+}
+
+function piRuntimeParameterSchema(tool: ToolDescriptor): Record<string, unknown> {
+  return objectParameterSchema(tool.mutates ? withoutConfirmationSchema(tool.input_schema) : tool.input_schema);
+}
+
+function toolLabel(name: string): string {
+  return name
+    .split(".")
+    .slice(1)
+    .join(" ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export function createComathTools(): ToolDescriptor[] {
@@ -574,7 +714,14 @@ export function createComathTools(): ToolDescriptor[] {
         manifest_path: stringProp
       })
     }
-  ];
+  ].map((tool) =>
+    tool.mutates
+      ? {
+          ...tool,
+          input_schema: requireConfirmationSchema(tool.input_schema)
+        }
+      : tool
+  );
 }
 
 export function requireMutationConfirmation(request: PermissionRequest): PermissionDecision {
@@ -631,6 +778,246 @@ export async function runComathResearchCommand(
   );
 }
 
+function optionValue(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index === -1) {
+    return undefined;
+  }
+  const value = args[index + 1];
+  return value && !value.startsWith("--") ? value : undefined;
+}
+
+function numberOptionValue(args: string[], name: string): number | undefined {
+  const value = optionValue(args, name);
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    return parsed;
+  }
+  throw new Error(`${name} must be a non-negative number`);
+}
+
+function firstPositional(args: string[]): string | undefined {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg.startsWith("--")) {
+      const next = args[index + 1];
+      if (next && !next.startsWith("--")) {
+        index += 1;
+      }
+      continue;
+    }
+    return arg;
+  }
+  return undefined;
+}
+
+function runtimeCtx(ctx: unknown): PiRuntimeContext {
+  return ctx && typeof ctx === "object" ? ctx as PiRuntimeContext : {};
+}
+
+async function requirePiHostConfirmation(
+  ctx: unknown,
+  target: string,
+  params: Record<string, unknown>
+): Promise<string> {
+  const confirm = runtimeCtx(ctx).ui?.confirm;
+  if (!confirm) {
+    throw new Error(`Pi host confirmation is required for ${target}`);
+  }
+  const allowed = await confirm(
+    "Confirm CoMath mutation",
+    `Allow ${target} to mutate trusted CoMath state through comathd? ${JSON.stringify(params)}`
+  );
+  if (allowed !== true) {
+    throw new Error(`mutation rejected by Pi host confirmation for ${target}`);
+  }
+  return `pi-host-confirmed:${target}`;
+}
+
+function actorFrom(options: RegisterComathPiRuntimeOptions, args: string[]): string {
+  return optionValue(args, "--actor") ?? options.actor ?? "pi-runtime";
+}
+
+function projectRootFrom(options: RegisterComathPiRuntimeOptions, args: string[]): string {
+  const projectRoot = optionValue(args, "--project-root") ?? options.project_root;
+  if (!projectRoot) {
+    throw new Error("--project-root is required");
+  }
+  return projectRoot;
+}
+
+async function notifyRuntimeResult(ctx: unknown, result: unknown): Promise<void> {
+  const notify = runtimeCtx(ctx).ui?.notify;
+  if (notify) {
+    await notify(JSON.stringify(result), "info");
+  }
+}
+
+async function executeRuntimeToolWithHostConfirmation(
+  client: ComathClient,
+  tool: ToolDescriptor,
+  params: Record<string, unknown>,
+  ctx?: unknown
+): Promise<any> {
+  const sanitized = { ...params };
+  delete sanitized.confirmation_id;
+  const executionInput = tool.mutates
+    ? {
+        ...sanitized,
+        confirmation_id: await requirePiHostConfirmation(ctx, tool.name, sanitized)
+      }
+    : sanitized;
+  return executeComathTool(client, tool.name, executionInput);
+}
+
+async function handleCampaignCommand(
+  client: ComathClient,
+  options: RegisterComathPiRuntimeOptions,
+  args: string,
+  ctx: unknown
+): Promise<void> {
+  const parsed = parseComathCommand(`/cm:campaign ${args}`.trim());
+  if (!parsed || parsed.action !== "campaign") {
+    throw new Error("campaign command is required");
+  }
+  const subcommand = parsed.subcommand ?? "status";
+  const campaignId = optionValue(parsed.args, "--campaign-id") ?? firstPositional(parsed.args);
+  if (!campaignId) {
+    throw new Error("campaign_id is required");
+  }
+  const base = {
+    project_root: projectRootFrom(options, parsed.args),
+    campaign_id: campaignId
+  };
+  if (subcommand === "status") {
+    await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.campaign.status", base));
+    return;
+  }
+  if (subcommand === "tick") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.campaign.tick");
+    if (!tool) {
+      throw new Error("campaign tick tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          ...base,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "next-actions") {
+    await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.campaign.nextActions", base));
+    return;
+  }
+  throw new Error(`unsupported campaign command: ${subcommand}`);
+}
+
+async function handleResearchCommand(
+  client: ComathClient,
+  options: RegisterComathPiRuntimeOptions,
+  args: string,
+  ctx: unknown
+): Promise<void> {
+  const parsed = parseComathCommand(`/cm:research ${args}`.trim());
+  if (!parsed || parsed.action !== "research") {
+    throw new Error("research command is required");
+  }
+  const projectRoot = projectRootFrom(options, parsed.args);
+  const actor = actorFrom(options, parsed.args);
+  const confirmationId = await requirePiHostConfirmation(ctx, "/cm:research", {
+    project_root: projectRoot,
+    actor,
+    args: parsed.args,
+    subcommand: parsed.subcommand
+  });
+  await notifyRuntimeResult(
+    ctx,
+    await runComathResearchCommand(client, `/cm:research ${args}`.trim(), {
+      project_root: projectRoot,
+      project_name: optionValue(parsed.args, "--project-name") ?? options.project_name,
+      actor,
+      confirmation_id: confirmationId,
+      max_ticks: numberOptionValue(parsed.args, "--max-ticks") ?? options.max_ticks
+    })
+  );
+}
+
+async function handleAuditCommand(
+  client: ComathClient,
+  options: RegisterComathPiRuntimeOptions,
+  args: string,
+  ctx: unknown
+): Promise<void> {
+  const parsed = parseComathCommand(`/cm:audit ${args}`.trim());
+  if (!parsed || parsed.action !== "audit") {
+    throw new Error("audit command is required");
+  }
+  const campaignId = optionValue(parsed.args, "--campaign-id") ?? firstPositional(parsed.args);
+  if (!campaignId) {
+    throw new Error("campaign_id is required");
+  }
+  const tool = createComathTools().find((descriptor) => descriptor.name === "comath.campaign.finalAudit");
+  if (!tool) {
+    throw new Error("campaign final audit tool is not registered");
+  }
+  await notifyRuntimeResult(
+    ctx,
+    await executeRuntimeToolWithHostConfirmation(
+      client,
+      tool,
+      {
+        project_root: projectRootFrom(options, parsed.args),
+        campaign_id: campaignId,
+        actor: actorFrom(options, parsed.args)
+      },
+      ctx
+    )
+  );
+}
+
+async function handleReplayCommand(
+  client: ComathClient,
+  options: RegisterComathPiRuntimeOptions,
+  args: string,
+  ctx: unknown
+): Promise<void> {
+  const parsed = parseComathCommand(`/cm:replay ${args}`.trim());
+  if (!parsed || parsed.action !== "replay") {
+    throw new Error("replay command is required");
+  }
+  const campaignId = optionValue(parsed.args, "--campaign-id") ?? firstPositional(parsed.args);
+  if (!campaignId) {
+    throw new Error("campaign_id is required");
+  }
+  const tool = createComathTools().find((descriptor) => descriptor.name === "comath.campaign.replay");
+  if (!tool) {
+    throw new Error("campaign replay tool is not registered");
+  }
+  await notifyRuntimeResult(
+    ctx,
+    await executeRuntimeToolWithHostConfirmation(
+      client,
+      tool,
+      {
+        project_root: projectRootFrom(options, parsed.args),
+        campaign_id: campaignId,
+        actor: actorFrom(options, parsed.args)
+      },
+      ctx
+    )
+  );
+}
+
 export function discoverComathResources(input: {
   skills?: string[];
   prompts?: string[];
@@ -645,6 +1032,112 @@ export function discoverComathResources(input: {
     ...(input.subagents ?? []).map((name) => ({ uri: `.pi/agents/${name}.md`, kind: "subagent" as const })),
     ...(input.artifacts ?? []).map((name) => ({ uri: `artifacts/${name}`, kind: "artifact" as const }))
   ];
+}
+
+function defaultComathResources(subagents: SubagentDefinition[]): ComathResource[] {
+  return discoverComathResources({
+    skills: ["math-research", "mathprove-adapter"],
+    prompts: ["coordinator", "reviewer", "formalization", "parallel-workstream"],
+    domainPacks: ["braid-statistics"],
+    subagents: subagents.map((definition) => definition.id),
+    artifacts: ["snapshot-manifest", "replay-manifest"]
+  });
+}
+
+function defaultRuntimeRegistration(subagents: SubagentDefinition[]) {
+  return createPiRuntimeRegistration(
+    {
+      name: "coMath-pi-lab",
+      commands: PI_RUNTIME_COMMANDS,
+      tools: createComathTools(),
+      resources: defaultComathResources(subagents),
+      subagents
+    },
+    {
+      package_name: "@comath/pi-extension",
+      package_version: "0.0.0",
+      entrypoint: "./dist/index.js",
+      detected_pi_runtime: {
+        source: "local_probe",
+        version: "unknown",
+        confidence: "unverified"
+      },
+      rate_limit: {
+        global_rpm: 4
+      }
+    }
+  );
+}
+
+export const runtime_registration = defaultRuntimeRegistration(listSubagentDefinitions());
+
+export function createDefaultComathClient(): ComathClient {
+  return createComathClient({
+    baseUrl: globalThis.process?.env?.COMATHD_BASE_URL ?? DEFAULT_COMATHD_BASE_URL
+  });
+}
+
+export default function registerComathPiRuntime(pi: PiExtensionApi, options: RegisterComathPiRuntimeOptions = {}): void {
+  const client = options.client ?? createDefaultComathClient();
+
+  for (const tool of createComathTools().filter((descriptor) => PI_RUNTIME_EXECUTABLE_TOOL_NAMES.has(descriptor.name))) {
+    pi.registerTool({
+      name: tool.name,
+      label: toolLabel(tool.name),
+      description: tool.description,
+      parameters: piRuntimeParameterSchema(tool),
+      executionMode: tool.mutates ? "sequential" : "parallel",
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+        try {
+          const result = await executeRuntimeToolWithHostConfirmation(client, tool, params, ctx);
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            details: result
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return {
+            content: [{ type: "text", text: message }],
+            details: { error: message },
+            isError: true
+          };
+        }
+      }
+    });
+  }
+
+  pi.registerCommand("cm:research", {
+    description: "Start or continue a bounded CoMath ResearchCampaign through comathd.",
+    handler: async (args, ctx) => {
+      await handleResearchCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.registerCommand("cm:campaign", {
+    description: "Inspect or tick a CoMath ResearchCampaign through comathd.",
+    handler: async (args, ctx) => {
+      await handleCampaignCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.registerCommand("cm:audit", {
+    description: "Run CoMath final audit routes through comathd.",
+    handler: async (args, ctx) => {
+      await handleAuditCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.registerCommand("cm:replay", {
+    description: "Run CoMath replay routes through comathd.",
+    handler: async (args, ctx) => {
+      await handleReplayCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.on("resources_discover", () => ({
+    skillPaths: ["skills"],
+    promptPaths: ["prompts"]
+  }));
 }
 
 export function renderTextDashboard(input: DashboardInput): string {
@@ -673,31 +1166,14 @@ export function renderTextDashboard(input: DashboardInput): string {
 
 export function createComathPiExtension(options: { client: ReturnType<typeof createComathClient> }) {
   const subagents: SubagentDefinition[] = listSubagentDefinitions();
+  const resources = defaultComathResources(subagents);
   return {
     name: "coMath-pi-lab",
-    commands: [
-      "/cm:init",
-      "/cm:open",
-      "/cm:status",
-      "/cm:claim",
-      "/cm:evidence",
-      "/cm:graph",
-      "/cm:paper",
-      "/cm:research",
-      "/cm:campaign",
-      "/cm:snapshot",
-      "/cm:replay",
-      "/cm:dashboard"
-    ],
+    commands: COMATH_EXTENSION_COMMANDS,
     tools: createComathTools(),
-    resources: discoverComathResources({
-      skills: ["math-research", "mathprove-adapter"],
-      prompts: ["coordinator", "reviewer", "formalization", "parallel-workstream"],
-      domainPacks: ["braid-statistics"],
-      subagents: subagents.map((definition) => definition.id),
-      artifacts: ["snapshot-manifest", "replay-manifest"]
-    }),
+    resources,
     subagents,
-    client: options.client
+    client: options.client,
+    runtime_registration: defaultRuntimeRegistration(subagents)
   };
 }

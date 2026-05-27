@@ -33,7 +33,11 @@ for (const [name, mutates, required] of expectedPaperTools) {
   assert.ok(tool, `${name} is registered`);
   assert.equal(tool.mutates, mutates, `${name} mutation flag`);
   assert.equal(tool.input_schema.type, "object", `${name} object schema`);
-  assert.deepEqual(tool.input_schema.required, required, `${name} required fields`);
+  assert.deepEqual(
+    tool.input_schema.required,
+    mutates ? [...required, "confirmation_id"] : required,
+    `${name} required fields`
+  );
 
   const permission = requireMutationConfirmation({ kind: "tool", name, mutates });
   assert.equal(permission.confirmation_required, mutates, `${name} confirmation flag`);

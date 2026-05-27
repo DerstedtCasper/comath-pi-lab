@@ -1078,6 +1078,82 @@ Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
 
+## Phase 26 Pi Runtime Registration Review Log
+
+### Scope
+
+Added a Pi 0.75.5-compatible runtime registration path for `@comath/pi-extension`. Phase 26 upgrades the extension from descriptor/test-only metadata to an installed Pi loader-compatible package with a default export runtime factory, package manifest entrypoints, a structured `runtime_registration` contract, and a narrow executable runtime surface for the already implemented research/campaign vertical slices.
+
+This phase does not make a Pi session mathematical authority. Trusted state, proof authority, final audit, and global replay remain owned by `comathd`; MathProve remains a non-authoritative evidence runner.
+
+### TDD Evidence
+
+```text
+node extensions/comath-pi/tests/phase26-pi-runtime-registration.test.mjs
+Initial RED result: exit 1; Phase 26 runtime registration contract, package manifest, and default export runtime factory were missing.
+
+Review-fix RED result: exit 1; runtime schemas exposed model-supplied `confirmation_id`, runtime commands did not dispatch to `comathd`, runtime registration declared commands that the default export did not register, `/cm:audit final` was parsed as a campaign id, and `--flag value` arguments could be mistaken for missing positional campaign ids.
+
+node extensions/comath-pi/tests/phase26-pi-runtime-registration.test.mjs
+Result: exit 0; Phase 26 runtime registration tests passed after host-side confirmation injection, command dispatch, and registration drift guards were added.
+```
+
+### Changed Surfaces
+
+- Added `extensions/comath-pi/src/runtime-registration.ts` with `createPiRuntimeRegistration()` and `validatePiRuntimeRegistration()`.
+- Updated `extensions/comath-pi/package.json` so `@comath/pi-extension` is package-loadable through `main`, `exports`, `files`, and `pi.extensions`.
+- Added a default export runtime factory in `extensions/comath-pi/src/index.ts`.
+- Registered only executable runtime tools in the production Pi runtime factory: `comath.research.startCampaign`, `comath.research.runCampaignLoop`, `comath.campaign.status`, `comath.campaign.tick`, `comath.campaign.nextActions`, `comath.campaign.finalAudit`, and `comath.campaign.replay`.
+- Kept descriptor-only tools available through `createComathTools()` but unregistered from the production Pi runtime factory until executable handlers exist.
+- Added host-side confirmation gating for runtime mutating tools and commands. Model parameters cannot supply `confirmation_id`; the runtime strips it from Pi schemas and injects a host-generated confirmation only after `ctx.ui.confirm()` approves the mutation.
+- Added `extensions/comath-pi/tests/phase26-pi-runtime-registration.test.mjs` and wired it into the default `@comath/pi-extension` test chain.
+- Updated README, TODO, acceptance matrix, Pi runtime assumptions, risk, handoff, security, math-integrity, and smoke/status docs so Phase 26 is no longer described as deferred.
+
+### Boundary And Integrity Notes
+
+The Pi runtime package exposes a loader-compatible default export and a structured registration contract, but all trusted mutations still cross the `comathd` client boundary. The extension does not write `.comath/`, does not import service internals, and does not inspect Lean proof artifacts directly.
+
+The `runtime_registration` contract records `global_rpm=4`, `trusted_state_access=comathd_only`, `extension_writes_runtime_state=false`, and `pi_session_is_math_authority=false`. Mutating runtime tools are sequential, require Pi host-side confirmation, and delegate to `comathd` campaign routes.
+
+### Residual Risks
+
+- Full interactive Pi/comathd install-session e2e remains deferred beyond the installed-loader smoke.
+- Runtime permission UX is currently the minimal `ctx.ui.confirm()` path, not a richer permission policy UI.
+- Persistent child-agent scheduling remains deferred; `/cm:research` is a bounded campaign-loop client over `comathd`, not an always-on scheduler.
+- Broad proof planning/theorem synthesis beyond the registered elementary theorem families remains deferred.
+- Broad MathProve proof search/final-audit semantics remain deferred; MathProve evidence cannot set `formally_checked`.
+- Native TriviumDB performance/persistence validation, stronger OS/network sandboxing, dependency-lock capture, cross-machine replay, richer Lean parser/statement equivalence, and trust profiles remain global GA blockers.
+
+### Final Root Validation
+
+Fresh Phase 26 validation completed on 2026-05-27:
+
+```text
+pi --version
+Result: exit 0; installed Pi CLI reported 0.75.5.
+
+node --input-type=module -e "<installed @earendil-works/pi-coding-agent discoverAndLoadExtensions smoke>"
+Result: exit 0; installed Pi 0.75.5 loader returned errors=[], extensionCount=1, 7 executable research/campaign tools, and commands cm:audit, cm:campaign, cm:replay, cm:research.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed, including Phase 26 runtime registration, host-confirmation, command dispatch, and drift guards.
+
+corepack pnpm build
+Result: exit 0; root recursive build passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; Phase 0/design smoke, all workspace tests, Phase 26 Pi runtime registration tests, comathd Phase 0-25 tests, proof-kernel integrations, and Phase 17 integrity evaluation passed.
+
+git diff --check
+Result: exit 0; no whitespace errors found.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repository-root runtime state was left behind.
+```
+
 ## Phase 25 Real MathProve External Bridge Review Log
 
 ### Scope

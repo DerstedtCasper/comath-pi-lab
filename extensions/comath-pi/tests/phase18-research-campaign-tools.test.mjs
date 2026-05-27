@@ -31,7 +31,11 @@ for (const [name, mutates, required] of expectedCampaignTools) {
   const tool = byName.get(name);
   assert.ok(tool, `${name} is registered`);
   assert.equal(tool.mutates, mutates, `${name} mutation flag`);
-  assert.deepEqual(tool.input_schema.required, required, `${name} required fields`);
+  assert.deepEqual(
+    tool.input_schema.required,
+    mutates ? [...required, "confirmation_id"] : required,
+    `${name} required fields`
+  );
   const permission = requireMutationConfirmation({ kind: "tool", name, mutates });
   assert.equal(permission.confirmation_required, mutates, `${name} confirmation flag`);
   assert.equal(permission.allowed, !mutates, `${name} default allow flag`);
@@ -55,7 +59,8 @@ await executeComathTool(client, "comath.research.startCampaign", {
   user_goal: "Prove n + 0 = n",
   domain: "elementary",
   strict_mode: true,
-  actor: "phase18-pi"
+  actor: "phase18-pi",
+  confirmation_id: "CONF-START"
 });
 assert.deepEqual(calls.at(-1), {
   method: "POST",
@@ -80,7 +85,8 @@ assert.equal(calls.at(-1).path, "/campaign/CAM-0001/status?project_root=D%3A%2Fr
 await executeComathTool(client, "comath.campaign.tick", {
   project_root: "D:/research/project",
   campaign_id: "CAM-0001",
-  actor: "phase18-pi"
+  actor: "phase18-pi",
+  confirmation_id: "CONF-TICK"
 });
 assert.deepEqual(calls.at(-1), {
   method: "POST",
@@ -101,7 +107,8 @@ assert.equal(calls.at(-1).path, "/campaign/CAM-0001/next-actions?project_root=D%
 await executeComathTool(client, "comath.campaign.finalAudit", {
   project_root: "D:/research/project",
   campaign_id: "CAM-0001",
-  actor: "phase18-pi"
+  actor: "phase18-pi",
+  confirmation_id: "CONF-AUDIT"
 });
 assert.deepEqual(calls.at(-1), {
   method: "POST",
@@ -115,7 +122,8 @@ assert.deepEqual(calls.at(-1), {
 await executeComathTool(client, "comath.campaign.replay", {
   project_root: "D:/research/project",
   campaign_id: "CAM-0001",
-  actor: "phase18-pi"
+  actor: "phase18-pi",
+  confirmation_id: "CONF-REPLAY"
 });
 assert.deepEqual(calls.at(-1), {
   method: "POST",
@@ -127,8 +135,21 @@ assert.deepEqual(calls.at(-1), {
 });
 
 await assert.rejects(
-  () => executeComathTool(client, "comath.campaign.tick", { project_root: "D:/research/project" }),
+  () =>
+    executeComathTool(client, "comath.campaign.tick", {
+      project_root: "D:/research/project",
+      confirmation_id: "CONF-MISSING-CAMPAIGN"
+    }),
   /campaign_id is required/
+);
+await assert.rejects(
+  () =>
+    executeComathTool(client, "comath.campaign.tick", {
+      project_root: "D:/research/project",
+      campaign_id: "CAM-0001",
+      actor: "phase18-pi"
+    }),
+  /confirmed mutation permission is required/
 );
 await assert.rejects(() => executeComathTool(client, "comath.unknown", {}), /unsupported comath tool/);
 

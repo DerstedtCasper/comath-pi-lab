@@ -5,15 +5,15 @@
 
 ## 0. Design Status
 
-This document defines the complete target design and implementation goals. The current repository has implemented the Phase 0-17 Research Alpha slice plus the Phase 18 GA proof-kernel vertical slices; later generalization work remains explicitly out of scope until a new goal is opened.
+This document defines the complete target design and implementation goals. The current repository has implemented the Phase 0-17 Research Alpha slice plus Phase 18-26 GA vertical-slice hardening; later generalization work remains explicitly out of scope until a new goal is opened.
 
-Current repository state after Phase 18:
+Current repository state after Phase 26:
 
-- Repo bootstrap, contracts, service foundation, artifact/audit kernel, claim registry, fail-closed gate, in-memory memory adapter, workstreams, GraphPatch review, MathProve bridge mock, compute runners, literature condition checks, working paper, optional TriviumDB adapter boundary, braid-statistics domain pack, read-only dashboard, snapshot/replay, and Phase 17 audits are implemented and verified.
-- Native CoMath proof-kernel campaign routes, 8-candidate GA audit artifacts, clean Lean replay for the `Nat.add_zero` vertical slice, statement-drift/cheat rejection, exact `n + 1 = n` refutation, snapshot restore plus proof replay, and Pi research/campaign tools are implemented as Phase 18 vertical slices.
+- Repo bootstrap, contracts, service foundation, artifact/audit kernel, claim registry, fail-closed gate, in-memory memory adapter, workstreams, GraphPatch review, MathProve bridge mock, compute runners, literature condition checks, working paper, optional TriviumDB adapter boundary, braid-statistics domain pack, read-only dashboard, snapshot/replay, Phase 17 audits, deterministic runner re-execution, and the external MathProve evidence-runner bridge are implemented and verified.
+- Native CoMath proof-kernel campaign routes, 8-candidate GA audit artifacts, clean Lean replay for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices, statement-drift/cheat rejection, exact `n + 1 = n` refutation, snapshot restore plus proof replay, Pi research/campaign tools, and Pi 0.75.5-compatible runtime registration are implemented as bounded GA vertical slices.
 - Full design, roadmap, agent model, risk register, acceptance matrix, runbook, TODO, REVIEW, security review, mathematical-integrity review, and Research Alpha retrospective are documented.
-- Research Alpha plus Phase 18 is a local auditable prototype with narrow executable proof-kernel slices, not a production arbitrary theorem prover.
-- Generic proof planning, real MathProve execution, production Pi runtime registration, native TriviumDB performance validation, full DLP-grade secret scanning, and runner re-execution replay remain later candidates.
+- Research Alpha plus Phase 18-26 is a local auditable prototype with narrow executable proof-kernel slices, not a production arbitrary theorem prover.
+- Generic proof planning, broad MathProve proof search/final-audit semantics, native TriviumDB performance validation, full DLP-grade secret scanning, full interactive Pi/comathd install-session e2e, and OS/network sandboxed runner replay remain later candidates.
 
 ## 1. Product Thesis
 
@@ -68,7 +68,7 @@ No theorem-like paper wording hides blockers or conjectural status.
 
 | Source | Current use | Boundary |
 | --- | --- | --- |
-| `earendil-works/pi` | Pi extension and package assumptions | Official docs are normative; re-check installed Pi before Phase 6. |
+| `earendil-works/pi` | Pi extension package/runtime assumptions | Phase 26 validated package manifest and loader behavior against installed Pi 0.75.5; official docs remain normative for future API drift. |
 | `buyixian/pi-ecosystem-docs` | Ecosystem taxonomy and package landscape | Useful for discovery, not final API authority when it drifts from official Pi docs. |
 | `YoKONCy/TriviumDB` | Optional embedded memory backend candidate | Native/alpha dependency; always behind adapter and fallback until Phase 13. |
 | `DerstedtCasper/MathProve-Skill` | Verification bridge and gate inspiration | Evidence producer only; no proof status without durable artifacts and final audit. |

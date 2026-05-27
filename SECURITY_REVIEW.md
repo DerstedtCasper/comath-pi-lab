@@ -190,10 +190,20 @@ node services/comathd/tests/unit/phase25-real-mathprove-bridge.test.mjs
 Result: exit 0; real MathProve external bridge tests passed, including missing-runner fail-closed behavior, controlled external `verify_sympy.py` invocation, statement-hash mismatch vetoes, metadata hashes, and no formal promotion from external runner output alone.
 ```
 
+Phase 26 targeted validation added after the Research Alpha audit:
+
+```text
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; includes Phase 26 package manifest, runtime registration contract, fake Pi API registration, dynamic entrypoint import, command dispatch, Pi host-side mutating-tool confirmation, and no Pi proof-authority checks.
+
+Installed Pi 0.75.5 loader smoke
+Result: exit 0; `@earendil-works/pi-coding-agent@0.75.5` loaded `extensions/comath-pi/dist/index.js` with no loader errors and registered the executable research/campaign tools.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
 - Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, and Phase 24 reruns the implemented Python compute runners through strict replay. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but stronger OS-level sandboxing, enforced network denial, dependency lock capture, and cross-machine replay validation remain deferred.
 - `comathd` still lacks lock/session semantics for multi-process writers; current tests exercise single-process Research Alpha behavior.
-- Production Pi runtime permissions must be revalidated before enabling installed runtime registration.
+- Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, but a full interactive Pi/comathd install-session e2e and richer runtime permission model remain separate hardening targets.

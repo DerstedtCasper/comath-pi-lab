@@ -96,7 +96,8 @@ assert.equal(tools.find((tool) => tool.name === "comath.replay.verifyManifest")?
 assert.deepEqual(tools.find((tool) => tool.name === "comath.snapshot.export")?.input_schema.required, [
   "project_root",
   "project_id",
-  "actor"
+  "actor",
+  "confirmation_id"
 ]);
 
 const resources = discoverComathResources({
