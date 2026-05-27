@@ -45,6 +45,7 @@ import {
   getAgentProfile,
   listAgentAdapterPackages,
   listAgentProfiles,
+  formatAgentRunLogSseSnapshot,
   probeAgentAdapterHealth,
   readAgentRunLogs,
   streamAgentRunLogs,
@@ -60,6 +61,7 @@ export type InjectRequest = {
 export type InjectResponse = {
   status: number;
   body: any;
+  headers?: Record<string, string>;
 };
 
 type RouteHandler = (body: unknown, url: URL) => unknown | Promise<unknown>;
@@ -664,6 +666,38 @@ async function route(method: string, path: string, body: unknown, context: Route
       }
     }
 
+    const agentRunLogSubscriptionMatch = /^\/agent\/run\/([^/]+)\/log-subscription$/.exec(url.pathname);
+    if (agentRunLogSubscriptionMatch) {
+      try {
+        const maxBytes = url.searchParams.get("max_bytes");
+        const stdoutCursor = url.searchParams.get("stdout_cursor");
+        const stderrCursor = url.searchParams.get("stderr_cursor");
+        const retryMs = url.searchParams.get("retry_ms");
+        const snapshot = formatAgentRunLogSseSnapshot(url.searchParams.get("project_root") ?? "", {
+          project_id: url.searchParams.get("project_id") ?? "",
+          run_id: decodeURIComponent(agentRunLogSubscriptionMatch[1] ?? ""),
+          cursor: {
+            stdout: stdoutCursor ? Number(stdoutCursor) : 0,
+            stderr: stderrCursor ? Number(stderrCursor) : 0
+          },
+          max_bytes: maxBytes ? Number(maxBytes) : undefined,
+          retry_ms: retryMs ? Number(retryMs) : undefined,
+          actor: url.searchParams.get("actor") ?? "api"
+        });
+        return {
+          status: 200,
+          headers: {
+            "content-type": snapshot.content_type,
+            "cache-control": "no-cache",
+            connection: "keep-alive"
+          },
+          body: snapshot.body
+        };
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
     const statusMatch = /^\/campaign\/([^/]+)\/status$/.exec(url.pathname);
     if (statusMatch) {
       try {
@@ -816,7 +850,17 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 
 function writeJson(res: ServerResponse, response: InjectResponse): void {
   res.statusCode = response.status;
-  res.setHeader("content-type", "application/json; charset=utf-8");
+  if (response.headers) {
+    for (const [name, value] of Object.entries(response.headers)) {
+      res.setHeader(name, value);
+    }
+  }
+  const contentType = response.headers?.["content-type"] ?? "application/json; charset=utf-8";
+  res.setHeader("content-type", contentType);
+  if (contentType.startsWith("text/event-stream")) {
+    res.end(response.body);
+    return;
+  }
   res.end(`${JSON.stringify(response.body)}\n`);
 }
 

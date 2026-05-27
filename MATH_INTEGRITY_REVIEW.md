@@ -100,6 +100,7 @@ Remaining mathematical work:
 - Phase 44 external Codex-compatible CLI invocation remains runtime orchestration only. External stdout/stderr is wrapped as `external_output_untrusted: true` with `proof_authority: none`; it cannot certify claims, select proof candidates as authoritative, apply GraphPatch, replace Lean replay/static audit, or act as MathProve/final-audit authority.
 - Phase 45 Pi/comathd install-session e2e remains orchestration evidence only. The live HTTP session proves package/service wiring and host confirmation, not mathematical truth; campaign state changes still require the normal proof-kernel, evidence, and gate semantics.
 - Phase 46 cursor-based AgentRun log streams remain inspection-only. Incremental stdout/stderr chunks and completion cursors carry `proof_authority: none`; they cannot certify candidate correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
+- Phase 47 SSE-style AgentRun log subscription snapshots remain inspection-only. Event-stream frames carry untrusted stdout/stderr chunks and `proof_authority: none`; they cannot certify candidate correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -293,3 +294,10 @@ Phase 45 mathematical-integrity validation:
 - `node tests/e2e/phase45-pi-comathd-install-session.test.mjs`
 
 Result: exit 0; live Pi/comathd session wiring, host confirmation, campaign start/tick, and agent package inspection passed while keeping Pi/session output non-authoritative for proof status.
+
+Phase 47 mathematical-integrity validation:
+
+- `node services/comathd/tests/unit/phase47-agent-log-subscription.test.mjs`
+- `node extensions/comath-pi/tests/phase47-agent-log-subscription-tools.test.mjs`
+
+Result: both exited 0; SSE-compatible log snapshots and Pi subscription tools preserve `proof_authority: none` and remain observability-only surfaces.

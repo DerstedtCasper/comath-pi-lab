@@ -25,12 +25,15 @@ export type ComathClientOptions = {
   fetch?: (url: string, init?: Record<string, unknown>) => Promise<{
     ok: boolean;
     status: number;
+    headers?: { get(name: string): string | null };
     json(): Promise<unknown>;
+    text?(): Promise<string>;
   }>;
 };
 
 export type ComathClient = {
   get(path: string): Promise<any>;
+  getText(path: string): Promise<{ ok: boolean; status?: number; content_type: string; body: string }>;
   post(path: string, body: unknown): Promise<any>;
 };
 
@@ -138,6 +141,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.agent.executeProfile",
   "comath.agent.logs",
   "comath.agent.streamLogs",
+  "comath.agent.subscribeLogs",
   "comath.agent.health",
   "comath.agent.adapterPackageList",
   "comath.agent.prepareAdapterPackage",
@@ -286,6 +290,24 @@ export function createComathClient(options: ComathClientOptions) {
   return {
     get(path: string): Promise<any> {
       return request("GET", path);
+    },
+    async getText(path: string): Promise<{ ok: boolean; status?: number; content_type: string; body: string }> {
+      const response = await fetchImpl(joinUrl(options.baseUrl, path), {
+        method: "GET",
+        headers: {
+          accept: "text/event-stream"
+        }
+      });
+      const payload = response.text ? await response.text() : JSON.stringify(await response.json());
+      if (!response.ok) {
+        throw new Error(`comathd text request failed (${response.status})${payload ? `: ${payload}` : ""}`);
+      }
+      return {
+        ok: true,
+        status: response.status,
+        content_type: response.headers?.get("content-type") ?? "text/plain; charset=utf-8",
+        body: payload
+      };
     },
     post(path: string, body: unknown): Promise<any> {
       return request("POST", path, body);
@@ -503,6 +525,23 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     const actorQuery = actor === undefined ? "" : `&actor=${encodeQuery(actor)}`;
     return client.get(
       `/agent/run/${encodeURIComponent(runId)}/log-stream?project_root=${encodeQuery(projectRoot)}&project_id=${encodeQuery(projectId)}&stdout_cursor=${encodeURIComponent(String(stdoutCursor))}&stderr_cursor=${encodeURIComponent(String(stderrCursor))}${maxBytesQuery}${actorQuery}`
+    );
+  }
+
+  if (name === "comath.agent.subscribeLogs") {
+    const projectRoot = readString(input, "project_root");
+    const projectId = readString(input, "project_id");
+    const runId = readString(input, "run_id");
+    const stdoutCursor = readNumber(input, "stdout_cursor") ?? 0;
+    const stderrCursor = readNumber(input, "stderr_cursor") ?? 0;
+    const maxBytes = readNumber(input, "max_bytes");
+    const retryMs = readNumber(input, "retry_ms");
+    const actor = readString(input, "actor", { optional: true });
+    const maxBytesQuery = maxBytes === undefined ? "" : `&max_bytes=${encodeURIComponent(String(maxBytes))}`;
+    const retryQuery = retryMs === undefined ? "" : `&retry_ms=${encodeURIComponent(String(retryMs))}`;
+    const actorQuery = actor === undefined ? "" : `&actor=${encodeQuery(actor)}`;
+    return client.getText(
+      `/agent/run/${encodeURIComponent(runId)}/log-subscription?project_root=${encodeQuery(projectRoot)}&project_id=${encodeQuery(projectId)}&stdout_cursor=${encodeURIComponent(String(stdoutCursor))}&stderr_cursor=${encodeURIComponent(String(stderrCursor))}${maxBytesQuery}${retryQuery}${actorQuery}`
     );
   }
 
@@ -841,6 +880,21 @@ export function createComathTools(): ToolDescriptor[] {
         stdout_cursor: { type: "number", minimum: 0 },
         stderr_cursor: { type: "number", minimum: 0 },
         max_bytes: { type: "number", minimum: 1 },
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.agent.subscribeLogs",
+      description: "Open a read-only SSE-style AgentRun stdout/stderr subscription snapshot through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id", "run_id"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        run_id: stringProp,
+        stdout_cursor: { type: "number", minimum: 0 },
+        stderr_cursor: { type: "number", minimum: 0 },
+        max_bytes: { type: "number", minimum: 1 },
+        retry_ms: { type: "number", minimum: 0 },
         actor: stringProp
       })
     },
@@ -1477,6 +1531,24 @@ async function handleAgentCommand(
         stdout_cursor: numberOptionValue(parsed.args, "--stdout-cursor"),
         stderr_cursor: numberOptionValue(parsed.args, "--stderr-cursor"),
         max_bytes: numberOptionValue(parsed.args, "--max-bytes"),
+        actor: actorFrom(options, parsed.args)
+      })
+    );
+    return;
+  }
+  if (subcommand === "subscribe-logs") {
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const runId = requiredOption(optionValue(parsed.args, "--run-id") ?? firstPositional(parsed.args), "run_id");
+    await notifyRuntimeResult(
+      ctx,
+      await executeComathTool(client, "comath.agent.subscribeLogs", {
+        project_root: projectRootFrom(options, parsed.args),
+        project_id: projectId,
+        run_id: runId,
+        stdout_cursor: numberOptionValue(parsed.args, "--stdout-cursor"),
+        stderr_cursor: numberOptionValue(parsed.args, "--stderr-cursor"),
+        max_bytes: numberOptionValue(parsed.args, "--max-bytes"),
+        retry_ms: numberOptionValue(parsed.args, "--retry-ms"),
         actor: actorFrom(options, parsed.args)
       })
     );

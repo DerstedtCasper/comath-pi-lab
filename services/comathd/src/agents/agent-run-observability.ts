@@ -61,6 +61,19 @@ export type AgentRunLogStream = {
   complete: boolean;
 };
 
+export type FormatAgentRunLogSseSnapshotInput = StreamAgentRunLogsInput & {
+  retry_ms?: number;
+};
+
+export type AgentRunLogSseSnapshot = {
+  project_id: string;
+  run_id: string;
+  content_type: "text/event-stream; charset=utf-8";
+  proof_authority: "none";
+  body: string;
+  stream: AgentRunLogStream;
+};
+
 export type ProbeAgentAdapterHealthInput = {
   project_id: string;
   profile_id: AgentProfileId;
@@ -112,6 +125,16 @@ function assertNonNegativeInteger(value: number, field: string): void {
   throw new ComathError(`${field} must be a non-negative integer`, {
     statusCode: 400,
     code: "AGENT_OBSERVABILITY_INVALID_CURSOR"
+  });
+}
+
+function assertSseRetryMs(value: number, field: string): void {
+  if (Number.isInteger(value) && value >= 0 && value <= 600_000) {
+    return;
+  }
+  throw new ComathError(`${field} must be an integer between 0 and 600000`, {
+    statusCode: 400,
+    code: "AGENT_OBSERVABILITY_INVALID_RETRY"
   });
 }
 
@@ -324,6 +347,56 @@ export function streamAgentRunLogs(projectRoot: string, input: StreamAgentRunLog
       stderr: stderr.size
     },
     complete
+  };
+}
+
+function sseDataLines(payload: unknown): string {
+  const json = JSON.stringify(payload);
+  return json
+    .split(/\r?\n/)
+    .map((line) => `data: ${line}`)
+    .join("\n");
+}
+
+export function formatAgentRunLogSseSnapshot(projectRoot: string, input: FormatAgentRunLogSseSnapshotInput): AgentRunLogSseSnapshot {
+  const retryMs = input.retry_ms ?? 1000;
+  assertSseRetryMs(retryMs, "retry_ms");
+  const stream = streamAgentRunLogs(projectRoot, input);
+  const eventId = `${stream.run_id}:${stream.next_cursor.stdout}:${stream.next_cursor.stderr}`;
+  const payload = {
+    event: "agent_run.log_chunk",
+    project_id: stream.project_id,
+    run_id: stream.run_id,
+    status: stream.status,
+    proof_authority: "none" as const,
+    cursor: stream.cursor,
+    next_cursor: stream.next_cursor,
+    chunks: stream.chunks,
+    truncated: stream.truncated,
+    sizes: stream.sizes,
+    complete: stream.complete
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_run.logs_sse_snapshot",
+    actor: input.actor ?? "api",
+    target_id: stream.run_id,
+    payload: {
+      cursor: stream.cursor,
+      next_cursor: stream.next_cursor,
+      max_bytes: input.max_bytes ?? defaultLogMaxBytes,
+      retry_ms: retryMs,
+      complete: stream.complete,
+      proof_authority: "none"
+    }
+  });
+  return {
+    project_id: stream.project_id,
+    run_id: stream.run_id,
+    content_type: "text/event-stream; charset=utf-8",
+    proof_authority: "none",
+    stream,
+    body: [`retry: ${retryMs}`, "event: agent_run.log_chunk", `id: ${eventId}`, sseDataLines(payload), ""].join("\n")
   };
 }
 

@@ -1,5 +1,54 @@
 # REVIEW
 
+## Phase 47 SSE-Style AgentRun Log Subscription Review Log
+
+### Scope
+
+Phase 47 adds an SSE-compatible AgentRun log subscription snapshot on top of Phase 46 cursor polling. The service exposes `formatAgentRunLogSseSnapshot()` and `GET /agent/run/:id/log-subscription`, returning `text/event-stream` frames with `retry`, `event: agent_run.log_chunk`, an event id bound to the run and next cursors, JSON `data`, audit events, and `proof_authority=none`. Pi exposes the same read-only surface through `comath.agent.subscribeLogs`, `createComathClient().getText()`, and `/cm:agent subscribe-logs`.
+
+### TDD Evidence
+
+Initial service RED result:
+
+```text
+node services/comathd/tests/unit/phase47-agent-log-subscription.test.mjs
+Result: exit 1; `formatAgentRunLogSseSnapshot` was not exported before implementation.
+```
+
+Initial Pi RED result:
+
+```text
+node extensions/comath-pi/tests/phase47-agent-log-subscription-tools.test.mjs
+Result: exit 1; `comath.agent.subscribeLogs` was not registered before implementation.
+```
+
+Focused validation:
+
+```text
+node services/comathd/tests/unit/phase47-agent-log-subscription.test.mjs
+Result: exit 0; SSE-compatible service log snapshot formatting, route headers/body, audit event emission, and non-authoritative metadata passed.
+
+node extensions/comath-pi/tests/phase47-agent-log-subscription-tools.test.mjs
+Result: exit 0; Pi text client, tool schema, text route payload, runtime registration, `/cm:agent subscribe-logs`, and operator notification output passed.
+```
+
+### Implementation Notes
+
+- Added `formatAgentRunLogSseSnapshot()` to `services/comathd/src/agents/agent-run-observability.ts`.
+- Added `GET /agent/run/:id/log-subscription`, `text/event-stream` response support in the local server wrapper, audit event `agent_run.logs_sse_snapshot`, and service status capability `agent_run_log_subscription_sse`.
+- Added Pi `ComathClient.getText()`, `comath.agent.subscribeLogs`, and `/cm:agent subscribe-logs`.
+- Wired Phase 47 focused tests into the default `@comath/comathd` and `@comath/pi-extension` test chains.
+
+### Boundary Statement
+
+Phase 47 is an SSE-compatible snapshot frame, not a persistent multi-event server loop, browser UI, or terminal session. It gives operators a real `text/event-stream` surface that can be polled or composed by a host, while all frame payloads remain untrusted observability material with `proof_authority=none`.
+
+### Residual Risks
+
+- Persistent multi-event WebSocket/SSE sessions and richer operator controls remain deferred.
+- Production Codex API/backend validation and installed production Codex CLI validation remain deferred.
+- OS-level process isolation and network-denial enforcement remain deferred.
+
 ## Phase 46 Cursor-Based AgentRun Log Stream Review Log
 
 ### Scope
