@@ -28,9 +28,16 @@ const forbidden = [
   { token: "opaque", pattern: /\bopaque\b/ }
 ];
 
-export function runStaticCheatScan(input: { projectRoot: string; leanRoot: string; reportPath?: string }): StaticCheatScanReport {
+export function runStaticCheatScan(input: {
+  projectRoot: string;
+  leanRoot: string;
+  reportPath?: string;
+  skeletonAllowlist?: string[];
+}): StaticCheatScanReport {
   const files = listLeanProjectFiles(input.leanRoot).filter((file) => file.endsWith(".lean"));
   const findings: StaticCheatFinding[] = [];
+  const warnings: string[] = [];
+  const skeletonAllowlist = new Set(input.skeletonAllowlist ?? []);
 
   for (const file of files) {
     const rel = relative(input.leanRoot, file).replace(/\\/g, "/");
@@ -38,6 +45,10 @@ export function runStaticCheatScan(input: { projectRoot: string; leanRoot: strin
     lines.forEach((line, index) => {
       for (const rule of forbidden) {
         if (rule.pattern.test(line)) {
+          if (rule.token === "sorry" && skeletonAllowlist.has(rel)) {
+            warnings.push(`skeleton_sorry_allowed:${rel}:${index + 1}`);
+            continue;
+          }
           findings.push({
             file: rel,
             line: index + 1,
@@ -54,7 +65,7 @@ export function runStaticCheatScan(input: { projectRoot: string; leanRoot: strin
     result: findings.length === 0 ? "pass" : "fail",
     findings,
     hard_vetoes: findings.map((finding) => `${finding.token}_detected`),
-    warnings: [],
+    warnings,
     scanned_files: files.map((file) => relative(input.leanRoot, file).replace(/\\/g, "/"))
   };
 

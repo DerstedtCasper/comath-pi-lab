@@ -362,6 +362,14 @@
 - [x] Add local command argument validation so missing project/run/workstream/profile fields fail before prompting for mutation confirmation.
 - [x] Add Phase 30 Pi extension tests and wire them into the default `@comath/pi-extension` test chain.
 
+## Phase 31: Lean Trust Profile And Skeleton Audit Hardening
+
+- [x] Add configurable Lean axiom trust profiles for final replay axiom-profile checks.
+- [x] Fail closed when `require_print_axioms=true` but the replay output lacks a target-theorem axiom report.
+- [x] Preserve ordinary classical and constructive trust-profile distinctions, including configurable `Classical.choice` authorization.
+- [x] Add skeleton-aware static cheat scanning so `sorry` can be allowed only in explicitly listed skeleton files, never final proof artifacts by default.
+- [x] Add Phase 31 Lean trust-profile tests and wire them into the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -373,7 +381,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Stronger runner re-execution sandboxing: OS-level isolation, network-denial enforcement, dependency lock capture, and cross-machine replay validation beyond the Phase 24 service-owned re-execution checks.
 - [ ] OS-level process sandboxing and multi-process writer/session locks for scheduled AgentRuns beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, and scoped-write controls.
-- [ ] Richer statement equivalence, Lean parser integration, and configurable trust profiles for broader mathematical domains.
+- [ ] Richer statement equivalence, Lean parser integration, theorem-signature extraction, and broader mathematical-domain trust profiles beyond Phase 31 axiom allowlists and skeleton-aware static scan.
 
 ## Design Documentation Goal
 

@@ -39,7 +39,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_runtime_registration_v0755",
       "agent_run_runtime_boundary",
       "agent_run_process_scheduler",
-      "agent_profile_service_api"
+      "agent_profile_service_api",
+      "lean_trust_profile_hardening"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

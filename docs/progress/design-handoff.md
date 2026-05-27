@@ -35,6 +35,7 @@ The repository has completed:
 - Phase 28 AgentRun process scheduler for allowlisted child-process launch, logging, timeout/cancel, concurrency, and rpm controls;
 - Phase 29 Agent profile service integration for profile validation, profile-backed AgentRun creation, and profile launch-envelope preparation;
 - Phase 30 Pi agent profile runtime UX for `/cm:agent` and executable profile tools;
+- Phase 31 Lean trust profile hardening for configurable axiom allowlists and skeleton-aware static audits;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -43,7 +44,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, and Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`. Phase 18-30 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, and Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance. Phase 18-31 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -65,7 +66,7 @@ Next correct action:
 /goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, and OS-level scheduled-process isolation.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-30 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-31 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -304,6 +305,14 @@ Apply it as follows:
 - Kept all profile operations as thin `comathd` client calls; the extension still does not read or write `.comath/` directly.
 - Added `extensions/comath-pi/tests/phase30-agent-profile-tools.test.mjs` and wired it into the default `@comath/pi-extension` test chain.
 - Remaining agent hardening: live Pi/Codex adapter execution, richer UI widgets, OS-level process sandboxing/network denial, log streaming APIs, and multi-process writer/session locks.
+
+## Phase 31 Completion Notes
+
+- Added configurable Lean trust profiles to `checkAxiomProfile()`, including project-specific allowed axiom sets.
+- Added fail-closed handling for missing target-theorem axiom reports when `require_print_axioms=true`.
+- Added skeleton-aware static cheat scanning: `sorry` may be allowed in explicit skeleton allowlist files, while final Lean files still fail closed.
+- Added `services/comathd/tests/unit/phase31-lean-trust-profile.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Remaining Lean authority hardening: theorem-signature extraction, Lean parser integration, transitive dependency closure, and broader domain-specific trust profiles.
 
 ## Verification To Run At Phase Boundary
 

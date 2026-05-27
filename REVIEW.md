@@ -1342,6 +1342,45 @@ Profile-backed AgentRuns inherit the profile role/model/tool profile but still u
 - Rich profile UI remains deferred beyond the Phase 30 `/cm:agent` command/tool harness.
 - Multi-process writer locks/session semantics and log streaming APIs remain deferred.
 
+## Phase 31 Lean Trust Profile Hardening Review Log
+
+### Scope
+
+Hardened Lean final-proof authority around configurable axiom trust profiles and skeleton-only placeholder policy. Phase 31 does not broaden theorem synthesis, add a Lean parser, or complete transitive Lake dependency semantics; it makes the existing final replay gate more explicit and more fail-closed.
+
+### TDD Evidence
+
+```text
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase31-lean-trust-profile.test.mjs
+Initial RED result: exit 1; `checkAxiomProfile()` did not return or enforce a project-level `trust_profile`.
+
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase31-lean-trust-profile.test.mjs
+Second RED result: exit 1; missing target-theorem `#print axioms` output did not produce `missing_target_axiom_report`.
+
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase31-lean-trust-profile.test.mjs
+Result: exit 0; Phase 31 Lean trust profile tests passed.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/tests/unit/phase31-lean-trust-profile.test.mjs`.
+- Extended `services/comathd/src/proof-kernel/lean/axiom-profile.ts` with configurable `LeanTrustProfile`, target-theorem axiom-report detection, and fail-closed `missing_target_axiom_report`.
+- Extended `services/comathd/src/proof-kernel/lean/static-cheat-scan.ts` with explicit skeleton allowlisting for `sorry`.
+- Added Phase 31 to the default `@comath/comathd` test chain and phase tracking documents.
+
+### Boundary And Integrity Notes
+
+Trust profiles only govern which Lean axioms may pass the axiom-profile gate. They do not certify statement equivalence, dependency closure, static proof integrity, clean replay, or claim promotion.
+
+Skeleton `sorry` allowlisting is opt-in per relative Lean file. Final proof files remain fail-closed on `sorry`, `admit`, unauthorized `axiom`, unauthorized `constant`, `unsafe`, and `opaque`.
+
+### Residual Risks
+
+- Statement equivalence still needs theorem-signature extraction rather than stdout substring matching.
+- Axiom-profile extraction still parses Lean text output; it is target-bound but not yet a Lean environment object.
+- Dependency closure is still local-file/import-hash oriented and not a full transitive Lake/mathlib trust proof.
+- Broad proof planning and theorem synthesis beyond registered theorem families remain unresolved GA blockers.
+
 ## Phase 30 Pi Agent Profile Runtime UX Review Log
 
 ### Scope
