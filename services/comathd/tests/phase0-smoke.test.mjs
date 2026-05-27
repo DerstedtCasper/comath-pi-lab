@@ -32,6 +32,7 @@ const requiredCapabilities = [
   "runner_cross_machine_replay_environment_gate",
   "lean_statement_alias_equivalence",
   "lean_declaration_parser_signature_fallback",
+  "lean_registered_logical_equivalence_witnesses",
   "trivium_target_platform_evaluation",
   "project_writer_session_lock",
   "agent_run_scheduler_writer_lock_integration",

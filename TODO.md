@@ -562,6 +562,13 @@
 - [x] Add `phase55-runner-cross-machine-replay.test.mjs` and wire Phase 55 into the default `@comath/comathd` test chain.
 - [x] Add `runner_cross_machine_replay_environment_gate` to smoke status capabilities and acceptance documentation.
 
+## Phase 56: Registered Lean Logical-Equivalence Witnesses
+
+- [x] Add `allowed_registered_logical_equivalences` to statement-equivalence checks for explicitly registered target signatures.
+- [x] Require exact formal-spec/target-signature binding, `lean_kernel_checked_equivalence`, witness artifact id, valid SHA-256 witness hash, and non-empty lemma names before accepting `logically_equivalent_with_registered_lemmas`.
+- [x] Fail closed when witness hashes, lemma names, or target signatures are missing or mismatched.
+- [x] Add `phase56-lean-registered-logical-equivalence.test.mjs` and wire Phase 56 into the default `@comath/comathd` test chain and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -572,7 +579,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance and Phase 55 environment drift gates: OS-level isolation and enforced network denial.
 - [ ] OS-level process sandboxing beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, Phase 39 project-level lock primitive, and Phase 40 AgentRun scheduler lock integration.
-- [ ] Richer statement equivalence beyond Phase 54 declaration parsing and Phase 37 registered aliases: proof-producing definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
+- [ ] Richer statement equivalence beyond Phase 54 declaration parsing, Phase 37 registered aliases, and Phase 56 registered logical-equivalence witnesses: proof search for equivalence lemmas, transitive semantic equivalence, and broader mathematical-domain trust profiles.
 
 ## Design Documentation Goal
 

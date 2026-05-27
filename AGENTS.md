@@ -68,8 +68,9 @@ Current implementation frontier:
 - Phase 53 is complete.
 - Phase 54 is complete.
 - Phase 55 is complete.
+- Phase 56 is complete.
 
-Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, production Codex/Pi adapter hardening, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-55 vertical slices as a claim of broad mathematical discovery capability.
+Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, production Codex/Pi adapter hardening, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-56 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
 
@@ -126,6 +127,8 @@ Phase 35 claim-scoped final replay audit paths prevent supported campaigns in th
 Phase 36 runner replay provenance hardening records sandbox policy and dependency-lock material in compute runner reports and replay manifests. Replay integrity must fail closed when either provenance class is missing. This is provenance and audit hardening only: it does not provide OS-level process isolation, enforced network denial, cross-machine replay environment gating, or broader runner-family lockfiles.
 
 Phase 55 runner cross-machine replay environment gating compares replay-run Node version, platform, and architecture metadata against the current process before runner re-execution. Environment mismatch must fail closed with `runner_reexecution_environment_mismatch` and must not launch runner replay. This is an integrity drift gate only: it is not OS-level process isolation, enforced network denial, dependency installation, or mathematical proof authority.
+
+Phase 56 registered Lean logical-equivalence witnesses are statement-binding metadata only. They may accept `logically_equivalent_with_registered_lemmas` only when a registered entry exactly binds the locked formal spec to the extracted target signature and supplies `lean_kernel_checked_equivalence`, a witness artifact id, a SHA-256 witness artifact hash, and non-empty lemma names. Free-form justification, missing witness material, or mismatched target signatures must fail closed. This is not proof search for equivalence lemmas, transitive semantic equivalence, or a replacement for final clean Lean replay.
 
 Phase 37 Lean statement-alias equivalence is a conservative extension of Phase 32. It may accept a target theorem signature that differs from the locked formal spec only when an explicit registered definitional alias maps the formal spec statement to that exact signature and records a witness. It must still fail closed on missing target output, ambiguous output, and non-registered mismatches. It is not full Lean parser integration, transitive semantic equivalence, or arbitrary logical-equivalence proof.
 

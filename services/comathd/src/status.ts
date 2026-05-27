@@ -44,6 +44,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "lean_statement_signature_binding",
       "lean_statement_alias_equivalence",
       "lean_declaration_parser_signature_fallback",
+      "lean_registered_logical_equivalence_witnesses",
       "proof_obligation_dag_planning",
       "campaign_scoped_ensemble_artifacts",
       "claim_scoped_final_replay_artifacts",

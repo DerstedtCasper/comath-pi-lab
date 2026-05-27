@@ -174,6 +174,7 @@ Remaining security requirements:
 35. **Installed Codex CLI validation remains service-configured and path-secret-free.** Phase 53 resolves the external CLI only from `COMATH_CODEX_CLI_PROGRAM` plus optional service prefix args, runs bounded `--version` and `--health` probes with `shell:false` and `COMATH_PROOF_AUTHORITY=none`, and omits the configured executable path from route responses and audit payloads.
 36. **Lean declaration parser is fail-closed target binding, not execution.** Phase 54 parses theorem/lemma declaration headers from already supplied Lean source, rejects ambiguous and comment-only substring matches, records the signature source, and does not execute code or add proof authority.
 37. **Runner replay environment drift fails closed.** Phase 55 compares recorded replay-run Node/platform/architecture metadata against the current process before re-execution and vetoes mismatches without launching a child runner.
+38. **Registered logical equivalence is metadata-gated.** Phase 56 accepts logical-equivalence statement binding only from exact registered formal-spec/target-signature pairs with kernel-witness metadata, witness artifact id/hash, and non-empty lemma names; free-form text cannot create an equivalence bypass.
 
 ### Validation Commands
 
@@ -413,3 +414,10 @@ Phase 55 targeted validation:
 
 Result: exit 0; snapshot replay verification rejects tampered-but-rehashed replay environment metadata with `runner_reexecution_environment_mismatch` and leaves `runner_reexecution` empty, so no child runner is launched under mismatched Node/platform/arch metadata.
 - Phase 55 is an integrity drift gate only. It does not add OS-level isolation, enforced network denial, or dependency installation control.
+
+Phase 56 targeted validation:
+
+- `node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs`
+
+Result: exit 0; registered logical-equivalence witnesses require exact formal-spec/target matching, `lean_kernel_checked_equivalence`, witness artifact id, SHA-256 witness hash, and non-empty lemma names. Missing witness hash, missing lemma names, and wrong target signatures fail closed.
+- Phase 56 adds no shell, network, parser execution, or broad proof-search surface; it is metadata-gated statement binding only.

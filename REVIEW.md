@@ -1,3 +1,37 @@
+## Phase 56 Registered Lean Logical-Equivalence Witnesses Review Log
+
+Scope: Phase 56 adds a controlled logical-equivalence statement-binding path. `checkStatementEquivalence()` can now accept `logically_equivalent_with_registered_lemmas` only when an explicitly registered entry exactly matches the locked formal spec and extracted target signature, supplies `witness_kind: lean_kernel_checked_equivalence`, a witness artifact id, a valid SHA-256 witness artifact hash, non-empty lemma names, and a justification. Missing witness material or a target-signature mismatch remains fail-closed.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs
+```
+
+Result: exit 1; the accepted registered logical-equivalence case returned `fail` instead of `pass`, showing the pre-existing `logically_equivalent_with_registered_lemmas` status was only a type placeholder and had no implementation path.
+
+Focused GREEN evidence:
+
+```text
+corepack pnpm --filter @comath/comathd build
+node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs
+node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs
+node services/comathd/tests/unit/phase54-lean-declaration-parser.test.mjs
+```
+
+Result: all exited 0 after implementation. Phase 56 validates registered witness acceptance plus fail-closed missing hash, missing lemma, and wrong-target cases; Phase 37/54 regressions preserve alias and declaration-parser behavior.
+
+Implementation notes:
+
+- Added `StatementRegisteredLogicalEquivalence` and optional `allowed_registered_logical_equivalences` input.
+- Added `registered_logical_equivalence` witness reports with witness kind, artifact id/hash, lemma names, and justification.
+- Required exact formal-spec/target-signature matching and valid witness metadata before reporting `logically_equivalent_with_registered_lemmas`.
+- Added `services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs` to the default `@comath/comathd` test chain and status capability `lean_registered_logical_equivalence_witnesses`.
+
+Residual risk:
+
+Phase 56 does not search for equivalence lemmas, prove transitive semantic equivalence, or broaden the trusted mathematical domain automatically. It is a registered, witness-backed statement-binding gate; final authority still requires clean Lean replay, static audit, dependency closure, axiom profile, and the ordinary claim promotion path.
+
 ## Phase 55 Runner Cross-Machine Replay Environment Gate Review Log
 
 Scope: Phase 55 adds a replay-integrity gate for cross-machine/environment drift. Snapshot replay verification now compares each replay run's recorded Node version, platform, and architecture against the current process before runner re-execution. A mismatch fails closed with `runner_reexecution_environment_mismatch` and does not launch runner replay.
