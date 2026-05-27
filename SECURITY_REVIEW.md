@@ -154,6 +154,7 @@ Remaining security requirements:
 15. **Proof-planning artifacts are campaign-scoped.** Phase 33 writes lemma DAG, line-map, per-obligation YAML, skeleton Lean, and skeleton report artifacts under `.comath/campaign/<CAM>/proof/` through path-policy-controlled runtime writes, avoiding cross-campaign overwrite of proof-planning provenance.
 16. **Ensemble artifacts are campaign-scoped.** Phase 34 writes candidate workspaces, candidate batch indexes, and arbitration decisions under `.comath/campaign/<CAM>/ensembles/lemma_sprint/<PO>/`, so concurrent supported campaigns cannot overwrite or read each other's proof-candidate state.
 17. **Final replay audit paths are claim-scoped.** Phase 35 removes hardcoded `C-0001` pointers from final replay stage-run artifact paths, so later campaign audits point to the active claim's evidence bundle.
+18. **Runner replay provenance is explicit.** Phase 36 records sandbox policy and dependency-lock material in compute runner reports and replay manifests, and replay integrity fails closed if either class of provenance is missing.
 
 ### Validation Commands
 
@@ -241,11 +242,18 @@ node services/comathd/tests/integration/phase35-final-replay-artifact-paths.test
 Result: exit 0; final replay stage-run artifact paths used the second campaign's active claim id instead of hardcoded `C-0001`.
 ```
 
+Phase 36 targeted validation:
+
+```text
+node services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs
+Result: exit 0; runner reports and replay manifests carried sandbox/dependency provenance and missing provenance failed closed.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
-- Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, and Phase 24 reruns the implemented Python compute runners through strict replay. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but stronger OS-level sandboxing, enforced network denial, dependency lock capture, and cross-machine replay validation remain deferred.
+- Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, Phase 24 reruns the implemented Python compute runners through strict replay, and Phase 36 records sandbox/dependency provenance with fail-closed integrity checks. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but OS-level sandboxing, enforced network denial, and cross-machine replay validation remain deferred.
 - `comathd` still lacks lock/session semantics for multi-process writers; current tests exercise single-process Research Alpha behavior.
 - Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, but a full interactive Pi/comathd install-session e2e and richer runtime permission model remain separate hardening targets.
 - Phase 27 validates AgentRun persistence and scoped writes; Phase 28 adds service-side process launch and scheduler controls on top of that boundary.

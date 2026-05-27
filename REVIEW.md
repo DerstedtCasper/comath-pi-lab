@@ -1416,6 +1416,65 @@ Phase 33 does not implement broad lemma decomposition or arbitrary theorem synth
 - Generic theorem synthesis and production proof-route agent execution remain deferred.
 - Skeleton artifacts are not built as final Lean targets; they are auditable planning outputs whose placeholders must be discharged later.
 
+## Phase 36 Runner Replay Sandbox And Dependency Provenance Review Log
+
+### Scope
+
+Added explicit sandbox-policy and dependency-lock provenance to compute-runner reports and replay manifests. Phase 36 reduces the runner replay hardening blocker by making provenance auditable and fail-closed; it does not claim OS-level isolation, enforced network denial, cross-machine replay validation, or arbitrary runner-family lockfile coverage.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs
+Initial RED result: exit 1; `metadata.sandbox_policy` was undefined in persisted runner reports.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding runner provenance metadata and replay-manifest propagation.
+
+node services/comathd/tests/phase0-smoke.test.mjs
+Result: exit 0; comathd smoke status accepted `runner_replay_sandbox_dependency_provenance` and the updated residual replay-sandbox risk.
+
+node services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs
+Result: exit 0; runner reports and replay manifests carried sandbox/dependency provenance, and missing provenance failed closed.
+
+node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs
+Result: exit 0; snapshot/replay tests passed after preserving dependency-lock script-hash drift in the existing script-drift fixture.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-36 package tests passed with Phase 36 wired into the default test chain.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests through Phase 36, and Phase 17 integrity evaluation passed.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+git diff --check
+Result: exit 0; no whitespace errors reported.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repository-root runtime state was left behind.
+```
+
+### Changed Surfaces
+
+- Added `sandbox_policy` and `dependency_lock` to compute runner metadata in `services/comathd/src/verification/runner-contracts.ts`.
+- Preserved sandbox/dependency provenance in `ReplayRunManifest` entries from `services/comathd/src/artifacts/replay.ts`.
+- Added replay-integrity vetoes `runner_sandbox_policy_missing` and `runner_dependency_lock_missing`.
+- Added `services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added `runner_replay_sandbox_dependency_provenance` to runtime status and smoke requirements.
+- Updated README, TODO, acceptance matrix, handoff, AGENTS, security review, and mathematical-integrity review.
+
+### Boundary And Integrity Notes
+
+The recorded sandbox policy is an auditable contract for the current runner execution path: `shell:false`, project-root cwd policy, fixed executable class, and `network: denied_by_contract`. It is not an OS-level sandbox. The dependency lock binds runner id/version, script hash, and Python package presence into replay artifacts so future replay checks can distinguish missing provenance from valid replayable material.
+
+### Residual Risks
+
+- OS-level runner isolation and enforced network denial remain deferred.
+- Cross-machine replay validation remains deferred.
+- Broader runner-family lockfiles beyond the implemented Python compute runners remain deferred.
+
 ## Phase 35 Claim-Scoped Final Replay Artifact Paths Review Log
 
 ### Scope

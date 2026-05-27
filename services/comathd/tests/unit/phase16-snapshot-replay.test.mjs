@@ -381,11 +381,13 @@ try {
   } = findRunnerEntry(scriptDrift, "sympy-exact");
   const scriptDriftReport = readJson(scriptDriftReportPath);
   scriptDriftReport.result.metadata.script_sha256 = "0".repeat(64);
+  scriptDriftReport.result.metadata.dependency_lock.script_sha256 = "0".repeat(64);
   const scriptDriftRun = scriptDriftManifest.replay.runs.find(
     (run) => run.report_relative_path === scriptDriftEntry.relative_path
   );
   assert.ok(scriptDriftRun);
   scriptDriftRun.script_sha256 = "0".repeat(64);
+  scriptDriftRun.dependency_lock.script_sha256 = "0".repeat(64);
   scriptDriftManifest.replay.integrity.runs_sha256 = sha256Text(canonicalJson(scriptDriftManifest.replay.runs));
   writeJson(scriptDriftReportPath, scriptDriftReport);
   writeJson(scriptDrift.manifest_path, recomputeSnapshotManifest(scriptDriftManifest, scriptDrift.snapshot_root));

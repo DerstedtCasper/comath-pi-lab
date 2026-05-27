@@ -48,8 +48,9 @@ Current implementation frontier:
 - Phase 33 is complete.
 - Phase 34 is complete.
 - Phase 35 is complete.
+- Phase 36 is complete.
 
-Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-35 vertical slices as a claim of broad mathematical discovery capability.
+Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-36 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
 
@@ -102,6 +103,8 @@ Phase 33 proof-obligation DAG planning is native planning-stage proof-kernel inf
 Phase 34 campaign-scoped ensemble artifacts prevent supported campaigns in the same project root from sharing candidate or decision state. Candidate workspaces, `candidates.json`, and `decision.json` must live under `.comath/campaign/<CAM>/ensembles/lemma_sprint/<PO>/`; legacy global `.comath/ensembles/lemma_sprint/PO-0001/` paths are not valid for new proof-kernel campaign writes.
 
 Phase 35 claim-scoped final replay audit paths prevent supported campaigns in the same project root from recording misleading final replay artifact pointers. Final replay stage runs must point to `.comath/evidence/<ACTIVE_CLAIM>/lean/final_replay_manifest.json` and `.comath/evidence/<ACTIVE_CLAIM>/lean/final_static_audit.json`; hardcoded `C-0001` paths are invalid when the active root claim differs.
+
+Phase 36 runner replay provenance hardening records sandbox policy and dependency-lock material in compute runner reports and replay manifests. Replay integrity must fail closed when either provenance class is missing. This is provenance and audit hardening only: it does not provide OS-level process isolation, enforced network denial, cross-machine replay validation, or broader runner-family lockfiles.
 
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 

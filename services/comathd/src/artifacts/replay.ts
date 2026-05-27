@@ -39,6 +39,19 @@ export type ReplayRunManifest = {
   stdout_sha256?: string;
   stderr_sha256?: string;
   replay_argv: string[];
+  sandbox_policy?: {
+    shell: false;
+    network: "denied_by_contract";
+    cwd_policy: "project_root";
+    allowed_executables: string[];
+    os_isolation: "process_boundary_only";
+  };
+  dependency_lock?: {
+    runner_id: string;
+    runner_version?: string;
+    script_sha256?: string | null;
+    python_packages: Record<string, string>;
+  };
   environment: {
     node: string;
     platform: string;
@@ -136,6 +149,36 @@ function parseReplayInput(inputJson: unknown): { ok: true; value: Record<string,
   }
 }
 
+function hasValidSandboxPolicy(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const policy = value as Record<string, unknown>;
+  return (
+    policy.shell === false &&
+    policy.network === "denied_by_contract" &&
+    policy.cwd_policy === "project_root" &&
+    Array.isArray(policy.allowed_executables) &&
+    policy.allowed_executables.every((item) => typeof item === "string") &&
+    policy.os_isolation === "process_boundary_only"
+  );
+}
+
+function hasValidDependencyLock(value: unknown, runnerId: string, runnerVersion: unknown, scriptSha256: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const lock = value as Record<string, unknown>;
+  return (
+    lock.runner_id === runnerId &&
+    lock.runner_version === runnerVersion &&
+    lock.script_sha256 === scriptSha256 &&
+    Boolean(lock.python_packages) &&
+    typeof lock.python_packages === "object" &&
+    !Array.isArray(lock.python_packages)
+  );
+}
+
 function trustedReexecutionTimeout(value: unknown): { timeout_ms: number; vetoes: string[] } {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return { timeout_ms: DEFAULT_REEXECUTION_TIMEOUT_MS, vetoes: [] };
@@ -195,6 +238,12 @@ export function verifyRunnerReportReplayIntegrity(report: unknown): RunnerReplay
   if (!metadata || typeof metadata !== "object") {
     vetoes.push("runner_metadata_missing");
   } else {
+    if (!hasValidSandboxPolicy(metadata.sandbox_policy)) {
+      vetoes.push("runner_sandbox_policy_missing");
+    }
+    if (!hasValidDependencyLock(metadata.dependency_lock, String(record?.runner_id ?? result?.runner_id ?? "unknown"), result?.runner_version, metadata.script_sha256)) {
+      vetoes.push("runner_dependency_lock_missing");
+    }
     if (!isSha256(metadata.input_sha256)) {
       vetoes.push("runner_input_hash_missing");
     }
@@ -361,6 +410,10 @@ function runFromReport(projectRoot: string, projectId: string, reportRelativePat
     stdout_sha256: isSha256(metadata.stdout_sha256) ? metadata.stdout_sha256 : undefined,
     stderr_sha256: isSha256(metadata.stderr_sha256) ? metadata.stderr_sha256 : undefined,
     replay_argv: replayArgv,
+    sandbox_policy: hasValidSandboxPolicy(metadata.sandbox_policy) ? metadata.sandbox_policy : undefined,
+    dependency_lock: hasValidDependencyLock(metadata.dependency_lock, runnerId, runnerVersion, metadata.script_sha256)
+      ? metadata.dependency_lock
+      : undefined,
     environment: {
       node: process.version,
       platform: process.platform,

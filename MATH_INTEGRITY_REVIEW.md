@@ -89,6 +89,7 @@ Remaining mathematical work:
 - Phase 33 proof-obligation DAG, line-map, obligation YAML, `Skeleton.lean`, and skeleton-report artifacts are planning evidence only. Named `sorry` placeholders for all open obligations in skeleton artifacts cannot promote claims and must be discharged by the existing final clean Lean replay and gate path.
 - Phase 34 campaign-scoped ensemble artifacts prevent candidate or arbitration state from one supported campaign being selected or reported by another supported campaign that reuses local `PO-0001`/`CAND-0001` identifiers.
 - Phase 35 final replay stage-run artifact paths are claim-scoped, so audit trails for later campaigns point to the active claim's Lean evidence rather than a hardcoded first-claim path.
+- Phase 36 runner replay provenance binds sandbox policy and dependency-lock material into runner reports and replay manifests; missing provenance is a replay-integrity veto, not a warning.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -197,12 +198,18 @@ Phase 35 adds coverage for:
 - a second supported theorem-family campaign whose claim is not `C-0001`;
 - final replay path records aligned with the actual `FinalLeanReplay.claim_id`.
 
+Phase 36 adds coverage for:
+
+- compute runner report metadata carrying sandbox-policy and dependency-lock provenance;
+- replay manifests preserving the same provenance for each replayable run;
+- fail-closed replay-integrity vetoes for missing sandbox policy or dependency lock material.
+
 ### Residual Risks
 
 - Real Lean kernel checking is implemented for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. Phase 33 adds native planning artifacts for those slices, but general lemma decomposition, theorem synthesis, richer line-map provenance, and broader domain automation remain unimplemented.
 - MathProve now has both the Phase 9 fail-closed mock and the Phase 25 external `verify_sympy.py` evidence-runner bridge. Neither path should be interpreted as broad MathProve proof search, final-audit proof authority, or direct claim-status authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
-- Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, and Phase 24 reruns the implemented deterministic Python compute runners. Stronger OS/network sandboxing, dependency locks, cross-machine replay, and broader runner families remain unimplemented.
+- Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, Phase 24 reruns the implemented deterministic Python compute runners, and Phase 36 records runner sandbox/dependency provenance. OS-level sandbox enforcement, cross-machine replay, and broader runner families remain unimplemented.
 - Braid domain scripts provide exact/combinatorial evidence and risk flags; they do not prove physical interpretations or category-level equivalences.
 - Phase 21 read models improve inspection fidelity but are not mathematical authorities; claim promotion remains gated by evidence, artifacts, and proof-kernel replay where applicable.
 - Phase 22 improves Pi-side orchestration, Phase 26 validates Pi 0.75.5-compatible runtime registration, Phase 27 adds an AgentRun report/failure-memory boundary, and Phase 28 adds allowlisted process scheduling. None of these surfaces are proof authority, AgentRun reports cannot self-review their own GraphPatch proposals, child-process completion cannot promote claims, and production Pi/Codex agent profile integration plus full interactive Pi/comathd install-session e2e remain unimplemented.

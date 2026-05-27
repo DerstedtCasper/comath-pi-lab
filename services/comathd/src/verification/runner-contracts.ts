@@ -43,6 +43,19 @@ export type RunnerMetadata = {
   cwd_policy: "project_root";
   network: false;
   shell: false;
+  sandbox_policy: {
+    shell: false;
+    network: "denied_by_contract";
+    cwd_policy: "project_root";
+    allowed_executables: string[];
+    os_isolation: "process_boundary_only";
+  };
+  dependency_lock: {
+    runner_id: RunnerId;
+    runner_version: string;
+    script_sha256: string | null;
+    python_packages: Record<string, string>;
+  };
   timeout_ms: number;
   seed?: number;
   replay_input_json: string;
@@ -303,16 +316,30 @@ async function buildMetadata(
 ): Promise<RunnerMetadata> {
   const safeStdout = scrubHostPaths(stdout);
   const safeStderr = scrubHostPaths(stderr);
+  const script_sha256 = scriptPath ? (await sha256File(scriptPath)).sha256 : null;
   return {
     cwd_policy: "project_root",
     network: false,
     shell: false,
+    sandbox_policy: {
+      shell: false,
+      network: "denied_by_contract",
+      cwd_policy: "project_root",
+      allowed_executables: scriptPath ? ["python"] : [],
+      os_isolation: "process_boundary_only"
+    },
+    dependency_lock: {
+      runner_id: spec.runner_id,
+      runner_version: spec.runner_version,
+      script_sha256,
+      python_packages: scriptPath ? { sympy: "present" } : {}
+    },
     timeout_ms: request.timeout_ms,
     seed: request.seed,
     replay_input_json: inputJson,
     replay_input_sha256: sha256Text(inputJson),
     input_sha256: sha256Text(inputJson),
-    script_sha256: scriptPath ? (await sha256File(scriptPath)).sha256 : null,
+    script_sha256,
     replay_argv: scriptPath
       ? ["python", `<runner-path>/${spec.script ?? "unknown"}`, "--input-json", "<canonical-json>"]
       : ["placeholder", spec.runner_id, "--input-json", "<canonical-json>"],

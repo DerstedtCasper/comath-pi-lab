@@ -27,7 +27,8 @@ const requiredCapabilities = [
   "pi_runtime_registration_v0755",
   "proof_obligation_dag_planning",
   "campaign_scoped_ensemble_artifacts",
-  "claim_scoped_final_replay_artifacts"
+  "claim_scoped_final_replay_artifacts",
+  "runner_replay_sandbox_dependency_provenance"
 ];
 
 for (const capability of requiredCapabilities) {
@@ -40,7 +41,7 @@ const requiredResidualRisks = [
   "generic_proof_planning_deferred",
   "broad_mathprove_proof_search_deferred",
   "full_interactive_pi_e2e_install_flow_deferred",
-  "stronger_runner_reexecution_sandbox_deferred"
+  "runner_os_network_sandbox_enforcement_deferred"
 ];
 
 for (const risk of requiredResidualRisks) {

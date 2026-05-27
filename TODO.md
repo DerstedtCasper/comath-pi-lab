@@ -404,6 +404,14 @@
 - [x] Wire Phase 35 into the default `@comath/comathd` test chain.
 - [x] Add `claim_scoped_final_replay_artifacts` to service status capabilities and smoke requirements.
 
+## Phase 36: Runner Replay Sandbox And Dependency Provenance
+
+- [x] Add sandbox-policy provenance to compute runner reports and replay manifests.
+- [x] Add dependency-lock provenance for runner id/version, script hash, and Python package presence.
+- [x] Fail closed when replay integrity sees missing sandbox policy or dependency lock material.
+- [x] Wire Phase 36 into the default `@comath/comathd` test chain.
+- [x] Add `runner_replay_sandbox_dependency_provenance` to service status capabilities and smoke requirements.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -413,7 +421,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Live Pi/Codex agent adapter execution beyond the Phase 30 Pi agent profile tools, Phase 29 service profile API, and Phase 28 allowlisted process scheduler fixtures.
 - [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
-- [ ] Stronger runner re-execution sandboxing: OS-level isolation, network-denial enforcement, dependency lock capture, and cross-machine replay validation beyond the Phase 24 service-owned re-execution checks.
+- [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance: OS-level isolation, enforced network denial, and cross-machine replay validation.
 - [ ] OS-level process sandboxing and multi-process writer/session locks for scheduled AgentRuns beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, and scoped-write controls.
 - [ ] Richer statement equivalence beyond unique target signature matching: Lean parser integration, definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
 
