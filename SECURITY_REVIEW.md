@@ -155,6 +155,7 @@ Remaining security requirements:
 16. **Ensemble artifacts are campaign-scoped.** Phase 34 writes candidate workspaces, candidate batch indexes, and arbitration decisions under `.comath/campaign/<CAM>/ensembles/lemma_sprint/<PO>/`, so concurrent supported campaigns cannot overwrite or read each other's proof-candidate state.
 17. **Final replay audit paths are claim-scoped.** Phase 35 removes hardcoded `C-0001` pointers from final replay stage-run artifact paths, so later campaign audits point to the active claim's evidence bundle.
 18. **Runner replay provenance is explicit.** Phase 36 records sandbox policy and dependency-lock material in compute runner reports and replay manifests, and replay integrity fails closed if either class of provenance is missing.
+19. **Statement-alias equivalence is allowlisted.** Phase 37 accepts non-identical Lean target signatures only through explicit registered definitional aliases and records the witness; unregistered mismatches remain fail-closed.
 
 ### Validation Commands
 
@@ -249,6 +250,13 @@ node services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs
 Result: exit 0; runner reports and replay manifests carried sandbox/dependency provenance and missing provenance failed closed.
 ```
 
+Phase 37 targeted validation:
+
+```text
+node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs
+Result: exit 0; registered Lean statement alias equivalence passed and missing/ambiguous/unregistered mismatches failed closed.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
@@ -258,3 +266,4 @@ Result: exit 0; runner reports and replay manifests carried sandbox/dependency p
 - Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, but a full interactive Pi/comathd install-session e2e and richer runtime permission model remain separate hardening targets.
 - Phase 27 validates AgentRun persistence and scoped writes; Phase 28 adds service-side process launch and scheduler controls on top of that boundary.
 - Phase 28 validates absolute-realpath allowlisted process launch, minimal env inheritance, timeout/cancel, process-tree termination attempts, output byte caps, non-authoritative scheduler envelopes, and rpm/concurrency controls, but it does not yet provide OS-level sandboxing, network-denial enforcement, production Pi/Codex agent adapters, live log streaming APIs, or multi-process writer locks.
+- Phase 37 registers alias equivalence data in-process and does not add a new external execution boundary; richer Lean parser/logical-equivalence machinery remains a future proof-authority hardening target.

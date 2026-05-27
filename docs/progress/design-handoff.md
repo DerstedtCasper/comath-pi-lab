@@ -41,6 +41,7 @@ The repository has completed:
 - Phase 34 campaign-scoped ensemble artifacts for candidate workspaces, candidate batch indexes, and arbitration decisions;
 - Phase 35 claim-scoped final replay audit paths;
 - Phase 36 runner replay sandbox and dependency provenance;
+- Phase 37 registered Lean statement alias equivalence;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -49,7 +50,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, Phase 34 scopes ensemble candidate/decision artifacts by campaign, Phase 35 makes final replay audit paths claim-scoped, and Phase 36 records runner sandbox/dependency provenance with fail-closed replay-integrity checks. Phase 18-36 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, Phase 34 scopes ensemble candidate/decision artifacts by campaign, Phase 35 makes final replay audit paths claim-scoped, Phase 36 records runner sandbox/dependency provenance with fail-closed replay-integrity checks, and Phase 37 accepts only explicitly registered Lean definitional-alias signatures with a witness while preserving fail-closed mismatch behavior. Phase 18-37 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -71,7 +72,7 @@ Next correct action:
 /goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, and OS-level scheduled-process isolation.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-36 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-37 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -359,6 +360,15 @@ Apply it as follows:
 - Preserved sandbox/dependency provenance in replay manifests and made missing provenance a replay-integrity veto.
 - Added `services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs` and wired it into the default `@comath/comathd` test chain.
 - Remaining replay hardening: OS-level isolation, enforced network denial, cross-machine replay validation, and broader runner-family lockfiles.
+
+## Phase 37 Completion Notes
+
+- Added explicit `allowed_definitional_aliases` support to `checkStatementEquivalence()`.
+- Accepted non-identical Lean target theorem signatures only when a registered alias maps the locked formal spec statement to the exact extracted target signature.
+- Added an `equivalence_witness` record for accepted registered aliases.
+- Preserved hard vetoes for missing target check output, ambiguous target check output, and non-registered statement mismatches.
+- Added `services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Remaining statement-equivalence hardening: Lean parser integration, proof-producing definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
 
 ## Verification To Run At Phase Boundary
 

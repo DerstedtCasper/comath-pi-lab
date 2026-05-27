@@ -1416,6 +1416,76 @@ Phase 33 does not implement broad lemma decomposition or arbitrary theorem synth
 - Generic theorem synthesis and production proof-route agent execution remain deferred.
 - Skeleton artifacts are not built as final Lean targets; they are auditable planning outputs whose placeholders must be discharged later.
 
+## Phase 37 Registered Lean Statement Alias Equivalence Review Log
+
+### Scope
+
+Added a conservative registered-alias path to Lean statement equivalence. Phase 37 permits a target theorem signature to differ from the locked formal spec only when an explicit `allowed_definitional_aliases` entry maps the formal spec statement to the exact extracted target signature and records a witness. It does not claim full Lean parser integration, arbitrary definitional equality, transitive semantic equivalence, or proof-producing logical equivalence.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs
+Initial RED result: exit 1; alias output `MathResearch.C0001 (n : Nat) : Nat.add n 0 = n` failed because statement equivalence only accepted exact normalized target-signature equality.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding registered alias support and status capability wiring.
+
+node services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs
+Result: exit 0; Phase 32 target-signature equality and missing/ambiguous/mismatch regressions remained valid.
+
+node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs
+Result: exit 0; registered alias equivalence passed for Lean notation expansion, while missing, ambiguous, and non-registered mismatched target output failed closed.
+```
+
+### Changed Surfaces
+
+- Added `StatementDefinitionalAlias` and optional `allowed_definitional_aliases` input to `services/comathd/src/proof-kernel/lean/statement-equivalence.ts`.
+- Added `equivalence_witness` output for accepted registered definitional aliases.
+- Preserved existing exact-match status and hard vetoes for missing target output, ambiguous target output, and mismatched signatures.
+- Added `services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added `lean_statement_alias_equivalence` and `lean_parser_logical_equivalence_deferred` to runtime status and smoke requirements.
+- Updated README, TODO, acceptance matrix, handoff, AGENTS, security review, and mathematical-integrity review.
+
+### Boundary And Integrity Notes
+
+Registered aliases are allowlist entries, not inferred theorem equivalence. The implementation normalizes whitespace only, compares the locked formal statement and extracted target signature exactly after normalization, and records the alias justification as evidence metadata. A target theorem with the wrong operand order, missing `#check` output, or multiple target outputs is still rejected.
+
+This keeps statement equivalence target-bound after Phase 32 while allowing narrowly audited notation expansion cases such as `n + 0 = n` versus `Nat.add n 0 = n`.
+
+### Residual Risks
+
+- Lean parser integration remains deferred.
+- Proof-producing definitional/logical equivalence classes remain deferred.
+- Transitive dependency semantics and broader mathematical-domain trust profiles remain deferred.
+
+### Final Root Validation
+
+Fresh Phase 37 validation completed on 2026-05-28:
+
+```text
+node services/comathd/tests/phase0-smoke.test.mjs
+Result: exit 0; comathd Research Alpha smoke accepted `lean_statement_alias_equivalence` and the deferred Lean parser/logical-equivalence residual risk.
+
+node services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs
+Result: exit 0; Phase 32 exact target-signature binding regressions remained green.
+
+node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs
+Result: exit 0; Phase 37 registered statement-alias equivalence tests passed.
+
+node scripts/phase0-smoke.mjs
+Result: exit 0; Phase 0/design smoke check passed for 25 required entries and 28 invariants.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-37 package tests passed with Phase 37 wired into the default test chain.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests through Phase 37, and Phase 17 integrity evaluation passed.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+```
+
 ## Phase 36 Runner Replay Sandbox And Dependency Provenance Review Log
 
 ### Scope

@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-36")) {
-  invariantFailures.push("README must describe the current Phase 18-36 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-37")) {
+  invariantFailures.push("README must describe the current Phase 18-37 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -96,12 +96,20 @@ if (!acceptanceMatrix.includes("Runner replay sandbox/dependency provenance")) {
   invariantFailures.push("acceptance matrix must include Phase 36 runner replay provenance acceptance");
 }
 
+if (!acceptanceMatrix.includes("37 Registered Lean statement alias equivalence")) {
+  invariantFailures.push("acceptance matrix must include Phase 37 registered Lean statement alias equivalence acceptance");
+}
+
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
 }
 
 if (!acceptanceMatrix.includes("Statement equivalence is target-bound")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 statement-equivalence mathematical-integrity acceptance");
+}
+
+if (!acceptanceMatrix.includes("Registered statement aliases require witnesses")) {
+  invariantFailures.push("acceptance matrix must include Phase 37 registered-alias mathematical-integrity acceptance");
 }
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
@@ -114,6 +122,10 @@ if (!acceptanceMatrix.includes("Final replay audit paths are claim-scoped")) {
 
 if (!acceptanceMatrix.includes("sandbox-policy and dependency-lock material")) {
   invariantFailures.push("acceptance matrix must include Phase 36 replay provenance integrity language");
+}
+
+if (!acceptanceMatrix.includes("explicit alias acceptance")) {
+  invariantFailures.push("acceptance matrix must include Phase 37 registered statement-alias coverage language");
 }
 
 for (const [content, label] of [

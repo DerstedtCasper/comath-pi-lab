@@ -90,6 +90,7 @@ Remaining mathematical work:
 - Phase 34 campaign-scoped ensemble artifacts prevent candidate or arbitration state from one supported campaign being selected or reported by another supported campaign that reuses local `PO-0001`/`CAND-0001` identifiers.
 - Phase 35 final replay stage-run artifact paths are claim-scoped, so audit trails for later campaigns point to the active claim's Lean evidence rather than a hardcoded first-claim path.
 - Phase 36 runner replay provenance binds sandbox policy and dependency-lock material into runner reports and replay manifests; missing provenance is a replay-integrity veto, not a warning.
+- Phase 37 registered statement-alias equivalence accepts non-identical Lean target signatures only with an explicit definitional-alias witness; missing, ambiguous, or unregistered mismatches remain hard vetoes.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -204,9 +205,16 @@ Phase 36 adds coverage for:
 - replay manifests preserving the same provenance for each replayable run;
 - fail-closed replay-integrity vetoes for missing sandbox policy or dependency lock material.
 
+Phase 37 adds coverage for:
+
+- registered definitional alias acceptance for Lean notation expansion from `n + 0 = n` to `Nat.add n 0 = n`;
+- persisted equivalence witnesses for accepted aliases;
+- fail-closed rejection for missing target output, ambiguous target output, and non-registered mismatched theorem signatures.
+
 ### Residual Risks
 
 - Real Lean kernel checking is implemented for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. Phase 33 adds native planning artifacts for those slices, but general lemma decomposition, theorem synthesis, richer line-map provenance, and broader domain automation remain unimplemented.
+- Statement equivalence now supports exact target-signature equality and explicit registered aliases only. Lean parser integration, proof-producing definitional/logical equivalence, transitive semantic equivalence, and broader mathematical-domain trust profiles remain unimplemented.
 - MathProve now has both the Phase 9 fail-closed mock and the Phase 25 external `verify_sympy.py` evidence-runner bridge. Neither path should be interpreted as broad MathProve proof search, final-audit proof authority, or direct claim-status authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
 - Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, Phase 24 reruns the implemented deterministic Python compute runners, and Phase 36 records runner sandbox/dependency provenance. OS-level sandbox enforcement, cross-machine replay, and broader runner families remain unimplemented.

@@ -412,6 +412,15 @@
 - [x] Wire Phase 36 into the default `@comath/comathd` test chain.
 - [x] Add `runner_replay_sandbox_dependency_provenance` to service status capabilities and smoke requirements.
 
+## Phase 37: Registered Lean Statement Alias Equivalence
+
+- [x] Add explicit definitional-alias input for Lean statement-equivalence checks.
+- [x] Accept alias-equivalent target theorem signatures only when a registered alias maps the locked formal spec to the actual target signature.
+- [x] Preserve fail-closed behavior for missing target output, ambiguous target output, and non-registered mismatches.
+- [x] Persist an equivalence witness for accepted registered aliases.
+- [x] Wire Phase 37 into the default `@comath/comathd` test chain.
+- [x] Add `lean_statement_alias_equivalence` to service status capabilities and smoke requirements.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -423,7 +432,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance: OS-level isolation, enforced network denial, and cross-machine replay validation.
 - [ ] OS-level process sandboxing and multi-process writer/session locks for scheduled AgentRuns beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, and scoped-write controls.
-- [ ] Richer statement equivalence beyond unique target signature matching: Lean parser integration, definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
+- [ ] Richer statement equivalence beyond Phase 37 registered aliases: Lean parser integration, proof-producing definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
 
 ## Design Documentation Goal
 
