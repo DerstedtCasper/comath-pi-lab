@@ -32,12 +32,13 @@
 | 12 Paper | paper check fails on overclaim and missing provenance. |
 | 13 TriviumDB | capability probe, fallback/default-safe factory behavior, optional native snapshot/restore tests, and StableIdMap boundary tests pass without requiring native TriviumDB in default CI. |
 | 14 Braid domain | ontology, prompts, sample project, and computation protocols exist. |
-| 15 Dashboard | read-only/degraded text/TUI renderer tests pass; dashboard does not read/write `.comath/` directly or repair state. |
+| 15 Dashboard | read-only text/TUI renderer tests pass; dashboard does not read/write `.comath/` directly or repair state. |
 | 16 Snapshot/replay | service routes, export/verify/restore smoke tests, replay manifest verification, tamper checks, and secret scan gates pass. |
 | 17 Evaluation/audits | security review, math integrity review, and evaluation suite exist. |
 | 18 GA proof-kernel vertical slices | ResearchCampaign routes, proof-kernel replay manifest gate, 8-candidate artifacts, statement-drift/cheat rejection, exact refutation, snapshot restore/replay, and Pi campaign tool tests pass. |
 | 19 GA ensemble recovery | `phase19-ga-ensemble-recovery.test.mjs` verifies seven failed candidates plus one Lean-valid candidate selects the Lean-valid candidate, preserves all failed routes, and writes the V8 dialectical stress artifact. |
 | 20 GA campaign state machine | `phase20-ga-campaign-state-machine.test.mjs` verifies v3 canonical campaign states, terminal-state names, bounded ticks, proof completion, refutation completion, terminal invariants, and unsupported-goal blocking. |
+| 21 Service read models | `phase21-read-model-routes.test.mjs` verifies service-owned claim/evidence/gate list routes, and `phase15-dashboard.test.mjs` verifies the Pi dashboard reads those routes without mutation or direct `.comath/` access. |
 
 ## Security Acceptance
 
@@ -62,6 +63,7 @@
 | GA proof promotion is replay-bound | Phase 18 proof-kernel gate tests require passed final replay manifest for the same claim and reject fake metadata, statement drift, `sorry`, and `axiom`. |
 | Candidate voting is not proof | Phase 19 ensemble recovery test selects the only Lean-valid candidate despite seven failures and preserves those failures as proof memory. |
 | Campaign completion is state-machine gated | Phase 20 state-machine tests reject old public stage names, verify canonical terminal-state invariants, and block unsupported goals instead of allowing report-writing or hardcoded replay to complete a campaign. |
+| Dashboard read models are not proof authority | Phase 21 read-model routes expose claim/evidence/gate state for inspection only; the dashboard remains read-only and cannot promote, repair, or mutate mathematical state. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -73,6 +75,7 @@
 | Snapshot restore plus proof replay | `phase18-ga-snapshot-replay.test.mjs` restores a snapshot and reruns campaign replay. | Covered for campaign proof replay. |
 | Ensemble recovery | `phase19-ga-ensemble-recovery.test.mjs` covers the v3 16.4 benchmark and verifies the V8 `dialectical_stress.json` schema. | Covered for the implemented elementary slice. |
 | Canonical campaign states | `phase20-ga-campaign-state-machine.test.mjs` rejects old public stage names and verifies `problem_locked`, `candidate_*`, `final_global_replay`, `completed_formal_proof`, and `completed_refutation` API states. | Covered for the implemented proof and refutation slices. |
+| Dashboard service read model | `phase21-read-model-routes.test.mjs` and `phase15-dashboard.test.mjs` cover `claim/evidence/gate` list routes and read-only dashboard aggregation. | Covered for product inspection; not mathematical authority. |
 | Global GA readiness | Current test evidence does not cover arbitrary theorem planning, real MathProve execution, production Pi runtime registration, native TriviumDB validation, or generic runner re-execution replay. | Not achieved; blocked by deferred generalization work. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the Phase 18 slices. | Deferred. |
 | Production Pi runtime registration | Extension descriptors and tool mappings exist; installed runtime API registration is not validated. | Deferred. |

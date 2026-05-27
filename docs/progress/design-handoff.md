@@ -25,6 +25,7 @@ The repository has completed:
 - Phase 18 GA proof-kernel vertical slices;
 - Phase 19 GA ensemble recovery and V8 dialectical stress coverage;
 - Phase 20 GA canonical ResearchCampaign state-machine coverage;
+- Phase 21 service read-model routes and dashboard aggregation;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -33,7 +34,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, and Phase 20 aligns public ResearchCampaign states with the v3 goal instruction. Phase 18-20 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, and Phase 21 adds service-owned read models for dashboard inspection. Phase 18-21 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -55,7 +56,7 @@ Next correct action:
 /goal Start the next generalization phase for generic proof planning, real MathProve execution, Pi runtime registration, TriviumDB native evaluation, and runner re-execution replay.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-20 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-21 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -151,7 +152,7 @@ Apply it as follows:
 - Implement extension-side read-only dashboard aggregation and renderers.
 - Dashboard aggregation may call `comathd` read routes through the client; it must not read `.comath` files directly.
 - Renderers must be pure presentation functions and must not write persistent dashboard snapshots.
-- Missing service list APIs should be reported as `degraded` read-model limitations, not bypassed from Pi extension code.
+- Service-owned claim/evidence/gate list APIs are available as of Phase 21; any future missing read model should be reported as `degraded` rather than bypassed from Pi extension code.
 - Any future mutations remain explicit tool calls with confirmation; dashboard views cannot repair or promote state.
 - Extension entrypoint descriptors may register snapshot/replay tools, but dashboard renderer/widget/review files must not implement persistence or read `.comath/` directly.
 
@@ -202,6 +203,14 @@ Apply it as follows:
 - Split campaign ticks into bounded resumable stages through context, planning, candidate generation, verification, arbitration, integration, adversarial review, final audit, final replay, and canonical terminal completion.
 - Added explicit unsupported-target blocking so canonical state-machine coverage is necessary evidence, not sufficient global GA readiness.
 - Added `campaign_state_machine_v3` to the service status capability list.
+
+## Phase 21 Completion Notes
+
+- Added `GET /claim/list`, `GET /evidence/list`, and `GET /gate/list` to `comathd`.
+- Added `services/comathd/tests/integration/phase21-read-model-routes.test.mjs`.
+- Updated the Pi dashboard aggregator to read claim, evidence, and gate-result boards from service routes.
+- Kept dashboard rendering read-only: no service-internal imports, direct `.comath/` reads/writes, state repair, claim promotion, GraphPatch apply, or snapshot export.
+- Added `claim_evidence_gate_read_models` to the service status capability list.
 
 ## Verification To Run At Phase Boundary
 

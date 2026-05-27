@@ -6,7 +6,7 @@ Date: 2026-05-25
 
 This retrospective summarizes the Phase 0-17 Research Alpha implementation of CoMath Pi Lab. It is an engineering and audit record, not a claim of mathematical discovery or proof capability.
 
-Postscript: Phase 18, completed after this retrospective, adds native CoMath proof-kernel GA vertical slices. The retrospective below remains the Phase 0-17 record; current status and Phase 18 evidence are tracked in `REVIEW.md`, `TODO.md`, and `docs/progress/design-handoff.md`.
+Postscript: Phases 18-21, completed after this retrospective, add native CoMath proof-kernel GA vertical slices, ensemble recovery, canonical campaign states, and service-owned dashboard read models. The retrospective below remains the Phase 0-17 record; current status and Phase 18-21 evidence are tracked in `REVIEW.md`, `TODO.md`, and `docs/progress/design-handoff.md`.
 
 ## Completed Capabilities
 
@@ -66,7 +66,6 @@ Final recorded validation on 2026-05-25 passed build, typecheck, root test, and 
 ## Next Research Beta Candidates
 
 - Real Lean/MathProve final-audit integration with kernel proof artifact validation.
-- Dedicated service read routes for claim/evidence/gate listing so the dashboard no longer depends on degraded paper-derived read models.
 - Native TriviumDB persistence/search evaluation behind the existing adapter boundary.
 - Runner re-execution for replay manifests with sandboxed dependency/version checks.
 - Richer braid/YBE exact matrix checks and Lean skeleton elaboration workflows.

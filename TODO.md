@@ -270,6 +270,13 @@
 - [x] Add bounded ticks for `problem_locked -> context_built -> planning -> candidate_generation -> candidate_verification -> candidate_arbitration -> integration -> adversarial_review -> final_static_audit -> final_global_replay -> completed_*`.
 - [x] Add Phase 20 regression coverage and wire it into the default `@comath/comathd` test chain.
 
+## Phase 21: Service Read Models For Dashboard
+
+- [x] Add `/claim/list`, `/evidence/list`, and `/gate/list` read-only routes owned by `comathd`.
+- [x] Add Phase 21 route coverage for claim/evidence/gate boards and gate-result filtering.
+- [x] Update the Pi dashboard aggregator to read claims, evidence, and gate vetoes from service routes rather than paper-derived degraded placeholders.
+- [x] Keep dashboard renderers pure and read-only; the dashboard still cannot promote claims, apply patches, repair state, or write snapshots.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -278,7 +285,6 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Real MathProve execution beyond the fail-closed bridge mock and native CoMath proof-kernel slices.
 - [ ] Real agent runner/scheduler that launches and rate-limits persistent Pi/Codex child agents rather than only static definitions and service-owned campaign ticks.
 - [ ] Production Pi extension runtime registration, after official API assumptions are revalidated against the installed Pi version.
-- [ ] Dedicated service read routes for claim/evidence/gate listing so the dashboard no longer uses degraded paper-derived read models.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Runner re-execution replay under an OS/network sandbox with dependency/version checks.
 - [ ] Richer statement equivalence, Lean parser integration, and configurable trust profiles for broader mathematical domains.

@@ -26,6 +26,42 @@ const client = {
         ]
       };
     }
+    if (path.startsWith("/claim/list")) {
+      return {
+        claims: [
+          {
+            id: "C-0001",
+            status: "conjectural",
+            statement: "For every natural number n, n + 0 = n.",
+            evidence_level: 0
+          }
+        ]
+      };
+    }
+    if (path.startsWith("/evidence/list")) {
+      return {
+        evidence: [
+          {
+            id: "EV-0001",
+            claim_id: "C-0001",
+            kind: "lean",
+            summary: "Lean replay evidence"
+          }
+        ]
+      };
+    }
+    if (path.startsWith("/gate/list")) {
+      return {
+        gates: [
+          {
+            id: "GR-0001",
+            claim_id: "C-0001",
+            ok: false,
+            vetoes: ["missing final replay"]
+          }
+        ]
+      };
+    }
     if (path.startsWith("/paper/state")) {
       return {
         manifest: { paper_id: "PAPER-0001", title: "Braid Notes" },
@@ -37,6 +73,14 @@ const client = {
             source_workstreams: ["WS-0001"],
             warnings: ["requires source"],
             blockers: ["missing formal proof"]
+          },
+          {
+            id: "PMN-0002",
+            claim_id: "C-PAPER-ONLY",
+            evidence_ids: ["EV-PAPER-ONLY"],
+            source_workstreams: [],
+            warnings: [],
+            blockers: ["paper-only blocker"]
           }
         ]
       };
@@ -66,9 +110,16 @@ assert.equal(snapshot.project.project_id, "PRJ-0001");
 assert.equal(snapshot.project.name, "Dashboard Project");
 assert.equal(snapshot.paper.check.ok, false);
 assert.equal(snapshot.paper.margin_notes[0].claim_id, "C-0001");
-assert.equal(snapshot.degraded.includes("claim_list_unavailable"), true);
-assert.equal(snapshot.degraded.includes("evidence_list_unavailable"), true);
-assert.equal(calls.length, 4);
+assert.equal(snapshot.degraded.includes("claim_list_unavailable"), false);
+assert.equal(snapshot.degraded.includes("evidence_list_unavailable"), false);
+assert.equal(snapshot.degraded.includes("gate_result_list_unavailable"), false);
+assert.equal(snapshot.claims[0].status, "conjectural");
+assert.equal(snapshot.claims[0].statement, "For every natural number n, n + 0 = n.");
+assert.equal(snapshot.evidence[0].source, "runner");
+assert.equal(snapshot.claims.some((claim) => claim.id === "C-PAPER-ONLY"), false);
+assert.equal(snapshot.evidence.some((item) => item.id === "EV-PAPER-ONLY"), false);
+assert.equal(snapshot.blockers.some((item) => item.source === "gate" && item.reason === "missing final replay"), true);
+assert.equal(calls.length, 7);
 assert.equal(calls.every((call) => call.method === "GET"), true);
 assert.equal(calls.some((call) => call.path.includes("/paper/render-claim")), false);
 assert.equal(calls.some((call) => call.path.includes("/claim/update")), false);
@@ -85,7 +136,9 @@ assert.equal(text.includes("C-0001"), true);
 assert.equal(text.includes("EV-0001"), true);
 assert.equal(text.includes("WS-0001"), true);
 assert.equal(text.includes("hidden_blocker"), true);
-assert.equal(text.includes("claim_list_unavailable"), true);
+assert.equal(text.includes("claim_list_unavailable"), false);
+assert.equal(text.includes("Gate Results"), true);
+assert.equal(text.includes("missing final replay"), true);
 
 const emptyText = renderDashboardText({
   project: { project_id: "PRJ-EMPTY" },

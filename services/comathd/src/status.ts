@@ -30,7 +30,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "phase17_integrity_evaluation",
       "proof_kernel_ga_vertical_slice",
       "proof_kernel_ensemble_recovery",
-      "campaign_state_machine_v3"
+      "campaign_state_machine_v3",
+      "claim_evidence_gate_read_models"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

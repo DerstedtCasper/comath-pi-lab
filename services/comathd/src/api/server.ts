@@ -3,8 +3,9 @@ import { URL } from "node:url";
 import { toComathError } from "../errors.js";
 import { getComathdStatus } from "../status.js";
 import { getProjectStatus, initProject, openProject } from "../project/project-store.js";
-import { getClaim, linkClaims, registerClaim, updateClaim } from "../claim/claim-store.js";
-import { promoteClaim } from "../verification/gate.js";
+import { getClaim, linkClaims, readClaims, registerClaim, updateClaim } from "../claim/claim-store.js";
+import { readEvidenceRecords } from "../evidence/store.js";
+import { promoteClaim, readGateResults } from "../verification/gate.js";
 import {
   checkPaper,
   exportPaper,
@@ -170,6 +171,37 @@ async function route(method: string, path: string, body: unknown, context: Route
           parsedUrl.searchParams.get("claim_id") ?? ""
         )
       })
+    ],
+    [
+      "GET /claim/list",
+      (_payload, parsedUrl) => ({
+        claims: readClaims(
+          parsedUrl.searchParams.get("project_root") ?? "",
+          parsedUrl.searchParams.get("project_id") ?? undefined
+        )
+      })
+    ],
+    [
+      "GET /evidence/list",
+      (_payload, parsedUrl) => {
+        const projectRoot = parsedUrl.searchParams.get("project_root") ?? "";
+        const projectId = parsedUrl.searchParams.get("project_id") ?? undefined;
+        const claimId = parsedUrl.searchParams.get("claim_id") ?? undefined;
+        const evidence = readEvidenceRecords(projectRoot, projectId).filter(
+          (record) => !claimId || record.claim_id === claimId
+        );
+        return { evidence };
+      }
+    ],
+    [
+      "GET /gate/list",
+      (_payload, parsedUrl) => {
+        const projectRoot = parsedUrl.searchParams.get("project_root") ?? "";
+        const projectId = parsedUrl.searchParams.get("project_id") ?? undefined;
+        const claimId = parsedUrl.searchParams.get("claim_id") ?? undefined;
+        const gates = readGateResults(projectRoot, projectId).filter((gate) => !claimId || gate.claim_id === claimId);
+        return { gates };
+      }
     ],
     [
       "POST /workstream/spawn",

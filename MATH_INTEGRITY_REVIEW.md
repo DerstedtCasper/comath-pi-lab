@@ -72,6 +72,7 @@ Remaining mathematical work:
 - Phase 18 native proof-kernel slice: `services/comathd/src/proof-kernel/`, `services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs`, `services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs`, `services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs`, and `services/comathd/tests/integration/phase18-ga-snapshot-replay.test.mjs`.
 - Phase 19 ensemble recovery and V8 stress coverage: `services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs`, `dialecticalStressSchema`, and the V8 `dialectical_stress.json` artifact writer.
 - Phase 20 canonical ResearchCampaign state coverage: `services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs`, `campaignStageSchema`, `campaignTerminalStateSchema`, and bounded canonical campaign ticks.
+- Phase 21 service read-model coverage: `services/comathd/tests/integration/phase21-read-model-routes.test.mjs` and `extensions/comath-pi/tests/phase15-dashboard.test.mjs`.
 
 ### Current Invariants
 
@@ -128,6 +129,13 @@ Phase 20 adds coverage for:
 - separation between public campaign states and internal proof-kernel artifact stages;
 - bounded ticks through context, planning, candidate generation, verification, arbitration, integration, adversarial review, final audit, final replay, and canonical proof/refutation completion states.
 
+Phase 21 adds coverage for:
+
+- service-owned read-only claim, evidence, and gate-result list routes;
+- dashboard aggregation over `/claim/list`, `/evidence/list`, and `/gate/list` without dashboard mutation or direct `.comath/` access;
+- gate vetoes appearing as dashboard blockers for inspection only;
+- rejection of hidden paper-derived fallback rows in the claim/evidence board once service read models exist.
+
 ### Residual Risks
 
 - Real Lean kernel checking is implemented for the Phase 18-20 `Nat.add_zero` vertical slice and its clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
@@ -135,3 +143,4 @@ Phase 20 adds coverage for:
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
 - Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, but generic computation runner re-execution remains deferred.
 - Braid domain scripts provide exact/combinatorial evidence and risk flags; they do not prove physical interpretations or category-level equivalences.
+- Phase 21 read models improve inspection fidelity but are not mathematical authorities; claim promotion remains gated by evidence, artifacts, and proof-kernel replay where applicable.

@@ -1078,6 +1078,73 @@ Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
 
+## Phase 21 Service Read-Model Dashboard Review Log
+
+### Scope
+
+Added service-owned read-only list routes for claim, evidence, and gate-result state, then moved the Pi dashboard aggregator from degraded paper-derived placeholders to those routes. Phase 21 improves product inspection and dashboard fidelity; it does not change proof authority, promotion rules, or mathematical gate semantics.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/integration/phase21-read-model-routes.test.mjs
+Initial RED result: exit 1; route injection returned 404 for missing `/claim/list`, `/evidence/list`, and `/gate/list`.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding read-model routes.
+
+node services/comathd/tests/integration/phase21-read-model-routes.test.mjs
+Result: exit 0; Phase 21 read-model route tests passed for claim/evidence/gate boards and claim-filtered gate results.
+
+corepack pnpm --filter @comath/pi-extension build; corepack pnpm --filter @comath/pi-extension exec node tests/phase15-dashboard.test.mjs
+Initial RED result after review: exit 1; paper-only margin provenance still appeared in the claim/evidence board without a degraded marker.
+
+corepack pnpm --filter @comath/pi-extension build; corepack pnpm --filter @comath/pi-extension exec node tests/phase15-dashboard.test.mjs
+Result: exit 0; dashboard board aggregation now treats `/claim/list`, `/evidence/list`, and `/gate/list` as the sole claim/evidence/gate board sources while retaining paper margin provenance only in paper/blocker sections.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed, including dashboard aggregation over `/claim/list`, `/evidence/list`, and `/gate/list`.
+```
+
+### Changed Surfaces
+
+- Added `GET /claim/list`, `GET /evidence/list`, and `GET /gate/list` to `services/comathd/src/api/server.ts`.
+- Added `services/comathd/tests/integration/phase21-read-model-routes.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Updated `extensions/comath-pi/src/renderers.ts` so dashboard aggregation reads claim, evidence, and gate boards through `comathd` routes.
+- Added `GateBoardItem` and gate blockers to `extensions/comath-pi/src/widgets.ts` and dashboard renderers.
+- Updated Phase 15 dashboard tests so `claim_list_unavailable`, `evidence_list_unavailable`, and `gate_result_list_unavailable` are no longer expected for the implemented service read models.
+- Added a regression guard that paper-only margin claims/evidence cannot silently populate the claim/evidence board.
+- Added `claim_evidence_gate_read_models` to `getComathdStatus()`.
+
+### Boundary And Integrity Notes
+
+The new routes are inspection surfaces only. They call existing store readers and expose persisted claim, evidence, and gate-result records; they do not promote claims, apply GraphPatch, repair state, export snapshots, or write dashboard artifacts.
+
+The Pi dashboard remains a thin client over `comathd` read routes. It still avoids service-internal imports and direct `.comath/` filesystem reads/writes. Failed gate vetoes can now appear as dashboard blockers, but those blockers are explanatory UI state, not proof authority.
+
+Paper margin provenance remains visible in the Paper and Blockers sections. It is no longer used as a hidden fallback to create claim/evidence board rows after service read models exist.
+
+### Residual Risks
+
+- The dashboard still has text/TUI renderers rather than validated production Pi runtime registration.
+- Route responses are service-owned JSON read models, not a richer query/index layer over native TriviumDB.
+- Global GA remains blocked by generic proof planning, real MathProve execution, real child-agent scheduling, native TriviumDB validation, sandboxed runner re-execution, production Pi registration, and richer statement equivalence.
+
+### Final Root Validation
+
+Fresh Phase 21 validation completed on 2026-05-27:
+
+```text
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-20 tests plus Phase 21 read-model route tests passed.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed, including the Phase 15 dashboard service-read-model regression.
+
+corepack pnpm test
+Result: exit 0; Phase 0/design smoke, workspace package tests, Phase 21 read-model routes, dashboard tests, and Phase 17 integrity evaluation passed.
+```
+
 ## Phase 20 GA Campaign State-Machine Vertical-Slice Review Log
 
 ### Scope

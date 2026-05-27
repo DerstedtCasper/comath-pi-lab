@@ -27,6 +27,15 @@ export type EvidenceBoardItem = {
   source: "margin_note" | "artifact" | "runner" | "literature" | "unknown";
 };
 
+export type GateBoardItem = {
+  id: string;
+  claim_id?: string;
+  ok: boolean;
+  target_status?: string;
+  vetoes: string[];
+  warnings: string[];
+};
+
 export type PaperDashboardState = {
   manifest?: unknown;
   margin_notes: Array<{
@@ -46,7 +55,7 @@ export type PaperDashboardState = {
 };
 
 export type BlockerItem = {
-  source: "paper" | "margin_note" | "workstream" | "degraded";
+  source: "paper" | "margin_note" | "workstream" | "gate" | "degraded";
   reason: string;
   target_id?: string;
 };
@@ -56,6 +65,7 @@ export type DashboardSnapshot = {
   claims: ClaimBoardItem[];
   workstreams: WorkstreamBoardItem[];
   evidence: EvidenceBoardItem[];
+  gates: GateBoardItem[];
   paper: PaperDashboardState;
   blockers: BlockerItem[];
   generated_at: string;
