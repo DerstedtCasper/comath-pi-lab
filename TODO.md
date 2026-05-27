@@ -334,16 +334,26 @@
 - [x] Reject GraphPatch producer self-review so an AgentRun cannot review its own proposed patch before trusted graph application.
 - [x] Add Phase 27 tests for create/start/report/list/write-scope/self-review/failure-memory/audit behavior and wire them into the default `@comath/comathd` test chain.
 
+## Phase 28: AgentRun Process Scheduler
+
+- [x] Add a service-side `AgentRunScheduler` that launches real child processes with `shell:false`, absolute-realpath allowlisted programs, bounded timeout, and minimal AgentRun environment variables.
+- [x] Enforce `max_concurrent` and `rpm` scheduler controls before child process start, including enqueue-time rpm reservation.
+- [x] Capture byte-capped stdout/stderr under `.tmp/comath/<ARUN>/logs/` through the Phase 27 AgentRun scoped writer, with truncation markers.
+- [x] Submit scheduler results back through `submitAgentRunReport()` so success, invalid report, timeout, nonzero failure, running cancellation, and queued cancellation become durable AgentRun state.
+- [x] Add cancellation support for running and queued AgentRuns, process-tree termination attempts, and audit events for started/completed/timed-out/cancelled/queued-cancelled/rate-limited launches.
+- [x] Add Phase 28 tests for real process launch, serial scheduling, absolute allowlist rejection, env isolation, invalid-report fail-closed handling, timeout, cancellation, rpm rejection, logs, output truncation, process-tree termination, non-authoritative report envelopes, and report persistence; wire them into the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond registered theorem families (`Nat.add_zero`, `Nat.mul_zero`) and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
-- [ ] Real agent launcher/scheduler that starts and rate-limits persistent Pi/Codex child-agent processes; Phase 27 covers only auditable AgentRun persistence, scoped writes, reports, and failure memory.
+- [ ] Production Pi/Codex child-agent profile integration beyond Phase 28's allowlisted process scheduler fixtures.
 - [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Stronger runner re-execution sandboxing: OS-level isolation, network-denial enforcement, dependency lock capture, and cross-machine replay validation beyond the Phase 24 service-owned re-execution checks.
+- [ ] OS-level process sandboxing and multi-process writer/session locks for scheduled AgentRuns beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, and scoped-write controls.
 - [ ] Richer statement equivalence, Lean parser integration, and configurable trust profiles for broader mathematical domains.
 
 ## Design Documentation Goal

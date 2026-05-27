@@ -1,6 +1,6 @@
 # SECURITY REVIEW
 
-Current-state note: sections below are chronological. The Phase 0 statement describes the bootstrap-only repository state at that time; later phases now include controlled runtime writes, runner execution, memory mutation, proof-kernel replay, Pi runtime registration, and AgentRun scoped write boundaries.
+Current-state note: sections below are chronological. The Phase 0 statement describes the bootstrap-only repository state at that time; later phases now include controlled runtime writes, runner execution, memory mutation, proof-kernel replay, Pi runtime registration, AgentRun scoped write boundaries, and allowlisted AgentRun process scheduling.
 
 ## Phase 0
 
@@ -150,6 +150,7 @@ Remaining security requirements:
 11. **Formal promotion requires replay evidence.** The gate rejects preloaded kernel metadata unless the requested artifacts include a passed proof-kernel `final_replay_manifest.json` for the same claim.
 12. **Compute runner replay no longer trusts manifest descriptors alone.** Strict `/replay/verify-manifest` reconstructs allowlisted runner commands from service code, uses persisted canonical runner input, and fails closed on replay/report drift, static snapshot vetoes before Python execution, script hash drift, input hash drift, oversized replay timeout, report-local stdio hash drift, untrusted replay argv, runner-version drift, nonzero exit, timeout, invalid JSON, runner ID mismatch, and result hash mismatch.
 13. **External MathProve runner is service-owned and non-authoritative.** Phase 25 invokes only the sibling `MathProve-Skill` `scripts/verify_sympy.py` through a fixed argv template, controlled `.comath/evidence/<claim>/mathprove` workspace, bounded timeout, explicit `shell:false`, and `network=false` metadata. Untrusted runner roots, missing runner, and statement-hash mismatch paths are archived fail-closed before promotion is attempted.
+14. **AgentRun scheduled processes are bounded and non-authoritative.** Phase 28 requires absolute-realpath program allowlists, `shell:false`, scoped `.tmp/comath/<ARUN>/` cwd/log paths, minimal inherited environment, sensitive env rejection, enqueue-time rpm reservation, queued/running cancellation, byte-capped stdout/stderr with truncation markers, scheduler report envelopes with `proof_authority: none`, invalid-report fail-closed persistence, and timeout/cancel process-tree termination attempts.
 
 ### Validation Commands
 
@@ -209,6 +210,13 @@ node services/comathd/tests/unit/phase27-agent-run-runtime.test.mjs
 Result: exit 0; AgentRun runtime-boundary tests passed, including scoped workstream and `.tmp/comath/<ARUN>/` writes, outside-scope rejection, report validation, producer self-review rejection, and failed-route memory recording.
 ```
 
+Phase 28 targeted validation added after the Research Alpha audit:
+
+```text
+node services/comathd/tests/unit/phase28-agent-run-scheduler.test.mjs
+Result: exit 0; AgentRun scheduler tests passed, including absolute-realpath allowlisted real process launch, serial scheduling, enqueue-time rpm rejection, minimal environment inheritance, sensitive env rejection, invalid-report fail-closed handling, timeout, running and queued cancellation, scoped byte-capped stdout/stderr logs, process-tree termination attempts, non-authoritative scheduler report envelopes, and report persistence.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
@@ -216,4 +224,5 @@ Result: exit 0; AgentRun runtime-boundary tests passed, including scoped workstr
 - Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, and Phase 24 reruns the implemented Python compute runners through strict replay. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but stronger OS-level sandboxing, enforced network denial, dependency lock capture, and cross-machine replay validation remain deferred.
 - `comathd` still lacks lock/session semantics for multi-process writers; current tests exercise single-process Research Alpha behavior.
 - Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, but a full interactive Pi/comathd install-session e2e and richer runtime permission model remain separate hardening targets.
-- Phase 27 validates AgentRun persistence and scoped writes, but it does not yet launch child-agent processes, stream logs, enforce OS process isolation, or rate-limit real agent execution.
+- Phase 27 validates AgentRun persistence and scoped writes; Phase 28 adds service-side process launch and scheduler controls on top of that boundary.
+- Phase 28 validates absolute-realpath allowlisted process launch, minimal env inheritance, timeout/cancel, process-tree termination attempts, output byte caps, non-authoritative scheduler envelopes, and rpm/concurrency controls, but it does not yet provide OS-level sandboxing, network-denial enforcement, production Pi/Codex agent adapters, live log streaming APIs, or multi-process writer locks.

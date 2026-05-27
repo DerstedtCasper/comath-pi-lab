@@ -175,10 +175,10 @@ Phase 25 adds coverage for:
 
 ### Residual Risks
 
-- Real Lean kernel checking is implemented for the registered Phase 18-27 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
+- Real Lean kernel checking is implemented for the registered Phase 18-28 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
 - MathProve now has both the Phase 9 fail-closed mock and the Phase 25 external `verify_sympy.py` evidence-runner bridge. Neither path should be interpreted as broad MathProve proof search, final-audit proof authority, or direct claim-status authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
 - Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, and Phase 24 reruns the implemented deterministic Python compute runners. Stronger OS/network sandboxing, dependency locks, cross-machine replay, and broader runner families remain unimplemented.
 - Braid domain scripts provide exact/combinatorial evidence and risk flags; they do not prove physical interpretations or category-level equivalences.
 - Phase 21 read models improve inspection fidelity but are not mathematical authorities; claim promotion remains gated by evidence, artifacts, and proof-kernel replay where applicable.
-- Phase 22 improves Pi-side orchestration, Phase 26 validates Pi 0.75.5-compatible runtime registration, and Phase 27 adds an AgentRun report/failure-memory boundary. None of these surfaces are proof authority, AgentRun reports cannot self-review their own GraphPatch proposals, and a real child-agent launcher/scheduler plus full interactive Pi/comathd install-session e2e remain unimplemented.
+- Phase 22 improves Pi-side orchestration, Phase 26 validates Pi 0.75.5-compatible runtime registration, Phase 27 adds an AgentRun report/failure-memory boundary, and Phase 28 adds allowlisted process scheduling. None of these surfaces are proof authority, AgentRun reports cannot self-review their own GraphPatch proposals, child-process completion cannot promote claims, and production Pi/Codex agent profile integration plus full interactive Pi/comathd install-session e2e remain unimplemented.

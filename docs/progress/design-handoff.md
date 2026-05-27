@@ -32,6 +32,7 @@ The repository has completed:
 - Phase 25 real MathProve external evidence-runner bridge;
 - Phase 26 Pi runtime registration against installed Pi 0.75.5 loader behavior;
 - Phase 27 AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, and failure memory;
+- Phase 28 AgentRun process scheduler for allowlisted child-process launch, logging, timeout/cancel, concurrency, and rpm controls;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -40,7 +41,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, and installed-loader smoke, and Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory. Phase 18-27 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, and Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls. Phase 18-28 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -59,10 +60,10 @@ Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA pr
 Next correct action:
 
 ```text
-/goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, and persistent child-agent scheduling.
+/goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, production Pi/Codex child-agent profile integration, and OS-level scheduled-process isolation.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-27 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-28 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -191,7 +192,7 @@ Apply it as follows:
 - Added negative coverage for fake formal metadata, static Lean cheats, statement drift, and high-scoring drifted candidates.
 - Added exact counterexample refutation for `n + 1 = n` and snapshot restore followed by proof replay.
 - Added Pi `/cm:research`, `/cm:campaign`, and campaign tool descriptors that call `comathd` without direct `.comath/` writes.
-- Remaining generalization work: broader proof planning, broad MathProve proof search/final-audit semantics, full interactive Pi/comathd install-session e2e, native TriviumDB target validation, stronger OS/network runner replay sandboxing, richer statement equivalence, and a real persistent child-agent runner.
+- Remaining generalization work: broader proof planning, broad MathProve proof search/final-audit semantics, full interactive Pi/comathd install-session e2e, native TriviumDB target validation, stronger OS/network runner replay sandboxing, richer statement equivalence, production Pi/Codex child-agent profile integration, and OS-level scheduled-process isolation.
 
 ## Phase 19 Completion Notes
 
@@ -226,7 +227,7 @@ Apply it as follows:
 - Added scoped campaign-loop capability checks for project root, actor, token presence, and tick budget.
 - Added `extensions/comath-pi/tests/phase22-research-loop.test.mjs`.
 - Kept proof authority and trusted state mutation in `comathd`; the loop starts and ticks campaigns through service routes and returns the service-backed dashboard.
-- Full interactive Pi/comathd install-session e2e and a real persistent child-agent scheduler remain deferred.
+- Full interactive Pi/comathd install-session e2e and production Pi/Codex child-agent profile integration remain deferred.
 
 ## Phase 23 Completion Notes
 
@@ -263,7 +264,7 @@ Apply it as follows:
 - Added a default export runtime factory that registers only currently executable research/campaign tools through Pi while leaving descriptor-only tools out of the production runtime factory.
 - Kept `confirmation_id` host-injected on the Pi runtime path: mutating runtime tools prompt through `ctx.ui.confirm()` and do not expose `confirmation_id` as a model-supplied parameter.
 - Added `extensions/comath-pi/tests/phase26-pi-runtime-registration.test.mjs` and `pi_runtime_registration_v0755` status capability.
-- Remaining Pi hardening: full interactive Pi/comathd install-session e2e, richer runtime permission UX, and persistent child-agent scheduling.
+- Remaining Pi hardening: full interactive Pi/comathd install-session e2e, richer runtime permission UX, and production Pi/Codex child-agent profile integration.
 
 ## Phase 27 Completion Notes
 
@@ -272,7 +273,16 @@ Apply it as follows:
 - Kept `.tmp/comath/<ARUN>/` writes scoped to `assertAgentRunWriteAllowed()` without weakening the global `.comath` runtime-write policy.
 - Added GraphPatch producer self-review rejection and durable failed-run `FailureRoute` memory nodes.
 - Added `services/comathd/tests/unit/phase27-agent-run-runtime.test.mjs` and `agent_run_runtime_boundary` status capability.
-- Remaining agent hardening: real child-agent process launcher, scheduler, rate limiting, cancellation, log streaming, and multi-process writer locks.
+- Remaining agent hardening after Phase 27 was real process launch, scheduler controls, cancellation, logs, and multi-process writer locks.
+
+## Phase 28 Completion Notes
+
+- Added `services/comathd/src/agents/agent-run-scheduler.ts` with `createAgentRunScheduler()` and an `AgentRunScheduler` class.
+- Scheduler launches real allowlisted child processes with `shell:false`, scoped cwd, AgentRun environment variables, timeout, cancellation, `max_concurrent`, and `rpm` controls.
+- Captures stdout/stderr under `.tmp/comath/<ARUN>/logs/` through the Phase 27 scoped writer and persists reports through `submitAgentRunReport()`.
+- Added scheduler audit events for process started/completed/timed out/cancelled/rate limited.
+- Added `services/comathd/tests/unit/phase28-agent-run-scheduler.test.mjs` and `agent_run_process_scheduler` status capability.
+- Remaining agent hardening: production Pi/Codex agent profile adapters, OS-level process sandboxing/network denial, log streaming APIs, and multi-process writer/session locks.
 
 ## Verification To Run At Phase Boundary
 

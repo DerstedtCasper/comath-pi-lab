@@ -24,6 +24,14 @@ export type StartAgentRunInput = {
   actor: string;
 };
 
+export type CancelQueuedAgentRunInput = {
+  project_id: string;
+  run_id: string;
+  report_markdown: string;
+  exit_reason: string;
+  actor: string;
+};
+
 export type SubmitAgentRunReportInput = {
   project_id: string;
   run_id: string;
@@ -199,6 +207,15 @@ function assertCanSubmit(run: AgentRun): void {
   }
 }
 
+function assertCanCancelQueued(run: AgentRun): void {
+  if (run.status !== "queued") {
+    throw new ComathError(`cannot cancel queued AgentRun in ${run.status} state`, {
+      statusCode: 400,
+      code: "INVALID_AGENT_RUN_TRANSITION"
+    });
+  }
+}
+
 function assertReportHeadings(reportMarkdown: string): void {
   for (const heading of requiredReportHeadings) {
     const pattern = new RegExp(`^${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "m");
@@ -326,6 +343,40 @@ export function startAgentRun(projectRoot: string, input: StartAgentRunInput): A
     payload: {
       workstream_id: next.workstream_id,
       campaign_id: next.campaign_id
+    }
+  });
+  return next;
+}
+
+export function cancelQueuedAgentRun(projectRoot: string, input: CancelQueuedAgentRunInput): AgentRun {
+  const run = readRun(projectRoot, input.run_id);
+  assertProjectMatches(run.project_id, input.project_id);
+  assertCanCancelQueued(run);
+  assertReportHeadings(input.report_markdown);
+  const reportPath = `.comath/workstreams/${run.workstream_id}/agent_runs/${run.id}/report.md`;
+  const absoluteReportPath = assertAgentRunWriteAllowed(projectRoot, run, reportPath);
+  mkdirSync(dirname(absoluteReportPath), { recursive: true });
+  writeFileSync(absoluteReportPath, `${input.report_markdown.trimEnd()}\n`, "utf8");
+
+  const completedAt = now();
+  const next = writeRun(projectRoot, {
+    ...run,
+    status: "cancelled",
+    report_path: reportPath,
+    exit_reason: input.exit_reason,
+    completed_at: completedAt,
+    updated_at: completedAt
+  });
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_run.queued_cancelled",
+    actor: input.actor,
+    target_id: run.id,
+    payload: {
+      status: next.status,
+      workstream_id: next.workstream_id,
+      report_path: next.report_path,
+      exit_reason: next.exit_reason
     }
   });
   return next;
