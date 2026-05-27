@@ -77,6 +77,8 @@ try {
   const candidateManifestPath = join(
     projectRoot,
     ".comath",
+    "campaign",
+    campaignId,
     "ensembles",
     "lemma_sprint",
     "PO-0001",

@@ -112,7 +112,23 @@ try {
   assert.equal(existsSync(join(projectRoot, ".comath", "lean", "FormalSpec", "C0001.json")), true);
   assert.equal(existsSync(join(projectRoot, ".comath", "lean", "Audit", "C0001.lean")), true);
   assert.equal(existsSync(join(projectRoot, ".comath", "evidence", claimId, "lean", "final_replay_manifest.json")), true);
-  assert.equal(existsSync(join(projectRoot, ".comath", "ensembles", "lemma_sprint", "PO-0001", "candidates", "V1_direct_formalist", "candidate_manifest.json")), true);
+  assert.equal(
+    existsSync(
+      join(
+        projectRoot,
+        ".comath",
+        "campaign",
+        campaignId,
+        "ensembles",
+        "lemma_sprint",
+        "PO-0001",
+        "candidates",
+        "V1_direct_formalist",
+        "candidate_manifest.json"
+      )
+    ),
+    true
+  );
   assert.equal(existsSync(join(projectRoot, ".comath", "proof_memory", "events.jsonl")), true);
 
   const replay = await server.inject({

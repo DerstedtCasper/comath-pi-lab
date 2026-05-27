@@ -11,6 +11,7 @@ import {
   type ResearchCampaign
 } from "../../types/schemas.js";
 import { getTheoremFamilyById, type TheoremFamily } from "../lean/theorem-family.js";
+import { candidateWorkspaceRel } from "./paths.js";
 import { defaultVariants } from "./variant-registry.js";
 
 export type CandidateBatch = {
@@ -121,14 +122,7 @@ export function runTheoremFamilyCandidates(input: {
 
   defaultVariants.forEach((variant, index) => {
     const candidateId = `CAND-${String(index + 1).padStart(4, "0")}`;
-    const workspaceRel = join(
-      ".comath",
-      "ensembles",
-      "lemma_sprint",
-      input.obligation.obligation_id,
-      "candidates",
-      variant.slug
-    );
+    const workspaceRel = candidateWorkspaceRel(input.campaign, input.obligation.obligation_id, variant.slug);
     const workspacePath = assertPathAllowed(input.projectRoot, workspaceRel, { purpose: "runtime-write" });
     mkdirSync(workspacePath, { recursive: true });
 

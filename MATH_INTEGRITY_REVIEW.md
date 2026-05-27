@@ -87,6 +87,7 @@ Remaining mathematical work:
 - `literature_supported` requires literature evidence, exact literature artifacts, quoted statement grounding inside the source artifact, and a successful citation-condition match.
 - `formally_checked` remains blocked unless Lean evidence, proof artifacts, kernel metadata, dependency closure, audit pass, and a passed proof-kernel final replay manifest for the same claim are present.
 - Phase 33 proof-obligation DAG, line-map, obligation YAML, `Skeleton.lean`, and skeleton-report artifacts are planning evidence only. Named `sorry` placeholders for all open obligations in skeleton artifacts cannot promote claims and must be discharged by the existing final clean Lean replay and gate path.
+- Phase 34 campaign-scoped ensemble artifacts prevent candidate or arbitration state from one supported campaign being selected or reported by another supported campaign that reuses local `PO-0001`/`CAND-0001` identifiers.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -181,6 +182,13 @@ Phase 33 adds coverage for:
 - line-map and obligation YAML binding across the current open-obligation closure;
 - `Skeleton.lean` `sorry` placeholders tagged with all open proof-obligation IDs;
 - planning stage-run artifact provenance and two-campaign no-overwrite behavior.
+
+Phase 34 adds coverage for:
+
+- campaign-scoped candidate workspaces under `.comath/campaign/<CAM>/ensembles/lemma_sprint/<PO>/`;
+- campaign-scoped `candidates.json` and `decision.json` reads/writes;
+- interleaved supported-campaign isolation for `Nat.add_zero` and `Nat.mul_zero` in one project root;
+- rejection of legacy global ensemble batch writes for new proof-kernel campaign execution.
 
 ### Residual Risks
 

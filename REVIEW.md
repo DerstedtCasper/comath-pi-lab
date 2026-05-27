@@ -1416,6 +1416,67 @@ Phase 33 does not implement broad lemma decomposition or arbitrary theorem synth
 - Generic theorem synthesis and production proof-route agent execution remain deferred.
 - Skeleton artifacts are not built as final Lean targets; they are auditable planning outputs whose placeholders must be discharged later.
 
+## Phase 34 Campaign-Scoped Ensemble Artifacts Review Log
+
+### Scope
+
+Moved proof-kernel ensemble candidate and arbitration artifacts into campaign-scoped runtime paths. Phase 34 fixes a concrete multi-campaign isolation bug left after Phase 33: planning artifacts were campaign-scoped, but supported proof campaigns still shared `.comath/ensembles/lemma_sprint/PO-0001/` for candidates and decisions.
+
+### TDD And Review Evidence
+
+```text
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed before writing the Phase 34 isolation regression.
+
+node services/comathd/tests/integration/phase34-campaign-ensemble-isolation.test.mjs
+RED result: exit 1; campaign A read campaign B candidate runs after interleaved candidate-generation ticks.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding campaign-scoped ensemble paths.
+
+node services/comathd/tests/integration/phase34-campaign-ensemble-isolation.test.mjs
+Result: exit 0; interleaved `Nat.add_zero` and `Nat.mul_zero` campaigns kept candidate workspaces, candidate batch indexes, and decisions in campaign-scoped paths.
+
+node services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs
+Result: exit 0; Phase 18 vertical slice passed with campaign-scoped candidate manifest paths.
+
+node services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs
+Result: exit 0; Phase 19 ensemble recovery passed with campaign-scoped candidate workspace and decision artifacts.
+
+node services/comathd/tests/integration/phase23-ga-theorem-family-generalization.test.mjs
+Result: exit 0; Phase 23 theorem-family generalization passed with campaign-scoped candidate manifest paths.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-34 package tests passed with Phase 34 wired into the default test chain.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests through Phase 34, and Phase 17 integrity evaluation passed.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/proof-kernel/ensemble/paths.ts`.
+- Updated `runTheoremFamilyCandidates()` to write candidate workspaces under `.comath/campaign/<CAM>/ensembles/lemma_sprint/<PO>/candidates/<variant>/`.
+- Updated `decideCandidate()` to write `decision.json` under the active campaign's ensemble root.
+- Updated campaign tick candidate verification, arbitration, integration, adversarial review, and final replay return paths to read `candidates.json` and `decision.json` from the active campaign.
+- Added `services/comathd/tests/integration/phase34-campaign-ensemble-isolation.test.mjs` and wired it into `@comath/comathd` default tests.
+- Updated Phase 18, Phase 19, and Phase 23 tests for the new campaign-scoped artifact paths.
+- Added `campaign_scoped_ensemble_artifacts` to runtime status and smoke requirements.
+- Updated README, TODO, acceptance matrix, handoff, AGENTS, security review, and mathematical-integrity review.
+
+### Boundary And Integrity Notes
+
+Phase 34 does not change candidate scoring or proof authority. It preserves the existing evidence-weighted arbitration semantics, but prevents a selected candidate or decision artifact from being read across campaign boundaries when campaigns reuse local `PO-0001` and `CAND-0001` identifiers.
+
+### Residual Risks
+
+- Candidate IDs remain campaign-local (`CAND-0001` etc.); this is acceptable only because artifacts are now campaign-scoped.
+- Live child-agent candidate execution remains deferred; current candidates are deterministic theorem-family slices.
+- OS-level sandboxing for untrusted candidate code remains deferred.
+
 ## Phase 32 Lean Statement Signature Binding Review Log
 
 ### Scope

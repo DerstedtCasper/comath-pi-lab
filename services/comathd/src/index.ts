@@ -39,6 +39,7 @@ export * from "./proof-kernel/campaign/research-campaign.js";
 export * from "./proof-kernel/campaign/campaign-tick.js";
 export * from "./proof-kernel/stages/proof-obligation-dag.js";
 export * from "./proof-kernel/ensemble/variant-registry.js";
+export * from "./proof-kernel/ensemble/paths.js";
 export * from "./proof-kernel/ensemble/candidate-runner.js";
 export * from "./proof-kernel/ensemble/decision-forest.js";
 export * from "./proof-kernel/ensemble/failure-aggregator.js";

@@ -59,11 +59,21 @@ try {
   recordFailedRoutes({ projectRoot, campaign, candidates: batch.candidates });
 
   const failedCandidates = batch.candidates.filter((candidate) => candidate.state === "candidate_failed");
+  assert.equal(
+    batch.candidates.every((candidate) =>
+      candidate.workspace_path.startsWith(`.comath/campaign/${campaign.campaign_id}/ensembles/lemma_sprint/PO-0001/`)
+    ),
+    true
+  );
   assert.equal(batch.candidates.length, 8);
   assert.equal(failedCandidates.length, 7);
   assert.equal(decision.selected_candidate_id, "CAND-0001");
   assert.equal(gate.result, "pass");
   assert.equal(decision.rejected_candidates.length, 7);
+  assert.equal(
+    existsSync(join(projectRoot, ".comath", "campaign", campaign.campaign_id, "ensembles", "lemma_sprint", "PO-0001", "decision.json")),
+    true
+  );
 
   const failureMemoryPath = join(projectRoot, ".comath", "proof_memory", "events.jsonl");
   const failureMemory = readFileSync(failureMemoryPath, "utf8")

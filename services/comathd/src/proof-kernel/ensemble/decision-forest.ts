@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { gateDecisionSchema, type CandidateRun, type GateDecision, type ResearchCampaign } from "../../types/schemas.js";
+import { ensembleDecisionRel } from "./paths.js";
 
 export type EnsembleDecision = {
   selected_candidate_id: string | null;
@@ -58,11 +59,10 @@ export function decideCandidate(input: {
     created_at: new Date().toISOString()
   });
 
-  const path = assertPathAllowed(
-    input.projectRoot,
-    join(".comath", "ensembles", "lemma_sprint", "PO-0001", "decision.json"),
-    { purpose: "runtime-write" }
-  );
+  const obligationId = input.candidates[0]?.obligation_id ?? "PO-0001";
+  const path = assertPathAllowed(input.projectRoot, ensembleDecisionRel(input.campaign, obligationId), {
+    purpose: "runtime-write"
+  });
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify({ ...decision, gate }, null, 2)}\n`, "utf8");
   return { decision, gate };

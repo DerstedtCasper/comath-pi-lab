@@ -42,7 +42,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_profile_service_api",
       "lean_trust_profile_hardening",
       "lean_statement_signature_binding",
-      "proof_obligation_dag_planning"
+      "proof_obligation_dag_planning",
+      "campaign_scoped_ensemble_artifacts"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

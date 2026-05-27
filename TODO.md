@@ -388,6 +388,15 @@
 - [x] Add Phase 33 regression coverage for multi-obligation skeleton/report closure, DAG validation, stage-run artifact paths, and two-campaign artifact isolation.
 - [x] Add `proof_obligation_dag_planning` to service status capabilities and smoke requirements.
 
+## Phase 34: Campaign-Scoped Ensemble Artifacts
+
+- [x] Move theorem-family candidate workspaces from legacy `.comath/ensembles/lemma_sprint/<PO>/` paths to `.comath/campaign/<CAM>/ensembles/lemma_sprint/<PO>/`.
+- [x] Move `candidates.json` and `decision.json` reads/writes to campaign-scoped ensemble paths.
+- [x] Update candidate verification, arbitration, integration, adversarial review, and final replay returns to read the current campaign's ensemble state.
+- [x] Add an interleaved supported-campaign regression proving `Nat.add_zero` and `Nat.mul_zero` campaigns do not overwrite or read each other's candidate/decision artifacts.
+- [x] Update Phase 18/19/23 assertions and default `@comath/comathd` test chain for campaign-scoped ensemble paths.
+- [x] Add `campaign_scoped_ensemble_artifacts` to service status capabilities and smoke requirements.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.

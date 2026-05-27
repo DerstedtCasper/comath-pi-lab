@@ -14,6 +14,7 @@ import { runTheoremFamilyCandidates } from "../ensemble/candidate-runner.js";
 import { createLeanProjectForTheorem } from "../lean/lean-project.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
 import { findTheoremFamilyForGoal, findTheoremFamilyForObligation } from "../lean/theorem-family.js";
+import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
 import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
 import {
@@ -219,11 +220,15 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
   return { campaign: writeCampaign(input.project_root, campaign, actor), obligation };
 }
 
-function readStoredDecision(projectRoot: string): { candidates: CandidateRun[]; decision: EnsembleDecision } | undefined {
-  const decisionPath = assertPathAllowed(projectRoot, join(".comath", "ensembles", "lemma_sprint", "PO-0001", "decision.json"), {
+function readStoredDecision(
+  projectRoot: string,
+  campaign: ResearchCampaign,
+  obligationId: string
+): { candidates: CandidateRun[]; decision: EnsembleDecision } | undefined {
+  const decisionPath = assertPathAllowed(projectRoot, ensembleDecisionRel(campaign, obligationId), {
     purpose: "runtime-write"
   });
-  const candidatesPath = assertPathAllowed(projectRoot, join(".comath", "ensembles", "lemma_sprint", "PO-0001", "candidates.json"), {
+  const candidatesPath = assertPathAllowed(projectRoot, ensembleCandidatesRel(campaign, obligationId), {
     purpose: "runtime-write"
   });
   if (!existsSync(decisionPath)) {
@@ -236,8 +241,8 @@ function readStoredDecision(projectRoot: string): { candidates: CandidateRun[]; 
   return { candidates, decision: payload as EnsembleDecision };
 }
 
-function readStoredCandidates(projectRoot: string): CandidateRun[] {
-  const candidatesPath = assertPathAllowed(projectRoot, join(".comath", "ensembles", "lemma_sprint", "PO-0001", "candidates.json"), {
+function readStoredCandidates(projectRoot: string, campaign: ResearchCampaign, obligationId: string): CandidateRun[] {
+  const candidatesPath = assertPathAllowed(projectRoot, ensembleCandidatesRel(campaign, obligationId), {
     purpose: "runtime-write"
   });
   if (!existsSync(candidatesPath)) {
@@ -551,7 +556,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       });
     }
     const batch = runTheoremFamilyCandidates({ projectRoot: input.project_root, campaign, obligation, theoremFamily });
-    const candidatesRel = join(".comath", "ensembles", "lemma_sprint", "PO-0001", "candidates.json").replace(/\\/g, "/");
+    const candidatesRel = ensembleCandidatesRel(campaign, obligation.obligation_id);
     writeRuntimeFile(
       input.project_root,
       candidatesRel,
@@ -573,7 +578,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "candidate_verification") {
-    const candidates = readStoredCandidates(input.project_root);
+    const candidates = readStoredCandidates(input.project_root, campaign, obligation.obligation_id);
     const verificationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_verification.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
@@ -599,8 +604,9 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "candidate_arbitration") {
-    const candidates = readStoredCandidates(input.project_root);
+    const candidates = readStoredCandidates(input.project_root, campaign, obligation.obligation_id);
     const { decision, gate } = decideCandidate({ projectRoot: input.project_root, campaign, candidates });
+    const decisionRel = ensembleDecisionRel(campaign, obligation.obligation_id);
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
@@ -609,7 +615,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         open_obligations: [{ ...obligation, status: gate.result === "pass" ? "candidate_selected" : "blocked" }],
         stage_runs: [
           ...campaign.stage_runs,
-          completedStageRun(campaign, "candidate_arbitration", [".comath/ensembles/lemma_sprint/PO-0001/decision.json"])
+          completedStageRun(campaign, "candidate_arbitration", [decisionRel])
         ],
         next_actions:
           gate.result === "pass"
@@ -622,7 +628,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "integration") {
-    const decision = readStoredDecision(input.project_root);
+    const decision = readStoredDecision(input.project_root, campaign, obligation.obligation_id);
     const integrationRel = writeSimpleStageArtifact(input.project_root, campaign, "integration.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
@@ -645,7 +651,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "adversarial_review") {
-    const decision = readStoredDecision(input.project_root);
+    const decision = readStoredDecision(input.project_root, campaign, obligation.obligation_id);
     const reviewRel = writeSimpleStageArtifact(input.project_root, campaign, "adversarial_review.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
@@ -691,7 +697,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       }),
       actor
     );
-    return { campaign: next, obligation, ensemble: readStoredDecision(input.project_root) };
+    return { campaign: next, obligation, ensemble: readStoredDecision(input.project_root, campaign, obligation.obligation_id) };
   }
 
   if (campaign.current_stage === "final_global_replay") {
@@ -815,7 +821,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     return {
       campaign: next,
       obligation,
-      ensemble: readStoredDecision(input.project_root),
+      ensemble: readStoredDecision(input.project_root, campaign, obligation.obligation_id),
       gate: {
         gate_id: "GD-0002",
         campaign_id: campaign.campaign_id,
