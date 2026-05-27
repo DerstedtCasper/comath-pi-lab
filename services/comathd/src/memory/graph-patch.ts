@@ -67,12 +67,23 @@ function assertTransition(from: GraphPatch["state"], to: GraphPatch["state"]): v
   }
 }
 
+function assertNotProducerReview(patch: GraphPatch, reviewer: string): void {
+  if (patch.provenance.created_by !== reviewer) {
+    return;
+  }
+  throw new ComathError("cannot review its own GraphPatch", {
+    statusCode: 403,
+    code: "GRAPH_PATCH_SELF_REVIEW_FORBIDDEN"
+  });
+}
+
 export function reviewGraphPatch(projectRoot: string, input: ReviewGraphPatchInput): GraphPatch {
   const reviewer = assertReviewer(input.reviewer);
   const status = readWorkstreamStatus(projectRoot, input.workstream_id);
   assertProject(status.project_id, input.project_id);
   const patch = readWorkstreamGraphPatch(projectRoot, input.workstream_id);
   assertTransition(patch.state, input.next_state);
+  assertNotProducerReview(patch, reviewer);
 
   const reviewerNotes = [`${reviewer}: ${input.notes?.trim() || input.next_state}`]
     .concat(patch.reviewer_notes ? [patch.reviewer_notes] : [])

@@ -208,6 +208,43 @@ export const workstreamSchema = z
   })
   .strict();
 
+export const agentRoleSchema = z.enum([
+  "coordinator",
+  "librarian",
+  "computation",
+  "proof_route",
+  "formalization",
+  "reviewer",
+  "graph_builder",
+  "security_auditor",
+  "math_integrity_auditor"
+]);
+
+export const agentRunStatusSchema = z.enum(["queued", "running", "succeeded", "failed", "cancelled"]);
+
+export const agentRunSchema = z
+  .object({
+    id: stableId,
+    project_id: stableId,
+    campaign_id: stableId.optional(),
+    workstream_id: stableId,
+    role: agentRoleSchema,
+    model: z.string().min(1),
+    tool_profile: z.string().min(1),
+    status: agentRunStatusSchema,
+    write_scope: z.array(z.string().min(1)).min(1),
+    report_path: z.string().min(1).optional(),
+    graph_patch_path: z.string().min(1).optional(),
+    artifact_manifest_path: z.string().min(1).optional(),
+    exit_reason: z.string().min(1).optional(),
+    created_by: z.string().min(1),
+    started_at: isoTimestamp.optional(),
+    completed_at: isoTimestamp.optional(),
+    created_at: isoTimestamp,
+    updated_at: isoTimestamp
+  })
+  .strict();
+
 export const auditEventSchema = z
   .object({
     id: stableId,
@@ -618,6 +655,9 @@ export type Claim = z.infer<typeof claimSchema>;
 export type MemoryNode = z.infer<typeof memoryNodeSchema>;
 export type MemoryEdge = z.infer<typeof memoryEdgeSchema>;
 export type Workstream = z.infer<typeof workstreamSchema>;
+export type AgentRole = z.infer<typeof agentRoleSchema>;
+export type AgentRunStatus = z.infer<typeof agentRunStatusSchema>;
+export type AgentRun = z.infer<typeof agentRunSchema>;
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type PathPolicyDecision = z.infer<typeof pathPolicyDecisionSchema>;
 export type RunnerPermissionEnvelope = z.infer<typeof runnerPermissionEnvelopeSchema>;

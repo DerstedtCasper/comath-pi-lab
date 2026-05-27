@@ -1,5 +1,7 @@
 # SECURITY REVIEW
 
+Current-state note: sections below are chronological. The Phase 0 statement describes the bootstrap-only repository state at that time; later phases now include controlled runtime writes, runner execution, memory mutation, proof-kernel replay, Pi runtime registration, and AgentRun scoped write boundaries.
+
 ## Phase 0
 
 No runtime code capable of path writes, shell execution, network calls, claim promotion, or database mutation has been implemented.
@@ -200,6 +202,13 @@ Installed Pi 0.75.5 loader smoke
 Result: exit 0; `@earendil-works/pi-coding-agent@0.75.5` loaded `extensions/comath-pi/dist/index.js` with no loader errors and registered the executable research/campaign tools.
 ```
 
+Phase 27 targeted validation added after the Research Alpha audit:
+
+```text
+node services/comathd/tests/unit/phase27-agent-run-runtime.test.mjs
+Result: exit 0; AgentRun runtime-boundary tests passed, including scoped workstream and `.tmp/comath/<ARUN>/` writes, outside-scope rejection, report validation, producer self-review rejection, and failed-route memory recording.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
@@ -207,3 +216,4 @@ Result: exit 0; `@earendil-works/pi-coding-agent@0.75.5` loaded `extensions/coma
 - Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, and Phase 24 reruns the implemented Python compute runners through strict replay. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but stronger OS-level sandboxing, enforced network denial, dependency lock capture, and cross-machine replay validation remain deferred.
 - `comathd` still lacks lock/session semantics for multi-process writers; current tests exercise single-process Research Alpha behavior.
 - Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, but a full interactive Pi/comathd install-session e2e and richer runtime permission model remain separate hardening targets.
+- Phase 27 validates AgentRun persistence and scoped writes, but it does not yet launch child-agent processes, stream logs, enforce OS process isolation, or rate-limit real agent execution.

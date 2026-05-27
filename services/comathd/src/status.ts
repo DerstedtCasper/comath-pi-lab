@@ -36,12 +36,13 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "proof_kernel_theorem_family_registry",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
-      "pi_runtime_registration_v0755"
+      "pi_runtime_registration_v0755",
+      "agent_run_runtime_boundary"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",
       "broad_mathprove_proof_search_deferred",
-      "real_agent_runner_scheduler_deferred",
+      "real_agent_launcher_scheduler_deferred",
       "full_interactive_pi_e2e_install_flow_deferred",
       "native_trivium_performance_evaluation_deferred",
       "stronger_runner_reexecution_sandbox_deferred",

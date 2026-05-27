@@ -1154,6 +1154,82 @@ Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
 
+## Phase 27 AgentRun Runtime Boundary Review Log
+
+### Scope
+
+Added the service-side AgentRun runtime contract needed before a real child-agent launcher can be trusted: persisted run records, explicit lifecycle transitions, scoped write permissions, structured report validation, GraphPatch producer/reviewer separation, and failed-route memory recording.
+
+This phase does not launch model processes, schedule persistent agents, enforce OS process isolation, stream logs, or rate-limit real Pi/Codex child-agent execution. It creates the auditable boundary those later launchers must use.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase27-agent-run-runtime.test.mjs
+Initial RED result: exit 1; `../../dist/index.js` did not export `assertAgentRunWriteAllowed`, `createAgentRun`, `getAgentRun`, `listAgentRuns`, `recordAgentRunFailureToMemory`, `startAgentRun`, or `submitAgentRunReport`.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding AgentRun schemas, store exports, runtime layout, and GraphPatch self-review rejection.
+
+node services/comathd/tests/unit/phase27-agent-run-runtime.test.mjs
+Result: exit 0; Phase 27 AgentRun runtime tests passed.
+
+Code-review hardening RED result: exit 1; scoped AgentRun writer allowed a `.tmp/comath/<ARUN>/escape` junction/symlink to redirect an allowed lexical path outside the project root.
+
+Code-review hardening RED result: exit 1; `graph_patch_path` and `artifact_manifest_path` report metadata were persisted without AgentRun scope validation or project-relative enforcement.
+
+Code-review hardening RED result: exit 1; recording the same failed AgentRun twice created a second `FailureRoute` node instead of returning the existing failure memory record.
+
+node services/comathd/tests/unit/phase27-agent-run-runtime.test.mjs
+Result: exit 0; Phase 27 tests passed after adding existing-ancestor realpath checks, metadata path validation, invalid run-id rejection, and idempotent failed-run memory recording.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/agents/agent-run-store.ts` and `services/comathd/src/agents/index.ts`.
+- Added `agentRoleSchema`, `agentRunStatusSchema`, `agentRunSchema`, and AgentRun TypeScript exports.
+- Added `.comath/agents` to the service runtime layout.
+- Exported AgentRun APIs from `services/comathd/src/index.ts`.
+- Hardened `reviewGraphPatch()` so a producer cannot review its own GraphPatch.
+- Hardened AgentRun scoped writes against symlink/junction realpath escapes through the nearest existing ancestor.
+- Validated submitted `graph_patch_path` and `artifact_manifest_path` as project-relative paths within the run's allowed write scope.
+- Made `recordAgentRunFailureToMemory()` idempotent for the same failed AgentRun.
+- Added `services/comathd/tests/unit/phase27-agent-run-runtime.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added `agent_run_runtime_boundary` to `getComathdStatus()`.
+- Updated README, TODO, acceptance matrix, risk, security, mathematical-integrity, and handoff documentation.
+
+### Boundary And Integrity Notes
+
+AgentRun write authorization is narrower than the global service path policy: a run may write only under its owning `.comath/workstreams/<WS>/` directory and `.tmp/comath/<ARUN>/`. The global `runtime-write` policy remains `.comath`-only; `.tmp` is allowed only by the AgentRun scoped writer. The scoped writer checks both lexical containment and nearest-existing-ancestor realpath containment, so symlink/junction escapes are rejected before a future launcher can write.
+
+AgentRun reports are artifacts, not proof authority. A successful report cannot promote a claim, apply a GraphPatch, or certify a proof. GraphPatch proposals still require independent review and explicit apply through `ResearchMemoryDB`; failed AgentRuns are preserved as `FailureRoute` memory nodes.
+
+### Residual Risks
+
+- Real child-agent process launching, scheduling, cancellation, log streaming, and rate limiting remain deferred.
+- Multi-process writer locks/session semantics remain deferred; current tests exercise single-process service behavior.
+- AgentRun report schema is heading-based Markdown validation, not yet a typed artifact-manifest parser or model-output verifier.
+- Producer/reviewer identity comparison is exact string equality; richer actor/run alias canonicalization remains a future identity-model task.
+- Global GA remains blocked by the deferred items in `TODO.md`; Phase 27 validates the child-agent audit boundary, not autonomous proof research.
+
+### Final Root Validation
+
+Fresh Phase 27 validation completed on 2026-05-27 after code-review hardening:
+
+```text
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-27 package tests passed, including AgentRun realpath/scope hardening, metadata path validation, idempotent failed-run memory, proof-kernel integrations, and theorem-family integrity coverage.
+
+corepack pnpm build
+Result: exit 0; root recursive build passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; Phase 0/design smoke, Pi extension tests, comathd Phase 0-27 tests, proof-kernel integrations, and Phase 17 integrity evaluation passed.
+```
+
 ## Phase 25 Real MathProve External Bridge Review Log
 
 ### Scope

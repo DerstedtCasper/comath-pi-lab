@@ -325,13 +325,22 @@
 - [x] Smoke-test the built extension with the installed `@earendil-works/pi-coding-agent@0.75.5` extension loader.
 - [x] Wire Phase 26 coverage into the default `@comath/pi-extension` test chain and smoke status capabilities.
 
+## Phase 27: AgentRun Runtime Boundary
+
+- [x] Add typed AgentRun runtime records with stable `ARUN-XXXX` IDs, roles, status transitions, campaign/workstream binding, scoped write permissions, and audit events.
+- [x] Persist AgentRun status under `.comath/agents/runs/<ARUN>/status.json` and reports under `.comath/workstreams/<WS>/agent_runs/<ARUN>/report.md`.
+- [x] Add scoped write checks that allow only the owning workstream directory and `.tmp/comath/<ARUN>/` while preserving the global `.comath` runtime-write path policy.
+- [x] Require structured AgentRun report headings before report submission and record failed AgentRuns as durable `FailureRoute` memory nodes.
+- [x] Reject GraphPatch producer self-review so an AgentRun cannot review its own proposed patch before trusted graph application.
+- [x] Add Phase 27 tests for create/start/report/list/write-scope/self-review/failure-memory/audit behavior and wire them into the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond registered theorem families (`Nat.add_zero`, `Nat.mul_zero`) and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
-- [ ] Real agent runner/scheduler that launches and rate-limits persistent Pi/Codex child agents rather than only static definitions and service-owned campaign ticks.
+- [ ] Real agent launcher/scheduler that starts and rate-limits persistent Pi/Codex child-agent processes; Phase 27 covers only auditable AgentRun persistence, scoped writes, reports, and failure memory.
 - [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Stronger runner re-execution sandboxing: OS-level isolation, network-denial enforcement, dependency lock capture, and cross-machine replay validation beyond the Phase 24 service-owned re-execution checks.

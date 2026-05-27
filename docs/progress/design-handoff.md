@@ -31,6 +31,7 @@ The repository has completed:
 - Phase 24 runner re-execution replay;
 - Phase 25 real MathProve external evidence-runner bridge;
 - Phase 26 Pi runtime registration against installed Pi 0.75.5 loader behavior;
+- Phase 27 AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, and failure memory;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -39,7 +40,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, and Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, and installed-loader smoke. Phase 18-26 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, and installed-loader smoke, and Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory. Phase 18-27 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -61,7 +62,7 @@ Next correct action:
 /goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, and persistent child-agent scheduling.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-26 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-27 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -263,6 +264,15 @@ Apply it as follows:
 - Kept `confirmation_id` host-injected on the Pi runtime path: mutating runtime tools prompt through `ctx.ui.confirm()` and do not expose `confirmation_id` as a model-supplied parameter.
 - Added `extensions/comath-pi/tests/phase26-pi-runtime-registration.test.mjs` and `pi_runtime_registration_v0755` status capability.
 - Remaining Pi hardening: full interactive Pi/comathd install-session e2e, richer runtime permission UX, and persistent child-agent scheduling.
+
+## Phase 27 Completion Notes
+
+- Added `services/comathd/src/agents/agent-run-store.ts` with create/start/report/list/get/write-scope and failure-memory APIs.
+- Persisted `ARUN-XXXX` status under `.comath/agents/runs/<ARUN>/status.json` and reports under `.comath/workstreams/<WS>/agent_runs/<ARUN>/report.md`.
+- Kept `.tmp/comath/<ARUN>/` writes scoped to `assertAgentRunWriteAllowed()` without weakening the global `.comath` runtime-write policy.
+- Added GraphPatch producer self-review rejection and durable failed-run `FailureRoute` memory nodes.
+- Added `services/comathd/tests/unit/phase27-agent-run-runtime.test.mjs` and `agent_run_runtime_boundary` status capability.
+- Remaining agent hardening: real child-agent process launcher, scheduler, rate limiting, cancellation, log streaming, and multi-process writer locks.
 
 ## Verification To Run At Phase Boundary
 

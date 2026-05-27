@@ -10,6 +10,7 @@ export const runtimeLayout = {
     "evidence",
     "audit",
     "workstreams",
+    "agents",
     "campaign",
     "proof",
     "ensembles",
