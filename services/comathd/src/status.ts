@@ -48,6 +48,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "campaign_scoped_ensemble_artifacts",
       "claim_scoped_final_replay_artifacts",
       "runner_replay_sandbox_dependency_provenance",
+      "runner_cross_machine_replay_environment_gate",
       "trivium_target_platform_evaluation",
       "project_writer_session_lock",
       "agent_run_scheduler_writer_lock_integration",

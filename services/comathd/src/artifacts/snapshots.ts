@@ -502,6 +502,13 @@ export async function verifySnapshot(
     if (!runnerEntryPaths.has(reportPath)) {
       vetoes.push("replay_run_report_missing");
     }
+    if (
+      run.environment.node !== process.version ||
+      run.environment.platform !== process.platform ||
+      run.environment.arch !== process.arch
+    ) {
+      vetoes.push("runner_reexecution_environment_mismatch");
+    }
   }
   for (const reportPath of runnerEntryPaths) {
     if (!replayRunsByPath.has(reportPath)) {

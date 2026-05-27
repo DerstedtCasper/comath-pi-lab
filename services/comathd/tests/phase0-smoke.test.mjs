@@ -29,6 +29,7 @@ const requiredCapabilities = [
   "campaign_scoped_ensemble_artifacts",
   "claim_scoped_final_replay_artifacts",
   "runner_replay_sandbox_dependency_provenance",
+  "runner_cross_machine_replay_environment_gate",
   "lean_statement_alias_equivalence",
   "lean_declaration_parser_signature_fallback",
   "trivium_target_platform_evaluation",

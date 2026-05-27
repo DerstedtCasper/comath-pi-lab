@@ -173,6 +173,7 @@ Remaining security requirements:
 34. **Codex API retry telemetry is bounded and secret-free.** Phase 52 retries only retryable `429`/`5xx` responses, caps `Retry-After`, bounds attempts through `COMATH_CODEX_API_MAX_ATTEMPTS`, records status/rate-limit telemetry, and fails closed without writing API keys to reports, logs, or Pi payloads.
 35. **Installed Codex CLI validation remains service-configured and path-secret-free.** Phase 53 resolves the external CLI only from `COMATH_CODEX_CLI_PROGRAM` plus optional service prefix args, runs bounded `--version` and `--health` probes with `shell:false` and `COMATH_PROOF_AUTHORITY=none`, and omits the configured executable path from route responses and audit payloads.
 36. **Lean declaration parser is fail-closed target binding, not execution.** Phase 54 parses theorem/lemma declaration headers from already supplied Lean source, rejects ambiguous and comment-only substring matches, records the signature source, and does not execute code or add proof authority.
+37. **Runner replay environment drift fails closed.** Phase 55 compares recorded replay-run Node/platform/architecture metadata against the current process before re-execution and vetoes mismatches without launching a child runner.
 
 ### Validation Commands
 
@@ -315,7 +316,7 @@ Result: exit 0; Pi agent execute tool tests passed for runtime tool/command regi
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
-- Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, Phase 24 reruns the implemented Python compute runners through strict replay, and Phase 36 records sandbox/dependency provenance with fail-closed integrity checks. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but OS-level sandboxing, enforced network denial, and cross-machine replay validation remain deferred.
+- Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, Phase 24 reruns the implemented Python compute runners through strict replay, Phase 36 records sandbox/dependency provenance with fail-closed integrity checks, and Phase 55 rejects cross-machine replay environment drift before runner launch. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but OS-level sandboxing and enforced network denial remain deferred.
 - Phase 40 integrates the project writer lock into the service-side AgentRun scheduler mutation path, but true OS-level multi-process sandboxing, network-denial enforcement, and mandatory external-process lock enforcement remain deferred.
 - Phase 41-53 execute live adapters through the scheduler boundary, add capped log readback plus cursor-based log polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, read-only operator panels, same-process scheduler-backed cancellation, and bounded health probes, add a service-owned packaged adapter launcher, support service-configured external Codex-compatible CLI invocation, validate a service-configured installed Codex CLI through bounded probes, add a service-configured Codex API backend contract, and harden that backend with retry/rate-limit telemetry. Production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer operator controls beyond same-process cancellation, OS-level sandboxing, and enforced network denial remain deferred.
 - Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, and Phase 45 validates an automated local Pi/comathd install-session over HTTP. Richer real-host Pi UI, manual install walkthrough, service lifecycle management, and runtime permission UX remain separate hardening targets.
@@ -405,3 +406,10 @@ Phase 54 targeted validation:
 Result: exit 0; retryable 429/5xx handling, capped retry telemetry, exhausted-attempt fail-closed behavior, audit events, and API-key non-disclosure passed with an injected client.
 - Phase 54 adds in-process declaration-header parsing and does not add a new external execution boundary; richer proof-producing logical-equivalence machinery remains a future proof-authority hardening target.
 - Phase 38 loads native TriviumDB only through dynamic adapter probing and explicit evaluation. Broader multi-platform native benchmarking and production default-backend rollout remain separate decisions.
+
+Phase 55 targeted validation:
+
+- `node services/comathd/tests/unit/phase55-runner-cross-machine-replay.test.mjs`
+
+Result: exit 0; snapshot replay verification rejects tampered-but-rehashed replay environment metadata with `runner_reexecution_environment_mismatch` and leaves `runner_reexecution` empty, so no child runner is launched under mismatched Node/platform/arch metadata.
+- Phase 55 is an integrity drift gate only. It does not add OS-level isolation, enforced network denial, or dependency installation control.

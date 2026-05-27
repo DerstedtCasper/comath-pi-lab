@@ -555,6 +555,13 @@
 - [x] Fail closed on ambiguous declarations and comment-only substring matches.
 - [x] Wire Phase 54 into the default `@comath/comathd` test chain and smoke status capabilities.
 
+## Phase 55: Runner Cross-Machine Replay Environment Gate
+
+- [x] Add a replay-integrity gate that compares recorded replay-run Node/platform/arch metadata with the current runner environment before re-execution.
+- [x] Fail closed with `runner_reexecution_environment_mismatch` and no runner launch when snapshot replay metadata is valid but environment identity has drifted.
+- [x] Add `phase55-runner-cross-machine-replay.test.mjs` and wire Phase 55 into the default `@comath/comathd` test chain.
+- [x] Add `runner_cross_machine_replay_environment_gate` to smoke status capabilities and acceptance documentation.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -563,7 +570,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
-- [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance: OS-level isolation, enforced network denial, and cross-machine replay validation.
+- [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance and Phase 55 environment drift gates: OS-level isolation and enforced network denial.
 - [ ] OS-level process sandboxing beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, Phase 39 project-level lock primitive, and Phase 40 AgentRun scheduler lock integration.
 - [ ] Richer statement equivalence beyond Phase 54 declaration parsing and Phase 37 registered aliases: proof-producing definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
 

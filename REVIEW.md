@@ -1,3 +1,35 @@
+## Phase 55 Runner Cross-Machine Replay Environment Gate Review Log
+
+Scope: Phase 55 adds a replay-integrity gate for cross-machine/environment drift. Snapshot replay verification now compares each replay run's recorded Node version, platform, and architecture against the current process before runner re-execution. A mismatch fails closed with `runner_reexecution_environment_mismatch` and does not launch runner replay.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/unit/phase55-runner-cross-machine-replay.test.mjs
+```
+
+Result: exit 1; after tampering `manifest.replay.runs[].environment.platform` and recomputing the manifest hashes, `/replay/verify-manifest` still returned `ok=true`. This was the expected missing environment-drift gate failure.
+
+Focused GREEN evidence:
+
+```text
+node services/comathd/tests/unit/phase55-runner-cross-machine-replay.test.mjs
+node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs
+```
+
+Result: both exited 0 after implementation. The Phase 55 test verifies tampered-but-rehashed replay environment metadata fails closed before runner launch; the Phase 16 regression keeps existing strict replay behavior intact.
+
+Implementation notes:
+
+- Added replay-run environment comparison in `verifySnapshot()` for `node`, `platform`, and `arch`.
+- Added veto `runner_reexecution_environment_mismatch` before runner re-execution summaries are launched.
+- Added `services/comathd/tests/unit/phase55-runner-cross-machine-replay.test.mjs` to the default `@comath/comathd` test chain.
+- Added status capability `runner_cross_machine_replay_environment_gate` and smoke/acceptance documentation.
+
+Residual risk:
+
+Phase 55 is a replay environment drift gate, not an OS-level sandbox, enforced network-denial layer, dependency installation resolver, signed snapshot protocol, or proof authority. It reduces cross-machine replay ambiguity for the implemented Python compute runners while leaving OS isolation and network enforcement as global GA blockers.
+
 ## Phase 54 Lean Declaration Parser Signature Fallback Review Log
 
 Scope: Phase 54 adds a conservative Lean theorem/lemma declaration parser as a fallback for statement-equivalence binding when target `#check` output is absent. It parses declaration headers from Lean source, supports namespace-qualified theorem binding and multi-line binders, records `signature_source: lean_declaration_parser`, and preserves fail-closed behavior for ambiguous declarations and comment-only substring matches.

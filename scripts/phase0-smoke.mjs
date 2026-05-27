@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-54")) {
-  invariantFailures.push("README must describe the current Phase 18-54 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-55")) {
+  invariantFailures.push("README must describe the current Phase 18-55 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -168,6 +168,10 @@ if (!acceptanceMatrix.includes("54 Lean declaration parser signature fallback"))
   invariantFailures.push("acceptance matrix must include Phase 54 Lean declaration parser signature fallback acceptance");
 }
 
+if (!acceptanceMatrix.includes("55 Runner cross-machine replay environment gate")) {
+  invariantFailures.push("acceptance matrix must include Phase 55 runner cross-machine replay environment gate acceptance");
+}
+
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
 }
@@ -240,6 +244,10 @@ if (!acceptanceMatrix.includes("Lean declaration parsing is in-process and fail-
   invariantFailures.push("acceptance matrix must include Phase 54 Lean declaration parser security acceptance");
 }
 
+if (!acceptanceMatrix.includes("Runner replay environment drift fails closed")) {
+  invariantFailures.push("acceptance matrix must include Phase 55 runner replay environment security acceptance");
+}
+
 if (!acceptanceMatrix.includes("Native memory backend evidence is non-promotional")) {
   invariantFailures.push("acceptance matrix must include Phase 38 native memory mathematical-integrity boundary");
 }
@@ -298,6 +306,10 @@ if (!acceptanceMatrix.includes("Installed CLI validation is not proof authority"
 
 if (!acceptanceMatrix.includes("Declaration parser output is not proof authority")) {
   invariantFailures.push("acceptance matrix must include Phase 54 declaration parser mathematical-integrity boundary");
+}
+
+if (!acceptanceMatrix.includes("Replay environment checks are not proof authority")) {
+  invariantFailures.push("acceptance matrix must include Phase 55 replay environment mathematical-integrity boundary");
 }
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
@@ -372,6 +384,10 @@ if (!acceptanceMatrix.includes("lean_declaration_parser_signature_fallback")) {
   invariantFailures.push("acceptance matrix must include Phase 54 lean_declaration_parser_signature_fallback capability language");
 }
 
+if (!acceptanceMatrix.includes("runner_cross_machine_replay_environment_gate")) {
+  invariantFailures.push("acceptance matrix must include Phase 55 runner_cross_machine_replay_environment_gate capability language");
+}
+
 if (!acceptanceMatrix.includes("/cm:agent prepare-package") || !acceptanceMatrix.includes("/cm:agent execute-package")) {
   invariantFailures.push("acceptance matrix must include Phase 43 Pi packaged-adapter command coverage language");
 }
@@ -438,6 +454,10 @@ if (!acceptanceMatrix.includes("phase53-installed-codex-cli-validation.test.mjs"
 
 if (!acceptanceMatrix.includes("phase54-lean-declaration-parser.test.mjs")) {
   invariantFailures.push("acceptance matrix must include Phase 54 Lean declaration parser test coverage language");
+}
+
+if (!acceptanceMatrix.includes("phase55-runner-cross-machine-replay.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 55 runner cross-machine replay test coverage language");
 }
 
 for (const [content, label] of [

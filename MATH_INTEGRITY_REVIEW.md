@@ -108,6 +108,7 @@ Remaining mathematical work:
 - Phase 52 Codex API retry telemetry remains runtime reliability metadata only. Attempts, status sequences, rate-limit markers, and exhausted-attempt failures cannot certify mathematical correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
 - Phase 53 installed Codex CLI validation remains runtime diagnostics only. Version strings, health JSON, capabilities, and missing-configuration diagnostics cannot certify mathematical correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
 - Phase 54 Lean declaration parsing remains statement-binding infrastructure only. Parsed theorem/lemma headers can identify a target declaration when `#check` output is absent, but they cannot prove definitional equality, certify proof terms, promote claims, apply GraphPatch, or replace clean Lean replay/static audit.
+- Phase 55 runner replay environment checks remain replay-integrity metadata only. Matching Node/platform/architecture metadata cannot certify mathematical correctness, promote claims, apply GraphPatch, or replace clean Lean replay/static audit; mismatches only veto runner re-execution.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -263,7 +264,7 @@ Phase 41 adds coverage for:
 - Statement equivalence now supports exact target-signature equality, explicit registered aliases, and conservative theorem/lemma declaration parsing for target headers. Proof-producing definitional/logical equivalence, transitive semantic equivalence, and broader mathematical-domain trust profiles remain unimplemented.
 - MathProve now has both the Phase 9 fail-closed mock and the Phase 25 external `verify_sympy.py` evidence-runner bridge. Neither path should be interpreted as broad MathProve proof search, final-audit proof authority, or direct claim-status authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
-- Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, Phase 24 reruns the implemented deterministic Python compute runners, and Phase 36 records runner sandbox/dependency provenance. OS-level sandbox enforcement, cross-machine replay, and broader runner families remain unimplemented.
+- Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, Phase 24 reruns the implemented deterministic Python compute runners, Phase 36 records runner sandbox/dependency provenance, and Phase 55 rejects cross-machine replay environment drift before runner launch. OS-level sandbox enforcement, enforced network denial, and broader runner families remain unimplemented.
 - Braid domain scripts provide exact/combinatorial evidence and risk flags; they do not prove physical interpretations or category-level equivalences.
 - Phase 21 read models improve inspection fidelity but are not mathematical authorities; claim promotion remains gated by evidence, artifacts, and proof-kernel replay where applicable.
 - Phase 22 improves Pi-side orchestration, Phase 26 validates Pi 0.75.5-compatible runtime registration, Phase 27 adds an AgentRun report/failure-memory boundary, and Phase 28 adds allowlisted process scheduling. None of these surfaces are proof authority, AgentRun reports cannot self-review their own GraphPatch proposals, child-process completion cannot promote claims, and production Pi/Codex agent profile integration plus full interactive Pi/comathd install-session e2e remain unimplemented.
@@ -354,3 +355,9 @@ Phase 54 mathematical-integrity validation:
 - `node services/comathd/tests/unit/phase54-lean-declaration-parser.test.mjs`
 
 Result: exit 0; Lean declaration parsing remains target-binding infrastructure, rejects ambiguous/comment-only matches, and records `signature_source: lean_declaration_parser` without adding proof authority.
+
+Phase 55 mathematical-integrity validation:
+
+- `node services/comathd/tests/unit/phase55-runner-cross-machine-replay.test.mjs`
+
+Result: exit 0; runner replay environment mismatch is a fail-closed integrity veto before launch, not proof evidence, and the route returns no runner re-execution summaries when Node/platform/arch metadata does not match the current process.
