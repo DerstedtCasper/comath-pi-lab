@@ -44,6 +44,7 @@ export * from "./proof-kernel/ensemble/failure-aggregator.js";
 export * from "./proof-kernel/lean/lean-project.js";
 export * from "./proof-kernel/lean/theorem-family.js";
 export * from "./proof-kernel/lean/static-cheat-scan.js";
+export * from "./proof-kernel/lean/statement-signature.js";
 export * from "./proof-kernel/lean/statement-equivalence.js";
 export * from "./proof-kernel/lean/dependency-closure.js";
 export * from "./proof-kernel/lean/axiom-profile.js";

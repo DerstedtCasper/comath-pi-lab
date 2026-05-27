@@ -1,4 +1,5 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { assertPathAllowed } from "../../security/path-policy.js";
@@ -18,8 +19,25 @@ export type CleanReplayResult = {
   statement_equivalence: ReturnType<typeof checkStatementEquivalence>;
 };
 
-function runCommand(command: string, args: string[], cwd: string): { exit_code: number; stdout: string; stderr: string } {
-  const result = spawnSync(command, args, { cwd, encoding: "utf8", timeout: 30_000 });
+function directElanTool(command: string, leanToolchain: string): string {
+  const match = /^leanprover\/lean4:(v[0-9]+\.[0-9]+\.[0-9]+)$/.exec(leanToolchain.trim());
+  if (!match || (command !== "lake" && command !== "lean")) {
+    return command;
+  }
+  const exe = process.platform === "win32" ? `${command}.exe` : command;
+  const toolchainDir = `leanprover--lean4---${match[1]}`;
+  const elanHome = process.env.ELAN_HOME ?? join(homedir(), ".elan");
+  const direct = join(elanHome, "toolchains", toolchainDir, "bin", exe);
+  return existsSync(direct) ? direct : command;
+}
+
+function runCommand(
+  command: string,
+  args: string[],
+  cwd: string,
+  leanToolchain: string
+): { exit_code: number; stdout: string; stderr: string } {
+  const result = spawnSync(directElanTool(command, leanToolchain), args, { cwd, encoding: "utf8", timeout: 30_000 });
   return {
     exit_code: result.status ?? 1,
     stdout: result.stdout ?? "",
@@ -63,6 +81,7 @@ export function runCleanLeanReplay(input: {
   const stdoutPathRel = join(evidenceRootRel, "final_replay.log");
   const stderrPathRel = join(evidenceRootRel, "final_replay.stderr.log");
   const manifestPathRel = join(evidenceRootRel, "final_replay_manifest.json");
+  const leanToolchain = readFileSync(input.leanProject.toolchainFile, "utf8").trim();
 
   const static_audit = runStaticCheatScan({
     projectRoot: input.projectRoot,
@@ -77,9 +96,9 @@ export function runCleanLeanReplay(input: {
     reportPath: dependencyPathRel
   });
 
-  const theoremCheck = runCommand("lake", ["env", "lean", input.leanProject.theoremFileRel], cleanRoot);
-  const build = runCommand("lake", ["build", ...input.leanProject.buildTargets], cleanRoot);
-  const audit = runCommand("lake", ["env", "lean", input.leanProject.auditFileRel], cleanRoot);
+  const theoremCheck = runCommand("lake", ["env", "lean", input.leanProject.theoremFileRel], cleanRoot, leanToolchain);
+  const build = runCommand("lake", ["build", ...input.leanProject.buildTargets], cleanRoot, leanToolchain);
+  const audit = runCommand("lake", ["env", "lean", input.leanProject.auditFileRel], cleanRoot, leanToolchain);
   const stdout = [theoremCheck.stdout, build.stdout, audit.stdout].filter(Boolean).join("\n");
   const stderr = [theoremCheck.stderr, build.stderr, audit.stderr].filter(Boolean).join("\n");
 
@@ -121,7 +140,7 @@ export function runCleanLeanReplay(input: {
     primary_dependency: input.leanProject.primaryDependency,
     locked_statement_hash: input.leanProject.formalSpec.locked_statement_hash,
     clean_workspace_path: relative(input.projectRoot, cleanRoot).replace(/\\/g, "/"),
-    lean_toolchain: readFileSync(input.leanProject.toolchainFile, "utf8").trim(),
+    lean_toolchain: leanToolchain,
     lakefile_hash: sha256FileSync(input.leanProject.lakefile).sha256,
     local_file_hashes: hashLeanProjectFiles(input.leanProject.leanRoot),
     command: input.leanProject.replayCommand,

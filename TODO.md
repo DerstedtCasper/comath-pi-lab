@@ -370,6 +370,14 @@
 - [x] Add skeleton-aware static cheat scanning so `sorry` can be allowed only in explicitly listed skeleton files, never final proof artifacts by default.
 - [x] Add Phase 31 Lean trust-profile tests and wire them into the default `@comath/comathd` test chain.
 
+## Phase 32: Lean Statement Signature Binding
+
+- [x] Add target theorem signature extraction for Lean `#check` output.
+- [x] Replace statement-equivalence substring matching with unique target-signature matching.
+- [x] Fail closed on missing target theorem signatures, ambiguous repeated target signatures, and mismatched theorem types.
+- [x] Preserve statement-drift vetoes while adding more precise `missing_target_check_output`, `ambiguous_target_check_output`, and `statement_signature_mismatch` vetoes.
+- [x] Add Phase 32 statement-signature tests and wire them into the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -381,7 +389,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Stronger runner re-execution sandboxing: OS-level isolation, network-denial enforcement, dependency lock capture, and cross-machine replay validation beyond the Phase 24 service-owned re-execution checks.
 - [ ] OS-level process sandboxing and multi-process writer/session locks for scheduled AgentRuns beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, and scoped-write controls.
-- [ ] Richer statement equivalence, Lean parser integration, theorem-signature extraction, and broader mathematical-domain trust profiles beyond Phase 31 axiom allowlists and skeleton-aware static scan.
+- [ ] Richer statement equivalence beyond unique target signature matching: Lean parser integration, definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
 
 ## Design Documentation Goal
 

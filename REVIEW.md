@@ -1342,6 +1342,42 @@ Profile-backed AgentRuns inherit the profile role/model/tool profile but still u
 - Rich profile UI remains deferred beyond the Phase 30 `/cm:agent` command/tool harness.
 - Multi-process writer locks/session semantics and log streaming APIs remain deferred.
 
+## Phase 32 Lean Statement Signature Binding Review Log
+
+### Scope
+
+Hardened statement equivalence by requiring a unique target theorem signature from Lean `#check` output. Phase 32 removes the previous substring-only acceptance path and adds explicit fail-closed vetoes for missing, ambiguous, and mismatched target signatures.
+
+This is not full Lean parser integration and does not prove definitional or logical equivalence across non-identical statements. It is a conservative binding improvement for the current final replay evidence path.
+
+### TDD Evidence
+
+```text
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase32-lean-statement-signature.test.mjs
+Initial RED result: exit 1; `checkStatementEquivalence()` returned no `target_signature` and still relied on substring matching.
+
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase32-lean-statement-signature.test.mjs
+Result: exit 0; Phase 32 Lean statement signature tests passed.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/proof-kernel/lean/statement-signature.ts`.
+- Updated `services/comathd/src/proof-kernel/lean/statement-equivalence.ts` to require a unique target theorem signature and emit `missing_target_check_output`, `ambiguous_target_check_output`, or `statement_signature_mismatch` vetoes.
+- Exported the signature helper from `services/comathd/src/index.ts`.
+- Added `services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs`.
+- Added Phase 32 to the default `@comath/comathd` test chain and phase tracking documents.
+
+### Boundary And Integrity Notes
+
+Statement equivalence now ignores target theorem text embedded inside arbitrary log lines. A passing report requires exactly one line beginning with the requested theorem name and matching the normalized formal spec signature.
+
+### Residual Risks
+
+- Definitional equivalence and registered-lemma logical equivalence still need Lean/parser-level support.
+- The signature parser is conservative and line-oriented; it may block valid pretty-printer formats until those formats are explicitly supported.
+- Broad proof planning and theorem synthesis beyond registered theorem families remain unresolved GA blockers.
+
 ## Phase 31 Lean Trust Profile Hardening Review Log
 
 ### Scope

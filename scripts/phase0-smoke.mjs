@@ -76,12 +76,12 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-31")) {
-  invariantFailures.push("README must describe the current Phase 18-31 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-32")) {
+  invariantFailures.push("README must describe the current Phase 18-32 GA vertical-slice evidence");
 }
 
-if (!acceptanceMatrix.includes("31 Lean trust profile hardening")) {
-  invariantFailures.push("acceptance matrix must include Phase 31 Lean trust profile hardening acceptance");
+if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
+  invariantFailures.push("acceptance matrix must include Phase 32 Lean statement signature binding acceptance");
 }
 
 for (const [content, label] of [
