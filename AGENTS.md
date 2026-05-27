@@ -45,8 +45,9 @@ Current implementation frontier:
 - Phase 30 is complete.
 - Phase 31 is complete.
 - Phase 32 is complete.
+- Phase 33 is complete.
 
-Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-32 vertical slices as a claim of broad mathematical discovery capability.
+Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-33 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
 
@@ -93,6 +94,8 @@ Phase 30 Pi agent profile UX is a thin-client runtime surface over `comathd` onl
 Phase 31 Lean trust-profile hardening is final-proof authority infrastructure. It may configure allowed Lean axioms and skeleton-only `sorry` allowlists, but it must fail closed when the target theorem lacks an axiom-profile report or when final proof files contain forbidden escape hatches. Trust-profile allowlists do not replace statement equivalence, dependency closure, static audit, clean replay, or claim promotion gates.
 
 Phase 32 Lean statement-signature binding is statement-equivalence hardening. It may parse target `#check` output to bind the final theorem to the locked formal spec, but it must fail closed on missing, ambiguous, substring-only, or mismatched signatures. It is not a substitute for full Lean parser integration or logical equivalence proof.
+
+Phase 33 proof-obligation DAG planning is native planning-stage proof-kernel infrastructure. It may write campaign-scoped `lemma_dag.json`, `line_map.json`, obligation YAML, `Skeleton.lean`, and skeleton reports under `.comath/campaign/<CAM>/proof/`, but those artifacts are not proof authority and cannot promote claims. Skeleton `sorry` placeholders must be named by proof-obligation ID and discharged by final clean Lean replay before any formal promotion.
 
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 

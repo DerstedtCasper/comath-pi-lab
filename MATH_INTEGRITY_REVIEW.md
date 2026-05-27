@@ -86,6 +86,7 @@ Remaining mathematical work:
 - `computationally_supported` requires computation or counterexample evidence, a successful bound computation runner output artifact, and trusted runner audit provenance; failed computation/counterexample runs remain evidence records but cannot promote claims.
 - `literature_supported` requires literature evidence, exact literature artifacts, quoted statement grounding inside the source artifact, and a successful citation-condition match.
 - `formally_checked` remains blocked unless Lean evidence, proof artifacts, kernel metadata, dependency closure, audit pass, and a passed proof-kernel final replay manifest for the same claim are present.
+- Phase 33 proof-obligation DAG, line-map, obligation YAML, `Skeleton.lean`, and skeleton-report artifacts are planning evidence only. Named `sorry` placeholders for all open obligations in skeleton artifacts cannot promote claims and must be discharged by the existing final clean Lean replay and gate path.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -173,9 +174,17 @@ Phase 25 adds coverage for:
 - stdout/stderr/result/replay-input hashes and fixed argv template metadata for external runner reports;
 - promotion-gate rejection of `formally_checked` even when the external runner returns `ok=true`.
 
+Phase 33 adds coverage for:
+
+- campaign-scoped native planning artifacts under `.comath/campaign/<CAM>/proof/`;
+- proof-obligation DAG duplicate-node, unknown-endpoint, unsupported-relation, and cycle rejection before artifact write;
+- line-map and obligation YAML binding across the current open-obligation closure;
+- `Skeleton.lean` `sorry` placeholders tagged with all open proof-obligation IDs;
+- planning stage-run artifact provenance and two-campaign no-overwrite behavior.
+
 ### Residual Risks
 
-- Real Lean kernel checking is implemented for the registered Phase 18-28 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
+- Real Lean kernel checking is implemented for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. Phase 33 adds native planning artifacts for those slices, but general lemma decomposition, theorem synthesis, richer line-map provenance, and broader domain automation remain unimplemented.
 - MathProve now has both the Phase 9 fail-closed mock and the Phase 25 external `verify_sympy.py` evidence-runner bridge. Neither path should be interpreted as broad MathProve proof search, final-audit proof authority, or direct claim-status authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
 - Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, and Phase 24 reruns the implemented deterministic Python compute runners. Stronger OS/network sandboxing, dependency locks, cross-machine replay, and broader runner families remain unimplemented.

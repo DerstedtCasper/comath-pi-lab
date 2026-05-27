@@ -76,12 +76,20 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-32")) {
-  invariantFailures.push("README must describe the current Phase 18-32 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-33")) {
+  invariantFailures.push("README must describe the current Phase 18-33 GA vertical-slice evidence");
+}
+
+if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
+  invariantFailures.push("acceptance matrix must include Phase 33 proof obligation DAG planning acceptance");
 }
 
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
-  invariantFailures.push("acceptance matrix must include Phase 32 Lean statement signature binding acceptance");
+  invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
+}
+
+if (!acceptanceMatrix.includes("Statement equivalence is target-bound")) {
+  invariantFailures.push("acceptance matrix must retain Phase 32 statement-equivalence mathematical-integrity acceptance");
 }
 
 for (const [content, label] of [
@@ -120,4 +128,4 @@ if (invariantFailures.length > 0) {
   process.exit(1);
 }
 
-console.log(`Phase 0/design smoke check passed (${required.length} required entries and ${5 + requiredSections.length} invariants).`);
+console.log(`Phase 0/design smoke check passed (${required.length} required entries and ${12 + requiredSections.length} invariants).`);

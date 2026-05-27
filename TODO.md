@@ -378,11 +378,21 @@
 - [x] Preserve statement-drift vetoes while adding more precise `missing_target_check_output`, `ambiguous_target_check_output`, and `statement_signature_mismatch` vetoes.
 - [x] Add Phase 32 statement-signature tests and wire them into the default `@comath/comathd` test chain.
 
+## Phase 33: Proof Obligation DAG Planning
+
+- [x] Add native planning-stage proof artifacts for `lemma_dag.json`, `line_map.json`, per-obligation YAML, `Skeleton.lean`, and `skeleton_report.md`.
+- [x] Scope Phase 33 proof-planning artifacts under `.comath/campaign/<CAM>/proof/` so independent campaigns do not overwrite one another's audit trail.
+- [x] Add DAG validation that rejects duplicate nodes, unknown edge endpoints, unsupported edge relations, and dependency cycles before planning artifacts are written.
+- [x] Bind skeleton `sorry` placeholders to all open proof-obligation IDs and record that the skeleton gate has no final proof authority.
+- [x] Record proof-planning artifacts in the `planning` stage run before candidate generation.
+- [x] Add Phase 33 regression coverage for multi-obligation skeleton/report closure, DAG validation, stage-run artifact paths, and two-campaign artifact isolation.
+- [x] Add `proof_obligation_dag_planning` to service status capabilities and smoke requirements.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Broad proof planning and theorem synthesis beyond registered theorem families (`Nat.add_zero`, `Nat.mul_zero`) and exact `n + 1 = n` refutation.
+- [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`), and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
 - [ ] Live Pi/Codex agent adapter execution beyond the Phase 30 Pi agent profile tools, Phase 29 service profile API, and Phase 28 allowlisted process scheduler fixtures.
 - [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.

@@ -37,6 +37,7 @@ The repository has completed:
 - Phase 30 Pi agent profile runtime UX for `/cm:agent` and executable profile tools;
 - Phase 31 Lean trust profile hardening for configurable axiom allowlists and skeleton-aware static audits;
 - Phase 32 Lean statement signature binding for target-bound statement-equivalence checks;
+- Phase 33 proof-obligation DAG planning for campaign-scoped lemma DAG, line-map, per-obligation YAML, and skeleton/report artifacts;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -45,7 +46,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, and Phase 32 binds statement equivalence to a unique target theorem signature. Phase 18-32 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, and Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure. Phase 18-33 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -67,7 +68,7 @@ Next correct action:
 /goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, and OS-level scheduled-process isolation.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-32 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-33 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -322,6 +323,16 @@ Apply it as follows:
 - Added fail-closed vetoes for missing target check output, ambiguous target check output, and statement signature mismatch.
 - Added `services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs` and wired it into the default `@comath/comathd` test chain.
 - Remaining Lean authority hardening: Lean parser integration, definitional/logical equivalence classes, and transitive dependency semantics.
+
+## Phase 33 Completion Notes
+
+- Added `services/comathd/src/proof-kernel/stages/proof-obligation-dag.ts` for native planning-stage lemma DAG, line-map, obligation YAML, Lean skeleton, and skeleton-report artifacts.
+- Scoped planning artifacts to `.comath/campaign/<CAM>/proof/` so concurrent or repeated campaigns preserve independent audit trails.
+- Added `validateProofObligationDag()` with duplicate-node, unknown-endpoint, unsupported-relation, and cycle rejection before artifacts are written.
+- Bound `Skeleton.lean` `sorry` placeholders to all open proof-obligation IDs and kept skeleton artifacts non-authoritative.
+- Recorded Phase 33 planning artifact paths in campaign stage runs and added `proof_obligation_dag_planning` to service status.
+- Added `services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Remaining proof-planning hardening: broad lemma decomposition, generic theorem synthesis, richer line-map provenance over multi-line derivations, and production proof-route agent execution.
 
 ## Verification To Run At Phase Boundary
 

@@ -14,6 +14,7 @@ import { runTheoremFamilyCandidates } from "../ensemble/candidate-runner.js";
 import { createLeanProjectForTheorem } from "../lean/lean-project.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
 import { findTheoremFamilyForGoal, findTheoremFamilyForObligation } from "../lean/theorem-family.js";
+import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
 import {
   candidateRunSchema,
@@ -482,10 +483,16 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "planning") {
+    const proofPlanning = writeProofPlanningArtifacts({
+      projectRoot: input.project_root,
+      campaign,
+      obligation
+    });
     const planRel = writeSimpleStageArtifact(input.project_root, campaign, "plan.json", {
       campaign_id: campaign.campaign_id,
       root_claim_id: campaign.root_claim_id,
       obligation_id: obligation.obligation_id,
+      proof_planning_artifacts: proofPlanning,
       public_stages: [
         "candidate_generation",
         "candidate_verification",
@@ -505,7 +512,17 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "candidate_generation",
-        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "planning", [planRel])],
+        stage_runs: [
+          ...campaign.stage_runs,
+          completedStageRun(campaign, "planning", [
+            planRel,
+            proofPlanning.lemma_dag_path,
+            proofPlanning.line_map_path,
+            ...proofPlanning.obligation_yaml_paths,
+            proofPlanning.skeleton_lean_path,
+            proofPlanning.skeleton_report_path
+          ])
+        ],
         next_actions: ["run bounded 8-way candidate generation or exact refutation search"]
       }),
       actor

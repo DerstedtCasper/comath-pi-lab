@@ -151,6 +151,7 @@ Remaining security requirements:
 12. **Compute runner replay no longer trusts manifest descriptors alone.** Strict `/replay/verify-manifest` reconstructs allowlisted runner commands from service code, uses persisted canonical runner input, and fails closed on replay/report drift, static snapshot vetoes before Python execution, script hash drift, input hash drift, oversized replay timeout, report-local stdio hash drift, untrusted replay argv, runner-version drift, nonzero exit, timeout, invalid JSON, runner ID mismatch, and result hash mismatch.
 13. **External MathProve runner is service-owned and non-authoritative.** Phase 25 invokes only the sibling `MathProve-Skill` `scripts/verify_sympy.py` through a fixed argv template, controlled `.comath/evidence/<claim>/mathprove` workspace, bounded timeout, explicit `shell:false`, and `network=false` metadata. Untrusted runner roots, missing runner, and statement-hash mismatch paths are archived fail-closed before promotion is attempted.
 14. **AgentRun scheduled processes are bounded and non-authoritative.** Phase 28 requires absolute-realpath program allowlists, `shell:false`, scoped `.tmp/comath/<ARUN>/` cwd/log paths, minimal inherited environment, sensitive env rejection, enqueue-time rpm reservation, queued/running cancellation, byte-capped stdout/stderr with truncation markers, scheduler report envelopes with `proof_authority: none`, invalid-report fail-closed persistence, and timeout/cancel process-tree termination attempts.
+15. **Proof-planning artifacts are campaign-scoped.** Phase 33 writes lemma DAG, line-map, per-obligation YAML, skeleton Lean, and skeleton report artifacts under `.comath/campaign/<CAM>/proof/` through path-policy-controlled runtime writes, avoiding cross-campaign overwrite of proof-planning provenance.
 
 ### Validation Commands
 
@@ -215,6 +216,13 @@ Phase 28 targeted validation added after the Research Alpha audit:
 ```text
 node services/comathd/tests/unit/phase28-agent-run-scheduler.test.mjs
 Result: exit 0; AgentRun scheduler tests passed, including absolute-realpath allowlisted real process launch, serial scheduling, enqueue-time rpm rejection, minimal environment inheritance, sensitive env rejection, invalid-report fail-closed handling, timeout, running and queued cancellation, scoped byte-capped stdout/stderr logs, process-tree termination attempts, non-authoritative scheduler report envelopes, and report persistence.
+```
+
+Phase 33 targeted validation added after the Research Alpha audit:
+
+```text
+node services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs
+Result: exit 0; proof-obligation DAG planning tests passed, including duplicate-node, unknown-endpoint, unsupported-relation, and cycle rejection; campaign-scoped planning artifacts; multi-obligation skeleton/report closure; stage-run provenance; and two-campaign no-overwrite behavior.
 ```
 
 ### Residual Risks

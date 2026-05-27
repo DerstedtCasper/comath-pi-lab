@@ -24,7 +24,8 @@ const requiredCapabilities = [
   "proof_kernel_ga_vertical_slice",
   "runner_reexecution_replay",
   "mathprove_external_evidence_runner",
-  "pi_runtime_registration_v0755"
+  "pi_runtime_registration_v0755",
+  "proof_obligation_dag_planning"
 ];
 
 for (const capability of requiredCapabilities) {

@@ -50,6 +50,7 @@
 | 30 Pi agent profile runtime UX | `phase30-agent-profile-tools.test.mjs` verifies executable Pi tools for profile list/get, profile-backed AgentRun creation, launch-envelope preparation, `/cm:agent` command dispatch, host confirmation for mutating profile tools, local required-argument validation, runtime registration inclusion, and no direct `.comath/` access from the extension. |
 | 31 Lean trust profile hardening | `phase31-lean-trust-profile.test.mjs` verifies configurable axiom allowlists, constructive rejection of `Classical.choice`, required target-theorem axiom reports, and skeleton-only `sorry` allowlisting for static proof-integrity scans. |
 | 32 Lean statement signature binding | `phase32-lean-statement-signature.test.mjs` verifies that statement equivalence accepts only a unique target theorem signature and fails closed on missing, ambiguous, substring-only, or mismatched theorem-type output. |
+| 33 Proof obligation DAG planning | `phase33-proof-obligation-dag.test.mjs` verifies campaign-scoped `lemma_dag.json`, `line_map.json`, obligation YAML, `Skeleton.lean`, and skeleton report artifacts across all open obligations; validates duplicate-node, unknown-endpoint, unsupported-relation, and cycle rejection; records planning artifacts in campaign stage runs; and proves two campaigns do not overwrite one another's planning artifacts. |
 
 ## Security Acceptance
 
@@ -86,6 +87,7 @@
 | Lean trust profiles are explicit gates | Phase 31 tests require target-bound `#print axioms` evidence and configurable allowed-axiom profiles; `Classical.choice` can be accepted for ordinary classical projects and rejected for constructive projects. |
 | Skeleton placeholders cannot leak into final proof artifacts | Phase 31 static-audit tests allow `sorry` only in explicitly listed skeleton files and still fail final Lean files containing `sorry`. |
 | Statement equivalence is target-bound | Phase 32 tests reject arbitrary stdout substrings and require a unique target-theorem signature before statement equivalence can pass. |
+| Planning skeletons are not proof authority | Phase 33 writes campaign-scoped skeleton/DAG/line-map artifacts with named proof-obligation placeholders only; these artifacts remain planning evidence and cannot promote claims without the existing clean Lean replay and gate path. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -109,5 +111,6 @@
 | Pi agent profile UX | `phase30-agent-profile-tools.test.mjs` covers Pi runtime registration and command/tool dispatch for service-owned profile list/get, AgentRun creation, and launch-envelope preparation. | Covered in the fake Pi runtime harness; live Pi/Codex adapter execution and full install-session e2e remain deferred. |
 | Lean trust profile hardening | `phase31-lean-trust-profile.test.mjs` covers project-level axiom allowlists and skeleton-aware static scanning. | Covered for configurable allowlists and target-bound axiom-report presence; richer theorem-signature extraction, Lean parser integration, and transitive dependency semantics remain deferred. |
 | Lean statement signature binding | `phase32-lean-statement-signature.test.mjs` covers target signature extraction and fail-closed statement-equivalence vetoes for missing/ambiguous/mismatched output. | Covered for unique target-signature equality; definitional/logical equivalence and Lean parser integration remain deferred. |
+| Proof obligation DAG planning | `phase33-proof-obligation-dag.test.mjs` covers native planning artifacts for lemma DAG, line map, obligation YAML, skeleton Lean placeholders, skeleton report, DAG validation, multi-obligation closure, and campaign-scoped artifact isolation. | Covered for the planning stage of registered theorem-family slices and open-obligation artifact closure; broad lemma decomposition, arbitrary theorem planning, and generic theorem synthesis remain deferred. |
 | Global GA readiness | Current test evidence does not cover arbitrary theorem planning, broad MathProve proof search/final-audit semantics, native TriviumDB validation, stronger OS/network replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, or broad theorem synthesis. | Not achieved; blocked by deferred generalization work. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the registered Phase 23 theorem families. | Deferred. |

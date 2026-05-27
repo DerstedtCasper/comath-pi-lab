@@ -1342,6 +1342,80 @@ Profile-backed AgentRuns inherit the profile role/model/tool profile but still u
 - Rich profile UI remains deferred beyond the Phase 30 `/cm:agent` command/tool harness.
 - Multi-process writer locks/session semantics and log streaming APIs remain deferred.
 
+## Phase 33 Proof Obligation DAG Planning Review Log
+
+### Scope
+
+Added native planning-stage proof-obligation artifacts to the service-owned proof kernel. Phase 33 writes a campaign-scoped lemma DAG, line map, obligation YAML, `Skeleton.lean`, and skeleton report during the public `planning` campaign state before candidate generation. This internalizes another MathProve v8 proof-factory concept without treating skeletons, DAGs, or line maps as proof authority.
+
+### TDD And Review Evidence
+
+```text
+node scripts/phase0-smoke.mjs
+Initial audit result: exit 1 before fix; root smoke still required README Phase 18-32 after README had moved to Phase 18-33.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed before Phase 33 regression hardening.
+
+node services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs
+Multi-obligation RED result: exit 1; a root -> lemma -> sublemma DAG marked the intermediate obligation as `leaf` instead of `intermediate`, exposing incomplete open-obligation closure semantics.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding campaign-scoped proof-planning artifacts and DAG validation.
+
+node services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs
+Result: exit 0; Phase 33 proof obligation DAG tests passed after DAG kind, multi-obligation skeleton, and skeleton-report closure fixes.
+
+node services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs
+Unsupported-relation RED result: exit 1; `validateProofObligationDag()` accepted a non-`decomposes_to` edge relation.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding unsupported-relation rejection.
+
+node services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs
+Result: exit 0; Phase 33 proof obligation DAG tests passed with duplicate-node, unknown-endpoint, unsupported-relation, cycle, multi-obligation closure, stage-run, and campaign-isolation coverage.
+
+node scripts/phase0-smoke.mjs
+Result: exit 0; root smoke now checks Phase 18-33 and Phase 33 acceptance while retaining Phase 32 statement-signature acceptance and mathematical-integrity guards.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-33 package tests passed with Phase 32 and Phase 33 wired into the default test chain.
+
+corepack pnpm build
+Result: exit 0; root recursive build passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests through Phase 33, and Phase 17 integrity evaluation passed.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repository-root runtime state was left behind.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/proof-kernel/stages/proof-obligation-dag.ts`.
+- Added `validateProofObligationDag()` with duplicate-node, unknown-edge-endpoint, unsupported-relation, and cycle rejection.
+- Wrote proof-planning artifacts under `.comath/campaign/<CAM>/proof/` instead of global `.comath/proof/`.
+- Added `Skeleton.lean` with proof-obligation-tagged planning-stage `sorry` placeholders for all open obligations and a skeleton report that explicitly denies proof authority.
+- Recorded Phase 33 artifact paths in the campaign `planning` stage run.
+- Added `services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs` and wired it into `@comath/comathd` default tests.
+- Added `proof_obligation_dag_planning` to runtime status and smoke requirements.
+- Updated README, TODO, acceptance matrix, handoff, AGENTS, security review, and mathematical-integrity review.
+
+### Boundary And Integrity Notes
+
+Phase 33 does not implement broad lemma decomposition or arbitrary theorem synthesis. The DAG is validated and campaign-scoped, and its planning artifacts now cover the current open-obligation closure rather than only the root obligation. `Skeleton.lean` may contain named `sorry` placeholders only as skeleton material; final proof authority still requires the existing static audit, statement-equivalence gate, axiom profile, dependency closure, clean Lean replay, and claim promotion gate.
+
+### Residual Risks
+
+- Broad proof planning beyond registered theorem families remains deferred.
+- Rich line-map provenance over multi-line informal derivations, citations, and computations remains deferred.
+- Generic theorem synthesis and production proof-route agent execution remain deferred.
+- Skeleton artifacts are not built as final Lean targets; they are auditable planning outputs whose placeholders must be discharged later.
+
 ## Phase 32 Lean Statement Signature Binding Review Log
 
 ### Scope
