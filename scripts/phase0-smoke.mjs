@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-38")) {
-  invariantFailures.push("README must describe the current Phase 18-38 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-39")) {
+  invariantFailures.push("README must describe the current Phase 18-39 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -104,6 +104,10 @@ if (!acceptanceMatrix.includes("38 Native TriviumDB target-platform evaluation")
   invariantFailures.push("acceptance matrix must include Phase 38 native TriviumDB target-platform evaluation acceptance");
 }
 
+if (!acceptanceMatrix.includes("39 Project writer session lock")) {
+  invariantFailures.push("acceptance matrix must include Phase 39 project writer session lock acceptance");
+}
+
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
 }
@@ -120,8 +124,16 @@ if (!acceptanceMatrix.includes("Native TriviumDB evaluation is explicit")) {
   invariantFailures.push("acceptance matrix must include Phase 38 native TriviumDB explicit-evaluation security acceptance");
 }
 
+if (!acceptanceMatrix.includes("Project writers are session-scoped")) {
+  invariantFailures.push("acceptance matrix must include Phase 39 writer session security acceptance");
+}
+
 if (!acceptanceMatrix.includes("Native memory backend evidence is non-promotional")) {
   invariantFailures.push("acceptance matrix must include Phase 38 native memory mathematical-integrity boundary");
+}
+
+if (!acceptanceMatrix.includes("Writer locks are coordination, not proof")) {
+  invariantFailures.push("acceptance matrix must include Phase 39 writer lock mathematical-integrity boundary");
 }
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
@@ -142,6 +154,10 @@ if (!acceptanceMatrix.includes("explicit alias acceptance")) {
 
 if (!acceptanceMatrix.includes("real `triviumdb@0.7.1` loading")) {
   invariantFailures.push("acceptance matrix must include Phase 38 real TriviumDB loading coverage language");
+}
+
+if (!acceptanceMatrix.includes("malformed-lock fail-closed behavior")) {
+  invariantFailures.push("acceptance matrix must include Phase 39 malformed-lock fail-closed coverage language");
 }
 
 for (const [content, label] of [

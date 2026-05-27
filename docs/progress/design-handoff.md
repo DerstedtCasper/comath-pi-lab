@@ -43,6 +43,7 @@ The repository has completed:
 - Phase 36 runner replay sandbox and dependency provenance;
 - Phase 37 registered Lean statement alias equivalence;
 - Phase 38 native TriviumDB target-platform evaluation;
+- Phase 39 project writer session lock;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -51,7 +52,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, Phase 34 scopes ensemble candidate/decision artifacts by campaign, Phase 35 makes final replay audit paths claim-scoped, Phase 36 records runner sandbox/dependency provenance with fail-closed replay-integrity checks, Phase 37 accepts only explicitly registered Lean definitional-alias signatures with a witness while preserving fail-closed mismatch behavior, and Phase 38 validates the optional native TriviumDB backend on the target Windows x64 platform with fail-closed reports, real native smoke, and performance/persistence metrics. Phase 18-38 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, Phase 34 scopes ensemble candidate/decision artifacts by campaign, Phase 35 makes final replay audit paths claim-scoped, Phase 36 records runner sandbox/dependency provenance with fail-closed replay-integrity checks, Phase 37 accepts only explicitly registered Lean definitional-alias signatures with a witness while preserving fail-closed mismatch behavior, Phase 38 validates the optional native TriviumDB backend on the target Windows x64 platform with fail-closed reports, real native smoke, and performance/persistence metrics, and Phase 39 adds a service-owned project writer session lock primitive with exclusive acquisition, token-gated release, stale takeover provenance, and malformed-lock fail-closed behavior. Phase 18-39 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -70,10 +71,10 @@ Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA pr
 Next correct action:
 
 ```text
-/goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, and OS-level scheduled-process isolation.
+/goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, AgentRun scheduler integration with the Phase 39 writer lock, and OS-level scheduled-process isolation.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-38 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-39 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -382,6 +383,14 @@ Apply it as follows:
 - Added `services/comathd/tests/unit/phase38-trivium-native-evaluation.test.mjs` and `services/comathd/scripts/run-trivium-target-evaluation.mjs`.
 - Added `corepack pnpm --filter @comath/comathd eval:trivium` for real native target-platform evaluation.
 - Remaining memory work: broader multi-platform benchmarking and production default-backend selection policy. The default backend remains in-memory unless TriviumDB is explicitly selected.
+
+## Phase 39 Completion Notes
+
+- Added `services/comathd/src/project/session-lock.ts` for project writer session locks under `.comath/sessions/writer.lock.json`.
+- Added exclusive initial acquisition, active-lock rejection, token-gated release, stale takeover with `previous_session_id`, and malformed-lock fail-closed behavior.
+- Added `services/comathd/tests/unit/phase39-project-session-lock.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added `project_writer_session_lock` to service status and kept `agent_process_multi_process_lock_integration_deferred` as an explicit residual risk.
+- Remaining agent hardening: integrate the lock into AgentRun scheduler mutation paths, add stronger OS-level process sandboxing/network denial, and validate live Pi/Codex adapter execution.
 
 ## Verification To Run At Phase Boundary
 

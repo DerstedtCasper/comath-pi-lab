@@ -9,6 +9,7 @@ export * from "./logger.js";
 export * from "./security/path-policy.js";
 export * from "./project/runtime-layout.js";
 export * from "./project/project-store.js";
+export * from "./project/session-lock.js";
 export * from "./config/config.js";
 export * from "./api/server.js";
 export * from "./artifacts/hash.js";

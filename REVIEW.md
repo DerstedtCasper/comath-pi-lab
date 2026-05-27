@@ -1416,6 +1416,77 @@ Phase 33 does not implement broad lemma decomposition or arbitrary theorem synth
 - Generic theorem synthesis and production proof-route agent execution remain deferred.
 - Skeleton artifacts are not built as final Lean targets; they are auditable planning outputs whose placeholders must be discharged later.
 
+## Phase 39 Project Writer Session Lock Review Log
+
+### Scope
+
+Added a service-owned project writer session lock primitive under `.comath/sessions/writer.lock.json`. Phase 39 gives `comathd` and future scheduled AgentRun writers an auditable single-writer coordination object with token-gated release, stale-lock takeover, and fail-closed malformed-lock behavior.
+
+This is not OS-level process sandboxing and does not yet wire every AgentRun scheduler launch or mutation route through the lock. It retires only the lock primitive portion of the broader scheduled-process isolation blocker.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase39-project-session-lock.test.mjs
+Initial RED result: exit 1; `../../dist/index.js` did not export `acquireProjectSessionLock`.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding the session-lock module and export.
+
+node services/comathd/tests/unit/phase39-project-session-lock.test.mjs
+Result: exit 0; Phase 39 lock tests passed for acquisition, active-lock rejection, token-gated release, and stale takeover.
+
+node services/comathd/tests/unit/phase39-project-session-lock.test.mjs
+Reviewer-strengthened RED result: exit 1; malformed lock input surfaced a raw `SyntaxError` instead of the required fail-closed unreadable-lock error.
+
+node services/comathd/tests/unit/phase39-project-session-lock.test.mjs
+Result: exit 0; malformed locks now fail closed with `active writer session lock is unreadable` and are not overwritten.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/project/session-lock.ts` with `acquireProjectSessionLock()`, `releaseProjectSessionLock()`, and `readProjectSessionLock()`.
+- Exported the lock API from `services/comathd/src/index.ts`.
+- Added `services/comathd/tests/unit/phase39-project-session-lock.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added `project_writer_session_lock` to `getComathdStatus()` and `agent_process_multi_process_lock_integration_deferred` as an explicit residual risk.
+- Updated README, TODO, acceptance matrix, smoke checks, and coordination notes for Phase 39.
+
+### Boundary And Security Notes
+
+The lock path is resolved through the existing runtime-write path policy and lives under `.comath/sessions/`. Initial acquisition uses exclusive-create semantics, active locks reject contenders, release requires the current session token, stale takeover records the replaced session id, and malformed lock JSON is treated as an active fail-closed condition rather than silently repaired.
+
+The session lock is coordination metadata only. It does not prove mathematical artifacts, does not grant claim-promotion authority, does not sandbox child processes, and does not yet enforce single-writer behavior across every AgentRun scheduler path.
+
+### Residual Risks
+
+- AgentRun scheduler integration with this writer lock remains deferred.
+- OS-level process sandboxing and network-denial enforcement remain deferred.
+- The primitive is file-lock-shaped coordination, not an operating-system advisory/mandatory lock across arbitrary external processes.
+
+### Final Root Validation
+
+Fresh Phase 39 validation completed on 2026-05-28:
+
+```text
+node scripts/phase0-smoke.mjs
+Result: exit 0; Phase 0/design smoke check passed for 25 required entries and 28 invariants.
+
+node services/comathd/tests/phase0-smoke.test.mjs
+Result: exit 0; comathd Research Alpha smoke accepted `project_writer_session_lock` and the deferred AgentRun lock-integration residual risk.
+
+node services/comathd/tests/unit/phase39-project-session-lock.test.mjs
+Result: exit 0; Phase 39 project session lock tests passed.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-39 package tests passed with Phase 39 wired into the default test chain.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests through Phase 39, and Phase 17 integrity evaluation passed.
+```
+
 ## Phase 38 Native TriviumDB Target-Platform Evaluation Review Log
 
 ### Scope

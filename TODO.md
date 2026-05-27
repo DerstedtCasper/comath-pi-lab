@@ -430,6 +430,16 @@
 - [x] Add `corepack pnpm --filter @comath/comathd eval:trivium` for real native evaluation.
 - [x] Wire Phase 38 into the default `@comath/comathd` test chain and smoke status capabilities.
 
+## Phase 39: Project Writer Session Lock
+
+- [x] Add service-owned writer session lock under `.comath/sessions/writer.lock.json`.
+- [x] Acquire the initial lock with exclusive create semantics.
+- [x] Reject concurrent active writer sessions with `active_writer_session_lock_exists`.
+- [x] Require a session token to release the lock.
+- [x] Allow stale-lock takeover while preserving the previous session id.
+- [x] Fail closed on unreadable or malformed active lock files without overwriting them.
+- [x] Wire Phase 39 into the default `@comath/comathd` test chain and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -439,7 +449,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Live Pi/Codex agent adapter execution beyond the Phase 30 Pi agent profile tools, Phase 29 service profile API, and Phase 28 allowlisted process scheduler fixtures.
 - [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance: OS-level isolation, enforced network denial, and cross-machine replay validation.
-- [ ] OS-level process sandboxing and multi-process writer/session locks for scheduled AgentRuns beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, and scoped-write controls.
+- [ ] OS-level process sandboxing and AgentRun scheduler integration with project writer/session locks beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, and Phase 39 project-level lock primitive.
 - [ ] Richer statement equivalence beyond Phase 37 registered aliases: Lean parser integration, proof-producing definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
 
 ## Design Documentation Goal

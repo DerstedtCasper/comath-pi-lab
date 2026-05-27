@@ -157,6 +157,7 @@ Remaining security requirements:
 18. **Runner replay provenance is explicit.** Phase 36 records sandbox policy and dependency-lock material in compute runner reports and replay manifests, and replay integrity fails closed if either class of provenance is missing.
 19. **Statement-alias equivalence is allowlisted.** Phase 37 accepts non-identical Lean target signatures only through explicit registered definitional aliases and records the witness; unregistered mismatches remain fail-closed.
 20. **Native TriviumDB target evaluation is explicit.** Phase 38 runs native TriviumDB through an adapter-owned evaluation harness, records fail-closed unavailable reports, and keeps default memory backend selection unchanged.
+21. **Project writer sessions have a fail-closed lock primitive.** Phase 39 writes `.comath/sessions/writer.lock.json` through the runtime-write path policy, rejects concurrent active locks, requires the session token for release, records stale takeover provenance, and treats malformed lock JSON as an unreadable active lock rather than overwriting it.
 
 ### Validation Commands
 
@@ -271,12 +272,19 @@ corepack pnpm --filter @comath/comathd eval:trivium
 Result: exit 0; real target evaluation passed with `backend=trivium`, `sample_size=64`, `search_top_hit_ratio=1`, `persistence_reopen.result=pass`, and no hard vetoes.
 ```
 
+Phase 39 targeted validation:
+
+```text
+node services/comathd/tests/unit/phase39-project-session-lock.test.mjs
+Result: exit 0; project writer session lock tests passed for exclusive acquisition, active-lock rejection, token-gated release, stale takeover, previous-session provenance, and malformed-lock fail-closed behavior.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
 - Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, Phase 24 reruns the implemented Python compute runners through strict replay, and Phase 36 records sandbox/dependency provenance with fail-closed integrity checks. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but OS-level sandboxing, enforced network denial, and cross-machine replay validation remain deferred.
-- `comathd` still lacks lock/session semantics for multi-process writers; current tests exercise single-process Research Alpha behavior.
+- Phase 39 adds a project writer session lock primitive, but AgentRun scheduler integration across all mutation paths and true OS-level multi-process lock enforcement remain deferred.
 - Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, but a full interactive Pi/comathd install-session e2e and richer runtime permission model remain separate hardening targets.
 - Phase 27 validates AgentRun persistence and scoped writes; Phase 28 adds service-side process launch and scheduler controls on top of that boundary.
 - Phase 28 validates absolute-realpath allowlisted process launch, minimal env inheritance, timeout/cancel, process-tree termination attempts, output byte caps, non-authoritative scheduler envelopes, and rpm/concurrency controls, but it does not yet provide OS-level sandboxing, network-denial enforcement, production Pi/Codex agent adapters, live log streaming APIs, or multi-process writer locks.

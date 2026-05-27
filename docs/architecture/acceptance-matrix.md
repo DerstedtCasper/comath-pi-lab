@@ -56,6 +56,7 @@
 | 36 Runner replay sandbox and dependency provenance | `phase36-runner-replay-provenance.test.mjs` verifies sandbox-policy and dependency-lock material in compute runner reports and replay manifests, plus fail-closed vetoes when either provenance class is missing. |
 | 37 Registered Lean statement alias equivalence | `phase37-lean-statement-alias-equivalence.test.mjs` verifies explicitly registered definitional aliases can accept a target theorem signature such as `Nat.add n 0 = n` for locked `n + 0 = n`, while missing, ambiguous, and non-registered mismatched target output still fails closed. |
 | 38 Native TriviumDB target-platform evaluation | `phase38-trivium-native-evaluation.test.mjs` verifies fail-closed unavailable reports and the evaluation-report contract; `eval:trivium` validates real `triviumdb@0.7.1` capability, persistence reopen, search top-hit ratio, and upsert/context timing on the target platform. |
+| 39 Project writer session lock | `phase39-project-session-lock.test.mjs` verifies exclusive project writer lock acquisition, active-lock rejection, token-gated release, stale takeover, previous-session provenance, and malformed-lock fail-closed behavior. |
 
 ## Security Acceptance
 
@@ -67,6 +68,7 @@
 | Runtime state not committed | `.gitignore` and smoke test. |
 | Native backends optional | TriviumDB probe/fallback tests. |
 | Native TriviumDB evaluation is explicit | Phase 38 keeps `triviumdb` as a root optional dependency and requires explicit target-platform evaluation before native-backend claims. |
+| Project writers are session-scoped | Phase 39 creates a service-owned writer lock under `.comath/sessions/` so concurrent writers have a fail-closed coordination primitive. |
 
 ## Mathematical Integrity Acceptance
 
@@ -98,6 +100,7 @@
 | Final replay audit paths are claim-scoped | Phase 35 requires final replay stage-run artifact pointers to use the current claim id, avoiding misleading audit trails when multiple supported campaigns share one project root. |
 | Registered statement aliases require witnesses | Phase 37 accepts non-identical Lean target signatures only through an explicit registered definitional-alias witness and keeps missing, ambiguous, or non-registered mismatches as hard vetoes. |
 | Native memory backend evidence is non-promotional | Phase 38 target-platform evaluation can validate memory persistence/performance, but it does not promote mathematical claims or bypass `comathd` gates. |
+| Writer locks are coordination, not proof | Phase 39 locks protect mutation sessions; they do not certify artifacts, evidence, proofs, or claim promotion. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -127,5 +130,6 @@
 | Runner replay sandbox/dependency provenance | `phase36-runner-replay-provenance.test.mjs` covers sandbox-policy and dependency-lock material in compute runner reports and replay manifests, plus fail-closed vetoes when either provenance class is missing. | Covered for provenance and integrity gates; OS-level isolation, enforced network denial, and cross-machine replay validation remain deferred. |
 | Registered Lean statement alias equivalence | `phase37-lean-statement-alias-equivalence.test.mjs` covers explicit alias acceptance for Lean notation expansion and fail-closed behavior for missing, ambiguous, or unregistered mismatched target signatures. | Covered for registered definitional aliases only; Lean parser integration, proof-producing logical equivalence, and transitive semantic equivalence remain deferred. |
 | Native TriviumDB target-platform evaluation | `phase38-trivium-native-evaluation.test.mjs`, `test:trivium` with `COMATH_ENABLE_TRIVIUM_TESTS=1`, and `eval:trivium` cover real `triviumdb@0.7.1` loading, adapter write/link/search paths, persistence reopen, target-platform performance metrics, and fail-closed unavailable reports. | Covered for this Windows x64 target and explicit optional backend evaluation; default backend remains memory and broader multi-platform benchmarking remains future work. |
+| Project writer/session lock | `phase39-project-session-lock.test.mjs` covers exclusive create, active-lock rejection, token release, stale takeover, malformed-lock fail-closed behavior, and path-policy confinement under `.comath/sessions/`. | Covered as a project-level primitive; full AgentRun scheduler integration and OS-level process sandboxing remain deferred. |
 | Global GA readiness | Current test evidence does not cover arbitrary theorem planning, broad MathProve proof search/final-audit semantics, OS-enforced network replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, or broad theorem synthesis. | Not achieved; blocked by deferred generalization work. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the registered Phase 23 theorem families. | Deferred. |
