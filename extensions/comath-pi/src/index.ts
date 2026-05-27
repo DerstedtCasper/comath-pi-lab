@@ -1,8 +1,14 @@
 import { listSubagentDefinitions, type SubagentDefinition } from "./subagents.js";
+import {
+  buildResearchCampaignLoopInput,
+  issueCampaignLoopCapability,
+  runResearchCampaignLoop
+} from "./research-loop.js";
 
 export * from "./subagents.js";
 export * from "./widgets.js";
 export * from "./renderers.js";
+export * from "./research-loop.js";
 export * from "./tools/review.js";
 
 export type ParsedComathCommand = {
@@ -73,7 +79,49 @@ export type DashboardInput = {
 };
 
 function splitCommand(input: string): string[] {
-  return input.trim().split(/\s+/).filter(Boolean);
+  const parts: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+
+  for (const char of input.trim()) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if ((char === '"' || char === "'") && !quote) {
+      quote = char;
+      continue;
+    }
+    if (quote && char === quote) {
+      quote = null;
+      continue;
+    }
+    if (!quote && /\s/.test(char)) {
+      if (current.length > 0) {
+        parts.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += char;
+  }
+
+  if (escaped) {
+    current += "\\";
+  }
+  if (quote) {
+    throw new Error(`unterminated quote: ${quote}`);
+  }
+  if (current.length > 0) {
+    parts.push(current);
+  }
+  return parts;
 }
 
 export function parseComathCommand(input: string): ParsedComathCommand | null {
@@ -169,6 +217,17 @@ function encodeQuery(value: string): string {
   return encodeURIComponent(value);
 }
 
+function readNumber(payload: Record<string, unknown>, field: string): number | undefined {
+  const value = payload[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  throw new Error(`${field} must be a non-negative number`);
+}
+
 function campaignPath(campaignId: string, suffix: string): string {
   return `/campaign/${encodeURIComponent(campaignId)}${suffix}`;
 }
@@ -182,6 +241,33 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
       domain: readString(input, "domain", { optional: true }),
       strict_mode: input.strict_mode === undefined ? true : input.strict_mode === true,
       actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.research.runCampaignLoop") {
+    const projectRoot = readString(input, "project_root");
+    const actor = readString(input, "actor");
+    const maxTicks = readNumber(input, "max_ticks");
+    const capability = issueCampaignLoopCapability({
+      project_root: projectRoot,
+      actor,
+      max_ticks: maxTicks,
+      confirmation: {
+        kind: "mutation_confirmation",
+        target: "comath.research.runCampaignLoop",
+        allowed: true,
+        confirmation_id: readString(input, "confirmation_id")
+      }
+    });
+    return runResearchCampaignLoop(client, {
+      project_root: projectRoot,
+      project_name: readString(input, "project_name", { optional: true }),
+      user_goal: readString(input, "user_goal"),
+      domain: readString(input, "domain", { optional: true }),
+      strict_mode: input.strict_mode === undefined ? undefined : input.strict_mode === true,
+      actor,
+      max_ticks: maxTicks,
+      capability
     });
   }
 
@@ -318,6 +404,21 @@ export function createComathTools(): ToolDescriptor[] {
         domain: stringProp,
         strict_mode: { type: "boolean" },
         actor: stringProp
+      })
+    },
+    {
+      name: "comath.research.runCampaignLoop",
+      description: "Run a bounded one-command ResearchCampaign loop through comathd and return dashboard state.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "user_goal", "actor", "confirmation_id"], {
+        project_root: stringProp,
+        project_name: stringProp,
+        user_goal: stringProp,
+        domain: stringProp,
+        strict_mode: { type: "boolean" },
+        actor: stringProp,
+        max_ticks: { type: "number", minimum: 0 },
+        confirmation_id: stringProp
       })
     },
     {
@@ -490,6 +591,44 @@ export function requireMutationConfirmation(request: PermissionRequest): Permiss
     confirmation_required: true,
     reason: `${request.name} mutates trusted CoMath state through comathd and requires confirmation`
   };
+}
+
+export async function runComathResearchCommand(
+  client: ComathClient,
+  command: string,
+  defaults: {
+    project_root: string;
+    project_name?: string;
+    actor: string;
+    confirmation_id: string;
+    max_ticks?: number;
+  }
+) {
+  const parsed = parseComathCommand(command);
+  if (!parsed || parsed.action !== "research") {
+    throw new Error("research command is required");
+  }
+  const capability = issueCampaignLoopCapability({
+    project_root: defaults.project_root,
+    actor: defaults.actor,
+    max_ticks: defaults.max_ticks,
+    confirmation: {
+      kind: "mutation_confirmation",
+      target: "/cm:research",
+      allowed: true,
+      confirmation_id: defaults.confirmation_id
+    }
+  });
+  return runResearchCampaignLoop(
+    client,
+    buildResearchCampaignLoopInput(parsed, {
+      project_root: defaults.project_root,
+      project_name: defaults.project_name,
+      actor: defaults.actor,
+      max_ticks: defaults.max_ticks,
+      capability
+    })
+  );
 }
 
 export function discoverComathResources(input: {

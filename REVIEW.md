@@ -1078,6 +1078,65 @@ Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
 
+## Phase 22 Pi Research Campaign Loop Review Log
+
+### Scope
+
+Added a Pi-side one-command research campaign loop so `/cm:research "<goal>" --goal --strict` and `comath.research.runCampaignLoop` can start a service-owned campaign, advance bounded ticks through `comathd`, and return a service-backed dashboard snapshot. Phase 22 moves the Pi layer beyond descriptor-only campaign tools, while keeping proof authority, promotion gates, artifacts, and runtime state ownership in `comathd`.
+
+### TDD And Review Evidence
+
+```text
+corepack pnpm --filter @comath/pi-extension build; corepack pnpm --filter @comath/pi-extension exec node tests/phase22-research-loop.test.mjs
+Initial RED result: exit 1; `../dist/index.js` did not provide `buildResearchCampaignLoopInput`.
+
+corepack pnpm --filter @comath/pi-extension build; corepack pnpm --filter @comath/pi-extension exec node tests/phase22-research-loop.test.mjs
+Reviewer-strengthened RED result: exit 1; `../dist/index.js` did not provide `issueCampaignLoopCapability`, exposing that the loop helper was not yet tied to confirmation/capability issuance.
+
+corepack pnpm --filter @comath/pi-extension build; corepack pnpm --filter @comath/pi-extension exec node tests/phase22-research-loop.test.mjs
+Parser/capability RED result: exit 1; `/cm:research start --goal "n + 0 = n"` incorrectly set `strict_mode=true` because `--goal` was treated as both value flag and strict marker.
+
+corepack pnpm --filter @comath/pi-extension build; corepack pnpm --filter @comath/pi-extension exec node tests/phase22-research-loop.test.mjs
+Result: exit 0; Phase 22 research loop tests passed for quote-aware command parsing, target-scoped capability issuance, command-loop execution, tool-loop execution, bounded tick budget, and dashboard return.
+```
+
+### Changed Surfaces
+
+- Added `extensions/comath-pi/src/research-loop.ts`.
+- Added `extensions/comath-pi/tests/phase22-research-loop.test.mjs` and wired it into the default `@comath/pi-extension` test chain.
+- Made `/cm:*` parsing quote-aware, with escaped quotes and unterminated quote rejection.
+- Added `issueCampaignLoopCapability()` so campaign-loop capability issuance requires a positive mutation confirmation for `/cm:research` or `comath.research.runCampaignLoop`.
+- Added `runResearchCampaignLoop()` for bounded `campaign/start -> campaign/tick* -> dashboard` orchestration through the existing client boundary.
+- Added `runComathResearchCommand()` and the mutating `comath.research.runCampaignLoop` tool descriptor/handler.
+- Added `pi_research_campaign_loop` to `getComathdStatus()` and updated README, TODO, acceptance, risk, handoff, extension, and math-integrity notes.
+
+### Boundary And Integrity Notes
+
+The loop does not read or write `.comath/` directly and does not import service internals. It only calls `comathd` through the extension client. A campaign-loop capability is scoped by project root, actor, confirmation ID, target, and tick budget; denied confirmations and unrelated confirmation targets fail closed.
+
+The loop can start and tick a campaign, but it cannot promote a claim by itself. Formal proof authority remains the service-owned proof-kernel replay plus gate-mediated promotion path.
+
+### Residual Risks
+
+- Production Pi runtime registration is still not validated against the installed Pi API.
+- The loop is a thin-client orchestration path, not a real persistent child-agent scheduler.
+- Generic proof planning, real MathProve execution, native TriviumDB target validation, runner re-execution replay, and richer statement equivalence remain global GA blockers.
+
+### Final Root Validation
+
+Fresh Phase 22 validation completed on 2026-05-27:
+
+```text
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed, including Phase 22 command/tool campaign-loop coverage and previous extension regressions.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-21 package tests passed after adding the Phase 22 status capability.
+
+corepack pnpm test
+Result: exit 0; Phase 0/design smoke, workspace package tests, Phase 22 research loop, Phase 21 read-model routes, proof-kernel campaign regressions, and Phase 17 integrity evaluation passed.
+```
+
 ## Phase 21 Service Read-Model Dashboard Review Log
 
 ### Scope

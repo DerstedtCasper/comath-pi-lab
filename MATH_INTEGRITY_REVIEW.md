@@ -73,6 +73,7 @@ Remaining mathematical work:
 - Phase 19 ensemble recovery and V8 stress coverage: `services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs`, `dialecticalStressSchema`, and the V8 `dialectical_stress.json` artifact writer.
 - Phase 20 canonical ResearchCampaign state coverage: `services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs`, `campaignStageSchema`, `campaignTerminalStateSchema`, and bounded canonical campaign ticks.
 - Phase 21 service read-model coverage: `services/comathd/tests/integration/phase21-read-model-routes.test.mjs` and `extensions/comath-pi/tests/phase15-dashboard.test.mjs`.
+- Phase 22 Pi research-loop coverage: `extensions/comath-pi/tests/phase22-research-loop.test.mjs`.
 
 ### Current Invariants
 
@@ -136,11 +137,19 @@ Phase 21 adds coverage for:
 - gate vetoes appearing as dashboard blockers for inspection only;
 - rejection of hidden paper-derived fallback rows in the claim/evidence board once service read models exist.
 
+Phase 22 adds coverage for:
+
+- Pi-side research loop command parsing and scoped campaign-loop capability checks;
+- bounded campaign start/tick execution through `comathd` routes only;
+- return of service-backed dashboard state after loop execution;
+- no Pi-side claim promotion, GraphPatch apply, artifact write, or proof replay authority.
+
 ### Residual Risks
 
-- Real Lean kernel checking is implemented for the Phase 18-20 `Nat.add_zero` vertical slice and its clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
+- Real Lean kernel checking is implemented for the Phase 18-22 `Nat.add_zero` vertical slice and its clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
 - MathProve bridge output is still a fail-closed mock and should not be interpreted as proof search performance or proof authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
 - Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, but generic computation runner re-execution remains deferred.
 - Braid domain scripts provide exact/combinatorial evidence and risk flags; they do not prove physical interpretations or category-level equivalences.
 - Phase 21 read models improve inspection fidelity but are not mathematical authorities; claim promotion remains gated by evidence, artifacts, and proof-kernel replay where applicable.
+- Phase 22 improves Pi-side orchestration, but the loop is not a proof authority and does not validate production Pi runtime registration or a real child-agent scheduler.

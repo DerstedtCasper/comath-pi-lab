@@ -1,6 +1,6 @@
 # Extension Tools
 
-Research Alpha plus Phase 18-21 tool descriptors live in `extensions/comath-pi/src/index.ts`.
+Research Alpha plus Phase 18-22 tool descriptors live in `extensions/comath-pi/src/index.ts`.
 
 Implemented descriptor groups:
 
@@ -12,5 +12,6 @@ Implemented descriptor groups:
 - snapshot export/verify/restore;
 - replay manifest verification.
 - research campaign start/status/tick/next-actions/final-audit/replay.
+- research campaign loop helper with scoped capability gating.
 
 Descriptors are not direct runtime mutations by themselves. Mutating tools are marked `mutates=true` and must pass host confirmation before a Pi runtime calls `comathd`. Read-only dashboard code must not import these descriptors as a shortcut to write `.comath/` state directly; it should read claim/evidence/gate boards through service read routes.

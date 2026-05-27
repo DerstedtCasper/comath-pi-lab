@@ -277,11 +277,19 @@
 - [x] Update the Pi dashboard aggregator to read claims, evidence, and gate vetoes from service routes rather than paper-derived degraded placeholders.
 - [x] Keep dashboard renderers pure and read-only; the dashboard still cannot promote claims, apply patches, repair state, or write snapshots.
 
+## Phase 22: Pi Research Campaign Loop
+
+- [x] Add quote-aware `/cm:research "<goal>" --goal --strict` parsing for one-command research entry.
+- [x] Add a scoped campaign-loop capability envelope so unattended loop execution is limited by project root, actor, and tick budget.
+- [x] Add `runResearchCampaignLoop()` to start a service-owned campaign, advance bounded ticks through `comathd`, and return a dashboard snapshot.
+- [x] Add Phase 22 Pi extension coverage for start/tick/dashboard flow, capability fail-closed behavior, and no direct trusted-state mutation from the extension.
+- [x] Keep production Pi runtime registration and real child-agent scheduling deferred; the loop is a tested thin-client product path over `comathd`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Generic proof planning and Lean project generation beyond the implemented Phase 18-20 `Nat.add_zero` and `n + 1 = n` vertical slices.
+- [ ] Generic proof planning and Lean project generation beyond the implemented Phase 18-22 `Nat.add_zero` and `n + 1 = n` vertical slices.
 - [ ] Real MathProve execution beyond the fail-closed bridge mock and native CoMath proof-kernel slices.
 - [ ] Real agent runner/scheduler that launches and rate-limits persistent Pi/Codex child agents rather than only static definitions and service-owned campaign ticks.
 - [ ] Production Pi extension runtime registration, after official API assumptions are revalidated against the installed Pi version.

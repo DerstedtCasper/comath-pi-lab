@@ -31,10 +31,12 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "proof_kernel_ga_vertical_slice",
       "proof_kernel_ensemble_recovery",
       "campaign_state_machine_v3",
-      "claim_evidence_gate_read_models"
+      "claim_evidence_gate_read_models",
+      "pi_research_campaign_loop"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",
+      "real_agent_runner_scheduler_deferred",
       "production_pi_runtime_registration_deferred",
       "native_trivium_performance_evaluation_deferred",
       "runner_reexecution_replay_deferred",
