@@ -24,6 +24,7 @@ The repository has completed:
 - Phase 17 evaluation, security, and mathematical-integrity audit;
 - Phase 18 GA proof-kernel vertical slices;
 - Phase 19 GA ensemble recovery and V8 dialectical stress coverage;
+- Phase 20 GA canonical ResearchCampaign state-machine coverage;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -32,7 +33,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, and Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage. Final validation evidence is recorded in `REVIEW.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, and Phase 20 aligns public ResearchCampaign states with the v3 goal instruction. Phase 18-20 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -54,7 +55,7 @@ Next correct action:
 /goal Start the next generalization phase for generic proof planning, real MathProve execution, Pi runtime registration, TriviumDB native evaluation, and runner re-execution replay.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. Research Alpha and Phase 18-19 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-20 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -191,6 +192,16 @@ Apply it as follows:
 - Added `dialecticalStressSchema` and a V8 `dialectical_stress.json` artifact writer under the native proof-kernel candidate runner.
 - Kept the dialectical stress cycle as a structured heuristic for objections, repairs, and assumption audits; `proof_authority` remains `none`.
 - Added `proof_kernel_ensemble_recovery` to the service status capability list.
+
+## Phase 20 Completion Notes
+
+- Added `services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs`.
+- Aligned public `ResearchCampaign.current_stage` with the v3 canonical state set from the goal instruction.
+- Aligned terminal states with `completed_formal_proof`, `completed_refutation`, `blocked_with_replayable_reason`, and `cancelled_by_user`.
+- Kept internal proof-kernel artifact stages such as `lemma_sprint` and `final_global_lean_replay` out of the public campaign state schema.
+- Split campaign ticks into bounded resumable stages through context, planning, candidate generation, verification, arbitration, integration, adversarial review, final audit, final replay, and canonical terminal completion.
+- Added explicit unsupported-target blocking so canonical state-machine coverage is necessary evidence, not sufficient global GA readiness.
+- Added `campaign_state_machine_v3` to the service status capability list.
 
 ## Verification To Run At Phase Boundary
 

@@ -42,7 +42,8 @@ try {
     }
   }
 
-  assert.equal(finalTick?.campaign.terminal_state, "formal_proof_verified");
+  assert.equal(finalTick?.campaign.current_stage, "completed_formal_proof");
+  assert.equal(finalTick?.campaign.terminal_state, "completed_formal_proof");
   assert.equal(finalTick.final_replay.result, "pass");
 
   const snapshot = await exportSnapshot(projectRoot, { project_id: projectId, actor: "phase18-snapshot" });

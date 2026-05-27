@@ -71,6 +71,7 @@ Remaining mathematical work:
 - Phase 17 evaluation: `tests/evaluation/phase17-integrity-evaluation.test.mjs`.
 - Phase 18 native proof-kernel slice: `services/comathd/src/proof-kernel/`, `services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs`, `services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs`, `services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs`, and `services/comathd/tests/integration/phase18-ga-snapshot-replay.test.mjs`.
 - Phase 19 ensemble recovery and V8 stress coverage: `services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs`, `dialecticalStressSchema`, and the V8 `dialectical_stress.json` artifact writer.
+- Phase 20 canonical ResearchCampaign state coverage: `services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs`, `campaignStageSchema`, `campaignTerminalStateSchema`, and bounded canonical campaign ticks.
 
 ### Current Invariants
 
@@ -120,9 +121,16 @@ Phase 19 adds coverage for:
 - a typed V8 dialectical stress artifact with `P`, `not_P`, `Q`, `not_Q`, `R`, `U`, `proof_authority: none`, and explicit downstream check authorities;
 - a regression boundary that V8 remains objection/repair generation, not proof evidence.
 
+Phase 20 adds coverage for:
+
+- the v3 public `ResearchCampaign` state set and allowed terminal states from the goal instruction;
+- rejection of old public stage names such as `problem_lock`, `lemma_sprint`, `final_global_lean_replay`, and `terminal`;
+- separation between public campaign states and internal proof-kernel artifact stages;
+- bounded ticks through context, planning, candidate generation, verification, arbitration, integration, adversarial review, final audit, final replay, and canonical proof/refutation completion states.
+
 ### Residual Risks
 
-- Real Lean kernel checking is implemented for the Phase 18 `Nat.add_zero` vertical slice and its clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
+- Real Lean kernel checking is implemented for the Phase 18-20 `Nat.add_zero` vertical slice and its clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
 - MathProve bridge output is still a fail-closed mock and should not be interpreted as proof search performance or proof authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
 - Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, but generic computation runner re-execution remains deferred.

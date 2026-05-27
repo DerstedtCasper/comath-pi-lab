@@ -248,7 +248,7 @@
 - [x] Require `formally_checked` promotion to bind to a passed proof-kernel `final_replay_manifest.json` for the requested claim.
 - [x] Add a positive Lean vertical slice for `Nat.add_zero`: problem lock, 8 candidate manifests, candidate audit artifacts, final clean replay, gate promotion, and replay route.
 - [x] Add negative proof-kernel gates for fake/preloaded formal metadata, `sorry`/`axiom` static cheats, and statement drift.
-- [x] Add exact refutation path for `n + 1 = n` with `n=0` counterexample evidence and terminal `verified_counterexample` campaign state.
+- [x] Add exact refutation path for `n + 1 = n` with `n=0` counterexample evidence and terminal `completed_refutation` campaign state.
 - [x] Add snapshot restore then proof-kernel replay coverage for restored projects.
 - [x] Expose Pi extension `/cm:research`, `/cm:campaign`, and six campaign tool descriptors as thin `comathd` client calls.
 - [x] Persist candidate `dependency_delta.json`, `assumption_delta.json`, `replay_commands.json`, `failure_routes.json`, and `graph_patch.json` artifacts.
@@ -262,9 +262,19 @@
 - [x] Keep V8 as a heuristic stress/revision artifact only; it does not certify proof validity or bypass Lean replay.
 - [x] Wire the Phase 19 test into the default `@comath/comathd` test chain.
 
+## Phase 20: GA ResearchCampaign State Machine
+
+- [x] Align public `ResearchCampaign.current_stage` with the v3 canonical state set from the goal instruction.
+- [x] Align terminal states with `completed_formal_proof`, `completed_refutation`, `blocked_with_replayable_reason`, and `cancelled_by_user`.
+- [x] Split public campaign stages from internal proof-kernel artifact stages such as `lemma_sprint` and `final_global_lean_replay`.
+- [x] Add bounded ticks for `problem_locked -> context_built -> planning -> candidate_generation -> candidate_verification -> candidate_arbitration -> integration -> adversarial_review -> final_static_audit -> final_global_replay -> completed_*`.
+- [x] Add Phase 20 regression coverage and wire it into the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
-- [ ] Generic proof planning, stage gates, and Lean project generation beyond the implemented Phase 18 `Nat.add_zero` and `n + 1 = n` vertical slices.
+These items block global GA readiness until each one is implemented and validated with executable evidence.
+
+- [ ] Generic proof planning and Lean project generation beyond the implemented Phase 18-20 `Nat.add_zero` and `n + 1 = n` vertical slices.
 - [ ] Real MathProve execution beyond the fail-closed bridge mock and native CoMath proof-kernel slices.
 - [ ] Real agent runner/scheduler that launches and rate-limits persistent Pi/Codex child agents rather than only static definitions and service-owned campaign ticks.
 - [ ] Production Pi extension runtime registration, after official API assumptions are revalidated against the installed Pi version.

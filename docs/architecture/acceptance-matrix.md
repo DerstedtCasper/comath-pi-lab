@@ -37,6 +37,7 @@
 | 17 Evaluation/audits | security review, math integrity review, and evaluation suite exist. |
 | 18 GA proof-kernel vertical slices | ResearchCampaign routes, proof-kernel replay manifest gate, 8-candidate artifacts, statement-drift/cheat rejection, exact refutation, snapshot restore/replay, and Pi campaign tool tests pass. |
 | 19 GA ensemble recovery | `phase19-ga-ensemble-recovery.test.mjs` verifies seven failed candidates plus one Lean-valid candidate selects the Lean-valid candidate, preserves all failed routes, and writes the V8 dialectical stress artifact. |
+| 20 GA campaign state machine | `phase20-ga-campaign-state-machine.test.mjs` verifies v3 canonical campaign states, terminal-state names, bounded ticks, proof completion, refutation completion, terminal invariants, and unsupported-goal blocking. |
 
 ## Security Acceptance
 
@@ -60,6 +61,7 @@
 | Paper wording cannot overclaim | paper check tests require block-bound margin provenance and reject theorem-like unsupported syntax. |
 | GA proof promotion is replay-bound | Phase 18 proof-kernel gate tests require passed final replay manifest for the same claim and reject fake metadata, statement drift, `sorry`, and `axiom`. |
 | Candidate voting is not proof | Phase 19 ensemble recovery test selects the only Lean-valid candidate despite seven failures and preserves those failures as proof memory. |
+| Campaign completion is state-machine gated | Phase 20 state-machine tests reject old public stage names, verify canonical terminal-state invariants, and block unsupported goals instead of allowing report-writing or hardcoded replay to complete a campaign. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -70,5 +72,7 @@
 | Refutation path | `phase18-ga-refutation-path.test.mjs` records exact `n=0` counterexample for `n + 1 = n`. | Covered for the implemented Nat false theorem slice. |
 | Snapshot restore plus proof replay | `phase18-ga-snapshot-replay.test.mjs` restores a snapshot and reruns campaign replay. | Covered for campaign proof replay. |
 | Ensemble recovery | `phase19-ga-ensemble-recovery.test.mjs` covers the v3 16.4 benchmark and verifies the V8 `dialectical_stress.json` schema. | Covered for the implemented elementary slice. |
+| Canonical campaign states | `phase20-ga-campaign-state-machine.test.mjs` rejects old public stage names and verifies `problem_locked`, `candidate_*`, `final_global_replay`, `completed_formal_proof`, and `completed_refutation` API states. | Covered for the implemented proof and refutation slices. |
+| Global GA readiness | Current test evidence does not cover arbitrary theorem planning, real MathProve execution, production Pi runtime registration, native TriviumDB validation, or generic runner re-execution replay. | Not achieved; blocked by deferred generalization work. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the Phase 18 slices. | Deferred. |
 | Production Pi runtime registration | Extension descriptors and tool mappings exist; installed runtime API registration is not validated. | Deferred. |

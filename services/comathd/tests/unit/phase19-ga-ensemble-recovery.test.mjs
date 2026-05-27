@@ -31,7 +31,7 @@ try {
     project_id: project.project_id,
     root_claim_id: claim.id,
     user_goal: claim.statement,
-    current_stage: "lemma_sprint",
+    current_stage: "candidate_arbitration",
     status: "running",
     strict_mode: true,
     stage_runs: [],

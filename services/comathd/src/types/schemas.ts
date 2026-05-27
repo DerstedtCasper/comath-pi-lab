@@ -267,31 +267,38 @@ export const gateResultSchema = z
 
 export const campaignStageSchema = z.enum([
   "initialized",
-  "problem_lock",
+  "problem_locked",
   "context_built",
   "planning",
   "running_stage",
   "candidate_generation",
   "candidate_verification",
   "candidate_arbitration",
-  "lemma_sprint",
   "integration",
   "adversarial_review",
   "repair",
   "final_static_audit",
-  "final_global_lean_replay",
-  "final_report_and_memory_update",
-  "terminal"
+  "final_global_replay",
+  "completed_formal_proof",
+  "completed_refutation",
+  "blocked",
+  "cancelled"
 ]);
 
 export const campaignStatusSchema = z.enum(["running", "paused", "blocked", "repairing", "terminal"]);
 
 export const campaignTerminalStateSchema = z.enum([
-  "formal_proof_verified",
-  "verified_counterexample",
-  "user_visible_theorem_repair_required",
-  "replayable_environment_blocker",
-  "user_cancelled"
+  "completed_formal_proof",
+  "completed_refutation",
+  "blocked_with_replayable_reason",
+  "cancelled_by_user"
+]);
+
+export const proofKernelStageSchema = z.enum([
+  "problem_lock",
+  "lemma_sprint",
+  "final_static_audit",
+  "final_global_lean_replay"
 ]);
 
 export const proofObligationStatusSchema = z.enum([
@@ -336,7 +343,7 @@ export const candidateRunSchema = z
   .object({
     candidate_id: stableId,
     campaign_id: stableId,
-    stage: campaignStageSchema,
+    stage: proofKernelStageSchema,
     obligation_id: stableId,
     variant_id: candidateVariantIdSchema,
     workspace_path: z.string().min(1),
@@ -355,7 +362,7 @@ export const candidateManifestSchema = z
   .object({
     candidate_id: stableId,
     variant_id: candidateVariantIdSchema,
-    stage: campaignStageSchema,
+    stage: proofKernelStageSchema,
     obligation_id: stableId,
     locked_statement_hash: z.string().min(1),
     candidate_statement_hash: z.string().min(1).optional(),
@@ -377,7 +384,7 @@ export const dialecticalStressSchema = z
   .object({
     candidate_id: stableId,
     variant_id: z.literal("V8"),
-    stage: campaignStageSchema,
+    stage: proofKernelStageSchema,
     obligation_id: stableId,
     locked_statement_hash: z.string().min(1),
     P: z.string().min(1),
@@ -395,7 +402,7 @@ export const gateDecisionSchema = z
   .object({
     gate_id: stableId,
     campaign_id: stableId,
-    stage: campaignStageSchema,
+    stage: proofKernelStageSchema,
     subject_id: stableId,
     result: z.enum(["pass", "fail", "blocked", "repair_required"]),
     selected_candidate_id: stableId.optional(),
@@ -471,6 +478,34 @@ export const researchCampaignSchema = z
         code: z.ZodIssueCode.custom,
         message: "non-terminal campaign cannot carry terminal_state",
         path: ["terminal_state"]
+      });
+    }
+    if (campaign.terminal_state === "completed_formal_proof" && campaign.current_stage !== "completed_formal_proof") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "completed_formal_proof terminal state requires completed_formal_proof current_stage",
+        path: ["current_stage"]
+      });
+    }
+    if (campaign.terminal_state === "completed_refutation" && campaign.current_stage !== "completed_refutation") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "completed_refutation terminal state requires completed_refutation current_stage",
+        path: ["current_stage"]
+      });
+    }
+    if (campaign.terminal_state === "blocked_with_replayable_reason" && campaign.current_stage !== "blocked") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "blocked_with_replayable_reason terminal state requires blocked current_stage",
+        path: ["current_stage"]
+      });
+    }
+    if (campaign.terminal_state === "cancelled_by_user" && campaign.current_stage !== "cancelled") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cancelled_by_user terminal state requires cancelled current_stage",
+        path: ["current_stage"]
       });
     }
   });
@@ -583,6 +618,7 @@ export type GateResult = z.infer<typeof gateResultSchema>;
 export type CampaignStage = z.infer<typeof campaignStageSchema>;
 export type CampaignStatus = z.infer<typeof campaignStatusSchema>;
 export type CampaignTerminalState = z.infer<typeof campaignTerminalStateSchema>;
+export type ProofKernelStage = z.infer<typeof proofKernelStageSchema>;
 export type ProofObligation = z.infer<typeof proofObligationSchema>;
 export type CandidateVariantId = z.infer<typeof candidateVariantIdSchema>;
 export type CandidateRun = z.infer<typeof candidateRunSchema>;

@@ -15,6 +15,7 @@ import { createNatAddZeroLeanProject } from "../lean/lean-project.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
 import {
+  candidateRunSchema,
   proofObligationSchema,
   researchCampaignSchema,
   type CandidateRun,
@@ -65,6 +66,33 @@ function writeRuntimeFile(projectRoot: string, rel: string, content: string): st
   mkdirSync(join(path, ".."), { recursive: true });
   writeFileSync(path, content, "utf8");
   return path;
+}
+
+function nextStageRunId(campaign: ResearchCampaign): string {
+  return `SR-${String(campaign.stage_runs.length + 1).padStart(4, "0")}`;
+}
+
+function stageRun(
+  campaign: ResearchCampaign,
+  stage: ResearchCampaign["current_stage"],
+  status: ResearchCampaign["stage_runs"][number]["status"],
+  artifact_paths: string[] = []
+): ResearchCampaign["stage_runs"][number] {
+  return {
+    id: nextStageRunId(campaign),
+    stage,
+    status,
+    artifact_paths,
+    created_at: now()
+  };
+}
+
+function completedStageRun(
+  campaign: ResearchCampaign,
+  stage: ResearchCampaign["current_stage"],
+  artifact_paths: string[] = []
+): ResearchCampaign["stage_runs"][number] {
+  return stageRun(campaign, stage, "completed", artifact_paths);
 }
 
 type LockedProblem = {
@@ -159,14 +187,14 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
     project_id: project.project_id,
     root_claim_id: claim.id,
     user_goal: input.user_goal,
-    current_stage: "problem_lock",
+    current_stage: "problem_locked",
     status: "running",
     strict_mode: input.strict_mode ?? true,
     stage_runs: [],
     open_obligations: [obligation],
     accepted_artifacts: [],
     blockers: [],
-    next_actions: ["tick campaign to build context and run the proof-route ensemble"],
+    next_actions: ["tick campaign to build context pack for the locked problem"],
     created_at: timestamp,
     updated_at: timestamp
   });
@@ -191,12 +219,80 @@ function readStoredDecision(projectRoot: string): { candidates: CandidateRun[]; 
     return undefined;
   }
   const payload = JSON.parse(readFileSync(decisionPath, "utf8"));
-  const candidates = existsSync(candidatesPath) ? (JSON.parse(readFileSync(candidatesPath, "utf8")) as CandidateRun[]) : [];
+  const candidates = existsSync(candidatesPath)
+    ? candidateRunSchema.array().parse(JSON.parse(readFileSync(candidatesPath, "utf8")))
+    : [];
   return { candidates, decision: payload as EnsembleDecision };
+}
+
+function readStoredCandidates(projectRoot: string): CandidateRun[] {
+  const candidatesPath = assertPathAllowed(projectRoot, join(".comath", "ensembles", "lemma_sprint", "PO-0001", "candidates.json"), {
+    purpose: "runtime-write"
+  });
+  if (!existsSync(candidatesPath)) {
+    throw new ComathError("candidate generation artifacts are missing", {
+      statusCode: 409,
+      code: "CAMPAIGN_CANDIDATES_MISSING"
+    });
+  }
+  return candidateRunSchema.array().parse(JSON.parse(readFileSync(candidatesPath, "utf8")));
+}
+
+function writeSimpleStageArtifact(projectRoot: string, campaign: ResearchCampaign, filename: string, payload: unknown): string {
+  const rel = join(".comath", "campaign", campaign.campaign_id, filename);
+  writeRuntimeFile(projectRoot, rel, `${JSON.stringify(payload, null, 2)}\n`);
+  return rel.replace(/\\/g, "/");
 }
 
 function isNatAddOneFalseObligation(obligation: ProofObligation): boolean {
   return obligation.locked_statement_structured.proposition === "n + 1 = n";
+}
+
+function isNatAddZeroProofObligation(obligation: ProofObligation): boolean {
+  return obligation.locked_statement_structured.proposition === "n + 0 = n";
+}
+
+function blockCampaignAtFinalReplay(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  actor: string;
+  reason: string;
+}): CampaignTickResult {
+  const blockerRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "final_replay_blocker.json", {
+    campaign_id: input.campaign.campaign_id,
+    root_claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    reason: input.reason,
+    locked_statement_structured: input.obligation.locked_statement_structured,
+    required_replay_target: "native Nat.add_zero vertical-slice replay",
+    created_at: now()
+  });
+  const blocker = {
+    reason: input.reason,
+    obligation_id: input.obligation.obligation_id,
+    artifact_path: blockerRel
+  };
+  const next = writeCampaign(
+    input.projectRoot,
+    researchCampaignSchema.parse({
+      ...input.campaign,
+      current_stage: "blocked",
+      status: "terminal",
+      terminal_state: "blocked_with_replayable_reason",
+      open_obligations: [{ ...input.obligation, status: "blocked" }],
+      blockers: [blocker],
+      stage_runs: [...input.campaign.stage_runs, stageRun(input.campaign, "final_global_replay", "blocked", [blockerRel])],
+      next_actions: ["general proof planning and theorem-specific Lean project generation are required before replay"]
+    }),
+    input.actor
+  );
+  return {
+    campaign: next,
+    obligation: { ...input.obligation, status: "blocked" },
+    ensemble: readStoredDecision(input.projectRoot),
+    blocker: input.reason
+  };
 }
 
 async function completeVerifiedCounterexample(input: {
@@ -262,21 +358,15 @@ async function completeVerifiedCounterexample(input: {
     input.projectRoot,
     researchCampaignSchema.parse({
       ...input.campaign,
-      current_stage: "terminal",
+      current_stage: "completed_refutation",
       status: "terminal",
-      terminal_state: "verified_counterexample",
+      terminal_state: "completed_refutation",
       open_obligations: [{ ...input.obligation, status: "refuted" }],
       accepted_artifacts: [artifact],
       blockers: [],
       stage_runs: [
         ...input.campaign.stage_runs,
-        {
-          id: "SR-0002",
-          stage: "lemma_sprint",
-          status: "completed",
-          artifact_paths: [artifactRel.replace(/\\/g, "/")],
-          created_at: now()
-        }
+        completedStageRun(input.campaign, "candidate_generation", [artifactRel.replace(/\\/g, "/")])
       ],
       next_actions: []
     }),
@@ -322,40 +412,97 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     throw new ComathError("campaign has no open proof obligation", { statusCode: 400, code: "CAMPAIGN_NO_OBLIGATION" });
   }
 
-  if (campaign.current_stage === "problem_lock") {
+  if (campaign.current_stage === "problem_locked") {
+    const obligationRel = join(".comath", "proof", "obligations", `${obligation.obligation_id}.json`).replace(/\\/g, "/");
     writeRuntimeFile(
       input.project_root,
-      join(".comath", "proof", "obligations", `${obligation.obligation_id}.json`),
+      obligationRel,
       `${JSON.stringify(obligation, null, 2)}\n`
     );
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
-        current_stage: "lemma_sprint",
+        current_stage: "context_built",
         stage_runs: [
           ...campaign.stage_runs,
-          {
-            id: "SR-0001",
-            stage: "problem_lock",
-            status: "completed",
-            artifact_paths: [
-              ".comath/lock/problem_lock.md",
-              ".comath/lock/assumptions.md",
-              ".comath/lock/notation.md",
-              ".comath/goals.yaml"
-            ],
-            created_at: now()
-          }
+          completedStageRun(campaign, "problem_locked", [
+            ".comath/lock/problem_lock.md",
+            ".comath/lock/assumptions.md",
+            ".comath/lock/notation.md",
+            ".comath/goals.yaml",
+            obligationRel
+          ])
         ],
-        next_actions: ["run strict 8-way candidate ensemble for PO-0001"]
+        next_actions: ["build campaign plan from locked context pack"]
       }),
       actor
     );
     return { campaign: next, obligation };
   }
 
-  if (campaign.current_stage === "lemma_sprint") {
+  if (campaign.current_stage === "context_built") {
+    const contextRel = writeSimpleStageArtifact(input.project_root, campaign, "context_pack.json", {
+      campaign_id: campaign.campaign_id,
+      root_claim_id: campaign.root_claim_id,
+      obligation_id: obligation.obligation_id,
+      locked_statement_hash: obligation.statement_hash,
+      locked_statement_nl: obligation.locked_statement_nl,
+      lock_artifacts: [
+        ".comath/lock/problem_lock.md",
+        ".comath/lock/assumptions.md",
+        ".comath/lock/notation.md",
+        ".comath/goals.yaml"
+      ],
+      retrieval_mode: "service-owned-local-context-pack",
+      created_at: now()
+    });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: "planning",
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "context_built", [contextRel])],
+        next_actions: ["create proof campaign plan and schedule candidate generation"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation };
+  }
+
+  if (campaign.current_stage === "planning") {
+    const planRel = writeSimpleStageArtifact(input.project_root, campaign, "plan.json", {
+      campaign_id: campaign.campaign_id,
+      root_claim_id: campaign.root_claim_id,
+      obligation_id: obligation.obligation_id,
+      public_stages: [
+        "candidate_generation",
+        "candidate_verification",
+        "candidate_arbitration",
+        "integration",
+        "adversarial_review",
+        "final_static_audit",
+        "final_global_replay"
+      ],
+      proof_kernel_stage: "lemma_sprint",
+      ensemble_variants: 8,
+      terminal_authority: "final_global_replay",
+      created_at: now()
+    });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: "candidate_generation",
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "planning", [planRel])],
+        next_actions: ["run bounded 8-way candidate generation or exact refutation search"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation };
+  }
+
+  if (campaign.current_stage === "candidate_generation") {
     if (isNatAddOneFalseObligation(obligation)) {
       return completeVerifiedCounterexample({
         projectRoot: input.project_root,
@@ -365,10 +512,10 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       });
     }
     const batch = runTrivialNatAddZeroCandidates({ projectRoot: input.project_root, campaign, obligation });
-    const { decision, gate } = decideCandidate({ projectRoot: input.project_root, campaign, candidates: batch.candidates });
+    const candidatesRel = join(".comath", "ensembles", "lemma_sprint", "PO-0001", "candidates.json").replace(/\\/g, "/");
     writeRuntimeFile(
       input.project_root,
-      join(".comath", "ensembles", "lemma_sprint", "PO-0001", "candidates.json"),
+      candidatesRel,
       `${JSON.stringify(batch.candidates, null, 2)}\n`
     );
     recordFailedRoutes({ projectRoot: input.project_root, campaign, candidates: batch.candidates });
@@ -376,29 +523,151 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
-        current_stage: "final_global_lean_replay",
-        open_obligations: [{ ...obligation, status: "candidate_selected" }],
-        stage_runs: [
-          ...campaign.stage_runs,
-          {
-            id: "SR-0002",
-            stage: "lemma_sprint",
-            status: gate.result === "pass" ? "completed" : "blocked",
-            artifact_paths: [".comath/ensembles/lemma_sprint/PO-0001/decision.json"],
-            created_at: now()
-          }
-        ],
-        next_actions: ["run final static audit and clean Lean replay"]
+        current_stage: "candidate_verification",
+        open_obligations: [{ ...obligation, status: "candidate_search" }],
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "candidate_generation", [candidatesRel])],
+        next_actions: ["verify candidate manifests, statement hashes, and failure preservation"]
       }),
       actor
     );
-    return { campaign: next, obligation, ensemble: { candidates: batch.candidates, decision }, gate };
+    return { campaign: next, obligation };
   }
 
-  if (campaign.current_stage === "final_global_lean_replay") {
+  if (campaign.current_stage === "candidate_verification") {
+    const candidates = readStoredCandidates(input.project_root);
+    const verificationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_verification.json", {
+      campaign_id: campaign.campaign_id,
+      obligation_id: obligation.obligation_id,
+      total_candidates: candidates.length,
+      kernel_checked_candidates: candidates.filter((candidate) => candidate.state === "candidate_kernel_checked").length,
+      failed_candidates: candidates.filter((candidate) => candidate.state === "candidate_failed").length,
+      all_statement_hashes_match: candidates.every(
+        (candidate) => candidate.candidate_statement_hash === candidate.locked_statement_hash
+      ),
+      created_at: now()
+    });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: "candidate_arbitration",
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "candidate_verification", [verificationRel])],
+        next_actions: ["select candidate by evidence-weighted arbitration"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation };
+  }
+
+  if (campaign.current_stage === "candidate_arbitration") {
+    const candidates = readStoredCandidates(input.project_root);
+    const { decision, gate } = decideCandidate({ projectRoot: input.project_root, campaign, candidates });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: gate.result === "pass" ? "integration" : "repair",
+        open_obligations: [{ ...obligation, status: gate.result === "pass" ? "candidate_selected" : "blocked" }],
+        stage_runs: [
+          ...campaign.stage_runs,
+          completedStageRun(campaign, "candidate_arbitration", [".comath/ensembles/lemma_sprint/PO-0001/decision.json"])
+        ],
+        next_actions:
+          gate.result === "pass"
+            ? ["integrate selected candidate before adversarial review"]
+            : ["repair blocked candidate search before retrying arbitration"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation, ensemble: { candidates, decision }, gate };
+  }
+
+  if (campaign.current_stage === "integration") {
+    const decision = readStoredDecision(input.project_root);
+    const integrationRel = writeSimpleStageArtifact(input.project_root, campaign, "integration.json", {
+      campaign_id: campaign.campaign_id,
+      obligation_id: obligation.obligation_id,
+      selected_candidate_id: decision?.decision.selected_candidate_id ?? null,
+      proof_kernel_stage: "lemma_sprint",
+      created_at: now()
+    });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: "adversarial_review",
+        open_obligations: [{ ...obligation, status: "candidate_selected" }],
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "integration", [integrationRel])],
+        next_actions: ["run adversarial proof-integrity review"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation, ensemble: decision };
+  }
+
+  if (campaign.current_stage === "adversarial_review") {
+    const decision = readStoredDecision(input.project_root);
+    const reviewRel = writeSimpleStageArtifact(input.project_root, campaign, "adversarial_review.json", {
+      campaign_id: campaign.campaign_id,
+      obligation_id: obligation.obligation_id,
+      selected_candidate_id: decision?.decision.selected_candidate_id ?? null,
+      proof_authority: "none",
+      required_next_authority: "final_static_audit_and_global_replay",
+      checks: ["statement drift", "hidden assumptions", "forbidden Lean escape hatches", "dependency closure"],
+      created_at: now()
+    });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: "final_static_audit",
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "adversarial_review", [reviewRel])],
+        next_actions: ["prepare final static audit before global replay"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation, ensemble: decision };
+  }
+
+  if (campaign.current_stage === "final_static_audit") {
+    const auditPlanRel = writeSimpleStageArtifact(input.project_root, campaign, "final_static_audit_plan.json", {
+      campaign_id: campaign.campaign_id,
+      obligation_id: obligation.obligation_id,
+      required_reports: [
+        "final_static_audit.json",
+        "axiom_profile.json",
+        "dependency_closure.json",
+        "statement_equivalence.json"
+      ],
+      next_stage_runs_clean_replay: true,
+      created_at: now()
+    });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: "final_global_replay",
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "final_static_audit", [auditPlanRel])],
+        next_actions: ["run final global Lean replay and claim promotion gate"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation, ensemble: readStoredDecision(input.project_root) };
+  }
+
+  if (campaign.current_stage === "final_global_replay") {
     const claim = getClaim(input.project_root, campaign.project_id, campaign.root_claim_id);
     if (!claim) {
       throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
+    }
+    if (!isNatAddZeroProofObligation(obligation)) {
+      return blockCampaignAtFinalReplay({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor,
+        reason: "unsupported final replay target"
+      });
     }
     const leanProject = createNatAddZeroLeanProject({
       projectRoot: input.project_root,
@@ -476,24 +745,18 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
-        current_stage: "terminal",
+        current_stage: ok ? "completed_formal_proof" : "blocked",
         status: "terminal",
-        terminal_state: ok ? "formal_proof_verified" : "replayable_environment_blocker",
+        terminal_state: ok ? "completed_formal_proof" : "blocked_with_replayable_reason",
         open_obligations: [{ ...obligation, status: ok ? "integrated" : "blocked" }],
         accepted_artifacts: [proofArtifact, replayArtifact, auditArtifact],
         blockers: ok ? [] : [{ reason: "final replay or promotion gate failed", gate: promotion.gate }],
         stage_runs: [
           ...campaign.stage_runs,
-          {
-            id: "SR-0003",
-            stage: "final_global_lean_replay",
-            status: ok ? "completed" : "blocked",
-            artifact_paths: [
-              ".comath/evidence/C-0001/lean/final_replay_manifest.json",
-              ".comath/evidence/C-0001/lean/final_static_audit.json"
-            ],
-            created_at: now()
-          }
+          stageRun(campaign, "final_global_replay", ok ? "completed" : "blocked", [
+            ".comath/evidence/C-0001/lean/final_replay_manifest.json",
+            ".comath/evidence/C-0001/lean/final_static_audit.json"
+          ])
         ],
         next_actions: ok ? [] : ["inspect final replay logs and promotion gate vetoes"]
       }),

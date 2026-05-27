@@ -1040,7 +1040,7 @@ ab32780 Persist GA candidate audit artifacts
 
 - `services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs`: starts a campaign for `n + 0 = n`, locks the problem, runs 8 candidates, persists candidate audit artifacts, performs final Lean replay, promotes the claim to `formally_checked`, and calls the replay route.
 - `services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs`: rejects fake/preloaded formal metadata without proof-kernel replay, detects `sorry` and `axiom`, and rejects a high-scoring statement-drift candidate.
-- `services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs`: keeps the locked statement `n + 1 = n`, records exact counterexample `n=0`, marks the claim `refuted`, and terminates as `verified_counterexample`.
+- `services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs`: keeps the locked statement `n + 1 = n`, records exact counterexample `n=0`, marks the claim `refuted`, and terminates as `completed_refutation`.
 - `services/comathd/tests/integration/phase18-ga-snapshot-replay.test.mjs`: exports a snapshot after proof verification, restores it into a fresh root, removes replay byproducts, and verifies proof-kernel replay passes from restored state.
 - `extensions/comath-pi/tests/phase18-research-campaign-tools.test.mjs`: verifies campaign tool descriptors, mutability flags, required inputs, and `comathd` route mapping.
 
@@ -1077,6 +1077,60 @@ Result: exit 0; Phase 0/design smoke, all workspace tests, Phase 18 comathd proo
 Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
+
+## Phase 20 GA Campaign State-Machine Vertical-Slice Review Log
+
+### Scope
+
+Aligned the public `ResearchCampaign` state machine with the v3 goal-instruction state set while preserving the existing proof-kernel artifact stage names internally. Phase 20 changes API-visible campaign stages and terminal states; it does not broaden theorem synthesis or replace the Phase 18-19 proof/refutation slices.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs
+Initial RED result: exit 1; `campaignStageSchema` rejected required v3 state `problem_locked` and still accepted old public stages.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after schema/stage split and campaign tick migration.
+
+node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs
+Result: exit 0; Phase 20 GA campaign state-machine tests passed. The expanded test asserts terminal-state invariants, the complete proof path order, the exact-refutation shortcut boundary, and an unsupported-goal blocker instead of false proof completion.
+
+node services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs
+Result: exit 0; positive proof vertical slice still passes with canonical public states.
+
+node services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs
+Result: exit 0; refutation slice now terminates as `completed_refutation`.
+
+node services/comathd/tests/integration/phase18-ga-snapshot-replay.test.mjs
+Result: exit 0; snapshot restore and proof replay still pass with `completed_formal_proof`.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd package tests passed with Phase 20 included in the default chain.
+```
+
+### Changed Surfaces
+
+- Updated `campaignStageSchema` to the v3 public state set and `campaignTerminalStateSchema` to `completed_formal_proof`, `completed_refutation`, `blocked_with_replayable_reason`, and `cancelled_by_user`.
+- Added `proofKernelStageSchema` so internal candidate/gate artifacts can still use proof-stage names such as `lemma_sprint` and `final_global_lean_replay`.
+- Split `tickCampaign()` into bounded public states: `problem_locked`, `context_built`, `planning`, `candidate_generation`, `candidate_verification`, `candidate_arbitration`, `integration`, `adversarial_review`, `final_static_audit`, `final_global_replay`, and canonical terminal states.
+- Added service-owned context, plan, verification, integration, adversarial-review, and final-audit plan artifacts under `.comath/campaign/<id>/`.
+- Blocked unsupported theorem targets at `final_global_replay` with `blocked_with_replayable_reason` instead of generating the hardcoded `Nat.add_zero` replay for unrelated goals.
+- Added `services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs` and wired it into the default comathd test chain.
+- Updated Phase 18/19 tests to use canonical public campaign states while retaining internal `lemma_sprint` artifact path checks.
+- Added `campaign_state_machine_v3` to `getComathdStatus()`.
+
+### Boundary And Integrity Notes
+
+Public campaign state is now owned by `comathd` and uses the v3 vocabulary required by the goal instruction. Old names such as `problem_lock`, `lemma_sprint`, `final_global_lean_replay`, and `terminal` are rejected as public campaign stages. They remain available only where they describe proof-kernel artifacts or candidate/gate stages.
+
+No campaign completes because a report was written or because agents agree. The formal-proof terminal state still requires the final replay/promotion gate path; the refutation terminal state still requires the exact counterexample path.
+
+### Residual Risks
+
+- The state machine is canonical for the implemented proof and refutation slices, but generic proof planning and real agent scheduling remain deferred.
+- The context and planning artifacts are deterministic service-owned capsules, not full Trivium-backed active retrieval or a persistent child-agent scheduler.
+- Global GA remains blocked by the deferred items in `TODO.md`; Phase 20 validates public campaign state semantics, not autonomous research completion.
 
 One Phase 17 evaluation assertion was updated after root-cause analysis: dashboard-only files still forbid `client.post`, filesystem writes, service-internal imports, and direct `.comath` access, while the extension entrypoint is checked separately so Phase 18 thin-client mutating campaign tools may call `comathd` without direct runtime-file writes.
 

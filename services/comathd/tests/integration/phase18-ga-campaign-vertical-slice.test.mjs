@@ -27,7 +27,7 @@ try {
   assert.equal(start.status, 200);
   assert.match(start.body.campaign.campaign_id, /^CAM-\d{4,}$/);
   assert.equal(start.body.campaign.status, "running");
-  assert.equal(start.body.campaign.current_stage, "problem_lock");
+  assert.equal(start.body.campaign.current_stage, "problem_locked");
   assert.match(start.body.campaign.root_claim_id, /^C-\d{4,}$/);
   assert.equal(existsSync(join(projectRoot, ".comath", "lock", "problem_lock.md")), true);
   assert.equal(existsSync(join(projectRoot, ".comath", "lock", "assumptions.md")), true);
@@ -67,7 +67,8 @@ try {
 
   assert.ok(finalTick, "campaign ticks should return a final body");
   assert.equal(finalTick.campaign.status, "terminal");
-  assert.equal(finalTick.campaign.terminal_state, "formal_proof_verified");
+  assert.equal(finalTick.campaign.current_stage, "completed_formal_proof");
+  assert.equal(finalTick.campaign.terminal_state, "completed_formal_proof");
   assert.equal(finalTick.gate?.result, "pass");
   assert.equal(finalTick.final_replay?.result, "pass");
   assert.equal(finalTick.static_audit?.result, "pass");
@@ -91,8 +92,10 @@ try {
       );
     }
   }
-  assert.equal(seenStages.has("lemma_sprint"), true);
-  assert.equal(seenStages.has("final_global_lean_replay"), true);
+  assert.equal(seenStages.has("candidate_generation"), true);
+  assert.equal(seenStages.has("candidate_verification"), true);
+  assert.equal(seenStages.has("candidate_arbitration"), true);
+  assert.equal(seenStages.has("final_global_replay"), true);
 
   const claim = getClaim(projectRoot, finalTick.campaign.project_id, claimId);
   assert.ok(claim);
@@ -103,7 +106,8 @@ try {
   assert.equal(claim.audit_state, "audit_passed");
 
   const persisted = readJson(statusPath);
-  assert.equal(persisted.terminal_state, "formal_proof_verified");
+  assert.equal(persisted.current_stage, "completed_formal_proof");
+  assert.equal(persisted.terminal_state, "completed_formal_proof");
   assert.equal(existsSync(join(projectRoot, ".comath", "lean", "MathResearch", "C0001.lean")), true);
   assert.equal(existsSync(join(projectRoot, ".comath", "lean", "FormalSpec", "C0001.json")), true);
   assert.equal(existsSync(join(projectRoot, ".comath", "lean", "Audit", "C0001.lean")), true);

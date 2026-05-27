@@ -49,7 +49,8 @@ try {
 
   assert.ok(finalTick, "campaign ticks should return a body");
   assert.equal(finalTick.campaign.status, "terminal");
-  assert.equal(finalTick.campaign.terminal_state, "verified_counterexample");
+  assert.equal(finalTick.campaign.current_stage, "completed_refutation");
+  assert.equal(finalTick.campaign.terminal_state, "completed_refutation");
   assert.equal(finalTick.counterexample?.assignment.n, 0);
   assert.equal(finalTick.counterexample?.lhs, 1);
   assert.equal(finalTick.counterexample?.rhs, 0);

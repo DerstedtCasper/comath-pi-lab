@@ -11,6 +11,8 @@
 | Phase 18 proof-kernel vertical slice overclaimed as arbitrary theorem proving | High | 18+ | Document the implemented `Nat.add_zero`/refutation slices and require new tests before broadening theorem classes. |
 | Proof candidate voting mistaken for proof evidence | High | 18+ | Candidate selection filters hard vetoes and statement drift before scoring; `formally_checked` requires replay-bound artifacts. |
 | V8 dialectical stress mistaken for proof evidence | High | 19+ | Persist `proof_authority: none`, require downstream Lean/exact-computation/citation gates, and test that ensemble recovery selects Lean-valid evidence rather than stress artifacts. |
+| Internal proof-stage names mistaken for public campaign states | Medium | 20+ | Public `ResearchCampaign.current_stage` uses v3 canonical states; internal proof-kernel stages such as `lemma_sprint` stay confined to candidate/gate artifacts. |
+| Bounded tick success mistaken for autonomous research completion | High | 20+ | Phase 20 validates public state semantics and blocks unsupported final replay targets; it does not validate generic proof planning or real agent scheduling. |
 | Agent consensus mistaken for proof | High | 4+ | Gate rules say reviewer/agent votes are advisory only. |
 | Workstream patch pollutes trusted graph | High | 7+ | `GraphPatch` review state; no auto-apply. |
 | Arbitrary shell execution from workstream | High | 10 | Runner sandbox, deny-by-default commands, timeout/memory limits. |
@@ -23,9 +25,10 @@
 
 ## Current Risk Posture
 
-After Phase 19:
+After Phase 20:
 
 - Runtime safety risks are active code-path risks, so validation must run against `comathd` routes, Pi descriptors, and proof-kernel replay artifacts rather than docs alone.
 - TriviumDB native persistence, production Pi runtime registration, real MathProve execution, and generic runner re-execution remain intentionally deferred behind adapter/gate boundaries.
-- The largest immediate risk is proof-scope overclaiming: Phase 18-19 cover bounded GA vertical slices and an ensemble recovery benchmark, not arbitrary theorem proving.
+- The largest immediate risk is proof-scope overclaiming: Phase 18-20 cover bounded GA vertical slices, an ensemble recovery benchmark, and canonical campaign-state flow, not arbitrary theorem proving.
+- Phase 20 validates public campaign state semantics, not autonomous GA research completion.
 - Subagent concurrency is intentionally small (`rpm=4`); prefer local deterministic commands and reserve child agents for bounded review or disjoint work.
