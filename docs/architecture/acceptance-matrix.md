@@ -58,6 +58,7 @@
 | 38 Native TriviumDB target-platform evaluation | `phase38-trivium-native-evaluation.test.mjs` verifies fail-closed unavailable reports and the evaluation-report contract; `eval:trivium` validates real `triviumdb@0.7.1` capability, persistence reopen, search top-hit ratio, and upsert/context timing on the target platform. |
 | 39 Project writer session lock | `phase39-project-session-lock.test.mjs` verifies exclusive project writer lock acquisition, active-lock rejection, token-gated release, stale takeover, previous-session provenance, and malformed-lock fail-closed behavior. |
 | 40 AgentRun scheduler writer lock integration | `phase40-agent-scheduler-session-lock.test.mjs` verifies scheduled AgentRun process execution fails closed when another active project writer exists, starts no child process, preserves the queued run, acquires/releases the lock for allowed runs, and records lock audit events. |
+| 41 Live agent adapter execution | `phase41-live-agent-adapter-execution.test.mjs` and `phase41-agent-execute-tool.test.mjs` verify profile-bound AgentRun creation, real allowlisted adapter process execution through the scheduler, service route execution, Pi runtime tool/command execution, writer-lock integration, and non-authoritative report wrapping. |
 
 ## Security Acceptance
 
@@ -71,6 +72,7 @@
 | Native TriviumDB evaluation is explicit | Phase 38 keeps `triviumdb` as a root optional dependency and requires explicit target-platform evaluation before native-backend claims. |
 | Project writers are session-scoped | Phase 39 creates a service-owned writer lock under `.comath/sessions/` so concurrent writers have a fail-closed coordination primitive. |
 | Scheduled AgentRuns respect writer locks | Phase 40 makes the process scheduler acquire the project writer lock before mutating run state/logs/reports and reject launches when another active writer owns the project. |
+| Live adapters remain allowlisted and scoped | Phase 41 executes profile-backed adapters only through scheduler allowlists, scoped AgentRun write paths, host confirmation on Pi, and service-owned audit/report paths. |
 
 ## Mathematical Integrity Acceptance
 
@@ -104,6 +106,7 @@
 | Native memory backend evidence is non-promotional | Phase 38 target-platform evaluation can validate memory persistence/performance, but it does not promote mathematical claims or bypass `comathd` gates. |
 | Writer locks are coordination, not proof | Phase 39 locks protect mutation sessions; they do not certify artifacts, evidence, proofs, or claim promotion. |
 | Scheduler lock ownership is non-authoritative | Phase 40 scheduler-held locks coordinate AgentRun mutation, but child-process completion and lock ownership remain non-proof-authority surfaces. |
+| Live adapter execution is non-authoritative | Phase 41 adapter output is wrapped as untrusted child stdout with `proof_authority: none`; adapter success cannot promote claims or bypass proof/evidence gates. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -135,5 +138,6 @@
 | Native TriviumDB target-platform evaluation | `phase38-trivium-native-evaluation.test.mjs`, `test:trivium` with `COMATH_ENABLE_TRIVIUM_TESTS=1`, and `eval:trivium` cover real `triviumdb@0.7.1` loading, adapter write/link/search paths, persistence reopen, target-platform performance metrics, and fail-closed unavailable reports. | Covered for this Windows x64 target and explicit optional backend evaluation; default backend remains memory and broader multi-platform benchmarking remains future work. |
 | Project writer/session lock | `phase39-project-session-lock.test.mjs` covers exclusive create, active-lock rejection, token release, stale takeover, malformed-lock fail-closed behavior, and path-policy confinement under `.comath/sessions/`. | Covered as a project-level primitive; full AgentRun scheduler integration and OS-level process sandboxing remain deferred. |
 | AgentRun scheduler writer-lock integration | `phase40-agent-scheduler-session-lock.test.mjs` covers active-lock launch rejection, no child/log side effects on blocked launch, queued-run preservation, scheduler-owned acquire/release around successful process execution, and lock audit events. | Covered for the service-side AgentRun scheduler mutation path; OS-level process sandboxing and mandatory external-process locks remain deferred. |
-| Global GA readiness | Current test evidence does not cover arbitrary theorem planning, broad MathProve proof search/final-audit semantics, OS-enforced network replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, or broad theorem synthesis. | Not achieved; blocked by deferred generalization work. |
+| Live agent adapter execution | `phase41-live-agent-adapter-execution.test.mjs` covers service-side live adapter execution and route behavior; `phase41-agent-execute-tool.test.mjs` covers Pi tool registration, host confirmation, route payloads, runtime registration, and `/cm:agent execute`. | Covered for allowlisted local adapter execution through `comathd`; production Codex CLI/API packaging, log streaming, adapter health checks, and interactive operator controls remain deferred. |
+| Global GA readiness | Current test evidence does not cover arbitrary theorem planning, broad MathProve proof search/final-audit semantics, OS-enforced network replay sandboxing, full interactive Pi/comathd install-session e2e, production Codex/Pi adapter packaging, or broad theorem synthesis. | Not achieved; blocked by deferred generalization work. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the registered Phase 23 theorem families. | Deferred. |

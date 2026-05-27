@@ -1416,6 +1416,86 @@ Phase 33 does not implement broad lemma decomposition or arbitrary theorem synth
 - Generic theorem synthesis and production proof-route agent execution remain deferred.
 - Skeleton artifacts are not built as final Lean targets; they are auditable planning outputs whose placeholders must be discharged later.
 
+## Phase 41 Live Agent Adapter Execution Review Log
+
+### Scope
+
+Added a live profile-backed adapter execution slice. `executeProfileAgentRun()` creates a validated profile-bound AgentRun, prepares the launch envelope, executes a real allowlisted adapter process through the Phase 28/40 scheduler, and returns run/result/audit material. `POST /agent/run/profile/execute`, Pi `comath.agent.executeProfile`, and `/cm:agent execute` expose the same path with host confirmation on Pi.
+
+This is a real local adapter execution path, not just a launch-envelope scaffold. It still does not package a production Codex CLI/API adapter, log streaming UI, adapter health checks, or OS-level sandboxing.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase41-live-agent-adapter-execution.test.mjs
+Initial RED result: exit 1; `../../dist/index.js` did not export `executeProfileAgentRun`.
+
+node services/comathd/tests/unit/phase41-live-agent-adapter-execution.test.mjs
+Integration RED result after first implementation: exit 1; scheduler rejected `COMATH_PROOF_AUTHORITY` as sensitive env, exposing a profile/scheduler boundary mismatch.
+
+node services/comathd/tests/unit/phase41-live-agent-adapter-execution.test.mjs
+Fixture RED result: exit 1; adapter fixture script had invalid generated JavaScript string escaping, then a too-narrow report assertion.
+
+node services/comathd/tests/unit/phase41-live-agent-adapter-execution.test.mjs
+Result: exit 0; live profile-backed adapter execution tests passed.
+
+node extensions/comath-pi/tests/phase41-agent-execute-tool.test.mjs
+Initial RED result: exit 1; `comath.agent.executeProfile` was not registered.
+
+node extensions/comath-pi/tests/phase41-agent-execute-tool.test.mjs
+Result: exit 0; Pi profile execution tool and `/cm:agent execute` tests passed.
+```
+
+### Changed Surfaces
+
+- Added `executeProfileAgentRun()` to `services/comathd/src/agents/agent-profiles.ts`.
+- Added `POST /agent/run/profile/execute` to `services/comathd/src/api/server.ts`.
+- Allowed the explicit non-secret `COMATH_PROOF_AUTHORITY=none` scheduler environment metadata while retaining sensitive env rejection.
+- Added `services/comathd/tests/unit/phase41-live-agent-adapter-execution.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added Pi `comath.agent.executeProfile` and `/cm:agent execute` in `extensions/comath-pi/src/index.ts`.
+- Added `extensions/comath-pi/tests/phase41-agent-execute-tool.test.mjs` and wired it into the default `@comath/pi-extension` test chain.
+- Added `live_agent_adapter_execution` to service status and updated README, TODO, acceptance matrix, smoke checks, security, math-integrity, and handoff notes.
+
+### Boundary And Integrity Notes
+
+The adapter executes through the same scheduler controls as other AgentRuns: absolute allowlisted program, `shell:false`, scoped cwd/log writes, rpm/concurrency controls, writer-lock acquisition, timeout/cancel behavior, and non-authoritative scheduler report wrapping. Child stdout is still marked untrusted; successful adapter exit cannot promote claims, apply GraphPatch directly, or replace proof-kernel replay.
+
+### Residual Risks
+
+- Production Codex CLI/API adapter packaging remains deferred.
+- Live log streaming, adapter health checks, and richer interactive operator controls remain deferred.
+- OS-level sandboxing and enforced network denial remain deferred.
+
+### Final Root Validation
+
+Fresh Phase 41 validation completed on 2026-05-28:
+
+```text
+node scripts/phase0-smoke.mjs
+Result: exit 0; Phase 0/design smoke check passed for 25 required entries and 28 invariants.
+
+node services/comathd/tests/phase0-smoke.test.mjs
+Result: exit 0; comathd Research Alpha smoke accepted `live_agent_adapter_execution`.
+
+node services/comathd/tests/unit/phase41-live-agent-adapter-execution.test.mjs
+Result: exit 0; Phase 41 live agent adapter execution tests passed.
+
+node extensions/comath-pi/tests/phase41-agent-execute-tool.test.mjs
+Result: exit 0; Phase 41 Pi agent execute tool tests passed.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-41 package tests passed with Phase 41 wired into the default test chain.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed with Phase 41 wired into the default test chain.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests through Phase 41, and Phase 17 integrity evaluation passed.
+```
+
 ## Phase 40 AgentRun Scheduler Writer Lock Integration Review Log
 
 ### Scope

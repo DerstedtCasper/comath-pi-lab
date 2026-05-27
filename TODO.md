@@ -448,13 +448,21 @@
 - [x] Record writer-lock blocked/acquired/released audit events.
 - [x] Wire Phase 40 into the default `@comath/comathd` test chain and smoke status capabilities.
 
+## Phase 41: Live Agent Adapter Execution
+
+- [x] Add service-owned `executeProfileAgentRun()` that creates a profile-bound AgentRun and launches a real allowlisted adapter process through the scheduler.
+- [x] Add `POST /agent/run/profile/execute` for live profile-backed adapter execution.
+- [x] Preserve `proof_authority=none`, scheduler non-authoritative report wrapping, writer-lock acquisition, and scoped logs/reports.
+- [x] Add Pi `comath.agent.executeProfile` runtime tool and `/cm:agent execute` command path with host confirmation.
+- [x] Wire Phase 41 into default `@comath/comathd` and `@comath/pi-extension` test chains and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`), and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
-- [ ] Live Pi/Codex agent adapter execution beyond the Phase 30 Pi agent profile tools, Phase 29 service profile API, and Phase 28 allowlisted process scheduler fixtures.
+- [ ] Production Codex/Pi adapter hardening beyond the Phase 41 live allowlisted adapter execution slice: real Codex CLI/API adapter packaging, richer runtime log streaming, adapter health checks, and interactive operator controls.
 - [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance: OS-level isolation, enforced network denial, and cross-machine replay validation.
 - [ ] OS-level process sandboxing beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, Phase 39 project-level lock primitive, and Phase 40 AgentRun scheduler lock integration.

@@ -49,12 +49,12 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "runner_replay_sandbox_dependency_provenance",
       "trivium_target_platform_evaluation",
       "project_writer_session_lock",
-      "agent_run_scheduler_writer_lock_integration"
+      "agent_run_scheduler_writer_lock_integration",
+      "live_agent_adapter_execution"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",
       "broad_mathprove_proof_search_deferred",
-      "live_pi_codex_agent_adapter_deferred",
       "full_interactive_pi_e2e_install_flow_deferred",
       "runner_os_network_sandbox_enforcement_deferred",
       "agent_process_os_sandbox_deferred",

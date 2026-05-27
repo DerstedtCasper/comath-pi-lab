@@ -159,6 +159,7 @@ Remaining security requirements:
 20. **Native TriviumDB target evaluation is explicit.** Phase 38 runs native TriviumDB through an adapter-owned evaluation harness, records fail-closed unavailable reports, and keeps default memory backend selection unchanged.
 21. **Project writer sessions have a fail-closed lock primitive.** Phase 39 writes `.comath/sessions/writer.lock.json` through the runtime-write path policy, rejects concurrent active locks, requires the session token for release, records stale takeover provenance, and treats malformed lock JSON as an unreadable active lock rather than overwriting it.
 22. **Scheduled AgentRuns respect project writer locks.** Phase 40 makes scheduler execution acquire the writer session before child-process mutation, reject active-lock conflicts before spawn, preserve the queued run on blocked launch, and release the scheduler-owned lock after terminal report handling.
+23. **Live profile adapters execute only through the scheduler boundary.** Phase 41 exposes profile-backed adapter execution through `executeProfileAgentRun()`, `/agent/run/profile/execute`, and Pi host-confirmed `comath.agent.executeProfile`, preserving program allowlists, scoped writes, writer locks, and non-authoritative report wrapping.
 
 ### Validation Commands
 
@@ -287,12 +288,23 @@ node services/comathd/tests/unit/phase40-agent-scheduler-session-lock.test.mjs
 Result: exit 0; scheduler writer-lock integration tests passed for active-lock launch rejection, no child/log side effects on blocked launch, queued-run preservation, scheduler acquire/release, and writer-lock audit events.
 ```
 
+Phase 41 targeted validation:
+
+```text
+node services/comathd/tests/unit/phase41-live-agent-adapter-execution.test.mjs
+Result: exit 0; live agent adapter execution tests passed for real allowlisted profile adapter execution through the scheduler, service route behavior, writer-lock use, and non-authoritative report wrapping.
+
+node extensions/comath-pi/tests/phase41-agent-execute-tool.test.mjs
+Result: exit 0; Pi agent execute tool tests passed for runtime tool/command registration, host confirmation, and `/agent/run/profile/execute` payload shape.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
 - Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, Phase 24 reruns the implemented Python compute runners through strict replay, and Phase 36 records sandbox/dependency provenance with fail-closed integrity checks. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but OS-level sandboxing, enforced network denial, and cross-machine replay validation remain deferred.
 - Phase 40 integrates the project writer lock into the service-side AgentRun scheduler mutation path, but true OS-level multi-process sandboxing, network-denial enforcement, and mandatory external-process lock enforcement remain deferred.
+- Phase 41 executes live adapters through the scheduler boundary, but production Codex CLI/API adapter packaging, live log streaming, adapter health checks, OS-level sandboxing, and enforced network denial remain deferred.
 - Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, but a full interactive Pi/comathd install-session e2e and richer runtime permission model remain separate hardening targets.
 - Phase 27 validates AgentRun persistence and scoped writes; Phase 28 adds service-side process launch and scheduler controls on top of that boundary.
 - Phase 28 validates absolute-realpath allowlisted process launch, minimal env inheritance, timeout/cancel, process-tree termination attempts, output byte caps, non-authoritative scheduler envelopes, and rpm/concurrency controls, but it does not yet provide OS-level sandboxing, network-denial enforcement, production Pi/Codex agent adapters, live log streaming APIs, or multi-process writer locks.

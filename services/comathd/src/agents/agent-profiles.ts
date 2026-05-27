@@ -2,7 +2,12 @@ import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
 import type { AgentRun, AgentRole } from "../types/schemas.js";
 import { createAgentRun } from "./agent-run-store.js";
-import type { AgentRunLaunchInput, AgentRunSchedulerOptions } from "./agent-run-scheduler.js";
+import {
+  createAgentRunScheduler,
+  type AgentRunLaunchInput,
+  type AgentRunProcessResult,
+  type AgentRunSchedulerOptions
+} from "./agent-run-scheduler.js";
 
 export type AgentProfileId =
   | "coordinator"
@@ -65,6 +70,25 @@ export type AgentProfileLaunch = {
   profile: AgentProfile;
   scheduler_options: AgentRunSchedulerOptions;
   launch_input: AgentRunLaunchInput;
+};
+
+export type ExecuteProfileAgentRunInput = {
+  project_id: string;
+  campaign_id?: string;
+  workstream_id: string;
+  profile_id: AgentProfileId;
+  program: string;
+  adapter_args?: string[];
+  goal: string;
+  context_path: string;
+  actor: string;
+};
+
+export type ExecuteProfileAgentRunResult = {
+  profile: AgentProfile;
+  run: AgentRun;
+  launch: AgentProfileLaunch;
+  result: AgentRunProcessResult;
 };
 
 const globalForbiddenTools = [
@@ -341,4 +365,55 @@ export function buildAgentProfileLaunch(projectRoot: string, input: BuildAgentPr
     }
   });
   return launch;
+}
+
+export async function executeProfileAgentRun(
+  projectRoot: string,
+  input: ExecuteProfileAgentRunInput
+): Promise<ExecuteProfileAgentRunResult> {
+  const run = createAgentRunForProfile(projectRoot, {
+    project_id: input.project_id,
+    campaign_id: input.campaign_id,
+    workstream_id: input.workstream_id,
+    profile_id: input.profile_id,
+    actor: input.actor
+  });
+  const launch = buildAgentProfileLaunch(projectRoot, {
+    project_id: input.project_id,
+    run_id: run.id,
+    profile_id: input.profile_id,
+    program: input.program,
+    goal: input.goal,
+    context_path: input.context_path,
+    actor: input.actor
+  });
+  launch.launch_input.command.args = [
+    ...(input.adapter_args ?? []),
+    ...(launch.launch_input.command.args ?? [])
+  ];
+  const scheduler = createAgentRunScheduler(launch.scheduler_options);
+  const result = await scheduler.launch(projectRoot, launch.launch_input);
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_run.profile_executed",
+    actor: input.actor,
+    target_id: run.id,
+    payload: {
+      profile_id: launch.profile.id,
+      status: result.status,
+      exit_code: result.exit_code,
+      report_path: result.report_path,
+      proof_authority: launch.profile.proof_authority
+    }
+  });
+  return {
+    profile: launch.profile,
+    run: {
+      ...run,
+      status: result.status,
+      report_path: result.report_path
+    },
+    launch,
+    result
+  };
 }

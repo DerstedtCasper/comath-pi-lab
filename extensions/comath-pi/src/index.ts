@@ -134,7 +134,8 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
-  "comath.agent.prepareLaunch"
+  "comath.agent.prepareLaunch",
+  "comath.agent.executeProfile"
 ]);
 
 const COMATH_EXTENSION_COMMANDS = [
@@ -458,6 +459,21 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     });
   }
 
+  if (name === "comath.agent.executeProfile") {
+    return client.post("/agent/run/profile/execute", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      campaign_id: readString(input, "campaign_id", { optional: true }),
+      workstream_id: readString(input, "workstream_id"),
+      profile_id: readString(input, "profile_id"),
+      program: readString(input, "program"),
+      adapter_args: Array.isArray(input.adapter_args) ? input.adapter_args.map(String) : undefined,
+      goal: readString(input, "goal"),
+      context_path: readString(input, "context_path"),
+      actor: readString(input, "actor")
+    });
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -701,6 +717,26 @@ export function createComathTools(): ToolDescriptor[] {
       )
     },
     {
+      name: "comath.agent.executeProfile",
+      description: "Create and execute a profile-bound AgentRun through the comathd scheduler.",
+      mutates: true,
+      input_schema: objectSchema(
+        ["project_root", "project_id", "workstream_id", "profile_id", "program", "goal", "context_path", "actor"],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          campaign_id: stringProp,
+          workstream_id: stringProp,
+          profile_id: stringProp,
+          program: stringProp,
+          adapter_args: stringArrayProp,
+          goal: stringProp,
+          context_path: stringProp,
+          actor: stringProp
+        }
+      )
+    },
+    {
       name: "comath.paper.init",
       description: "Initialize the working paper artifact set through comathd.",
       mutates: true,
@@ -888,6 +924,21 @@ function numberOptionValue(args: string[], name: string): number | undefined {
     return parsed;
   }
   throw new Error(`${name} must be a non-negative number`);
+}
+
+function optionValues(args: string[], name: string): string[] {
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] !== name) {
+      continue;
+    }
+    const value = args[index + 1];
+    if (value && !value.startsWith("--")) {
+      values.push(value);
+      index += 1;
+    }
+  }
+  return values;
 }
 
 function firstPositional(args: string[]): string | undefined {
@@ -1122,6 +1173,39 @@ async function handleAgentCommand(
           run_id: runId,
           profile_id: profileId,
           program,
+          goal,
+          context_path: contextPath,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "execute") {
+    const profileId = requiredOption(optionValue(parsed.args, "--profile") ?? firstPositional(parsed.args), "profile_id");
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const workstreamId = requiredOption(optionValue(parsed.args, "--workstream-id"), "workstream_id");
+    const program = requiredOption(optionValue(parsed.args, "--program"), "program");
+    const goal = requiredOption(optionValue(parsed.args, "--goal"), "goal");
+    const contextPath = requiredOption(optionValue(parsed.args, "--context"), "context_path");
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.agent.executeProfile");
+    if (!tool) {
+      throw new Error("agent profile execute tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: projectId,
+          campaign_id: optionValue(parsed.args, "--campaign-id"),
+          workstream_id: workstreamId,
+          profile_id: profileId,
+          program,
+          adapter_args: optionValues(parsed.args, "--adapter-arg"),
           goal,
           context_path: contextPath,
           actor: actorFrom(options, parsed.args)

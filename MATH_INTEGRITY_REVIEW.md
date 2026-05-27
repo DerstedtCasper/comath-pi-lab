@@ -94,6 +94,7 @@ Remaining mathematical work:
 - Phase 38 native TriviumDB target-platform evaluation validates memory persistence/performance explicitly and records fail-closed native-unavailable reports; it is not mathematical evidence and cannot promote claims.
 - Phase 39 project writer session locks are mutation-coordination metadata only. A held lock does not certify artifacts, evidence, proof replay, theorem equivalence, or claim-promotion eligibility.
 - Phase 40 scheduler-held writer locks coordinate AgentRun process mutation only. A scheduler-owned lock, process exit code, or child report remains non-authoritative for mathematical truth and cannot promote claims.
+- Phase 41 live adapter execution remains an AgentRun evidence-production surface only. Adapter output is untrusted child stdout wrapped with `proof_authority: none`; it cannot promote claims, apply GraphPatch directly, or replace proof-kernel replay.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -236,6 +237,13 @@ Phase 40 adds coverage for:
 - scheduler-owned writer-lock acquire/release around a successful child-process run;
 - audit visibility for blocked, acquired, and released writer-lock events without adding proof authority.
 
+Phase 41 adds coverage for:
+
+- profile-bound AgentRun creation followed by real allowlisted adapter process execution;
+- service route execution through `/agent/run/profile/execute`;
+- Pi `comath.agent.executeProfile` and `/cm:agent execute` host-confirmed execution paths;
+- preservation of `proof_authority: none`, untrusted child stdout wrapping, writer-lock use, and scoped run logs/reports.
+
 ### Residual Risks
 
 - Real Lean kernel checking is implemented for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. Phase 33 adds native planning artifacts for those slices, but general lemma decomposition, theorem synthesis, richer line-map provenance, and broader domain automation remain unimplemented.
@@ -248,3 +256,4 @@ Phase 40 adds coverage for:
 - Phase 22 improves Pi-side orchestration, Phase 26 validates Pi 0.75.5-compatible runtime registration, Phase 27 adds an AgentRun report/failure-memory boundary, and Phase 28 adds allowlisted process scheduling. None of these surfaces are proof authority, AgentRun reports cannot self-review their own GraphPatch proposals, child-process completion cannot promote claims, and production Pi/Codex agent profile integration plus full interactive Pi/comathd install-session e2e remain unimplemented.
 - Phase 38 validates native memory persistence and performance only for the current target platform; it does not make native memory content proof authority or enable default native backend selection without explicit configuration.
 - Phase 40 reduces writer-race risk in the service-side AgentRun scheduler path, but mathematical consistency still depends on ordinary evidence, replay, and promotion gates; OS-level sandboxing and external-process enforcement remain deferred.
+- Phase 41 makes agent execution product-real for an allowlisted adapter slice, but broad autonomous mathematical discovery remains blocked by proof planning, proof replay, MathProve semantics, and independent review gates.

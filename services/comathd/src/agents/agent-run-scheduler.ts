@@ -117,6 +117,7 @@ const inheritedEnvironmentAllowlist =
 
 const sensitiveEnvironmentPattern =
   /(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE|SESSION|PRIVATE|SSH|OPENAI|ANTHROPIC|AZURE|AWS|GOOGLE|GITHUB|CLOUD)/i;
+const explicitNonSecretEnvironmentKeys = new Set(["COMATH_PROOF_AUTHORITY"]);
 
 function fallbackReport(exitReason: string): string {
   return [...reportHeadings, "", `Exit reason: ${exitReason}`, ""].join("\n");
@@ -240,7 +241,7 @@ function assertCommandEnvAllowed(env: Record<string, string> = {}): void {
         code: "AGENT_RUN_ENV_INVALID"
       });
     }
-    if (sensitiveEnvironmentPattern.test(key)) {
+    if (!explicitNonSecretEnvironmentKeys.has(key) && sensitiveEnvironmentPattern.test(key)) {
       throw new ComathError(`environment variable is not allowed: ${key}`, {
         statusCode: 403,
         code: "AGENT_RUN_ENV_DENIED"
