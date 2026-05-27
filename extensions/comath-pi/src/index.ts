@@ -514,6 +514,9 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
       run_id: readString(input, "run_id"),
       profile_id: readString(input, "profile_id"),
       adapter_id: readString(input, "adapter_id"),
+      ...(readString(input, "backend", { optional: true }) === undefined
+        ? {}
+        : { backend: readString(input, "backend", { optional: true }) }),
       goal: readString(input, "goal"),
       context_path: readString(input, "context_path"),
       actor: readString(input, "actor")
@@ -528,6 +531,9 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
       workstream_id: readString(input, "workstream_id"),
       profile_id: readString(input, "profile_id"),
       adapter_id: readString(input, "adapter_id"),
+      ...(readString(input, "backend", { optional: true }) === undefined
+        ? {}
+        : { backend: readString(input, "backend", { optional: true }) }),
       goal: readString(input, "goal"),
       context_path: readString(input, "context_path"),
       actor: readString(input, "actor")
@@ -581,6 +587,7 @@ function toolLabel(name: string): string {
 export function createComathTools(): ToolDescriptor[] {
   const stringProp = { type: "string" };
   const stringArrayProp = { type: "array", items: stringProp };
+  const agentAdapterBackendProp = { type: "string", enum: ["bundled", "external"] };
   return [
     {
       name: "comath.project.open",
@@ -839,6 +846,7 @@ export function createComathTools(): ToolDescriptor[] {
           run_id: stringProp,
           profile_id: stringProp,
           adapter_id: stringProp,
+          backend: agentAdapterBackendProp,
           goal: stringProp,
           context_path: stringProp,
           actor: stringProp
@@ -858,6 +866,7 @@ export function createComathTools(): ToolDescriptor[] {
           workstream_id: stringProp,
           profile_id: stringProp,
           adapter_id: stringProp,
+          backend: agentAdapterBackendProp,
           goal: stringProp,
           context_path: stringProp,
           actor: stringProp
@@ -1279,6 +1288,7 @@ async function handleAgentCommand(
           run_id: runId,
           profile_id: profileId,
           adapter_id: adapterId,
+          backend: optionValue(parsed.args, "--backend"),
           goal,
           context_path: contextPath,
           actor: actorFrom(options, parsed.args)
@@ -1311,6 +1321,7 @@ async function handleAgentCommand(
           workstream_id: workstreamId,
           profile_id: profileId,
           adapter_id: adapterId,
+          backend: optionValue(parsed.args, "--backend"),
           goal,
           context_path: contextPath,
           actor: actorFrom(options, parsed.args)

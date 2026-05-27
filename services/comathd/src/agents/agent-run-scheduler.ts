@@ -117,7 +117,12 @@ const inheritedEnvironmentAllowlist =
 
 const sensitiveEnvironmentPattern =
   /(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|COOKIE|SESSION|PRIVATE|SSH|OPENAI|ANTHROPIC|AZURE|AWS|GOOGLE|GITHUB|CLOUD)/i;
-const explicitNonSecretEnvironmentKeys = new Set(["COMATH_PROOF_AUTHORITY"]);
+const explicitNonSecretEnvironmentKeys = new Set([
+  "COMATH_PROOF_AUTHORITY",
+  "COMATH_CODEX_ADAPTER_BACKEND",
+  "COMATH_CODEX_EXTERNAL_PROGRAM",
+  "COMATH_CODEX_EXTERNAL_PREFIX_ARGS"
+]);
 
 function fallbackReport(exitReason: string): string {
   return [...reportHeadings, "", `Exit reason: ${exitReason}`, ""].join("\n");

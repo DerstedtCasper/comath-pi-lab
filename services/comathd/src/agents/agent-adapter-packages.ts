@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
@@ -39,6 +39,7 @@ export type BuildAgentAdapterPackageLaunchInput = {
   run_id: string;
   profile_id: AgentProfileId;
   adapter_id: AgentAdapterPackageId;
+  backend?: "bundled" | "external";
   goal: string;
   context_path: string;
   actor: string;
@@ -56,6 +57,7 @@ export type ExecuteAgentAdapterPackageInput = {
   workstream_id: string;
   profile_id: AgentProfileId;
   adapter_id: AgentAdapterPackageId;
+  backend?: "bundled" | "external";
   goal: string;
   context_path: string;
   actor: string;
@@ -151,13 +153,67 @@ function assertProfileSupported(pkg: AgentAdapterPackage, profileId: AgentProfil
   });
 }
 
+function parseExternalPrefixArgs(rawValue: string | undefined): string[] {
+  if (!rawValue) {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawValue);
+  } catch {
+    throw new ComathError("COMATH_CODEX_CLI_PREFIX_ARGS must be a JSON string array", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_EXTERNAL_PREFIX_ARGS_INVALID"
+    });
+  }
+  if (!Array.isArray(parsed) || parsed.some((entry) => typeof entry !== "string" || entry.length === 0)) {
+    throw new ComathError("COMATH_CODEX_CLI_PREFIX_ARGS must be a JSON string array", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_EXTERNAL_PREFIX_ARGS_INVALID"
+    });
+  }
+  if (parsed.some((entry) => entry.includes("\u0000"))) {
+    throw new ComathError("COMATH_CODEX_CLI_PREFIX_ARGS contains an invalid argument", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_EXTERNAL_PREFIX_ARGS_INVALID"
+    });
+  }
+  return parsed;
+}
+
+function resolveExternalCodexProgram(): { program: string; prefixArgs: string[] } | undefined {
+  const configuredProgram = process.env.COMATH_CODEX_CLI_PROGRAM;
+  if (!configuredProgram) {
+    return undefined;
+  }
+  if (!isAbsolute(configuredProgram)) {
+    throw new ComathError("COMATH_CODEX_CLI_PROGRAM must be an absolute path", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_EXTERNAL_PROGRAM_INVALID"
+    });
+  }
+  const absoluteProgram = resolve(configuredProgram);
+  if (!existsSync(absoluteProgram)) {
+    throw new ComathError("COMATH_CODEX_CLI_PROGRAM does not exist", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_EXTERNAL_PROGRAM_MISSING"
+    });
+  }
+  return {
+    program: realpathSync.native(absoluteProgram),
+    prefixArgs: parseExternalPrefixArgs(process.env.COMATH_CODEX_CLI_PREFIX_ARGS)
+  };
+}
+
 export function buildAgentAdapterPackageLaunch(
   projectRoot: string,
   input: BuildAgentAdapterPackageLaunchInput
 ): AgentAdapterPackageLaunch {
   const pkg = getAgentAdapterPackage(input.adapter_id);
+  const backend = input.backend ?? "bundled";
   const profile = getAgentProfile(input.profile_id);
   assertProfileSupported(pkg, profile.id);
+  const externalCodex = backend === "external" ? resolveExternalCodexProgram() : undefined;
   const launch = buildAgentProfileLaunch(projectRoot, {
     project_id: input.project_id,
     run_id: input.run_id,
@@ -177,8 +233,15 @@ export function buildAgentAdapterPackageLaunch(
     ...launch.launch_input.command.env,
     COMATH_ADAPTER_PACKAGE_ID: pkg.id,
     COMATH_ADAPTER_PACKAGE_KIND: pkg.kind,
+    COMATH_CODEX_ADAPTER_BACKEND: backend,
     COMATH_PROOF_AUTHORITY: "none"
   };
+  if (backend === "external" && externalCodex) {
+    launch.launch_input.command.env.COMATH_CODEX_EXTERNAL_PROGRAM = externalCodex.program;
+    if (externalCodex.prefixArgs.length > 0) {
+      launch.launch_input.command.env.COMATH_CODEX_EXTERNAL_PREFIX_ARGS = JSON.stringify(externalCodex.prefixArgs);
+    }
+  }
   appendAuditEvent(projectRoot, {
     project_id: input.project_id,
     event_type: "agent_adapter.package_launch_prepared",
@@ -187,8 +250,10 @@ export function buildAgentAdapterPackageLaunch(
     payload: {
       adapter_id: pkg.id,
       profile_id: profile.id,
+      backend,
       program: pkg.program,
       adapter_script: pkg.adapter_script,
+      external_program_configured: Boolean(externalCodex),
       rpm: launch.scheduler_options.rpm,
       proof_authority: pkg.proof_authority
     }
@@ -212,6 +277,7 @@ export async function executeAgentAdapterPackage(
     run_id: run.id,
     profile_id: input.profile_id,
     adapter_id: input.adapter_id,
+    backend: input.backend,
     goal: input.goal,
     context_path: input.context_path,
     actor: input.actor

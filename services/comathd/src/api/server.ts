@@ -358,6 +358,7 @@ async function route(method: string, path: string, body: unknown, context: Route
           run_id: string;
           profile_id: string;
           adapter_id: string;
+          backend?: "bundled" | "external";
           goal: string;
           context_path: string;
           actor: string;
@@ -368,6 +369,7 @@ async function route(method: string, path: string, body: unknown, context: Route
             run_id: body.run_id,
             profile_id: body.profile_id as Parameters<typeof buildAgentAdapterPackageLaunch>[1]["profile_id"],
             adapter_id: body.adapter_id as Parameters<typeof buildAgentAdapterPackageLaunch>[1]["adapter_id"],
+            backend: body.backend,
             goal: body.goal,
             context_path: body.context_path,
             actor: body.actor
@@ -385,6 +387,7 @@ async function route(method: string, path: string, body: unknown, context: Route
           workstream_id: string;
           profile_id: string;
           adapter_id: string;
+          backend?: "bundled" | "external";
           goal: string;
           context_path: string;
           actor: string;
@@ -396,6 +399,7 @@ async function route(method: string, path: string, body: unknown, context: Route
             workstream_id: body.workstream_id,
             profile_id: body.profile_id as Parameters<typeof executeAgentAdapterPackage>[1]["profile_id"],
             adapter_id: body.adapter_id as Parameters<typeof executeAgentAdapterPackage>[1]["adapter_id"],
+            backend: body.backend,
             goal: body.goal,
             context_path: body.context_path,
             actor: body.actor

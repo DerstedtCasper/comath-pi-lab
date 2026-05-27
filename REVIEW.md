@@ -1,5 +1,65 @@
 # REVIEW
 
+## Phase 44 Codex CLI External Adapter Invocation Review Log
+
+### Scope
+
+Phase 44 upgrades the service-owned `codex-cli` package from bundled-launcher-only execution to an optional external Codex-compatible CLI backend. The external backend is enabled only by service environment configuration (`COMATH_CODEX_CLI_PROGRAM`, plus optional JSON `COMATH_CODEX_CLI_PREFIX_ARGS`), then selected by package prepare/execute inputs with `backend: "external"`. Pi can select the backend but cannot provide arbitrary external program paths.
+
+### TDD Evidence
+
+Initial service RED result:
+
+```text
+node services/comathd/tests/unit/phase44-codex-cli-external-invocation.test.mjs
+Result: exit 1; COMATH_CODEX_ADAPTER_BACKEND was undefined in the prepared package launch envelope.
+```
+
+Initial Pi RED result:
+
+```text
+node extensions/comath-pi/tests/phase44-agent-adapter-external-tools.test.mjs
+Result: exit 1; prepareAdapterPackage tool schema did not expose a backend enum.
+```
+
+### Implementation Notes
+
+- Added `backend?: "bundled" | "external"` to package prepare/execute inputs and route payloads.
+- Added service-side external CLI resolution from `COMATH_CODEX_CLI_PROGRAM`, requiring an absolute existing path and recording the realpath in the launcher environment.
+- Added optional `COMATH_CODEX_CLI_PREFIX_ARGS` as a JSON string array for fixed service-owned prefix args, used by tests to execute a fake `.mjs` CLI through the current Node runtime without exposing arbitrary shell strings.
+- Extended the bundled `codex-cli-adapter.mjs` to invoke the external program with `spawnSync`, `shell:false`, AgentRun-scoped cwd, bounded output capture, fixed argv (`--profile`, `--role`, `--goal-file`, `--context`, `--prompt-file`), and `COMATH_PROOF_AUTHORITY=none`.
+- Wrapped external stdout/stderr as untrusted AgentRun report material under `external_output_untrusted: true`; the report still states no claim promotion, no GraphPatch authority, and no proof authority.
+- Added Pi `backend` enum schema and `/cm:agent prepare-package|execute-package --backend external` passthrough while preserving host confirmation for mutating operations.
+- Added `codex_cli_external_adapter_invocation` to service status and wired Phase 44 tests into default package test chains.
+
+### Boundary Statement
+
+The external backend is runtime orchestration only. It can produce draft agent material through a service-configured Codex-compatible CLI, but it cannot promote claims, certify proofs, apply GraphPatch, mutate trusted state directly, or replace Lean-backed final replay. Missing external CLI configuration fails closed as a durable failed AgentRun.
+
+### Residual Risks
+
+- Phase 44 validates against a fake Codex-compatible CLI, not an installed production Codex CLI or a real Codex API backend.
+- Streaming/subscription log UX, richer operator controls, and OS-enforced adapter isolation remain deferred.
+- External CLI network denial is not OS-enforced by this phase; the current boundary is fixed argv, scoped cwd, scheduler timeout/cancellation, rpm=4, and non-authoritative wrapping.
+
+### Focused Validation
+
+Fresh focused validation completed on 2026-05-28:
+
+```text
+node services/comathd/tests/unit/phase43-agent-adapter-package.test.mjs
+Result: exit 0; bundled package lifecycle remains compatible after the v2 launcher health version update.
+
+node services/comathd/tests/unit/phase44-codex-cli-external-invocation.test.mjs
+Result: exit 0; external CLI backend invokes fixed service-configured argv, wraps output as untrusted, and fails closed when unconfigured.
+
+node extensions/comath-pi/tests/phase43-agent-adapter-package-tools.test.mjs
+Result: exit 0; default packaged adapter Pi tools still omit backend when unspecified.
+
+node extensions/comath-pi/tests/phase44-agent-adapter-external-tools.test.mjs
+Result: exit 0; Pi tools and `/cm:agent` commands pass `backend: external` without exposing program paths.
+```
+
 ## Phase 0 Review Log
 
 ### Scope

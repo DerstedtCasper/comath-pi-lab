@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-43")) {
-  invariantFailures.push("README must describe the current Phase 18-43 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-44")) {
+  invariantFailures.push("README must describe the current Phase 18-44 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {

@@ -474,13 +474,21 @@
 - [x] Copy bundled adapter launcher assets into `dist` during `@comath/comathd` build.
 - [x] Wire Phase 43 into default `@comath/comathd` and `@comath/pi-extension` test chains and smoke status capabilities.
 
+## Phase 44: Codex CLI External Adapter Invocation
+
+- [x] Add fail-closed external backend support for the service-owned `codex-cli` package behind `COMATH_CODEX_CLI_PROGRAM` and optional fixed JSON prefix args.
+- [x] Keep external adapter invocation behind the bundled launcher, `shell:false`, AgentRun-scoped cwd, bounded stdout/stderr wrapping, `rpm=4`, and `COMATH_PROOF_AUTHORITY=none`.
+- [x] Wrap external Codex-compatible CLI output as untrusted AgentRun report material without claim promotion, GraphPatch authority, or proof authority.
+- [x] Add Pi `backend` selection for packaged adapter prepare/execute tools and `/cm:agent prepare-package|execute-package --backend external`, without exposing arbitrary external program paths to Pi/model input.
+- [x] Wire Phase 44 into default `@comath/comathd` and `@comath/pi-extension` test chains and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`), and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
-- [ ] Production Codex/Pi adapter hardening beyond the Phase 41-43 live allowlisted execution, bounded observability, and service-owned package-registry slices: real external Codex CLI/API invocation, streaming/subscription log UI beyond capped log reads, richer interactive operator controls, and OS-enforced adapter isolation.
+- [ ] Production Codex/Pi adapter hardening beyond the Phase 41-44 live allowlisted execution, bounded observability, service-owned package registry, and service-configured external CLI invocation slices: real Codex API backend, streaming/subscription log UI beyond capped log reads, richer interactive operator controls, OS-enforced adapter isolation, and validation against an installed production Codex CLI.
 - [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance: OS-level isolation, enforced network denial, and cross-machine replay validation.
 - [ ] OS-level process sandboxing beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, Phase 39 project-level lock primitive, and Phase 40 AgentRun scheduler lock integration.

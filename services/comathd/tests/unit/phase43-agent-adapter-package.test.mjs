@@ -49,7 +49,7 @@ try {
     actor: "phase43-test"
   });
   assert.equal(health.ok, true);
-  assert.equal(health.version, "phase43-codex-adapter-v1");
+  assert.equal(health.version, "phase44-codex-adapter-v2");
   assert.equal(health.capabilities.includes("agent-report"), true);
 
   const prepared = buildAgentAdapterPackageLaunch(projectRoot, {
