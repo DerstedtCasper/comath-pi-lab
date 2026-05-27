@@ -52,6 +52,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_run_scheduler_writer_lock_integration",
       "live_agent_adapter_execution",
       "agent_run_observability",
+      "agent_run_log_stream_cursor",
       "agent_adapter_package_registry",
       "codex_cli_external_adapter_invocation"
     ],

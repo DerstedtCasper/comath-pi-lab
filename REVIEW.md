@@ -1,5 +1,54 @@
 # REVIEW
 
+## Phase 46 Cursor-Based AgentRun Log Stream Review Log
+
+### Scope
+
+Phase 46 adds service-owned cursor polling for AgentRun stdout/stderr logs. It exposes `streamAgentRunLogs()` and `GET /agent/run/:id/log-stream` with independent stdout/stderr byte cursors, bounded chunks, next cursors, terminal completion detection, audit events, and `proof_authority=none`. Pi exposes the same read-only path through `comath.agent.streamLogs` and `/cm:agent stream`.
+
+### TDD Evidence
+
+Initial service RED result:
+
+```text
+node services/comathd/tests/unit/phase46-agent-log-stream.test.mjs
+Result: exit 1; `streamAgentRunLogs` was not exported before implementation.
+```
+
+Initial Pi RED result:
+
+```text
+node extensions/comath-pi/tests/phase46-agent-log-stream-tools.test.mjs
+Result: exit 1; `comath.agent.streamLogs` was not registered before implementation.
+```
+
+Focused validation:
+
+```text
+node services/comathd/tests/unit/phase46-agent-log-stream.test.mjs
+Result: exit 0; cursor-based service log streaming, route handling, invalid-cursor rejection, audit event emission, and non-authoritative metadata passed.
+
+node extensions/comath-pi/tests/phase46-agent-log-stream-tools.test.mjs
+Result: exit 0; Pi tool schema, GET route payload, runtime registration, `/cm:agent stream`, and operator notification output passed.
+```
+
+### Implementation Notes
+
+- Added `streamAgentRunLogs()` to `services/comathd/src/agents/agent-run-observability.ts`.
+- Added `GET /agent/run/:id/log-stream` and service status capability `agent_run_log_stream_cursor`.
+- Added Pi `comath.agent.streamLogs` and `/cm:agent stream` as read-only operator polling surfaces.
+- Wired Phase 46 focused tests into the default `@comath/comathd` and `@comath/pi-extension` test chains.
+
+### Boundary Statement
+
+Phase 46 is cursor-based polling, not WebSocket/SSE subscription and not an interactive terminal. It improves operator observability beyond one-shot capped reads, but streamed log chunks remain untrusted runtime artifacts with `proof_authority=none`; they cannot promote claims, certify proofs, apply GraphPatch, or replace proof-kernel replay.
+
+### Residual Risks
+
+- Continuous subscription transport, richer operator controls, and production Codex CLI/API validation remain deferred.
+- OS-level process isolation and network-denial enforcement remain deferred.
+- Cursor values are byte offsets into UTF-8 log files; callers should treat chunk text as display material, not a proof artifact.
+
 ## Phase 45 Pi/comathd Install-Session E2E Review Log
 
 ### Scope

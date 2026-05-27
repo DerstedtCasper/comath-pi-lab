@@ -47,6 +47,7 @@ import {
   listAgentProfiles,
   probeAgentAdapterHealth,
   readAgentRunLogs,
+  streamAgentRunLogs,
   validateAgentProfiles
 } from "../agents/index.js";
 
@@ -631,6 +632,29 @@ async function route(method: string, path: string, body: unknown, context: Route
           logs: readAgentRunLogs(url.searchParams.get("project_root") ?? "", {
             project_id: url.searchParams.get("project_id") ?? "",
             run_id: decodeURIComponent(agentRunLogsMatch[1] ?? ""),
+            max_bytes: maxBytes ? Number(maxBytes) : undefined,
+            actor: url.searchParams.get("actor") ?? "api"
+          })
+        });
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const agentRunLogStreamMatch = /^\/agent\/run\/([^/]+)\/log-stream$/.exec(url.pathname);
+    if (agentRunLogStreamMatch) {
+      try {
+        const maxBytes = url.searchParams.get("max_bytes");
+        const stdoutCursor = url.searchParams.get("stdout_cursor");
+        const stderrCursor = url.searchParams.get("stderr_cursor");
+        return success({
+          stream: streamAgentRunLogs(url.searchParams.get("project_root") ?? "", {
+            project_id: url.searchParams.get("project_id") ?? "",
+            run_id: decodeURIComponent(agentRunLogStreamMatch[1] ?? ""),
+            cursor: {
+              stdout: stdoutCursor ? Number(stdoutCursor) : 0,
+              stderr: stderrCursor ? Number(stderrCursor) : 0
+            },
             max_bytes: maxBytes ? Number(maxBytes) : undefined,
             actor: url.searchParams.get("actor") ?? "api"
           })

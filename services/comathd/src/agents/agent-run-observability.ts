@@ -27,6 +27,40 @@ export type AgentRunLogs = {
   stderr_truncated: boolean;
 };
 
+export type AgentRunLogCursor = {
+  stdout: number;
+  stderr: number;
+};
+
+export type StreamAgentRunLogsInput = {
+  project_id: string;
+  run_id: string;
+  cursor?: Partial<AgentRunLogCursor>;
+  max_bytes?: number;
+  actor?: string;
+};
+
+export type AgentRunLogStream = {
+  project_id: string;
+  run_id: string;
+  status: string;
+  proof_authority: "none";
+  stdout_path: string;
+  stderr_path: string;
+  cursor: AgentRunLogCursor;
+  next_cursor: AgentRunLogCursor;
+  chunks: {
+    stdout: string;
+    stderr: string;
+  };
+  truncated: {
+    stdout: boolean;
+    stderr: boolean;
+  };
+  sizes: AgentRunLogCursor;
+  complete: boolean;
+};
+
 export type ProbeAgentAdapterHealthInput = {
   project_id: string;
   profile_id: AgentProfileId;
@@ -68,6 +102,16 @@ function assertPositiveInteger(value: number, field: string): void {
   throw new ComathError(`${field} must be a positive integer`, {
     statusCode: 400,
     code: "AGENT_OBSERVABILITY_INVALID_LIMIT"
+  });
+}
+
+function assertNonNegativeInteger(value: number, field: string): void {
+  if (Number.isInteger(value) && value >= 0) {
+    return;
+  }
+  throw new ComathError(`${field} must be a non-negative integer`, {
+    statusCode: 400,
+    code: "AGENT_OBSERVABILITY_INVALID_CURSOR"
   });
 }
 
@@ -115,6 +159,22 @@ function readBoundedText(path: string, maxBytes: number): { text: string; trunca
   return {
     text: buffer.subarray(0, maxBytes).toString("utf8"),
     truncated
+  };
+}
+
+function readStreamChunk(path: string, cursor: number, maxBytes: number): { text: string; next: number; size: number; truncated: boolean } {
+  if (!existsSync(path)) {
+    return { text: "", next: cursor, size: 0, truncated: false };
+  }
+  const buffer = readFileSync(path);
+  const size = buffer.byteLength;
+  const safeCursor = Math.min(cursor, size);
+  const end = Math.min(safeCursor + maxBytes, size);
+  return {
+    text: buffer.subarray(safeCursor, end).toString("utf8"),
+    next: end,
+    size,
+    truncated: end < size
   };
 }
 
@@ -205,6 +265,65 @@ export function readAgentRunLogs(projectRoot: string, input: ReadAgentRunLogsInp
     stderr: stderr.text,
     stdout_truncated: stdout.truncated,
     stderr_truncated: stderr.truncated
+  };
+}
+
+export function streamAgentRunLogs(projectRoot: string, input: StreamAgentRunLogsInput): AgentRunLogStream {
+  const maxBytes = input.max_bytes ?? defaultLogMaxBytes;
+  assertPositiveInteger(maxBytes, "max_bytes");
+  const cursor = {
+    stdout: input.cursor?.stdout ?? 0,
+    stderr: input.cursor?.stderr ?? 0
+  };
+  assertNonNegativeInteger(cursor.stdout, "cursor.stdout");
+  assertNonNegativeInteger(cursor.stderr, "cursor.stderr");
+  const run = getAgentRun(projectRoot, input.project_id, input.run_id);
+  const stdoutPath = `.tmp/comath/${run.id}/logs/stdout.log`;
+  const stderrPath = `.tmp/comath/${run.id}/logs/stderr.log`;
+  const stdout = readStreamChunk(assertReadableProjectPath(projectRoot, stdoutPath, "stdout_path"), cursor.stdout, maxBytes);
+  const stderr = readStreamChunk(assertReadableProjectPath(projectRoot, stderrPath, "stderr_path"), cursor.stderr, maxBytes);
+  const nextCursor = { stdout: stdout.next, stderr: stderr.next };
+  const terminal = ["succeeded", "failed", "cancelled"].includes(run.status);
+  const complete = terminal && nextCursor.stdout >= stdout.size && nextCursor.stderr >= stderr.size;
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_run.logs_streamed",
+    actor: input.actor ?? "api",
+    target_id: run.id,
+    payload: {
+      cursor,
+      next_cursor: nextCursor,
+      max_bytes: maxBytes,
+      stdout_path: stdoutPath,
+      stderr_path: stderrPath,
+      stdout_bytes: stdout.text.length,
+      stderr_bytes: stderr.text.length,
+      complete,
+      proof_authority: "none"
+    }
+  });
+  return {
+    project_id: run.project_id,
+    run_id: run.id,
+    status: run.status,
+    proof_authority: "none",
+    stdout_path: stdoutPath,
+    stderr_path: stderrPath,
+    cursor,
+    next_cursor: nextCursor,
+    chunks: {
+      stdout: stdout.text,
+      stderr: stderr.text
+    },
+    truncated: {
+      stdout: stdout.truncated,
+      stderr: stderr.truncated
+    },
+    sizes: {
+      stdout: stdout.size,
+      stderr: stderr.size
+    },
+    complete
   };
 }
 

@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-45")) {
-  invariantFailures.push("README must describe the current Phase 18-45 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-46")) {
+  invariantFailures.push("README must describe the current Phase 18-46 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -132,6 +132,10 @@ if (!acceptanceMatrix.includes("45 Pi/comathd install-session e2e")) {
   invariantFailures.push("acceptance matrix must include Phase 45 Pi/comathd install-session acceptance");
 }
 
+if (!acceptanceMatrix.includes("46 Cursor-based AgentRun log stream")) {
+  invariantFailures.push("acceptance matrix must include Phase 46 cursor-based AgentRun log-stream acceptance");
+}
+
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
 }
@@ -168,6 +172,10 @@ if (!acceptanceMatrix.includes("Packaged adapters remain service-owned and allow
   invariantFailures.push("acceptance matrix must include Phase 43 packaged-adapter security acceptance");
 }
 
+if (!acceptanceMatrix.includes("AgentRun log streams are cursor-bounded")) {
+  invariantFailures.push("acceptance matrix must include Phase 46 cursor-bounded log-stream security acceptance");
+}
+
 if (!acceptanceMatrix.includes("Native memory backend evidence is non-promotional")) {
   invariantFailures.push("acceptance matrix must include Phase 38 native memory mathematical-integrity boundary");
 }
@@ -190,6 +198,10 @@ if (!acceptanceMatrix.includes("AgentRun logs are observability artifacts")) {
 
 if (!acceptanceMatrix.includes("Packaged adapters are not proof authority")) {
   invariantFailures.push("acceptance matrix must include Phase 43 packaged-adapter mathematical-integrity boundary");
+}
+
+if (!acceptanceMatrix.includes("Cursor log streams are observability artifacts")) {
+  invariantFailures.push("acceptance matrix must include Phase 46 cursor log-stream mathematical-integrity boundary");
 }
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
@@ -228,12 +240,24 @@ if (!acceptanceMatrix.includes("/cm:agent logs") || !acceptanceMatrix.includes("
   invariantFailures.push("acceptance matrix must include Phase 42 Pi command observability coverage language");
 }
 
+if (!acceptanceMatrix.includes("/cm:agent stream")) {
+  invariantFailures.push("acceptance matrix must include Phase 46 Pi command log-stream coverage language");
+}
+
 if (!acceptanceMatrix.includes("/cm:agent prepare-package") || !acceptanceMatrix.includes("/cm:agent execute-package")) {
   invariantFailures.push("acceptance matrix must include Phase 43 Pi packaged-adapter command coverage language");
 }
 
 if (!acceptanceMatrix.includes("phase45-pi-comathd-install-session.test.mjs")) {
   invariantFailures.push("acceptance matrix must include Phase 45 install-session e2e test coverage language");
+}
+
+if (!acceptanceMatrix.includes("phase46-agent-log-stream.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 46 service log-stream test coverage language");
+}
+
+if (!acceptanceMatrix.includes("phase46-agent-log-stream-tools.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 46 Pi log-stream test coverage language");
 }
 
 for (const [content, label] of [
