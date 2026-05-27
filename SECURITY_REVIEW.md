@@ -175,6 +175,7 @@ Remaining security requirements:
 36. **Lean declaration parser is fail-closed target binding, not execution.** Phase 54 parses theorem/lemma declaration headers from already supplied Lean source, rejects ambiguous and comment-only substring matches, records the signature source, and does not execute code or add proof authority.
 37. **Runner replay environment drift fails closed.** Phase 55 compares recorded replay-run Node/platform/architecture metadata against the current process before re-execution and vetoes mismatches without launching a child runner.
 38. **Registered logical equivalence is metadata-gated.** Phase 56 accepts logical-equivalence statement binding only from exact registered formal-spec/target-signature pairs with kernel-witness metadata, witness artifact id/hash, and non-empty lemma names; free-form text cannot create an equivalence bypass.
+39. **Theorem template instantiation is registry-bound.** Phase 57 instantiates only a service-owned theorem-family entry for `nat_zero_add`; user/model text cannot provide proof terms, replay commands, executable paths, or arbitrary Lean code.
 
 ### Validation Commands
 
@@ -421,3 +422,10 @@ Phase 56 targeted validation:
 
 Result: exit 0; registered logical-equivalence witnesses require exact formal-spec/target matching, `lean_kernel_checked_equivalence`, witness artifact id, SHA-256 witness hash, and non-empty lemma names. Missing witness hash, missing lemma names, and wrong target signatures fail closed.
 - Phase 56 adds no shell, network, parser execution, or broad proof-search surface; it is metadata-gated statement binding only.
+
+Phase 57 targeted validation:
+
+- `node services/comathd/tests/integration/phase57-ga-theorem-template-instantiation.test.mjs`
+
+Result: exit 0; `0 + n = n` is classified into the service-owned `nat_zero_add` template, candidates and Lean files use fixed `Nat.zero_add` metadata, and promotion still requires final clean replay plus the ordinary gate.
+- Phase 57 adds no dynamic command construction, no model-supplied Lean proof terms, and no new execution boundary.

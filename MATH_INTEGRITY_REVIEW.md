@@ -110,6 +110,7 @@ Remaining mathematical work:
 - Phase 54 Lean declaration parsing remains statement-binding infrastructure only. Parsed theorem/lemma headers can identify a target declaration when `#check` output is absent, but they cannot prove definitional equality, certify proof terms, promote claims, apply GraphPatch, or replace clean Lean replay/static audit.
 - Phase 55 runner replay environment checks remain replay-integrity metadata only. Matching Node/platform/architecture metadata cannot certify mathematical correctness, promote claims, apply GraphPatch, or replace clean Lean replay/static audit; mismatches only veto runner re-execution.
 - Phase 56 registered logical-equivalence witnesses remain statement-binding infrastructure only. A registered `lean_kernel_checked_equivalence` witness can justify accepting an extracted target signature as logically equivalent to the locked spec, but it cannot certify the theorem proof, promote claims, apply GraphPatch, or replace clean Lean replay/static audit.
+- Phase 57 theorem template instantiation remains registry-bound proof-kernel infrastructure only. Recognizing `nat_zero_add` does not certify the theorem by classification; the claim is promoted only after generated Lean source, statement equivalence, dependency closure, axiom profile, final clean replay, and the ordinary gate pass.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -261,7 +262,7 @@ Phase 41 adds coverage for:
 
 ### Residual Risks
 
-- Real Lean kernel checking is implemented for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. Phase 33 adds native planning artifacts for those slices, but general lemma decomposition, theorem synthesis, richer line-map provenance, and broader domain automation remain unimplemented.
+- Real Lean kernel checking is implemented for the registered `Nat.add_zero`, `Nat.mul_zero`, and `Nat.zero_add` vertical slices and their clean replay gate. Phase 33 adds native planning artifacts for those slices, but general lemma decomposition, theorem synthesis, richer line-map provenance, and broader domain automation remain unimplemented.
 - Statement equivalence now supports exact target-signature equality, explicit registered aliases, conservative theorem/lemma declaration parsing for target headers, and registered logical-equivalence witness metadata. Proof search for equivalence lemmas, transitive semantic equivalence, and broader mathematical-domain trust profiles remain unimplemented.
 - MathProve now has both the Phase 9 fail-closed mock and the Phase 25 external `verify_sympy.py` evidence-runner bridge. Neither path should be interpreted as broad MathProve proof search, final-audit proof authority, or direct claim-status authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
@@ -368,3 +369,9 @@ Phase 56 mathematical-integrity validation:
 - `node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs`
 
 Result: exit 0; registered logical-equivalence witnesses produce `logically_equivalent_with_registered_lemmas` only with exact statement binding and kernel-witness metadata. Missing hashes, missing lemma names, and wrong target signatures remain hard statement-mismatch vetoes.
+
+Phase 57 mathematical-integrity validation:
+
+- `node services/comathd/tests/integration/phase57-ga-theorem-template-instantiation.test.mjs`
+
+Result: exit 0; the `nat_zero_add` template reaches `formally_checked` only after clean Lean replay with `Nat.zero_add`, exact candidate/replay metadata, and the normal promotion gate. Template classification alone remains non-authoritative.

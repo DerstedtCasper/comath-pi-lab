@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-56")) {
-  invariantFailures.push("README must describe the current Phase 18-56 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-57")) {
+  invariantFailures.push("README must describe the current Phase 18-57 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -176,6 +176,10 @@ if (!acceptanceMatrix.includes("56 Registered Lean logical-equivalence witnesses
   invariantFailures.push("acceptance matrix must include Phase 56 registered Lean logical-equivalence witness acceptance");
 }
 
+if (!acceptanceMatrix.includes("57 Lean theorem template instantiation")) {
+  invariantFailures.push("acceptance matrix must include Phase 57 Lean theorem template instantiation acceptance");
+}
+
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
 }
@@ -256,6 +260,10 @@ if (!acceptanceMatrix.includes("Registered logical equivalence requires kernel w
   invariantFailures.push("acceptance matrix must include Phase 56 registered logical-equivalence security acceptance");
 }
 
+if (!acceptanceMatrix.includes("Theorem template instantiation remains registry-bound")) {
+  invariantFailures.push("acceptance matrix must include Phase 57 theorem template instantiation security acceptance");
+}
+
 if (!acceptanceMatrix.includes("Native memory backend evidence is non-promotional")) {
   invariantFailures.push("acceptance matrix must include Phase 38 native memory mathematical-integrity boundary");
 }
@@ -322,6 +330,10 @@ if (!acceptanceMatrix.includes("Replay environment checks are not proof authorit
 
 if (!acceptanceMatrix.includes("Registered logical equivalence is statement binding, not proof authority")) {
   invariantFailures.push("acceptance matrix must include Phase 56 registered logical-equivalence mathematical-integrity boundary");
+}
+
+if (!acceptanceMatrix.includes("Template-instantiated theorem families still require clean replay")) {
+  invariantFailures.push("acceptance matrix must include Phase 57 theorem template mathematical-integrity boundary");
 }
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
@@ -404,6 +416,10 @@ if (!acceptanceMatrix.includes("lean_registered_logical_equivalence_witnesses"))
   invariantFailures.push("acceptance matrix must include Phase 56 lean_registered_logical_equivalence_witnesses capability language");
 }
 
+if (!acceptanceMatrix.includes("proof_kernel_theorem_template_instantiation")) {
+  invariantFailures.push("acceptance matrix must include Phase 57 proof_kernel_theorem_template_instantiation capability language");
+}
+
 if (!acceptanceMatrix.includes("/cm:agent prepare-package") || !acceptanceMatrix.includes("/cm:agent execute-package")) {
   invariantFailures.push("acceptance matrix must include Phase 43 Pi packaged-adapter command coverage language");
 }
@@ -478,6 +494,10 @@ if (!acceptanceMatrix.includes("phase55-runner-cross-machine-replay.test.mjs")) 
 
 if (!acceptanceMatrix.includes("phase56-lean-registered-logical-equivalence.test.mjs")) {
   invariantFailures.push("acceptance matrix must include Phase 56 registered Lean logical-equivalence test coverage language");
+}
+
+if (!acceptanceMatrix.includes("phase57-ga-theorem-template-instantiation.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 57 theorem template instantiation test coverage language");
 }
 
 for (const [content, label] of [

@@ -1,3 +1,36 @@
+## Phase 57 Lean Theorem Template Instantiation Review Log
+
+Scope: Phase 57 extends the native theorem-family registry with a third service-owned Nat identity template, `nat_zero_add`. User goals for `0 + n = n` now lock a normalized statement, Lean target, candidate metadata, final replay manifest, and proof dependency using `Nat.zero_add`, then pass only through the existing clean Lean replay and claim promotion gates.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/integration/phase57-ga-theorem-template-instantiation.test.mjs
+```
+
+Result: exit 1; the campaign locked the raw user goal text instead of `For every natural number n, 0 + n = n.`, showing that `0 + n = n` was not yet recognized as a supported theorem-family template.
+
+Focused GREEN evidence:
+
+```text
+corepack pnpm --filter @comath/comathd build
+node services/comathd/tests/integration/phase57-ga-theorem-template-instantiation.test.mjs
+node services/comathd/tests/integration/phase23-ga-theorem-family-generalization.test.mjs
+node services/comathd/tests/integration/phase23-ga-integrity-boundaries.test.mjs
+```
+
+Result: all exited 0 after implementation. Phase 57 proves the `nat_zero_add` template completes full campaign replay and promotion, while Phase 23 regressions preserve the existing `nat_mul_zero`, unsupported-goal, mismatch, and refutation boundaries.
+
+Implementation notes:
+
+- Added `nat_zero_add` to the service-owned theorem-family registry with proposition `0 + n = n`, Lean target `theorem C0001 (n : Nat) : 0 + n = n`, proof term `Nat.zero_add n`, and dependency `Nat.zero_add`.
+- Extended goal classification and obligation matching to include `nat_zero_add`.
+- Added `services/comathd/tests/integration/phase57-ga-theorem-template-instantiation.test.mjs` to the default `@comath/comathd` test chain and status capability `proof_kernel_theorem_template_instantiation`.
+
+Residual risk:
+
+Phase 57 is a registry-bound theorem template instantiation slice. It is not arbitrary theorem synthesis, broad proof planning, model-generated Lean code acceptance, or a replacement for final clean replay. The global GA blocker remains for broad theorem synthesis beyond registered theorem-family templates.
+
 ## Phase 56 Registered Lean Logical-Equivalence Witnesses Review Log
 
 Scope: Phase 56 adds a controlled logical-equivalence statement-binding path. `checkStatementEquivalence()` can now accept `logically_equivalent_with_registered_lemmas` only when an explicitly registered entry exactly matches the locked formal spec and extracted target signature, supplies `witness_kind: lean_kernel_checked_equivalence`, a witness artifact id, a valid SHA-256 witness artifact hash, non-empty lemma names, and a justification. Missing witness material or a target-signature mismatch remains fail-closed.

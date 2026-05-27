@@ -569,11 +569,18 @@
 - [x] Fail closed when witness hashes, lemma names, or target signatures are missing or mismatched.
 - [x] Add `phase56-lean-registered-logical-equivalence.test.mjs` and wire Phase 56 into the default `@comath/comathd` test chain and smoke status capabilities.
 
+## Phase 57: Lean Theorem Template Instantiation
+
+- [x] Add a third service-owned Nat identity theorem-family template, `nat_zero_add`, for the locked statement `0 + n = n`.
+- [x] Classify user goals for `0 + n = n`, lock normalized problem/Lean target metadata, and generate exact candidates using `Nat.zero_add`.
+- [x] Run the instantiated template through full campaign candidate generation, final clean Lean replay, statement equivalence, dependency closure, axiom profile, and claim promotion gate.
+- [x] Add `phase57-ga-theorem-template-instantiation.test.mjs` and wire Phase 57 into the default `@comath/comathd` test chain and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`), and exact `n + 1 = n` refutation.
+- [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.

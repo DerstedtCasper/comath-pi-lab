@@ -22,6 +22,7 @@ const requiredCapabilities = [
   "working_paper",
   "snapshot_replay",
   "proof_kernel_ga_vertical_slice",
+  "proof_kernel_theorem_template_instantiation",
   "runner_reexecution_replay",
   "mathprove_external_evidence_runner",
   "pi_runtime_registration_v0755",

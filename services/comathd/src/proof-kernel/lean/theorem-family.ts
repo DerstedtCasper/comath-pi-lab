@@ -1,6 +1,6 @@
 import type { ProofObligation } from "../../types/schemas.js";
 
-export type TheoremFamilyId = "nat_add_zero" | "nat_mul_zero";
+export type TheoremFamilyId = "nat_add_zero" | "nat_mul_zero" | "nat_zero_add";
 
 export type TheoremFamily = {
   id: TheoremFamilyId;
@@ -73,6 +73,25 @@ export const theoremFamilies: TheoremFamily[] = [
     notationLines: ["- `*`: Nat multiplication."],
     directCandidateSummary: "Direct Lean proof by Nat.mul_zero for the exact locked theorem.",
     directCandidateMaintainabilityNotes: "Readable single theorem using Nat.mul_zero from the Lean standard library."
+  },
+  {
+    ...common,
+    id: "nat_zero_add",
+    proposition: "0 + n = n",
+    lockedStatementNl: "For every natural number n, 0 + n = n.",
+    structured: {
+      variable: "n",
+      type: "Nat",
+      proposition: "0 + n = n",
+      theorem_family: "nat_zero_add"
+    },
+    leanTarget: "theorem C0001 (n : Nat) : 0 + n = n",
+    normalizedStatement: "MathResearch.C0001 (n : Nat) : 0 + n = n",
+    proofTerm: "Nat.zero_add n",
+    dependency: "Nat.zero_add",
+    notationLines: ["- `+`: Nat addition."],
+    directCandidateSummary: "Direct Lean proof by Nat.zero_add for the exact locked theorem.",
+    directCandidateMaintainabilityNotes: "Readable single theorem using Nat.zero_add from the Lean standard library."
   }
 ];
 
@@ -91,6 +110,9 @@ export function findTheoremFamilyForGoal(goal: string): TheoremFamily | undefine
   if (/\bn\s*\*\s*0\s*=\s*0\b/i.test(goal)) {
     return getTheoremFamilyById("nat_mul_zero");
   }
+  if (/\b0\s*\+\s*n\s*=\s*n\b/i.test(goal)) {
+    return getTheoremFamilyById("nat_zero_add");
+  }
   return undefined;
 }
 
@@ -107,7 +129,7 @@ export function findTheoremFamilyForObligation(obligation: ProofObligation): The
   };
 
   const familyId = obligation.locked_statement_structured.theorem_family;
-  if (familyId === "nat_add_zero" || familyId === "nat_mul_zero") {
+  if (familyId === "nat_add_zero" || familyId === "nat_mul_zero" || familyId === "nat_zero_add") {
     const family = getTheoremFamilyById(familyId);
     return matchesObligation(family) ? family : undefined;
   }

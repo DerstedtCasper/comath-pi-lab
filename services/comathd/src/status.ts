@@ -34,6 +34,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "claim_evidence_gate_read_models",
       "pi_research_campaign_loop",
       "proof_kernel_theorem_family_registry",
+      "proof_kernel_theorem_template_instantiation",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
       "pi_runtime_registration_v0755",
