@@ -26,7 +26,8 @@ const requiredCapabilities = [
   "mathprove_external_evidence_runner",
   "pi_runtime_registration_v0755",
   "proof_obligation_dag_planning",
-  "campaign_scoped_ensemble_artifacts"
+  "campaign_scoped_ensemble_artifacts",
+  "claim_scoped_final_replay_artifacts"
 ];
 
 for (const capability of requiredCapabilities) {

@@ -397,6 +397,13 @@
 - [x] Update Phase 18/19/23 assertions and default `@comath/comathd` test chain for campaign-scoped ensemble paths.
 - [x] Add `campaign_scoped_ensemble_artifacts` to service status capabilities and smoke requirements.
 
+## Phase 35: Claim-Scoped Final Replay Artifact Paths
+
+- [x] Replace hardcoded `C-0001` final replay stage-run artifact paths with paths generated from the active claim id.
+- [x] Add a second-campaign regression proving final replay audit pointers use `C-0002` when the active root claim is `C-0002`.
+- [x] Wire Phase 35 into the default `@comath/comathd` test chain.
+- [x] Add `claim_scoped_final_replay_artifacts` to service status capabilities and smoke requirements.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.

@@ -43,7 +43,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "lean_trust_profile_hardening",
       "lean_statement_signature_binding",
       "proof_obligation_dag_planning",
-      "campaign_scoped_ensemble_artifacts"
+      "campaign_scoped_ensemble_artifacts",
+      "claim_scoped_final_replay_artifacts"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

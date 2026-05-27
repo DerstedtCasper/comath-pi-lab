@@ -1416,6 +1416,69 @@ Phase 33 does not implement broad lemma decomposition or arbitrary theorem synth
 - Generic theorem synthesis and production proof-route agent execution remain deferred.
 - Skeleton artifacts are not built as final Lean targets; they are auditable planning outputs whose placeholders must be discharged later.
 
+## Phase 35 Claim-Scoped Final Replay Artifact Paths Review Log
+
+### Scope
+
+Removed the last hardcoded `C-0001` final replay stage-run artifact pointers from the supported proof-kernel campaign path. Phase 35 fixes a concrete audit-trail bug after Phase 34: supported campaigns could be ensemble-isolated but still report final replay artifact paths under the first claim id when the active root claim was a later claim.
+
+### TDD And Review Evidence
+
+```text
+node services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs
+Initial RED result: exit 1; the second supported campaign's final replay stage run still pointed at `.comath/evidence/C-0001/lean/...` while `FinalLeanReplay.claim_id` was `C-0002`.
+
+node services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs
+Result: exit 0; final replay stage-run artifact paths used the active second-campaign claim id.
+```
+
+### Changed Surfaces
+
+- Updated `tickCampaign()` final replay stage-run artifact path generation to use `claim.id`.
+- Added `services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs` and wired it into `@comath/comathd` default tests.
+- Added `claim_scoped_final_replay_artifacts` to runtime status and smoke requirements.
+- Updated README, TODO, acceptance matrix, handoff, AGENTS, security review, and mathematical-integrity review.
+
+### Boundary And Integrity Notes
+
+Phase 35 changes audit-pointer correctness only. It does not alter final replay proof authority, candidate selection, static audit semantics, theorem-family scope, or claim promotion gates. The claim remains formally checked only when the service-owned final replay manifest for that same claim passes the existing gate path.
+
+### Final Boundary Validation
+
+Fresh Phase 35 validation completed on 2026-05-28:
+
+```text
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after the Phase 35 code and documentation updates.
+
+node services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs
+Result: exit 0; Phase 35 final replay artifact path regression passed.
+
+node scripts/phase0-smoke.mjs
+Result: exit 0; root smoke checked 25 required entries and 26 invariants.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-35 package tests passed with Phase 35 wired into the default test chain.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests through Phase 35, and Phase 17 integrity evaluation passed.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+git diff --check
+Result: exit 0; no whitespace errors reported.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repository-root runtime state was left behind.
+```
+
+### Residual Risks
+
+- Claim-scoped paths are covered for registered theorem-family proof campaigns, not arbitrary theorem synthesis.
+- Release-bundle provenance is still minimal; richer cross-artifact traceability remains deferred.
+- Full interactive Pi/comathd install-session e2e and live Pi/Codex agent adapter execution remain deferred.
+
 ## Phase 34 Campaign-Scoped Ensemble Artifacts Review Log
 
 ### Scope

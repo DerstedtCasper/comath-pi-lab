@@ -153,6 +153,7 @@ Remaining security requirements:
 14. **AgentRun scheduled processes are bounded and non-authoritative.** Phase 28 requires absolute-realpath program allowlists, `shell:false`, scoped `.tmp/comath/<ARUN>/` cwd/log paths, minimal inherited environment, sensitive env rejection, enqueue-time rpm reservation, queued/running cancellation, byte-capped stdout/stderr with truncation markers, scheduler report envelopes with `proof_authority: none`, invalid-report fail-closed persistence, and timeout/cancel process-tree termination attempts.
 15. **Proof-planning artifacts are campaign-scoped.** Phase 33 writes lemma DAG, line-map, per-obligation YAML, skeleton Lean, and skeleton report artifacts under `.comath/campaign/<CAM>/proof/` through path-policy-controlled runtime writes, avoiding cross-campaign overwrite of proof-planning provenance.
 16. **Ensemble artifacts are campaign-scoped.** Phase 34 writes candidate workspaces, candidate batch indexes, and arbitration decisions under `.comath/campaign/<CAM>/ensembles/lemma_sprint/<PO>/`, so concurrent supported campaigns cannot overwrite or read each other's proof-candidate state.
+17. **Final replay audit paths are claim-scoped.** Phase 35 removes hardcoded `C-0001` pointers from final replay stage-run artifact paths, so later campaign audits point to the active claim's evidence bundle.
 
 ### Validation Commands
 
@@ -231,6 +232,13 @@ Phase 34 targeted validation:
 ```text
 node services/comathd/tests/integration/phase34-campaign-ensemble-isolation.test.mjs
 Result: exit 0; interleaved supported campaigns kept candidates, candidate batch indexes, and decision artifacts in campaign-scoped ensemble paths.
+```
+
+Phase 35 targeted validation:
+
+```text
+node services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs
+Result: exit 0; final replay stage-run artifact paths used the second campaign's active claim id instead of hardcoded `C-0001`.
 ```
 
 ### Residual Risks

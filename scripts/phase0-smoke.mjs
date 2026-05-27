@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-34")) {
-  invariantFailures.push("README must describe the current Phase 18-34 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-35")) {
+  invariantFailures.push("README must describe the current Phase 18-35 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -86,6 +86,10 @@ if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
 
 if (!acceptanceMatrix.includes("34 Campaign-scoped ensemble artifacts")) {
   invariantFailures.push("acceptance matrix must include Phase 34 campaign-scoped ensemble artifact acceptance");
+}
+
+if (!acceptanceMatrix.includes("35 Claim-scoped final replay artifact paths")) {
+  invariantFailures.push("acceptance matrix must include Phase 35 claim-scoped final replay artifact path acceptance");
 }
 
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
@@ -98,6 +102,10 @@ if (!acceptanceMatrix.includes("Statement equivalence is target-bound")) {
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
   invariantFailures.push("acceptance matrix must include Phase 34 campaign ensemble mathematical-integrity acceptance");
+}
+
+if (!acceptanceMatrix.includes("Final replay audit paths are claim-scoped")) {
+  invariantFailures.push("acceptance matrix must include Phase 35 final replay audit-path mathematical-integrity acceptance");
 }
 
 for (const [content, label] of [
@@ -136,4 +144,4 @@ if (invariantFailures.length > 0) {
   process.exit(1);
 }
 
-console.log(`Phase 0/design smoke check passed (${required.length} required entries and ${14 + requiredSections.length} invariants).`);
+console.log(`Phase 0/design smoke check passed (${required.length} required entries and ${16 + requiredSections.length} invariants).`);

@@ -810,8 +810,8 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         stage_runs: [
           ...campaign.stage_runs,
           stageRun(campaign, "final_global_replay", ok ? "completed" : "blocked", [
-            ".comath/evidence/C-0001/lean/final_replay_manifest.json",
-            ".comath/evidence/C-0001/lean/final_static_audit.json"
+            join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/"),
+            join(".comath", "evidence", claim.id, "lean", "final_static_audit.json").replace(/\\/g, "/")
           ])
         ],
         next_actions: ok ? [] : ["inspect final replay logs and promotion gate vetoes"]

@@ -39,6 +39,7 @@ The repository has completed:
 - Phase 32 Lean statement signature binding for target-bound statement-equivalence checks;
 - Phase 33 proof-obligation DAG planning for campaign-scoped lemma DAG, line-map, per-obligation YAML, and skeleton/report artifacts;
 - Phase 34 campaign-scoped ensemble artifacts for candidate workspaces, candidate batch indexes, and arbitration decisions;
+- Phase 35 claim-scoped final replay audit paths;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -47,7 +48,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, and Phase 34 scopes ensemble candidate/decision artifacts by campaign. Phase 18-34 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, Phase 34 scopes ensemble candidate/decision artifacts by campaign, and Phase 35 makes final replay audit paths claim-scoped. Phase 18-35 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -69,7 +70,7 @@ Next correct action:
 /goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, and OS-level scheduled-process isolation.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-34 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-35 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -342,6 +343,13 @@ Apply it as follows:
 - Updated campaign ticks so candidate verification, arbitration, integration, adversarial review, and final replay returns read the current campaign's ensemble state.
 - Added `services/comathd/tests/integration/phase34-campaign-ensemble-isolation.test.mjs` and wired it into the default `@comath/comathd` test chain.
 - Remaining ensemble hardening: live child-agent candidate execution, richer proof-step decomposition, and OS-level isolation for untrusted candidate code.
+
+## Phase 35 Completion Notes
+
+- Replaced hardcoded `C-0001` final replay stage-run artifact paths with paths generated from the active claim id.
+- Added `services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs` for a second supported campaign whose root claim is not `C-0001`.
+- Added `claim_scoped_final_replay_artifacts` to service status and smoke requirements.
+- Remaining final replay hardening: richer release-bundle provenance, generalized theorem-family coverage, and broader proof-planning integration.
 
 ## Verification To Run At Phase Boundary
 

@@ -52,6 +52,7 @@
 | 32 Lean statement signature binding | `phase32-lean-statement-signature.test.mjs` verifies that statement equivalence accepts only a unique target theorem signature and fails closed on missing, ambiguous, substring-only, or mismatched theorem-type output. |
 | 33 Proof obligation DAG planning | `phase33-proof-obligation-dag.test.mjs` verifies campaign-scoped `lemma_dag.json`, `line_map.json`, obligation YAML, `Skeleton.lean`, and skeleton report artifacts across all open obligations; validates duplicate-node, unknown-endpoint, unsupported-relation, and cycle rejection; records planning artifacts in campaign stage runs; and proves two campaigns do not overwrite one another's planning artifacts. |
 | 34 Campaign-scoped ensemble artifacts | `phase34-campaign-ensemble-isolation.test.mjs` verifies two interleaved supported campaigns in one project root keep candidate workspaces, `candidates.json`, and `decision.json` under `.comath/campaign/<CAM>/ensembles/lemma_sprint/<PO>/`, and that campaign A never reads campaign B candidate runs after B advances. |
+| 35 Claim-scoped final replay artifact paths | `phase35-final-replay-artifact-paths.test.mjs` verifies final replay stage-run artifact paths are generated from the active root claim id, including a second supported campaign whose claim is not `C-0001`. |
 
 ## Security Acceptance
 
@@ -90,6 +91,7 @@
 | Statement equivalence is target-bound | Phase 32 tests reject arbitrary stdout substrings and require a unique target-theorem signature before statement equivalence can pass. |
 | Planning skeletons are not proof authority | Phase 33 writes campaign-scoped skeleton/DAG/line-map artifacts with named proof-obligation placeholders only; these artifacts remain planning evidence and cannot promote claims without the existing clean Lean replay and gate path. |
 | Campaign ensemble state is campaign-scoped | Phase 34 prevents supported campaigns with reused `PO-0001`/`CAND-0001` local IDs from sharing candidate or arbitration artifacts; proof selection reads only the active campaign's ensemble state. |
+| Final replay audit paths are claim-scoped | Phase 35 requires final replay stage-run artifact pointers to use the current claim id, avoiding misleading audit trails when multiple supported campaigns share one project root. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -115,5 +117,6 @@
 | Lean statement signature binding | `phase32-lean-statement-signature.test.mjs` covers target signature extraction and fail-closed statement-equivalence vetoes for missing/ambiguous/mismatched output. | Covered for unique target-signature equality; definitional/logical equivalence and Lean parser integration remain deferred. |
 | Proof obligation DAG planning | `phase33-proof-obligation-dag.test.mjs` covers native planning artifacts for lemma DAG, line map, obligation YAML, skeleton Lean placeholders, skeleton report, DAG validation, multi-obligation closure, and campaign-scoped artifact isolation. | Covered for the planning stage of registered theorem-family slices and open-obligation artifact closure; broad lemma decomposition, arbitrary theorem planning, and generic theorem synthesis remain deferred. |
 | Campaign-scoped ensemble artifacts | `phase34-campaign-ensemble-isolation.test.mjs` covers interleaved supported campaigns and ensures candidate workspaces, candidate batch indexes, and arbitration decisions are scoped by campaign. | Covered for registered theorem-family proof campaigns; live external child-agent ensemble execution remains deferred. |
+| Claim-scoped final replay artifact paths | `phase35-final-replay-artifact-paths.test.mjs` covers second-campaign final replay audit paths using the active root claim id. | Covered for registered theorem-family proof campaigns; richer release-bundle provenance remains deferred. |
 | Global GA readiness | Current test evidence does not cover arbitrary theorem planning, broad MathProve proof search/final-audit semantics, native TriviumDB validation, stronger OS/network replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, or broad theorem synthesis. | Not achieved; blocked by deferred generalization work. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the registered Phase 23 theorem families. | Deferred. |
