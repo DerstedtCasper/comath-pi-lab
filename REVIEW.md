@@ -1,3 +1,35 @@
+## Phase 53 Installed Codex CLI Validation Review Log
+
+Scope: Phase 53 adds a service-owned validation path for an installed external Codex-compatible CLI. `validateExternalCodexCliInstallation()` resolves `COMATH_CODEX_CLI_PROGRAM` and optional service prefix args inside `comathd`, runs bounded `--version` and `--health --profile <profile>` probes with `COMATH_PROOF_AUTHORITY=none`, exposes `/agent/adapter/package/validate-installed-cli`, and records audit telemetry without returning the configured executable path.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/unit/phase53-installed-codex-cli-validation.test.mjs
+```
+
+Result: exit 1; the test failed because `validateExternalCodexCliInstallation` was not exported. This was the expected missing-product-entrypoint failure.
+
+GREEN evidence:
+
+```text
+corepack pnpm --filter @comath/comathd build
+node services/comathd/tests/unit/phase53-installed-codex-cli-validation.test.mjs
+```
+
+Result: both exited 0 after implementation; the focused test validates configured CLI version/health probes, fail-closed missing configuration, route exposure, audit event emission, executable-path non-disclosure, and `proof_authority=none`.
+
+Implementation notes:
+
+- Added `validateExternalCodexCliInstallation()` and exported typed installed-CLI validation/probe result shapes from the agent adapter package module.
+- Added `POST /agent/adapter/package/validate-installed-cli` as a service-side endpoint; callers provide adapter/profile/project metadata and timeout, not executable paths.
+- Added audit event `agent_adapter.installed_codex_cli_validated` keyed by project id, with package/profile ids, probe booleans, health version/capabilities, diagnostics, and `proof_authority=none`.
+- Wired Phase 53 into the default `@comath/comathd` test chain and status capability `installed_codex_cli_validation`.
+
+Residual risk:
+
+Phase 53 validates a service-configured installed CLI contract with bounded probes, but it is not a live production Codex API account/network validation, streaming operator UX, credential rotation workflow, OS-enforced adapter isolation, or proof authority. Probe stdout/stderr and health metadata remain runtime diagnostics only.
+
 ## Phase 52 Codex API Retry And Rate-Limit Telemetry Review Log
 
 Scope: Phase 52 hardens the Phase 51 `codex-api` backend with bounded retry behavior and operator-visible telemetry. The backend retries only retryable statuses (`429`, `5xx`), honors capped `Retry-After`, records attempt counts/status sequences/rate-limit detection in report and audit payloads, and fails closed after exhausted attempts without exposing service API keys.

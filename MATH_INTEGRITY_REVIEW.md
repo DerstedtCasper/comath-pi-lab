@@ -106,6 +106,7 @@ Remaining mathematical work:
 - Phase 50 bounded multi-event AgentRun log sessions remain inspection-only. Multi-frame SSE payloads carry untrusted stdout/stderr chunks and `proof_authority: none`; they cannot certify candidate correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
 - Phase 51 Codex API backend output remains runtime draft material only. Responses-compatible API output is wrapped with `proof_authority: none`; it cannot certify candidate correctness, promote claims, apply GraphPatch, act as MathProve/final-audit authority, or replace Lean replay/static audit.
 - Phase 52 Codex API retry telemetry remains runtime reliability metadata only. Attempts, status sequences, rate-limit markers, and exhausted-attempt failures cannot certify mathematical correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
+- Phase 53 installed Codex CLI validation remains runtime diagnostics only. Version strings, health JSON, capabilities, and missing-configuration diagnostics cannot certify mathematical correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -271,7 +272,7 @@ Phase 41 adds coverage for:
 - Phase 42 makes runtime inspection product-real for capped logs and bounded adapter health probes, but these artifacts remain non-evidential for formal proof authority.
 - Phase 43 makes packaged adapter selection product-real for a service-owned Codex launcher, but the launcher remains non-evidential for formal proof authority.
 - Phase 44 makes service-configured external Codex-compatible CLI invocation product-real for draft AgentRun material, but it remains non-evidential for formal proof authority and is not validation against a production Codex API backend.
-- Phase 45 makes local Pi/comathd install-session wiring product-real for an automated HTTP session, Phase 48 makes a read-only AgentRun operator panel product-real for status/action inspection, Phase 49 makes same-process live cancellation product-real, Phase 50 makes bounded multi-event log-session readback product-real, Phase 51 makes a service-configured Codex API backend contract product-real, and Phase 52 hardens Codex API retry telemetry, but real Pi operator UX, production API/network validation, indefinite operator sessions, cross-process cancellation/recovery, and service lifecycle management remain outside mathematical authority.
+- Phase 45 makes local Pi/comathd install-session wiring product-real for an automated HTTP session, Phase 48 makes a read-only AgentRun operator panel product-real for status/action inspection, Phase 49 makes same-process live cancellation product-real, Phase 50 makes bounded multi-event log-session readback product-real, Phase 51 makes a service-configured Codex API backend contract product-real, Phase 52 hardens Codex API retry telemetry, and Phase 53 validates a service-configured installed Codex CLI through bounded probes, but real Pi operator UX, production API/network validation, indefinite operator sessions, cross-process cancellation/recovery, and service lifecycle management remain outside mathematical authority.
 
 Phase 42 mathematical-integrity validation:
 
@@ -340,3 +341,9 @@ Phase 52 mathematical-integrity validation:
 - `node services/comathd/tests/unit/phase52-codex-api-retry-telemetry.test.mjs`
 
 Result: exit 0; Codex API retry and rate-limit telemetry remains non-authoritative runtime metadata and preserves fail-closed behavior after exhausted attempts.
+
+Phase 53 mathematical-integrity validation:
+
+- `node services/comathd/tests/unit/phase53-installed-codex-cli-validation.test.mjs`
+
+Result: exit 0; installed Codex CLI version/health probes remain non-authoritative runtime diagnostics, preserve fail-closed missing-configuration behavior, and expose `proof_authority=none`.

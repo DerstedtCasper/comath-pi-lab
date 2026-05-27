@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
@@ -74,7 +75,39 @@ export type ExecuteAgentAdapterPackageResult = {
   result: AgentRunProcessResult;
 };
 
+export type InstalledCodexCliProbe = {
+  ok: boolean;
+  exit_code: number | null;
+  signal: NodeJS.Signals | null;
+  timed_out: boolean;
+  stdout: string;
+  stderr: string;
+  version?: string;
+  capabilities: string[];
+};
+
+export type InstalledCodexCliValidation = {
+  ok: boolean;
+  project_id: string;
+  adapter_id: AgentAdapterPackageId;
+  profile_id: AgentProfileId;
+  program_configured: boolean;
+  proof_authority: "none";
+  version_probe: InstalledCodexCliProbe;
+  health_probe: InstalledCodexCliProbe;
+  diagnostics: string[];
+};
+
+export type ValidateExternalCodexCliInstallationInput = {
+  project_id: string;
+  adapter_id: AgentAdapterPackageId;
+  profile_id: AgentProfileId;
+  actor: string;
+  timeout_ms?: number;
+};
+
 const moduleDir = dirname(fileURLToPath(import.meta.url));
+const installedCliProbeOutputLimit = 16 * 1024;
 
 export type CodexApiBackendRequest = {
   url: string;
@@ -233,6 +266,133 @@ function resolveExternalCodexProgram(): { program: string; prefixArgs: string[] 
     program: realpathSync.native(absoluteProgram),
     prefixArgs: parseExternalPrefixArgs(process.env.COMATH_CODEX_CLI_PREFIX_ARGS)
   };
+}
+
+function boundedInstalledCliText(value: unknown): string {
+  return Buffer.from(typeof value === "string" ? value : "", "utf8").subarray(0, installedCliProbeOutputLimit).toString("utf8");
+}
+
+function emptyInstalledCliProbe(): InstalledCodexCliProbe {
+  return {
+    ok: false,
+    exit_code: null,
+    signal: null,
+    timed_out: false,
+    stdout: "",
+    stderr: "",
+    capabilities: []
+  };
+}
+
+function parseInstalledCliHealth(stdout: string): { version?: string; capabilities: string[] } {
+  try {
+    const parsed = JSON.parse(stdout);
+    const version = typeof parsed?.version === "string" ? parsed.version : undefined;
+    const capabilities = Array.isArray(parsed?.capabilities)
+      ? parsed.capabilities.filter((entry: unknown): entry is string => typeof entry === "string")
+      : [];
+    return { version, capabilities };
+  } catch {
+    return { capabilities: [] };
+  }
+}
+
+function runInstalledCliProbe(
+  externalCodex: { program: string; prefixArgs: string[] },
+  args: string[],
+  timeoutMs: number
+): InstalledCodexCliProbe {
+  const result = spawnSync(externalCodex.program, [...externalCodex.prefixArgs, ...args], {
+    cwd: dirname(externalCodex.program),
+    shell: false,
+    windowsHide: true,
+    timeout: timeoutMs,
+    encoding: "utf8",
+    maxBuffer: installedCliProbeOutputLimit,
+    env: {
+      PATH: process.env.PATH ?? "",
+      COMATH_PROOF_AUTHORITY: "none"
+    }
+  });
+  const stdout = boundedInstalledCliText(result.stdout);
+  const stderr = boundedInstalledCliText(result.stderr);
+  const parsed = args.includes("--health") ? parseInstalledCliHealth(stdout) : { capabilities: [] };
+  return {
+    ok: result.status === 0 && !result.error,
+    exit_code: result.status,
+    signal: result.signal,
+    timed_out: Boolean(result.error && result.error.message.includes("ETIMEDOUT")),
+    stdout,
+    stderr,
+    version: parsed.version,
+    capabilities: parsed.capabilities
+  };
+}
+
+export function validateExternalCodexCliInstallation(
+  projectRoot: string,
+  input: ValidateExternalCodexCliInstallationInput
+): InstalledCodexCliValidation {
+  const pkg = getAgentAdapterPackage(input.adapter_id);
+  const profile = getAgentProfile(input.profile_id);
+  assertProfileSupported(pkg, profile.id);
+  const timeoutMs = input.timeout_ms ?? 10_000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new ComathError("timeout_ms must be a positive integer", {
+      statusCode: 400,
+      code: "AGENT_ADAPTER_PACKAGE_INSTALLED_CLI_TIMEOUT_INVALID"
+    });
+  }
+  let externalCodex: { program: string; prefixArgs: string[] } | undefined;
+  const diagnostics: string[] = [];
+  try {
+    externalCodex = resolveExternalCodexProgram();
+  } catch (error) {
+    diagnostics.push(error instanceof Error ? error.message : String(error));
+  }
+  if (!externalCodex) {
+    diagnostics.push("COMATH_CODEX_CLI_PROGRAM is not configured");
+  }
+  const versionProbe = externalCodex ? runInstalledCliProbe(externalCodex, ["--version"], timeoutMs) : emptyInstalledCliProbe();
+  const healthProbe = externalCodex
+    ? runInstalledCliProbe(externalCodex, ["--health", "--profile", profile.id], timeoutMs)
+    : emptyInstalledCliProbe();
+  if (externalCodex && !versionProbe.ok) {
+    diagnostics.push("installed Codex CLI version probe failed");
+  }
+  if (externalCodex && !healthProbe.ok) {
+    diagnostics.push("installed Codex CLI health probe failed");
+  }
+  const validation: InstalledCodexCliValidation = {
+    ok: Boolean(externalCodex) && versionProbe.ok && healthProbe.ok,
+    project_id: input.project_id,
+    adapter_id: pkg.id,
+    profile_id: profile.id,
+    program_configured: Boolean(externalCodex),
+    proof_authority: "none",
+    version_probe: versionProbe,
+    health_probe: healthProbe,
+    diagnostics
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_adapter.installed_codex_cli_validated",
+    actor: input.actor,
+    target_id: input.project_id,
+    payload: {
+      adapter_id: pkg.id,
+      profile_id: profile.id,
+      ok: validation.ok,
+      program_configured: validation.program_configured,
+      version_probe_ok: versionProbe.ok,
+      health_probe_ok: healthProbe.ok,
+      health_version: healthProbe.version,
+      capabilities: healthProbe.capabilities,
+      diagnostics,
+      proof_authority: "none"
+    }
+  });
+  return validation;
 }
 
 function normalizeCodexApiBaseUrl(rawValue: string | undefined): string {

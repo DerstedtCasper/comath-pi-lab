@@ -42,6 +42,7 @@ import {
   createAgentRunForProfile,
   executeAgentAdapterPackage,
   executeProfileAgentRun,
+  validateExternalCodexCliInstallation,
   cancelAgentRunFromOperator,
   getAgentProfile,
   formatAgentRunLogSseSession,
@@ -408,6 +409,28 @@ async function route(method: string, path: string, body: unknown, context: Route
             backend: body.backend,
             goal: body.goal,
             context_path: body.context_path,
+            actor: body.actor
+          })
+        };
+      }
+    ],
+    [
+      "POST /agent/adapter/package/validate-installed-cli",
+      (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          profile_id: string;
+          adapter_id: string;
+          timeout_ms?: number;
+          actor: string;
+        };
+        return {
+          validation: validateExternalCodexCliInstallation(body.project_root, {
+            project_id: body.project_id,
+            profile_id: body.profile_id as Parameters<typeof validateExternalCodexCliInstallation>[1]["profile_id"],
+            adapter_id: body.adapter_id as Parameters<typeof validateExternalCodexCliInstallation>[1]["adapter_id"],
+            timeout_ms: body.timeout_ms,
             actor: body.actor
           })
         };
