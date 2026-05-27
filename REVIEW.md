@@ -1293,6 +1293,55 @@ Timeout and running cancellation attempt process-tree termination (`taskkill /T 
 - Log streaming APIs remain deferred; Phase 28 persists bounded stdout/stderr logs after process completion.
 - AgentRun report schema is still heading-based Markdown validation, not a typed artifact-manifest parser or model-output verifier.
 
+## Phase 29 Agent Profile Service Integration Review Log
+
+### Scope
+
+Added service-owned GA agent profiles on top of the Phase 27 AgentRun runtime boundary and Phase 28 process scheduler. Phase 29 exposes validated profile metadata, profile-backed AgentRun creation, and scheduler launch-envelope preparation through `comathd`, so the child-agent orchestration surface is no longer only an internal TypeScript helper.
+
+This phase does not make profiles, child processes, or AgentRun reports mathematical authorities. Every profile is constrained to `may_mutate_trusted_state=false`, `proof_authority=none`, scoped workstream/tmp write templates, `rpm<=4`, and forbidden direct-promotion/trusted-write tools. Live Pi/Codex adapter execution, richer profile UI, OS/network sandboxing, multi-process writer locks, and log streaming remain deferred.
+
+### TDD Evidence
+
+```text
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase29-agent-profile-integration.test.mjs
+Initial RED result: exit 1; `dist/index.js` did not provide `buildAgentProfileLaunch`.
+
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase29-agent-profile-integration.test.mjs
+Route RED result: exit 1; `/agent/profile/list?global_rpm=4` returned 404 before the service routes existed.
+
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase29-agent-profile-integration.test.mjs
+Route-order RED result: exit 1; dynamic `/agent/profile/:id` treated `/agent/profile/list` as an unknown profile id.
+
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase29-agent-profile-integration.test.mjs
+Status RED result: exit 1; `/health` did not yet report `agent_profile_service_api`.
+
+corepack pnpm --filter @comath/comathd exec node tests/unit/phase29-agent-profile-integration.test.mjs
+Result: exit 0; Phase 29 Agent profile integration tests passed.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/agents/agent-profiles.ts`.
+- Exported profile APIs from `services/comathd/src/agents/index.ts`.
+- Added `GET /agent/profile/list`, `GET /agent/profile/:id`, `POST /agent/run/profile`, and `POST /agent/run/profile/prepare-launch` to `services/comathd/src/api/server.ts`.
+- Added `services/comathd/tests/unit/phase29-agent-profile-integration.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added `agent_profile_service_api` to `getComathdStatus()`.
+- Updated README, TODO, AGENTS, acceptance matrix, and handoff documentation.
+
+### Boundary And Integrity Notes
+
+Profile validation fails closed on duplicate IDs, trusted-state mutation authority, proof authority, profile-local rpm above the global budget, forbidden tools also present in allowed tools, and missing write-scope templates. Unknown profile IDs return `AGENT_PROFILE_UNKNOWN`.
+
+Profile-backed AgentRuns inherit the profile role/model/tool profile but still use the ordinary AgentRun scoped write policy. Launch envelopes only prepare scheduler-compatible command metadata and profile environment variables; they exclude secret-like env keys and do not run processes by themselves.
+
+### Residual Risks
+
+- Live Pi/Codex agent adapter execution remains deferred; Phase 29 provides the service contract, not an end-to-end remote model worker pool.
+- OS-level sandboxing and enforced network denial remain deferred beyond the Phase 28 process-shape controls.
+- Rich profile UI and `/cm:agent` Pi commands are not yet implemented.
+- Multi-process writer locks/session semantics and log streaming APIs remain deferred.
+
 ## Phase 25 Real MathProve External Bridge Review Log
 
 ### Scope

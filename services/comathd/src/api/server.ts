@@ -36,6 +36,13 @@ import {
 } from "../workstream/workstream-store.js";
 import { getCampaign, writeCampaign } from "../proof-kernel/campaign/research-campaign.js";
 import { replayCampaign, startCampaign, tickCampaign } from "../proof-kernel/campaign/campaign-tick.js";
+import {
+  buildAgentProfileLaunch,
+  createAgentRunForProfile,
+  getAgentProfile,
+  listAgentProfiles,
+  validateAgentProfiles
+} from "../agents/index.js";
 
 export type InjectRequest = {
   method: "GET" | "POST";
@@ -85,6 +92,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         service: "comathd",
         ...getComathdStatus()
       })
+    ],
+    [
+      "GET /agent/profile/list",
+      (_payload, parsedUrl) => {
+        const globalRpm = Number(parsedUrl.searchParams.get("global_rpm") ?? 4);
+        const profiles = listAgentProfiles();
+        return {
+          profiles,
+          validation: validateAgentProfiles(profiles, { global_rpm: globalRpm })
+        };
+      }
     ],
     ["POST /project/init", (payload) => initProject(payload as { name?: string; root_path: string })],
     [
@@ -213,6 +231,56 @@ async function route(method: string, path: string, body: unknown, context: Route
             kind: body.kind,
             goal: body.goal,
             created_by: body.created_by ?? body.actor ?? "api"
+          })
+        };
+      }
+    ],
+    [
+      "POST /agent/run/profile",
+      (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          campaign_id?: string;
+          workstream_id: string;
+          profile_id: string;
+          actor: string;
+        };
+        const run = createAgentRunForProfile(body.project_root, {
+          project_id: body.project_id,
+          campaign_id: body.campaign_id,
+          workstream_id: body.workstream_id,
+          profile_id: body.profile_id as Parameters<typeof createAgentRunForProfile>[1]["profile_id"],
+          actor: body.actor
+        });
+        return {
+          run,
+          profile: getAgentProfile(body.profile_id)
+        };
+      }
+    ],
+    [
+      "POST /agent/run/profile/prepare-launch",
+      (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          run_id: string;
+          profile_id: string;
+          program: string;
+          goal: string;
+          context_path: string;
+          actor: string;
+        };
+        return {
+          launch: buildAgentProfileLaunch(body.project_root, {
+            project_id: body.project_id,
+            run_id: body.run_id,
+            profile_id: body.profile_id as Parameters<typeof buildAgentProfileLaunch>[1]["profile_id"],
+            program: body.program,
+            goal: body.goal,
+            context_path: body.context_path,
+            actor: body.actor
           })
         };
       }
@@ -424,6 +492,15 @@ async function route(method: string, path: string, body: unknown, context: Route
   };
 
   if (method.toUpperCase() === "GET") {
+    const agentProfileMatch = /^\/agent\/profile\/([^/]+)$/.exec(url.pathname);
+    if (agentProfileMatch && agentProfileMatch[1] !== "list") {
+      try {
+        return success({ profile: getAgentProfile(decodeURIComponent(agentProfileMatch[1] ?? "")) });
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
     const statusMatch = /^\/campaign\/([^/]+)\/status$/.exec(url.pathname);
     if (statusMatch) {
       try {

@@ -343,13 +343,23 @@
 - [x] Add cancellation support for running and queued AgentRuns, process-tree termination attempts, and audit events for started/completed/timed-out/cancelled/queued-cancelled/rate-limited launches.
 - [x] Add Phase 28 tests for real process launch, serial scheduling, absolute allowlist rejection, env isolation, invalid-report fail-closed handling, timeout, cancellation, rpm rejection, logs, output truncation, process-tree termination, non-authoritative report envelopes, and report persistence; wire them into the default `@comath/comathd` test chain.
 
+## Phase 29: Agent Profile Service Integration
+
+- [x] Add persisted GA agent profiles for coordinator, librarian, computation, proof-route, formalization, reviewer, graph-builder, security-auditor, and math-integrity-auditor with `may_mutate_trusted_state=false`, `proof_authority=none`, write-scope templates, forbidden direct-promotion tools, and `rpm<=4`.
+- [x] Validate agent profiles against the global `rpm=4` budget and fail closed on duplicate IDs, forbidden tools, trusted-state mutation authority, proof authority, missing write scopes, or profile-local rpm overflow.
+- [x] Bind AgentRun creation to profiles through service-owned `createAgentRunForProfile()`, preserving role, model profile, tool profile, scoped write directories, and audit events.
+- [x] Prepare scheduler launch envelopes from profiles without leaking secret-like environment variables and with profile-specific timeout/rpm/concurrency settings.
+- [x] Expose `GET /agent/profile/list`, `GET /agent/profile/:id`, `POST /agent/run/profile`, and `POST /agent/run/profile/prepare-launch` through `comathd`.
+- [x] Add Phase 29 tests for profile validation, unknown-profile rejection, profile-backed AgentRun creation, launch-envelope preparation, audit events, and service route coverage.
+- [x] Add `agent_profile_service_api` to service status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond registered theorem families (`Nat.add_zero`, `Nat.mul_zero`) and exact `n + 1 = n` refutation.
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
-- [ ] Production Pi/Codex child-agent profile integration beyond Phase 28's allowlisted process scheduler fixtures.
+- [ ] Live Pi/Codex agent adapter execution beyond the Phase 29 service profile API and Phase 28 allowlisted process scheduler fixtures.
 - [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Stronger runner re-execution sandboxing: OS-level isolation, network-denial enforcement, dependency lock capture, and cross-machine replay validation beyond the Phase 24 service-owned re-execution checks.
