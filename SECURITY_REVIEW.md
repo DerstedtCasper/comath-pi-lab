@@ -166,6 +166,7 @@ Remaining security requirements:
 27. **Install-session e2e exercises the built package over real HTTP.** Phase 45 starts a local `comathd` HTTP server, imports the Pi extension from the built package manifest, and drives campaign/agent operations through `createComathClient({ baseUrl })` with Pi host confirmations. This catches boundary drift that mocked clients cannot see.
 28. **AgentRun log streaming is cursor-bounded and non-promotional.** Phase 46 exposes `GET /agent/run/:id/log-stream` and Pi `/cm:agent stream` as read-only cursor polling over scheduler-owned stdout/stderr files. Cursors and `max_bytes` are validated, paths remain project-confined, audit events are emitted, and returned chunks carry `proof_authority=none`.
 29. **AgentRun log subscriptions are SSE-compatible snapshots, not shell access.** Phase 47 exposes `GET /agent/run/:id/log-subscription` and Pi `/cm:agent subscribe-logs` as read-only `text/event-stream` frames over the same bounded cursor/path policy. It emits audit events and keeps `proof_authority=none` in the frame payload.
+30. **AgentRun operator panels are service-owned read models.** Phase 48 exposes `GET /agent/run/:id/operator-panel` and Pi `/cm:agent panel` as read-only aggregation over AgentRun status, cursor log chunks, SSE snapshot metadata, and action availability. It does not expose shell access, executable paths, direct `.comath/` mutation, or fake cancellation; `cancel.enabled=false` until a real active scheduler registry can prove cancellability.
 
 ### Validation Commands
 
@@ -310,10 +311,10 @@ Result: exit 0; Pi agent execute tool tests passed for runtime tool/command regi
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
 - Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, Phase 24 reruns the implemented Python compute runners through strict replay, and Phase 36 records sandbox/dependency provenance with fail-closed integrity checks. The Phase 25 MathProve bridge records `network=false` and uses fixed argv/timeout controls, but OS-level sandboxing, enforced network denial, and cross-machine replay validation remain deferred.
 - Phase 40 integrates the project writer lock into the service-side AgentRun scheduler mutation path, but true OS-level multi-process sandboxing, network-denial enforcement, and mandatory external-process lock enforcement remain deferred.
-- Phase 41-47 execute live adapters through the scheduler boundary, add capped log readback plus cursor-based log polling, SSE-compatible subscription snapshots, and bounded health probes, add a service-owned packaged adapter launcher, and support service-configured external Codex-compatible CLI invocation. Real Codex API invocation, production installed-CLI validation, persistent multi-event WebSocket/SSE sessions, richer operator controls, OS-level sandboxing, and enforced network denial remain deferred.
+- Phase 41-48 execute live adapters through the scheduler boundary, add capped log readback plus cursor-based log polling, SSE-compatible subscription snapshots, read-only operator panels, and bounded health probes, add a service-owned packaged adapter launcher, and support service-configured external Codex-compatible CLI invocation. Real Codex API invocation, production installed-CLI validation, persistent multi-event WebSocket/SSE sessions, richer operator controls beyond read-only panels, OS-level sandboxing, and enforced network denial remain deferred.
 - Phase 26 validates installed-loader registration and Pi host-side mutating-tool confirmation gates for Pi 0.75.5, and Phase 45 validates an automated local Pi/comathd install-session over HTTP. Richer real-host Pi UI, manual install walkthrough, service lifecycle management, and runtime permission UX remain separate hardening targets.
 - Phase 27 validates AgentRun persistence and scoped writes; Phase 28 adds service-side process launch and scheduler controls on top of that boundary.
-- Phase 28 validates absolute-realpath allowlisted process launch, minimal env inheritance, timeout/cancel, process-tree termination attempts, output byte caps, non-authoritative scheduler envelopes, and rpm/concurrency controls; Phase 42 adds capped log read APIs; Phase 46 adds cursor-based log polling; Phase 47 adds SSE-compatible snapshot frames. It still does not provide OS-level sandboxing, network-denial enforcement, production Pi/Codex agent adapters, persistent multi-event subscriptions, or multi-process writer locks.
+- Phase 28 validates absolute-realpath allowlisted process launch, minimal env inheritance, timeout/cancel, process-tree termination attempts, output byte caps, non-authoritative scheduler envelopes, and rpm/concurrency controls; Phase 42 adds capped log read APIs; Phase 46 adds cursor-based log polling; Phase 47 adds SSE-compatible snapshot frames; Phase 48 adds read-only operator panels with disabled live-cancel metadata. It still does not provide OS-level sandboxing, network-denial enforcement, production Pi/Codex agent adapters, persistent multi-event subscriptions, true scheduler-backed live cancellation, or multi-process writer locks.
 
 Phase 42 targeted validation:
 
@@ -354,5 +355,12 @@ Phase 47 targeted validation:
 - `node extensions/comath-pi/tests/phase47-agent-log-subscription-tools.test.mjs`
 
 Result: both exited 0; SSE-compatible log snapshot formatting, `text/event-stream` route headers/body, audit events, Pi text-client routing, and `proof_authority=none` payloads passed.
+
+Phase 48 targeted validation:
+
+- `node services/comathd/tests/unit/phase48-agent-operator-panel.test.mjs`
+- `node extensions/comath-pi/tests/phase48-agent-operator-panel-tools.test.mjs`
+
+Result: both exited 0; service-owned operator panel aggregation, route handling, action availability metadata, disabled-cancel semantics, audit events, Pi JSON routing, and `proof_authority=none` payloads passed.
 - Phase 37 registers alias equivalence data in-process and does not add a new external execution boundary; richer Lean parser/logical-equivalence machinery remains a future proof-authority hardening target.
 - Phase 38 loads native TriviumDB only through dynamic adapter probing and explicit evaluation. Broader multi-platform native benchmarking and production default-backend rollout remain separate decisions.

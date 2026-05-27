@@ -74,6 +74,27 @@ export type AgentRunLogSseSnapshot = {
   stream: AgentRunLogStream;
 };
 
+export type ReadAgentRunOperatorPanelInput = StreamAgentRunLogsInput;
+
+export type AgentRunOperatorPanel = {
+  project_id: string;
+  run: ReturnType<typeof getAgentRun>;
+  proof_authority: "none";
+  endpoints: {
+    logs: string;
+    log_stream: string;
+    log_subscription: string;
+  };
+  actions: {
+    read_logs: { enabled: true; endpoint: string };
+    stream_logs: { enabled: true; endpoint: string };
+    subscribe_logs: { enabled: true; endpoint: string };
+    cancel: { enabled: false; reason: string };
+  };
+  log_stream: AgentRunLogStream;
+  log_subscription: AgentRunLogSseSnapshot;
+};
+
 export type ProbeAgentAdapterHealthInput = {
   project_id: string;
   profile_id: AgentProfileId;
@@ -397,6 +418,51 @@ export function formatAgentRunLogSseSnapshot(projectRoot: string, input: FormatA
     proof_authority: "none",
     stream,
     body: [`retry: ${retryMs}`, "event: agent_run.log_chunk", `id: ${eventId}`, sseDataLines(payload), ""].join("\n")
+  };
+}
+
+export function readAgentRunOperatorPanel(projectRoot: string, input: ReadAgentRunOperatorPanelInput): AgentRunOperatorPanel {
+  const run = getAgentRun(projectRoot, input.project_id, input.run_id);
+  const encodedRunId = encodeURIComponent(run.id);
+  const endpoints = {
+    logs: `/agent/run/${encodedRunId}/logs`,
+    log_stream: `/agent/run/${encodedRunId}/log-stream`,
+    log_subscription: `/agent/run/${encodedRunId}/log-subscription`
+  };
+  const stream = streamAgentRunLogs(projectRoot, input);
+  const subscription = formatAgentRunLogSseSnapshot(projectRoot, input);
+  const terminal = ["succeeded", "failed", "cancelled"].includes(run.status);
+  const cancelReason = terminal
+    ? "terminal AgentRun cannot be cancelled"
+    : "cancel requires an active scheduler registry in the current service process";
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_run.operator_panel_read",
+    actor: input.actor ?? "api",
+    target_id: run.id,
+    payload: {
+      status: run.status,
+      cursor: stream.cursor,
+      next_cursor: stream.next_cursor,
+      actions: ["read_logs", "stream_logs", "subscribe_logs"],
+      cancel_enabled: false,
+      cancel_reason: cancelReason,
+      proof_authority: "none"
+    }
+  });
+  return {
+    project_id: run.project_id,
+    run,
+    proof_authority: "none",
+    endpoints,
+    actions: {
+      read_logs: { enabled: true, endpoint: endpoints.logs },
+      stream_logs: { enabled: true, endpoint: endpoints.log_stream },
+      subscribe_logs: { enabled: true, endpoint: endpoints.log_subscription },
+      cancel: { enabled: false, reason: cancelReason }
+    },
+    log_stream: stream,
+    log_subscription: subscription
   };
 }
 

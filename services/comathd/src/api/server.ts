@@ -44,6 +44,7 @@ import {
   executeProfileAgentRun,
   getAgentProfile,
   listAgentAdapterPackages,
+  readAgentRunOperatorPanel,
   listAgentProfiles,
   formatAgentRunLogSseSnapshot,
   probeAgentAdapterHealth,
@@ -693,6 +694,29 @@ async function route(method: string, path: string, body: unknown, context: Route
           },
           body: snapshot.body
         };
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const agentRunOperatorPanelMatch = /^\/agent\/run\/([^/]+)\/operator-panel$/.exec(url.pathname);
+    if (agentRunOperatorPanelMatch) {
+      try {
+        const maxBytes = url.searchParams.get("max_bytes");
+        const stdoutCursor = url.searchParams.get("stdout_cursor");
+        const stderrCursor = url.searchParams.get("stderr_cursor");
+        return success({
+          panel: readAgentRunOperatorPanel(url.searchParams.get("project_root") ?? "", {
+            project_id: url.searchParams.get("project_id") ?? "",
+            run_id: decodeURIComponent(agentRunOperatorPanelMatch[1] ?? ""),
+            cursor: {
+              stdout: stdoutCursor ? Number(stdoutCursor) : 0,
+              stderr: stderrCursor ? Number(stderrCursor) : 0
+            },
+            max_bytes: maxBytes ? Number(maxBytes) : undefined,
+            actor: url.searchParams.get("actor") ?? "api"
+          })
+        });
       } catch (error) {
         return dynamicRouteError(error);
       }

@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-47")) {
-  invariantFailures.push("README must describe the current Phase 18-47 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-48")) {
+  invariantFailures.push("README must describe the current Phase 18-48 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -140,6 +140,10 @@ if (!acceptanceMatrix.includes("47 SSE-style AgentRun log subscription")) {
   invariantFailures.push("acceptance matrix must include Phase 47 SSE-style AgentRun log-subscription acceptance");
 }
 
+if (!acceptanceMatrix.includes("48 AgentRun operator panel")) {
+  invariantFailures.push("acceptance matrix must include Phase 48 AgentRun operator-panel acceptance");
+}
+
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
 }
@@ -184,6 +188,10 @@ if (!acceptanceMatrix.includes("AgentRun log subscriptions are SSE snapshots")) 
   invariantFailures.push("acceptance matrix must include Phase 47 SSE log-subscription security acceptance");
 }
 
+if (!acceptanceMatrix.includes("AgentRun operator panels are read-only")) {
+  invariantFailures.push("acceptance matrix must include Phase 48 operator-panel security acceptance");
+}
+
 if (!acceptanceMatrix.includes("Native memory backend evidence is non-promotional")) {
   invariantFailures.push("acceptance matrix must include Phase 38 native memory mathematical-integrity boundary");
 }
@@ -214,6 +222,10 @@ if (!acceptanceMatrix.includes("Cursor log streams are observability artifacts")
 
 if (!acceptanceMatrix.includes("SSE log subscription frames are observability artifacts")) {
   invariantFailures.push("acceptance matrix must include Phase 47 SSE log-subscription mathematical-integrity boundary");
+}
+
+if (!acceptanceMatrix.includes("Operator panels are observability artifacts")) {
+  invariantFailures.push("acceptance matrix must include Phase 48 operator-panel mathematical-integrity boundary");
 }
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
@@ -260,6 +272,10 @@ if (!acceptanceMatrix.includes("/cm:agent subscribe-logs")) {
   invariantFailures.push("acceptance matrix must include Phase 47 Pi command log-subscription coverage language");
 }
 
+if (!acceptanceMatrix.includes("/cm:agent panel")) {
+  invariantFailures.push("acceptance matrix must include Phase 48 Pi command operator-panel coverage language");
+}
+
 if (!acceptanceMatrix.includes("/cm:agent prepare-package") || !acceptanceMatrix.includes("/cm:agent execute-package")) {
   invariantFailures.push("acceptance matrix must include Phase 43 Pi packaged-adapter command coverage language");
 }
@@ -282,6 +298,14 @@ if (!acceptanceMatrix.includes("phase47-agent-log-subscription.test.mjs")) {
 
 if (!acceptanceMatrix.includes("phase47-agent-log-subscription-tools.test.mjs")) {
   invariantFailures.push("acceptance matrix must include Phase 47 Pi log-subscription test coverage language");
+}
+
+if (!acceptanceMatrix.includes("phase48-agent-operator-panel.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 48 service operator-panel test coverage language");
+}
+
+if (!acceptanceMatrix.includes("phase48-agent-operator-panel-tools.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 48 Pi operator-panel test coverage language");
 }
 
 for (const [content, label] of [

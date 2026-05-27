@@ -1,3 +1,43 @@
+## Phase 48 AgentRun Operator Panel Review Log
+
+Scope: Phase 48 adds a service-owned AgentRun operator panel read model on top of Phase 46/47 log observability. The panel aggregates AgentRun status, cursor log stream metadata, SSE subscription snapshot metadata, endpoint hints, and action availability while keeping `proof_authority=none`. Cancellation is explicitly reported as unavailable unless a future real scheduler registry can prove live cancellability; this phase does not fake cross-process cancellation.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/unit/phase48-agent-operator-panel.test.mjs
+Result: exit 1; `readAgentRunOperatorPanel` was not exported before implementation.
+
+node extensions/comath-pi/tests/phase48-agent-operator-panel-tools.test.mjs
+Result: exit 1; `comath.agent.operatorPanel` was not registered before implementation.
+```
+
+Focused GREEN evidence:
+
+```text
+node services/comathd/tests/unit/phase48-agent-operator-panel.test.mjs
+Result: exit 0; service operator panel aggregation, route handling, disabled-cancel semantics, audit event, endpoint metadata, and `proof_authority=none` passed.
+
+node extensions/comath-pi/tests/phase48-agent-operator-panel-tools.test.mjs
+Result: exit 0; Pi tool schema, JSON GET route payload, runtime registration, `/cm:agent panel`, and operator notification output passed.
+```
+
+Implementation summary:
+
+- Added `readAgentRunOperatorPanel()` in AgentRun observability.
+- Added `GET /agent/run/:id/operator-panel`, audit event `agent_run.operator_panel_read`, and service status capability `agent_run_operator_panel`.
+- Added Pi `comath.agent.operatorPanel` and `/cm:agent panel` as read-only operator surfaces.
+- Wired Phase 48 focused tests into the default `@comath/comathd` and `@comath/pi-extension` test chains.
+
+Boundary notes:
+
+Phase 48 is a read-only operator control panel, not a live terminal, not persistent multi-event SSE/WebSocket, and not a scheduler-registry-backed cancellation API. Operator panel payloads remain observability metadata with `proof_authority=none`; they cannot certify claims, apply GraphPatch, mutate `.comath/` directly from Pi, or replace final Lean replay/static audit.
+
+Residual risks:
+
+- True scheduler-backed live cancellation remains deferred until a service-owned active scheduler registry exists.
+- Persistent multi-event WebSocket/SSE sessions remain deferred.
+- Production Codex CLI/API validation and OS-enforced adapter isolation remain deferred.
 # REVIEW
 
 ## Phase 47 SSE-Style AgentRun Log Subscription Review Log
@@ -1172,7 +1212,6 @@ Result: exit 0; Phase 0 smoke, all workspace tests, and Phase 17 integrity evalu
 Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
-
 ## Phase 42 AgentRun Observability Review Log
 
 ### Scope
@@ -1295,7 +1334,6 @@ Result: exit 0; no whitespace errors. Git reported Windows LF-to-CRLF normalizat
 Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
-
 ### Final Phase 42 Validation
 
 Fresh Phase 42 validation completed on 2026-05-28:

@@ -142,6 +142,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.agent.logs",
   "comath.agent.streamLogs",
   "comath.agent.subscribeLogs",
+  "comath.agent.operatorPanel",
   "comath.agent.health",
   "comath.agent.adapterPackageList",
   "comath.agent.prepareAdapterPackage",
@@ -545,6 +546,21 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.agent.operatorPanel") {
+    const projectRoot = readString(input, "project_root");
+    const projectId = readString(input, "project_id");
+    const runId = readString(input, "run_id");
+    const stdoutCursor = readNumber(input, "stdout_cursor") ?? 0;
+    const stderrCursor = readNumber(input, "stderr_cursor") ?? 0;
+    const maxBytes = readNumber(input, "max_bytes");
+    const actor = readString(input, "actor", { optional: true });
+    const maxBytesQuery = maxBytes === undefined ? "" : `&max_bytes=${encodeURIComponent(String(maxBytes))}`;
+    const actorQuery = actor === undefined ? "" : `&actor=${encodeQuery(actor)}`;
+    return client.get(
+      `/agent/run/${encodeURIComponent(runId)}/operator-panel?project_root=${encodeQuery(projectRoot)}&project_id=${encodeQuery(projectId)}&stdout_cursor=${encodeURIComponent(String(stdoutCursor))}&stderr_cursor=${encodeURIComponent(String(stderrCursor))}${maxBytesQuery}${actorQuery}`
+    );
+  }
+
   if (name === "comath.agent.health") {
     const timeoutMs = readNumber(input, "timeout_ms");
     return client.post("/agent/adapter/health", {
@@ -895,6 +911,20 @@ export function createComathTools(): ToolDescriptor[] {
         stderr_cursor: { type: "number", minimum: 0 },
         max_bytes: { type: "number", minimum: 1 },
         retry_ms: { type: "number", minimum: 0 },
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.agent.operatorPanel",
+      description: "Read a service-owned AgentRun operator panel with status, log cursors, subscription metadata, and allowed actions.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id", "run_id"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        run_id: stringProp,
+        stdout_cursor: { type: "number", minimum: 0 },
+        stderr_cursor: { type: "number", minimum: 0 },
+        max_bytes: { type: "number", minimum: 1 },
         actor: stringProp
       })
     },
@@ -1549,6 +1579,23 @@ async function handleAgentCommand(
         stderr_cursor: numberOptionValue(parsed.args, "--stderr-cursor"),
         max_bytes: numberOptionValue(parsed.args, "--max-bytes"),
         retry_ms: numberOptionValue(parsed.args, "--retry-ms"),
+        actor: actorFrom(options, parsed.args)
+      })
+    );
+    return;
+  }
+  if (subcommand === "panel") {
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const runId = requiredOption(optionValue(parsed.args, "--run-id") ?? firstPositional(parsed.args), "run_id");
+    await notifyRuntimeResult(
+      ctx,
+      await executeComathTool(client, "comath.agent.operatorPanel", {
+        project_root: projectRootFrom(options, parsed.args),
+        project_id: projectId,
+        run_id: runId,
+        stdout_cursor: numberOptionValue(parsed.args, "--stdout-cursor"),
+        stderr_cursor: numberOptionValue(parsed.args, "--stderr-cursor"),
+        max_bytes: numberOptionValue(parsed.args, "--max-bytes"),
         actor: actorFrom(options, parsed.args)
       })
     );
