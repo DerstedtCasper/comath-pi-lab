@@ -135,7 +135,9 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
   "comath.agent.prepareLaunch",
-  "comath.agent.executeProfile"
+  "comath.agent.executeProfile",
+  "comath.agent.logs",
+  "comath.agent.health"
 ]);
 
 const COMATH_EXTENSION_COMMANDS = [
@@ -474,6 +476,30 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     });
   }
 
+  if (name === "comath.agent.logs") {
+    const projectRoot = readString(input, "project_root");
+    const projectId = readString(input, "project_id");
+    const runId = readString(input, "run_id");
+    const maxBytes = readNumber(input, "max_bytes");
+    const maxBytesQuery = maxBytes === undefined ? "" : `&max_bytes=${encodeURIComponent(String(maxBytes))}`;
+    return client.get(
+      `/agent/run/${encodeURIComponent(runId)}/logs?project_root=${encodeQuery(projectRoot)}&project_id=${encodeQuery(projectId)}${maxBytesQuery}`
+    );
+  }
+
+  if (name === "comath.agent.health") {
+    const timeoutMs = readNumber(input, "timeout_ms");
+    return client.post("/agent/adapter/health", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      profile_id: readString(input, "profile_id"),
+      program: readString(input, "program"),
+      adapter_args: Array.isArray(input.adapter_args) ? input.adapter_args.map(String) : undefined,
+      ...(timeoutMs === undefined ? {} : { timeout_ms: timeoutMs }),
+      actor: readString(input, "actor")
+    });
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -735,6 +761,31 @@ export function createComathTools(): ToolDescriptor[] {
           actor: stringProp
         }
       )
+    },
+    {
+      name: "comath.agent.logs",
+      description: "Read capped stdout/stderr logs for an AgentRun through comathd.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "project_id", "run_id"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        run_id: stringProp,
+        max_bytes: { type: "number", minimum: 1 }
+      })
+    },
+    {
+      name: "comath.agent.health",
+      description: "Run a bounded non-authoritative health probe for an allowlisted agent adapter through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "profile_id", "program", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        profile_id: stringProp,
+        program: stringProp,
+        adapter_args: stringArrayProp,
+        timeout_ms: { type: "number", minimum: 1 },
+        actor: stringProp
+      })
     },
     {
       name: "comath.paper.init",
@@ -1208,6 +1259,47 @@ async function handleAgentCommand(
           adapter_args: optionValues(parsed.args, "--adapter-arg"),
           goal,
           context_path: contextPath,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "logs") {
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const runId = requiredOption(optionValue(parsed.args, "--run-id") ?? firstPositional(parsed.args), "run_id");
+    await notifyRuntimeResult(
+      ctx,
+      await executeComathTool(client, "comath.agent.logs", {
+        project_root: projectRootFrom(options, parsed.args),
+        project_id: projectId,
+        run_id: runId,
+        max_bytes: numberOptionValue(parsed.args, "--max-bytes")
+      })
+    );
+    return;
+  }
+  if (subcommand === "health") {
+    const profileId = requiredOption(optionValue(parsed.args, "--profile") ?? firstPositional(parsed.args), "profile_id");
+    const projectId = requiredOption(optionValue(parsed.args, "--project-id"), "project_id");
+    const program = requiredOption(optionValue(parsed.args, "--program"), "program");
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.agent.health");
+    if (!tool) {
+      throw new Error("agent health tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: projectId,
+          profile_id: profileId,
+          program,
+          adapter_args: optionValues(parsed.args, "--adapter-arg"),
+          timeout_ms: numberOptionValue(parsed.args, "--timeout-ms"),
           actor: actorFrom(options, parsed.args)
         },
         ctx

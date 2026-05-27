@@ -95,6 +95,7 @@ Remaining mathematical work:
 - Phase 39 project writer session locks are mutation-coordination metadata only. A held lock does not certify artifacts, evidence, proof replay, theorem equivalence, or claim-promotion eligibility.
 - Phase 40 scheduler-held writer locks coordinate AgentRun process mutation only. A scheduler-owned lock, process exit code, or child report remains non-authoritative for mathematical truth and cannot promote claims.
 - Phase 41 live adapter execution remains an AgentRun evidence-production surface only. Adapter output is untrusted child stdout wrapped with `proof_authority: none`; it cannot promote claims, apply GraphPatch directly, or replace proof-kernel replay.
+- Phase 42 AgentRun observability remains inspection-only. Capped stdout/stderr reads and adapter health results carry `proof_authority: none`; they cannot promote claims, certify candidate correctness, apply GraphPatch, or replace Lean replay/static audit.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -257,3 +258,11 @@ Phase 41 adds coverage for:
 - Phase 38 validates native memory persistence and performance only for the current target platform; it does not make native memory content proof authority or enable default native backend selection without explicit configuration.
 - Phase 40 reduces writer-race risk in the service-side AgentRun scheduler path, but mathematical consistency still depends on ordinary evidence, replay, and promotion gates; OS-level sandboxing and external-process enforcement remain deferred.
 - Phase 41 makes agent execution product-real for an allowlisted adapter slice, but broad autonomous mathematical discovery remains blocked by proof planning, proof replay, MathProve semantics, and independent review gates.
+- Phase 42 makes runtime inspection product-real for capped logs and bounded adapter health probes, but these artifacts remain non-evidential for formal proof authority.
+
+Phase 42 mathematical-integrity validation:
+
+- `node services/comathd/tests/unit/phase42-agent-run-observability.test.mjs`
+- `node extensions/comath-pi/tests/phase42-agent-observability-tools.test.mjs`
+
+Result: both exited 0; logs and health probes are exposed through service/Pi surfaces while preserving `proof_authority: none` and host-confirmed mutation for health execution.

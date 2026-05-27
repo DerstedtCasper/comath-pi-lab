@@ -42,6 +42,8 @@ import {
   executeProfileAgentRun,
   getAgentProfile,
   listAgentProfiles,
+  probeAgentAdapterHealth,
+  readAgentRunLogs,
   validateAgentProfiles
 } from "../agents/index.js";
 
@@ -317,6 +319,30 @@ async function route(method: string, path: string, body: unknown, context: Route
       }
     ],
     [
+      "POST /agent/adapter/health",
+      (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          profile_id: string;
+          program: string;
+          adapter_args?: string[];
+          timeout_ms?: number;
+          actor: string;
+        };
+        return {
+          health: probeAgentAdapterHealth(body.project_root, {
+            project_id: body.project_id,
+            profile_id: body.profile_id as Parameters<typeof probeAgentAdapterHealth>[1]["profile_id"],
+            program: body.program,
+            adapter_args: body.adapter_args,
+            timeout_ms: body.timeout_ms,
+            actor: body.actor
+          })
+        };
+      }
+    ],
+    [
       "GET /workstream/status",
       (_payload, parsedUrl) => ({
         workstream: getWorkstreamStatus(parsedUrl.searchParams.get("project_root") ?? "", {
@@ -527,6 +553,23 @@ async function route(method: string, path: string, body: unknown, context: Route
     if (agentProfileMatch && agentProfileMatch[1] !== "list") {
       try {
         return success({ profile: getAgentProfile(decodeURIComponent(agentProfileMatch[1] ?? "")) });
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const agentRunLogsMatch = /^\/agent\/run\/([^/]+)\/logs$/.exec(url.pathname);
+    if (agentRunLogsMatch) {
+      try {
+        const maxBytes = url.searchParams.get("max_bytes");
+        return success({
+          logs: readAgentRunLogs(url.searchParams.get("project_root") ?? "", {
+            project_id: url.searchParams.get("project_id") ?? "",
+            run_id: decodeURIComponent(agentRunLogsMatch[1] ?? ""),
+            max_bytes: maxBytes ? Number(maxBytes) : undefined,
+            actor: url.searchParams.get("actor") ?? "api"
+          })
+        });
       } catch (error) {
         return dynamicRouteError(error);
       }

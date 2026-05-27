@@ -980,6 +980,79 @@ Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
 
+## Phase 42 AgentRun Observability Review Log
+
+### Scope
+
+Added a bounded runtime-inspection slice for live profile adapters. Phase 42 exposes capped AgentRun stdout/stderr reads and adapter health probes through `comathd` and Pi, without turning logs, adapter success, or health JSON into mathematical authority.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase42-agent-run-observability.test.mjs
+Initial RED result: exit 1; `../../dist/index.js` did not export `probeAgentAdapterHealth`.
+
+node extensions/comath-pi/tests/phase42-agent-observability-tools.test.mjs
+Initial RED result: exit 1; `comath.agent.logs` was not registered.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after service implementation.
+
+corepack pnpm --filter @comath/pi-extension build
+Result: exit 0; TypeScript build completed after Pi implementation.
+
+node services/comathd/tests/unit/phase42-agent-run-observability.test.mjs
+Result: exit 0; Phase 42 AgentRun observability tests passed.
+
+node extensions/comath-pi/tests/phase42-agent-observability-tools.test.mjs
+Result: exit 0; Phase 42 Pi agent observability tool tests passed.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/agents/agent-run-observability.ts` with `readAgentRunLogs()` and `probeAgentAdapterHealth()`.
+- Added `GET /agent/run/:id/logs` and `POST /agent/adapter/health` routes.
+- Added Pi runtime tools `comath.agent.logs` and `comath.agent.health` plus `/cm:agent logs` and `/cm:agent health` command paths.
+- Added `agent_run_observability` to service status and wired Phase 42 tests into default package test chains.
+- Updated README, TODO, acceptance matrix, security, math-integrity, and handoff notes.
+
+### Boundary And Integrity Notes
+
+AgentRun logs are read only from scheduler-derived `.tmp/comath/<ARUN>/logs/stdout.log` and `stderr.log` paths after resolving the owning run. Health probes require an absolute existing program, run with `shell:false`, bounded timeout/output, minimal environment inheritance, and `COMATH_PROOF_AUTHORITY=none`. Pi health probes are treated as mutating because they execute a process and therefore require host confirmation.
+
+Logs and health responses carry `proof_authority: none`. They cannot promote claims, apply GraphPatch, certify candidate correctness, or replace static audit and final Lean replay.
+
+### Residual Risks
+
+- Phase 42 is capped readback plus bounded health probes, not a streaming/subscription log UI.
+- Production Codex CLI/API adapter packaging and richer interactive operator controls remain deferred.
+- OS-level process sandboxing and network-denial enforcement remain deferred.
+- Global GA remains blocked by the deferred items in `TODO.md`.
+
+### Final Phase 42 Validation
+
+Fresh Phase 42 validation completed on 2026-05-28:
+
+```text
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-42 package tests passed.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed with Phase 42 wired into the default test chain.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed.
+
+corepack pnpm test
+Result: exit 0; root smoke, workspace tests, Phase 42 tests, and Phase 17 integrity evaluation passed.
+
+git diff --check
+Result: exit 0; no whitespace errors. Git reported Windows LF-to-CRLF normalization warnings only.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repository-root runtime state was left behind.
+```
+
 ### Changed Files
 
 - Added `tests/evaluation/phase17-integrity-evaluation.test.mjs`.

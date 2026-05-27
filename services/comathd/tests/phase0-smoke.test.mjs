@@ -33,7 +33,8 @@ const requiredCapabilities = [
   "trivium_target_platform_evaluation",
   "project_writer_session_lock",
   "agent_run_scheduler_writer_lock_integration",
-  "live_agent_adapter_execution"
+  "live_agent_adapter_execution",
+  "agent_run_observability"
 ];
 
 for (const capability of requiredCapabilities) {

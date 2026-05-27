@@ -29,6 +29,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "corepack pnpm build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-research-campaign-tools.test.mjs && node tests/phase22-research-loop.test.mjs && node tests/phase26-pi-runtime-registration.test.mjs && node tests/phase30-agent-profile-tools.test.mjs && node tests/phase41-agent-execute-tool.test.mjs"
+    "test": "corepack pnpm build && node tests/phase6-extension.test.mjs && node tests/phase8-subagents.test.mjs && node tests/phase12-paper-tools.test.mjs && node tests/phase15-dashboard.test.mjs && node tests/phase18-research-campaign-tools.test.mjs && node tests/phase22-research-loop.test.mjs && node tests/phase26-pi-runtime-registration.test.mjs && node tests/phase30-agent-profile-tools.test.mjs && node tests/phase41-agent-execute-tool.test.mjs && node tests/phase42-agent-observability-tools.test.mjs"
   }
 }
