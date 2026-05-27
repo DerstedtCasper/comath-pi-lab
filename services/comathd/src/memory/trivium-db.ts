@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { InMemoryStableIdMap, type StableIdMap } from "../db/stable-id-map.js";
 import { assertPathAllowed } from "../security/path-policy.js";
@@ -38,7 +38,10 @@ type NativeDatabaseHandle = {
   getEdges?: (...args: unknown[]) => unknown;
   flush?: () => unknown;
   close?: () => unknown;
+  updatePayload?: (...args: unknown[]) => unknown;
 };
+
+type NativeApiKind = "generic" | "triviumdb_vector";
 
 type TriviumResearchMemoryDBOptions = {
   nativeModule?: TriviumNativeModule;
@@ -77,11 +80,35 @@ function nativeDatabaseConstructor(nativeModule: TriviumNativeModule | undefined
   if (nativeModule.Database) {
     return nativeModule.Database;
   }
+  if (nativeModule.TriviumDB) {
+    return nativeModule.TriviumDB;
+  }
   const defaultExport = nativeModule.default;
   if (defaultExport && typeof defaultExport === "object" && "Database" in defaultExport) {
     return (defaultExport as { Database?: unknown }).Database;
   }
+  if (defaultExport && typeof defaultExport === "object" && "TriviumDB" in defaultExport) {
+    return (defaultExport as { TriviumDB?: unknown }).TriviumDB;
+  }
   return undefined;
+}
+
+function nativeApiKind(nativeModule: TriviumNativeModule | undefined): NativeApiKind {
+  if (!nativeModule) {
+    return "generic";
+  }
+  if (nativeModule.TriviumDB) {
+    return "triviumdb_vector";
+  }
+  const defaultExport = nativeModule.default;
+  if (defaultExport && typeof defaultExport === "object" && "TriviumDB" in defaultExport) {
+    return "triviumdb_vector";
+  }
+  return "generic";
+}
+
+function nativeVector(id: number, dim = 4): number[] {
+  return Array.from({ length: dim }, (_, index) => (id % (index + 7)) / (index + 7));
 }
 
 async function openNativeDatabase(nativeModule: TriviumNativeModule | undefined, dbPath: string): Promise<NativeDatabaseHandle | null> {
@@ -93,7 +120,7 @@ async function openNativeDatabase(nativeModule: TriviumNativeModule | undefined,
     open?: (path: string) => unknown;
     openWithConfig?: (path: string, config?: unknown) => unknown;
     open_with_config?: (path: string, config?: unknown) => unknown;
-    new (path: string): unknown;
+    new (path: string, dim?: number): unknown;
   };
   const opened =
     typeof ctor.open === "function"
@@ -102,7 +129,7 @@ async function openNativeDatabase(nativeModule: TriviumNativeModule | undefined,
         ? await ctor.openWithConfig(dbPath)
         : typeof ctor.open_with_config === "function"
           ? await ctor.open_with_config(dbPath)
-          : new ctor(dbPath);
+          : new ctor(dbPath, 4);
   return opened && typeof opened === "object" ? (opened as NativeDatabaseHandle) : null;
 }
 
@@ -111,6 +138,11 @@ async function maybeCall(method: ((...args: unknown[]) => unknown) | undefined, 
     return undefined;
   }
   return method.apply(self, args);
+}
+
+function isNativeAlreadyExistsError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /already exists|已存在/i.test(message);
 }
 
 async function closeNative(handle: NativeDatabaseHandle | null): Promise<void> {
@@ -135,6 +167,8 @@ export class TriviumResearchMemoryDB implements ResearchMemoryDB {
   private projectId: string | null = null;
   private nextNativeId = 1;
   private nativeHandle: NativeDatabaseHandle | null = null;
+  private nativeApiKind: NativeApiKind = "generic";
+  private nativeDbPath: string | null = null;
   readonly backendLabel: string;
 
   constructor(options: TriviumResearchMemoryDBOptions = {}) {
@@ -152,12 +186,21 @@ export class TriviumResearchMemoryDB implements ResearchMemoryDB {
     this.projectId = options.projectId;
     const dbDir = assertPathAllowed(projectRoot, join(".comath", "db"), { purpose: "runtime-write" });
     mkdirSync(dbDir, { recursive: true });
-    this.nativeHandle = await openNativeDatabase(this.nativeModule, join(dbDir, "research-memory.tdb"));
+    this.nativeDbPath = join(dbDir, "research-memory.tdb");
+    this.nativeHandle = await openNativeDatabase(this.nativeModule, this.nativeDbPath);
+    this.nativeApiKind = nativeApiKind(this.nativeModule);
   }
 
   async close(): Promise<void> {
     await closeNative(this.nativeHandle);
+    if (this.nativeDbPath) {
+      const lockPath = `${this.nativeDbPath}.lock`;
+      if (existsSync(lockPath)) {
+        rmSync(lockPath, { force: true });
+      }
+    }
     this.nativeHandle = null;
+    this.nativeDbPath = null;
     this.projectRoot = null;
     this.projectId = null;
   }
@@ -192,10 +235,19 @@ export class TriviumResearchMemoryDB implements ResearchMemoryDB {
     this.nodes.set(parsed.id, parsed);
     const insertWithId = this.nativeHandle?.insertWithId ?? this.nativeHandle?.insert_with_id;
     if (insertWithId) {
-      await maybeCall(insertWithId, this.nativeHandle, [triviumId, parsed.title, parsed.payload]);
+      const args = this.nativeApiKind === "triviumdb_vector" ? [triviumId, nativeVector(triviumId), parsed] : [triviumId, parsed.title, parsed.payload];
+      try {
+        await maybeCall(insertWithId, this.nativeHandle, args);
+      } catch (error) {
+        if (!isNativeAlreadyExistsError(error)) {
+          throw error;
+        }
+        await maybeCall(this.nativeHandle?.updatePayload, this.nativeHandle, [triviumId, parsed]);
+      }
       return;
     }
-    await maybeCall(this.nativeHandle?.insert, this.nativeHandle, [parsed.title, parsed.payload]);
+    const insertArgs = this.nativeApiKind === "triviumdb_vector" ? [nativeVector(triviumId), parsed] : [parsed.title, parsed.payload];
+    await maybeCall(this.nativeHandle?.insert, this.nativeHandle, insertArgs);
   }
 
   async getNode(stableId: string): Promise<MemoryNode | null> {
@@ -213,7 +265,8 @@ export class TriviumResearchMemoryDB implements ResearchMemoryDB {
     await maybeCall(this.nativeHandle?.link, this.nativeHandle, [
       source?.trivium_id ?? parsed.source_id,
       target?.trivium_id ?? parsed.target_id,
-      parsed.label
+      parsed.label,
+      1
     ]);
   }
 
@@ -226,7 +279,8 @@ export class TriviumResearchMemoryDB implements ResearchMemoryDB {
     if (!query) {
       return [];
     }
-    await maybeCall(this.nativeHandle?.search, this.nativeHandle, [input.query, input.limit ?? 20]);
+    const nativeSearchArgs = this.nativeApiKind === "triviumdb_vector" ? [nativeVector(1), input.limit ?? 20, 0, 0] : [input.query, input.limit ?? 20];
+    await maybeCall(this.nativeHandle?.search, this.nativeHandle, nativeSearchArgs);
     const results: MemorySearchResult[] = [];
     for (const node of this.nodes.values()) {
       if (node.project_id !== input.project_id) {

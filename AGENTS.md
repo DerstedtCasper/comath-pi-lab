@@ -50,8 +50,9 @@ Current implementation frontier:
 - Phase 35 is complete.
 - Phase 36 is complete.
 - Phase 37 is complete.
+- Phase 38 is complete.
 
-Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-37 vertical slices as a claim of broad mathematical discovery capability.
+Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, live Pi/Codex agent adapter execution, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-38 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
 
@@ -108,6 +109,8 @@ Phase 35 claim-scoped final replay audit paths prevent supported campaigns in th
 Phase 36 runner replay provenance hardening records sandbox policy and dependency-lock material in compute runner reports and replay manifests. Replay integrity must fail closed when either provenance class is missing. This is provenance and audit hardening only: it does not provide OS-level process isolation, enforced network denial, cross-machine replay validation, or broader runner-family lockfiles.
 
 Phase 37 Lean statement-alias equivalence is a conservative extension of Phase 32. It may accept a target theorem signature that differs from the locked formal spec only when an explicit registered definitional alias maps the formal spec statement to that exact signature and records a witness. It must still fail closed on missing target output, ambiguous output, and non-registered mismatches. It is not full Lean parser integration, transitive semantic equivalence, or arbitrary logical-equivalence proof.
+
+Phase 38 native TriviumDB target-platform evaluation keeps TriviumDB optional and behind the adapter boundary. `triviumdb` may exist only as a root optional dependency; `services/comathd` must not add it to ordinary dependencies or top-level imports. Target-platform validation must use `evaluateTriviumTargetPlatform()` or `corepack pnpm --filter @comath/comathd eval:trivium`, record capability/performance/persistence evidence, and fail closed when native loading is unavailable. Passing Phase 38 does not make TriviumDB the default backend.
 
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 

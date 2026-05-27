@@ -421,6 +421,15 @@
 - [x] Wire Phase 37 into the default `@comath/comathd` test chain.
 - [x] Add `lean_statement_alias_equivalence` to service status capabilities and smoke requirements.
 
+## Phase 38: Native TriviumDB Target-Platform Evaluation
+
+- [x] Add `evaluateTriviumTargetPlatform()` to run a fixed memory workload through the Trivium adapter and emit `.comath/db/trivium-target-evaluation.json`.
+- [x] Add fail-closed native-unavailable reports instead of silently counting fallback memory as target-platform validation.
+- [x] Support the actual `triviumdb@0.7.1` Node export shape (`default.TriviumDB`) while preserving stable business IDs behind `StableIdMap`.
+- [x] Validate native persistence reopen behavior, search top-hit ratio, upsert latency, and context-pack traversal on the target platform.
+- [x] Add `corepack pnpm --filter @comath/comathd eval:trivium` for real native evaluation.
+- [x] Wire Phase 38 into the default `@comath/comathd` test chain and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -429,7 +438,6 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
 - [ ] Live Pi/Codex agent adapter execution beyond the Phase 30 Pi agent profile tools, Phase 29 service profile API, and Phase 28 allowlisted process scheduler fixtures.
 - [ ] Full interactive Pi UX and `comathd` install-session e2e beyond the Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest, default export, fake Pi API registration, and installed-loader smoke.
-- [ ] Native TriviumDB performance and persistence validation on the target platform.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance: OS-level isolation, enforced network denial, and cross-machine replay validation.
 - [ ] OS-level process sandboxing and multi-process writer/session locks for scheduled AgentRuns beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, and scoped-write controls.
 - [ ] Richer statement equivalence beyond Phase 37 registered aliases: Lean parser integration, proof-producing definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.

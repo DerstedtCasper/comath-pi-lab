@@ -42,6 +42,7 @@ The repository has completed:
 - Phase 35 claim-scoped final replay audit paths;
 - Phase 36 runner replay sandbox and dependency provenance;
 - Phase 37 registered Lean statement alias equivalence;
+- Phase 38 native TriviumDB target-platform evaluation;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -50,7 +51,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, Phase 34 scopes ensemble candidate/decision artifacts by campaign, Phase 35 makes final replay audit paths claim-scoped, Phase 36 records runner sandbox/dependency provenance with fail-closed replay-integrity checks, and Phase 37 accepts only explicitly registered Lean definitional-alias signatures with a witness while preserving fail-closed mismatch behavior. Phase 18-37 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, Phase 34 scopes ensemble candidate/decision artifacts by campaign, Phase 35 makes final replay audit paths claim-scoped, Phase 36 records runner sandbox/dependency provenance with fail-closed replay-integrity checks, Phase 37 accepts only explicitly registered Lean definitional-alias signatures with a witness while preserving fail-closed mismatch behavior, and Phase 38 validates the optional native TriviumDB backend on the target Windows x64 platform with fail-closed reports, real native smoke, and performance/persistence metrics. Phase 18-38 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -72,7 +73,7 @@ Next correct action:
 /goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, TriviumDB native evaluation, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, and OS-level scheduled-process isolation.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-37 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-38 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -152,6 +153,7 @@ Apply it as follows:
 
 - Use `services/comathd/src/memory/trivium-capability.ts` and `services/comathd/src/memory/trivium-db.ts`.
 - Do not add `triviumdb` to ordinary dependencies or top-level imports.
+- As of Phase 38, `triviumdb@0.7.1` is allowed only as a root optional dependency for target-platform evaluation.
 - Capability probing must use dynamic native loading inside a function and return diagnostics without blocking default tests.
 - Default memory backend remains in-memory unless TriviumDB is explicitly requested and available.
 - Native TriviumDB tests must be gated by `COMATH_ENABLE_TRIVIUM_TESTS=1`.
@@ -201,7 +203,7 @@ Apply it as follows:
 - Added negative coverage for fake formal metadata, static Lean cheats, statement drift, and high-scoring drifted candidates.
 - Added exact counterexample refutation for `n + 1 = n` and snapshot restore followed by proof replay.
 - Added Pi `/cm:research`, `/cm:campaign`, and campaign tool descriptors that call `comathd` without direct `.comath/` writes.
-- Remaining generalization work: broader proof planning, broad MathProve proof search/final-audit semantics, full interactive Pi/comathd install-session e2e, native TriviumDB target validation, stronger OS/network runner replay sandboxing, richer statement equivalence, production Pi/Codex child-agent profile integration, and OS-level scheduled-process isolation.
+- Remaining generalization work: broader proof planning, broad MathProve proof search/final-audit semantics, full interactive Pi/comathd install-session e2e, stronger OS/network runner replay sandboxing, richer statement equivalence, production Pi/Codex child-agent profile integration, and OS-level scheduled-process isolation.
 
 ## Phase 19 Completion Notes
 
@@ -245,7 +247,7 @@ Apply it as follows:
 - Added `services/comathd/tests/integration/phase23-ga-theorem-family-generalization.test.mjs` for the `n * 0 = 0` proof campaign and replay route.
 - Added `services/comathd/tests/integration/phase23-ga-integrity-boundaries.test.mjs` for family/proposition mismatch blocking, stale ensemble prevention, and completed-refutation replay immutability.
 - Final replay manifests now include theorem family, canonical proposition, normalized statement, primary dependency, and locked statement hash; promotion requires replay hash binding to the promoted claim.
-- Broad theorem synthesis, broad MathProve proof search/final-audit semantics, full interactive Pi/comathd install-session e2e, native TriviumDB validation, and stronger runner replay sandboxing remain deferred.
+- Broad theorem synthesis, broad MathProve proof search/final-audit semantics, full interactive Pi/comathd install-session e2e, and stronger runner replay sandboxing remain deferred.
 
 ## Phase 24 Completion Notes
 
@@ -369,6 +371,17 @@ Apply it as follows:
 - Preserved hard vetoes for missing target check output, ambiguous target check output, and non-registered statement mismatches.
 - Added `services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs` and wired it into the default `@comath/comathd` test chain.
 - Remaining statement-equivalence hardening: Lean parser integration, proof-producing definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
+
+## Phase 38 Completion Notes
+
+- Added `services/comathd/src/memory/trivium-evaluation.ts` with `evaluateTriviumTargetPlatform()`.
+- Added root optional dependency `triviumdb@0.7.1` for explicit target-platform evaluation while keeping `services/comathd` ordinary dependencies free of native packages.
+- Extended Trivium capability probing and adapter opening to support the actual Node export shape `default.TriviumDB`.
+- Adapted native writes/search probes to the vector API while preserving CoMath stable business IDs behind `StableIdMap`.
+- Added safe close/reopen handling for the target native lock file and idempotent restore/update behavior when native nodes already persist.
+- Added `services/comathd/tests/unit/phase38-trivium-native-evaluation.test.mjs` and `services/comathd/scripts/run-trivium-target-evaluation.mjs`.
+- Added `corepack pnpm --filter @comath/comathd eval:trivium` for real native target-platform evaluation.
+- Remaining memory work: broader multi-platform benchmarking and production default-backend selection policy. The default backend remains in-memory unless TriviumDB is explicitly selected.
 
 ## Verification To Run At Phase Boundary
 

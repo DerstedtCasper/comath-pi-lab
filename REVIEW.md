@@ -1416,6 +1416,98 @@ Phase 33 does not implement broad lemma decomposition or arbitrary theorem synth
 - Generic theorem synthesis and production proof-route agent execution remain deferred.
 - Skeleton artifacts are not built as final Lean targets; they are auditable planning outputs whose placeholders must be discharged later.
 
+## Phase 38 Native TriviumDB Target-Platform Evaluation Review Log
+
+### Scope
+
+Added an explicit native TriviumDB target-platform evaluation harness. Phase 38 retires the previous "native TriviumDB performance/persistence validation" blocker for this Windows x64 workstation by installing `triviumdb@0.7.1` as a root optional dependency, adapting the CoMath Trivium adapter to the actual Node export/API shape, and recording fail-closed capability, persistence, search-quality, and timing evidence.
+
+This does not make TriviumDB the default backend. Native memory remains optional, dynamically loaded, and selected only through the adapter/factory path.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase38-trivium-native-evaluation.test.mjs
+Initial RED result: exit 1; `evaluateTriviumTargetPlatform` was not exported.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding the Trivium target-evaluation module and export.
+
+node services/comathd/tests/unit/phase38-trivium-native-evaluation.test.mjs
+Result: exit 0; evaluation contract passed for fail-closed native-unavailable reports and fake-native available reports.
+```
+
+### Real Native Evidence
+
+```text
+corepack pnpm --store-dir .pnpm-store add -w -O triviumdb@0.7.1
+Result: exit 0; root optional dependency `triviumdb@0.7.1` installed without adding it to `services/comathd` ordinary dependencies.
+
+$env:COMATH_ENABLE_TRIVIUM_TESTS='1'; corepack pnpm --filter @comath/comathd test:trivium
+Initial native result: exit 1; target package exported `default.TriviumDB`, not `Database`, then exposed vector-API and lock/reopen behavior that required adapter support.
+
+$env:COMATH_ENABLE_TRIVIUM_TESTS='1'; corepack pnpm --filter @comath/comathd test:trivium
+Result: exit 0; real native adapter smoke passed for `triviumdb@0.7.1` after supporting `default.TriviumDB`, vector insert/search calls, lock cleanup, and idempotent restore/update.
+
+corepack pnpm --filter @comath/comathd eval:trivium
+Result: exit 0; real Windows x64 target evaluation passed with `backend=trivium`, `sample_size=64`, `search_top_hit_ratio=1`, `persistence_reopen.result=pass`, `upsert_ms_per_node=0.12635156250000001`, and no hard vetoes.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/memory/trivium-evaluation.ts` with `evaluateTriviumTargetPlatform()`.
+- Added `services/comathd/tests/unit/phase38-trivium-native-evaluation.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Added `services/comathd/scripts/run-trivium-target-evaluation.mjs` and `corepack pnpm --filter @comath/comathd eval:trivium`.
+- Added root optional dependency `triviumdb@0.7.1`; `services/comathd/package.json` still has no `triviumdb` dependency.
+- Extended Trivium capability probing and adapter construction for the actual Node export shape `default.TriviumDB`.
+- Adapted native insert/search calls to the vector API while keeping CoMath's stable string IDs and in-process search semantics intact.
+- Added native close/reopen lock cleanup for the adapter-owned `.comath/db/research-memory.tdb.lock` path.
+- Made restore idempotent against already-persisted native nodes by updating payload after native "already exists" errors.
+- Added `trivium_target_platform_evaluation` to runtime status and smoke requirements.
+- Updated README, TODO, acceptance matrix, handoff, AGENTS, security review, and mathematical-integrity review.
+
+### Boundary And Integrity Notes
+
+The native package is optional at the workspace root so target-platform evaluation can load it without making `services/comathd` depend on native code in ordinary package metadata. Default tests still exercise fallback and adapter semantics. Native validation is explicit: `eval:trivium` must pass before claiming target native persistence/performance readiness.
+
+TriviumDB evidence remains memory-system evidence only. It does not promote claims, certify proofs, replace Lean replay, or authorize MathProve output.
+
+### Residual Risks
+
+- Broader multi-platform native benchmarking remains future work.
+- Production default-backend selection policy remains explicit configuration work; Phase 38 keeps the default backend as memory.
+- TriviumDB native lock behavior is handled for the adapter-owned evaluation path, but multi-process writer/session locks remain a separate AgentRun/comathd blocker.
+
+### Final Root Validation
+
+Fresh Phase 38 validation completed on 2026-05-28:
+
+```text
+node scripts/phase0-smoke.mjs
+Result: exit 0; Phase 0/design smoke check passed for 25 required entries and 28 invariants.
+
+node services/comathd/tests/phase0-smoke.test.mjs
+Result: exit 0; comathd smoke accepted `trivium_target_platform_evaluation` and no longer lists `native_trivium_performance_evaluation_deferred` as a residual risk.
+
+node services/comathd/tests/unit/phase38-trivium-native-evaluation.test.mjs
+Result: exit 0; Phase 38 TriviumDB native evaluation contract tests passed.
+
+$env:COMATH_ENABLE_TRIVIUM_TESTS='1'; corepack pnpm --filter @comath/comathd test:trivium
+Result: exit 0; real `triviumdb@0.7.1` optional native smoke passed on Windows x64.
+
+corepack pnpm --filter @comath/comathd eval:trivium
+Result: exit 0; real target evaluation passed with `backend=trivium`, `sample_size=64`, `search_top_hit_ratio=1`, `persistence_reopen.result=pass`, `upsert_ms_per_node=0.08118437500000031`, and no hard vetoes.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-38 package tests passed with Phase 38 wired into the default test chain.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests through Phase 38, and Phase 17 integrity evaluation passed.
+```
+
 ## Phase 37 Registered Lean Statement Alias Equivalence Review Log
 
 ### Scope

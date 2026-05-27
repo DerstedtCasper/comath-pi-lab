@@ -55,6 +55,7 @@
 | 35 Claim-scoped final replay artifact paths | `phase35-final-replay-artifact-paths.test.mjs` verifies final replay stage-run artifact paths are generated from the active root claim id, including a second supported campaign whose claim is not `C-0001`. |
 | 36 Runner replay sandbox and dependency provenance | `phase36-runner-replay-provenance.test.mjs` verifies sandbox-policy and dependency-lock material in compute runner reports and replay manifests, plus fail-closed vetoes when either provenance class is missing. |
 | 37 Registered Lean statement alias equivalence | `phase37-lean-statement-alias-equivalence.test.mjs` verifies explicitly registered definitional aliases can accept a target theorem signature such as `Nat.add n 0 = n` for locked `n + 0 = n`, while missing, ambiguous, and non-registered mismatched target output still fails closed. |
+| 38 Native TriviumDB target-platform evaluation | `phase38-trivium-native-evaluation.test.mjs` verifies fail-closed unavailable reports and the evaluation-report contract; `eval:trivium` validates real `triviumdb@0.7.1` capability, persistence reopen, search top-hit ratio, and upsert/context timing on the target platform. |
 
 ## Security Acceptance
 
@@ -65,6 +66,7 @@
 | Secrets not imported or snapshotted | artifact import and snapshot export secret-scan tests. |
 | Runtime state not committed | `.gitignore` and smoke test. |
 | Native backends optional | TriviumDB probe/fallback tests. |
+| Native TriviumDB evaluation is explicit | Phase 38 keeps `triviumdb` as a root optional dependency and requires explicit target-platform evaluation before native-backend claims. |
 
 ## Mathematical Integrity Acceptance
 
@@ -95,6 +97,7 @@
 | Campaign ensemble state is campaign-scoped | Phase 34 prevents supported campaigns with reused `PO-0001`/`CAND-0001` local IDs from sharing candidate or arbitration artifacts; proof selection reads only the active campaign's ensemble state. |
 | Final replay audit paths are claim-scoped | Phase 35 requires final replay stage-run artifact pointers to use the current claim id, avoiding misleading audit trails when multiple supported campaigns share one project root. |
 | Registered statement aliases require witnesses | Phase 37 accepts non-identical Lean target signatures only through an explicit registered definitional-alias witness and keeps missing, ambiguous, or non-registered mismatches as hard vetoes. |
+| Native memory backend evidence is non-promotional | Phase 38 target-platform evaluation can validate memory persistence/performance, but it does not promote mathematical claims or bypass `comathd` gates. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -123,5 +126,6 @@
 | Claim-scoped final replay artifact paths | `phase35-final-replay-artifact-paths.test.mjs` covers second-campaign final replay audit paths using the active root claim id. | Covered for registered theorem-family proof campaigns; richer release-bundle provenance remains deferred. |
 | Runner replay sandbox/dependency provenance | `phase36-runner-replay-provenance.test.mjs` covers sandbox-policy and dependency-lock material in compute runner reports and replay manifests, plus fail-closed vetoes when either provenance class is missing. | Covered for provenance and integrity gates; OS-level isolation, enforced network denial, and cross-machine replay validation remain deferred. |
 | Registered Lean statement alias equivalence | `phase37-lean-statement-alias-equivalence.test.mjs` covers explicit alias acceptance for Lean notation expansion and fail-closed behavior for missing, ambiguous, or unregistered mismatched target signatures. | Covered for registered definitional aliases only; Lean parser integration, proof-producing logical equivalence, and transitive semantic equivalence remain deferred. |
-| Global GA readiness | Current test evidence does not cover arbitrary theorem planning, broad MathProve proof search/final-audit semantics, native TriviumDB validation, OS-enforced network replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, or broad theorem synthesis. | Not achieved; blocked by deferred generalization work. |
+| Native TriviumDB target-platform evaluation | `phase38-trivium-native-evaluation.test.mjs`, `test:trivium` with `COMATH_ENABLE_TRIVIUM_TESTS=1`, and `eval:trivium` cover real `triviumdb@0.7.1` loading, adapter write/link/search paths, persistence reopen, target-platform performance metrics, and fail-closed unavailable reports. | Covered for this Windows x64 target and explicit optional backend evaluation; default backend remains memory and broader multi-platform benchmarking remains future work. |
+| Global GA readiness | Current test evidence does not cover arbitrary theorem planning, broad MathProve proof search/final-audit semantics, OS-enforced network replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, or broad theorem synthesis. | Not achieved; blocked by deferred generalization work. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the registered Phase 23 theorem families. | Deferred. |

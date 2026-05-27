@@ -29,7 +29,8 @@ const requiredCapabilities = [
   "campaign_scoped_ensemble_artifacts",
   "claim_scoped_final_replay_artifacts",
   "runner_replay_sandbox_dependency_provenance",
-  "lean_statement_alias_equivalence"
+  "lean_statement_alias_equivalence",
+  "trivium_target_platform_evaluation"
 ];
 
 for (const capability of requiredCapabilities) {

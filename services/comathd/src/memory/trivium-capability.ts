@@ -63,8 +63,14 @@ function getDatabaseConstructor(nativeModule: TriviumNativeModule): unknown {
   if (nativeModule.Database) {
     return nativeModule.Database;
   }
+  if (nativeModule.TriviumDB) {
+    return nativeModule.TriviumDB;
+  }
   if (defaultExport && typeof defaultExport === "object" && "Database" in defaultExport) {
     return (defaultExport as { Database?: unknown }).Database;
+  }
+  if (defaultExport && typeof defaultExport === "object" && "TriviumDB" in defaultExport) {
+    return (defaultExport as { TriviumDB?: unknown }).TriviumDB;
   }
   return undefined;
 }
@@ -85,9 +91,9 @@ async function maybeOpenDatabase(nativeModule: TriviumNativeModule, projectRoot?
   try {
     const ctor = Database as {
       open?: (path: string) => unknown;
-      new (path: string): unknown;
+      new (path: string, dim?: number): unknown;
     };
-    opened = typeof ctor.open === "function" ? await ctor.open(probePath) : new ctor(probePath);
+    opened = typeof ctor.open === "function" ? await ctor.open(probePath) : new ctor(probePath, 4);
     const close = opened && typeof opened === "object" && "close" in opened ? (opened as { close?: () => unknown }).close : undefined;
     if (typeof close === "function") {
       await close.call(opened);

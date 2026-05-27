@@ -12,7 +12,7 @@ Security requirements queued for later phases:
 - fail-closed runner sandbox;
 - secret scanning before snapshot/replay;
 - `.comath/` ignored by Git;
-- no direct TriviumDB FFI hooks by default;
+- no eager TriviumDB FFI hooks by default;
 - no arbitrary workstream shell execution.
 
 ## Phase 1
@@ -22,7 +22,7 @@ Security-relevant contract hardening is in place:
 - GraphPatch cannot directly mutate protected claim promotion fields.
 - privileged claim statuses require gate identity at schema level.
 - `formally_checked` requires kernel/audit/dependency closure metadata.
-- TriviumDB native integration remains absent from dependencies and runtime code.
+- TriviumDB native integration remains optional and dynamically loaded behind the adapter boundary.
 
 ## Phase 2-4 Security Review
 
@@ -143,7 +143,7 @@ Remaining security requirements:
 4. **Paper export fails closed.** `exportPaper()` records `paper.export_rejected` and throws `PAPER_CHECK_FAILED` when `checkPaper()` returns vetoes.
 5. **Promotion gate validates real evidence and artifacts.** The gate now checks evidence and artifact existence, project/claim binding, evidence-artifact linkage, artifact hash/size, and target-status evidence kind.
 6. **Pi extension dashboard remains read-only.** Phase 15/17 tests statically reject service-internal imports, direct `.comath` access, and filesystem writes from dashboard files.
-7. **TriviumDB remains optional.** No ordinary dependency or eager native import exists; native loading stays behind capability probing and adapter boundaries.
+7. **TriviumDB remains optional.** `triviumdb@0.7.1` is a root optional dependency for explicit target-platform evaluation only; no ordinary `services/comathd` dependency or eager native import exists, and native loading stays behind capability probing and adapter boundaries.
 8. **Replay integrity checks include internal run hashes.** Snapshot verification validates replay manifest `runs_sha256` values so hand-edited replay metadata fails closed.
 9. **Snapshot/replay are exposed only through `comathd`.** HTTP routes now cover snapshot export, verify, restore, and replay-manifest verification; Pi extension entries are descriptors/commands only and do not read or write `.comath/` directly.
 10. **Phase 18 proof-kernel replay remains service-owned.** Campaign routes, candidate artifacts, Lean replay outputs, and counterexample evidence write only under path-policy-controlled `.comath/` directories; Pi campaign tools call `comathd` and do not mutate trusted files directly.
@@ -156,6 +156,7 @@ Remaining security requirements:
 17. **Final replay audit paths are claim-scoped.** Phase 35 removes hardcoded `C-0001` pointers from final replay stage-run artifact paths, so later campaign audits point to the active claim's evidence bundle.
 18. **Runner replay provenance is explicit.** Phase 36 records sandbox policy and dependency-lock material in compute runner reports and replay manifests, and replay integrity fails closed if either class of provenance is missing.
 19. **Statement-alias equivalence is allowlisted.** Phase 37 accepts non-identical Lean target signatures only through explicit registered definitional aliases and records the witness; unregistered mismatches remain fail-closed.
+20. **Native TriviumDB target evaluation is explicit.** Phase 38 runs native TriviumDB through an adapter-owned evaluation harness, records fail-closed unavailable reports, and keeps default memory backend selection unchanged.
 
 ### Validation Commands
 
@@ -257,6 +258,19 @@ node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.m
 Result: exit 0; registered Lean statement alias equivalence passed and missing/ambiguous/unregistered mismatches failed closed.
 ```
 
+Phase 38 targeted validation:
+
+```text
+node services/comathd/tests/unit/phase38-trivium-native-evaluation.test.mjs
+Result: exit 0; TriviumDB target-platform evaluation contract passed for unavailable and available native probes.
+
+$env:COMATH_ENABLE_TRIVIUM_TESTS='1'; corepack pnpm --filter @comath/comathd test:trivium
+Result: exit 0; real `triviumdb@0.7.1` native adapter smoke passed on Windows x64.
+
+corepack pnpm --filter @comath/comathd eval:trivium
+Result: exit 0; real target evaluation passed with `backend=trivium`, `sample_size=64`, `search_top_hit_ratio=1`, `persistence_reopen.result=pass`, and no hard vetoes.
+```
+
 ### Residual Risks
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
@@ -267,3 +281,4 @@ Result: exit 0; registered Lean statement alias equivalence passed and missing/a
 - Phase 27 validates AgentRun persistence and scoped writes; Phase 28 adds service-side process launch and scheduler controls on top of that boundary.
 - Phase 28 validates absolute-realpath allowlisted process launch, minimal env inheritance, timeout/cancel, process-tree termination attempts, output byte caps, non-authoritative scheduler envelopes, and rpm/concurrency controls, but it does not yet provide OS-level sandboxing, network-denial enforcement, production Pi/Codex agent adapters, live log streaming APIs, or multi-process writer locks.
 - Phase 37 registers alias equivalence data in-process and does not add a new external execution boundary; richer Lean parser/logical-equivalence machinery remains a future proof-authority hardening target.
+- Phase 38 loads native TriviumDB only through dynamic adapter probing and explicit evaluation. Broader multi-platform native benchmarking and production default-backend rollout remain separate decisions.
