@@ -74,6 +74,7 @@ Remaining mathematical work:
 - Phase 20 canonical ResearchCampaign state coverage: `services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs`, `campaignStageSchema`, `campaignTerminalStateSchema`, and bounded canonical campaign ticks.
 - Phase 21 service read-model coverage: `services/comathd/tests/integration/phase21-read-model-routes.test.mjs` and `extensions/comath-pi/tests/phase15-dashboard.test.mjs`.
 - Phase 22 Pi research-loop coverage: `extensions/comath-pi/tests/phase22-research-loop.test.mjs`.
+- Phase 23 theorem-family registry and integrity-boundary coverage: `services/comathd/src/proof-kernel/lean/theorem-family.ts`, `services/comathd/tests/integration/phase23-ga-theorem-family-generalization.test.mjs`, and `services/comathd/tests/integration/phase23-ga-integrity-boundaries.test.mjs`.
 
 ### Current Invariants
 
@@ -144,9 +145,18 @@ Phase 22 adds coverage for:
 - return of service-backed dashboard state after loop execution;
 - no Pi-side claim promotion, GraphPatch apply, artifact write, or proof replay authority.
 
+Phase 23 adds coverage for:
+
+- a registered `Nat.mul_zero` proof campaign that locks `n * 0 = 0`, generates family-specific candidates, runs clean Lean replay, promotes only through the ordinary gate, and supports replay;
+- final replay manifests carrying theorem family, canonical proposition, primary dependency, normalized statement, and locked statement hash;
+- promotion gate rejection unless the proof-kernel replay manifest hash matches the claim statement hash;
+- fail-closed behavior when theorem-family metadata does not match the locked proposition, Lean target, or locked natural-language statement;
+- unsupported goals blocking before theorem-family candidates are fabricated;
+- proof replay requests for completed refutations returning read-only blockers without mutating the `completed_refutation` terminal state.
+
 ### Residual Risks
 
-- Real Lean kernel checking is implemented for the Phase 18-22 `Nat.add_zero` vertical slice and its clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
+- Real Lean kernel checking is implemented for the registered Phase 18-23 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
 - MathProve bridge output is still a fail-closed mock and should not be interpreted as proof search performance or proof authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
 - Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, but generic computation runner re-execution remains deferred.

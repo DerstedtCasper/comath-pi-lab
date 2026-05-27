@@ -10,6 +10,7 @@ import {
   type ProofObligation,
   type ResearchCampaign
 } from "../../types/schemas.js";
+import { getTheoremFamilyById, type TheoremFamily } from "../lean/theorem-family.js";
 import { defaultVariants } from "./variant-registry.js";
 
 export type CandidateBatch = {
@@ -29,6 +30,7 @@ function writeCandidateAuditArtifacts(input: {
   workspaceRel: string;
   manifest: CandidateManifest;
   isDirectWinner: boolean;
+  theoremFamily: TheoremFamily;
 }): void {
   writeJson(input.projectRoot, join(input.workspaceRel, "dependency_delta.json"), {
     candidate_id: input.manifest.candidate_id,
@@ -46,7 +48,7 @@ function writeCandidateAuditArtifacts(input: {
     commands: input.isDirectWinner
       ? [
           {
-            command: "lake build MathResearch.C0001 Audit.C0001",
+            command: input.theoremFamily.replayCommand,
             cwd: ".comath/lean",
             expected_exit_code: 0
           }
@@ -108,10 +110,11 @@ function writeDialecticalStressArtifact(input: {
   writeJson(input.projectRoot, join(input.workspaceRel, "dialectical_stress.json"), artifact);
 }
 
-export function runTrivialNatAddZeroCandidates(input: {
+export function runTheoremFamilyCandidates(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
   obligation: ProofObligation;
+  theoremFamily: TheoremFamily;
 }): CandidateBatch {
   const candidates: CandidateRun[] = [];
   const manifests: CandidateManifest[] = [];
@@ -138,25 +141,27 @@ export function runTrivialNatAddZeroCandidates(input: {
       locked_statement_hash: input.obligation.statement_hash,
       candidate_statement_hash: input.obligation.statement_hash,
       statement_equivalence_claim: "exact",
+      theorem_family: input.theoremFamily.id,
+      canonical_proposition: input.theoremFamily.proposition,
+      primary_dependency: input.theoremFamily.dependency,
       introduced_assumptions: [],
-      introduced_dependencies: isDirectWinner ? ["Nat.add_zero"] : [],
-      lean_files: isDirectWinner ? [".comath/lean/MathResearch/C0001.lean"] : [],
+      introduced_dependencies: isDirectWinner ? [input.theoremFamily.dependency] : [],
+      lean_files: isDirectWinner ? [`.comath/lean/${input.theoremFamily.theoremFileRel}`] : [],
       logs: [],
       evidence: [],
       hard_vetoes: [],
       failures: isDirectWinner ? [] : [`${variant.name} did not produce a kernel-checked candidate in the trivial slice.`],
-      replay_command: isDirectWinner ? "lake build" : "",
-      summary: isDirectWinner
-        ? "Direct Lean proof by Nat.add_zero for the exact locked theorem."
-        : `${variant.name} supplied stress, search, or failure-route context only.`,
-      maintainability_notes: isDirectWinner ? "Readable single theorem using a standard library theorem." : "Preserved as failed-route memory."
+      replay_command: isDirectWinner ? input.theoremFamily.replayCommand : "",
+      summary: isDirectWinner ? input.theoremFamily.directCandidateSummary : `${variant.name} supplied stress, search, or failure-route context only.`,
+      maintainability_notes: isDirectWinner ? input.theoremFamily.directCandidateMaintainabilityNotes : "Preserved as failed-route memory."
     });
     const manifestAbs = writeJson(input.projectRoot, join(workspaceRel, "candidate_manifest.json"), manifest);
     writeCandidateAuditArtifacts({
       projectRoot: input.projectRoot,
       workspaceRel,
       manifest,
-      isDirectWinner
+      isDirectWinner,
+      theoremFamily: input.theoremFamily
     });
     if (variant.variant_id === "V8") {
       writeDialecticalStressArtifact({
@@ -197,10 +202,21 @@ export function runTrivialNatAddZeroCandidates(input: {
         score: isDirectWinner ? 15_500 : -100,
         hard_vetoes: [],
         artifacts: [],
-        replay_command: isDirectWinner ? "lake build" : undefined
+        replay_command: isDirectWinner ? input.theoremFamily.replayCommand : undefined
       })
     );
   });
 
   return { candidates, manifests };
+}
+
+export function runTrivialNatAddZeroCandidates(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+}): CandidateBatch {
+  return runTheoremFamilyCandidates({
+    ...input,
+    theoremFamily: getTheoremFamilyById("nat_add_zero")
+  });
 }

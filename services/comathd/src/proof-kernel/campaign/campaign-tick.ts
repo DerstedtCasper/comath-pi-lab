@@ -10,9 +10,10 @@ import { assertPathAllowed } from "../../security/path-policy.js";
 import { promoteClaim } from "../../verification/gate.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
 import { recordFailedRoutes } from "../ensemble/failure-aggregator.js";
-import { runTrivialNatAddZeroCandidates } from "../ensemble/candidate-runner.js";
-import { createNatAddZeroLeanProject } from "../lean/lean-project.js";
+import { runTheoremFamilyCandidates } from "../ensemble/candidate-runner.js";
+import { createLeanProjectForTheorem } from "../lean/lean-project.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
+import { findTheoremFamilyForGoal, findTheoremFamilyForObligation } from "../lean/theorem-family.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
 import {
   candidateRunSchema,
@@ -100,6 +101,7 @@ type LockedProblem = {
   structured: Record<string, unknown>;
   lean_target?: string;
   theorem_name?: string;
+  notation_lines: string[];
 };
 
 function classifyLockedProblem(goal: string): LockedProblem {
@@ -108,22 +110,26 @@ function classifyLockedProblem(goal: string): LockedProblem {
       statement: "For every natural number n, n + 1 = n.",
       structured: { variable: "n", type: "Nat", proposition: "n + 1 = n" },
       lean_target: "theorem C0001 (n : Nat) : n + 1 = n",
-      theorem_name: "MathResearch.C0001"
+      theorem_name: "MathResearch.C0001",
+      notation_lines: ["- `+`: Nat addition."]
     };
   }
-  if (/n\s*\+\s*0\s*=\s*n|n \+ 0 = n|natural/i.test(goal)) {
+  const theoremFamily = findTheoremFamilyForGoal(goal);
+  if (theoremFamily) {
     return {
-      statement: "For every natural number n, n + 0 = n.",
-      structured: { variable: "n", type: "Nat", proposition: "n + 0 = n" },
-      lean_target: "theorem C0001 (n : Nat) : n + 0 = n",
-      theorem_name: "MathResearch.C0001"
+      statement: theoremFamily.lockedStatementNl,
+      structured: theoremFamily.structured,
+      lean_target: theoremFamily.leanTarget,
+      theorem_name: theoremFamily.theoremName,
+      notation_lines: theoremFamily.notationLines
     };
   }
   return {
     statement: goal.trim(),
     structured: {},
     lean_target: undefined,
-    theorem_name: undefined
+    theorem_name: undefined,
+    notation_lines: []
   };
 }
 
@@ -139,7 +145,11 @@ function createProblemLock(projectRoot: string, input: { claim_id: string; goal:
     [`# Problem Lock`, "", `claim_id: ${input.claim_id}`, "", problem.statement, ""].join("\n")
   );
   writeRuntimeFile(projectRoot, join(".comath", "lock", "assumptions.md"), "# Assumptions\n\n- n : Nat\n");
-  writeRuntimeFile(projectRoot, join(".comath", "lock", "notation.md"), "# Notation\n\n- `Nat`: Lean natural numbers.\n- `+`: Nat addition.\n");
+  writeRuntimeFile(
+    projectRoot,
+    join(".comath", "lock", "notation.md"),
+    ["# Notation", "", "- `Nat`: Lean natural numbers.", ...problem.notation_lines, ""].join("\n")
+  );
   writeRuntimeFile(
     projectRoot,
     join(".comath", "goals.yaml"),
@@ -248,8 +258,8 @@ function isNatAddOneFalseObligation(obligation: ProofObligation): boolean {
   return obligation.locked_statement_structured.proposition === "n + 1 = n";
 }
 
-function isNatAddZeroProofObligation(obligation: ProofObligation): boolean {
-  return obligation.locked_statement_structured.proposition === "n + 0 = n";
+function isSupportedProofObligation(obligation: ProofObligation): boolean {
+  return Boolean(findTheoremFamilyForObligation(obligation));
 }
 
 function blockCampaignAtFinalReplay(input: {
@@ -258,14 +268,16 @@ function blockCampaignAtFinalReplay(input: {
   obligation: ProofObligation;
   actor: string;
   reason: string;
+  stage?: ResearchCampaign["current_stage"];
 }): CampaignTickResult {
+  const stage = input.stage ?? "final_global_replay";
   const blockerRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "final_replay_blocker.json", {
     campaign_id: input.campaign.campaign_id,
     root_claim_id: input.campaign.root_claim_id,
     obligation_id: input.obligation.obligation_id,
     reason: input.reason,
     locked_statement_structured: input.obligation.locked_statement_structured,
-    required_replay_target: "native Nat.add_zero vertical-slice replay",
+    required_replay_target: "registered theorem-family clean Lean replay",
     created_at: now()
   });
   const blocker = {
@@ -282,7 +294,7 @@ function blockCampaignAtFinalReplay(input: {
       terminal_state: "blocked_with_replayable_reason",
       open_obligations: [{ ...input.obligation, status: "blocked" }],
       blockers: [blocker],
-      stage_runs: [...input.campaign.stage_runs, stageRun(input.campaign, "final_global_replay", "blocked", [blockerRel])],
+      stage_runs: [...input.campaign.stage_runs, stageRun(input.campaign, stage, "blocked", [blockerRel])],
       next_actions: ["general proof planning and theorem-specific Lean project generation are required before replay"]
     }),
     input.actor
@@ -290,7 +302,6 @@ function blockCampaignAtFinalReplay(input: {
   return {
     campaign: next,
     obligation: { ...input.obligation, status: "blocked" },
-    ensemble: readStoredDecision(input.projectRoot),
     blocker: input.reason
   };
 }
@@ -511,7 +522,18 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         actor
       });
     }
-    const batch = runTrivialNatAddZeroCandidates({ projectRoot: input.project_root, campaign, obligation });
+    const theoremFamily = findTheoremFamilyForObligation(obligation);
+    if (!theoremFamily) {
+      return blockCampaignAtFinalReplay({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor,
+        reason: "unsupported final replay target",
+        stage: "candidate_generation"
+      });
+    }
+    const batch = runTheoremFamilyCandidates({ projectRoot: input.project_root, campaign, obligation, theoremFamily });
     const candidatesRel = join(".comath", "ensembles", "lemma_sprint", "PO-0001", "candidates.json").replace(/\\/g, "/");
     writeRuntimeFile(
       input.project_root,
@@ -660,7 +682,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     if (!claim) {
       throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
     }
-    if (!isNatAddZeroProofObligation(obligation)) {
+    if (!isSupportedProofObligation(obligation)) {
       return blockCampaignAtFinalReplay({
         projectRoot: input.project_root,
         campaign,
@@ -669,10 +691,21 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         reason: "unsupported final replay target"
       });
     }
-    const leanProject = createNatAddZeroLeanProject({
+    const theoremFamily = findTheoremFamilyForObligation(obligation);
+    if (!theoremFamily) {
+      return blockCampaignAtFinalReplay({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor,
+        reason: "unsupported final replay target"
+      });
+    }
+    const leanProject = createLeanProjectForTheorem({
       projectRoot: input.project_root,
       claim_id: claim.id,
-      locked_statement_hash: claim.statement_hash
+      locked_statement_hash: claim.statement_hash,
+      theoremFamily
     });
     const replay = runCleanLeanReplay({
       projectRoot: input.project_root,
@@ -712,7 +745,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       project_id: campaign.project_id,
       claim_id: claim.id,
       kind: "lean",
-      summary: "Clean Lean/Lake replay passed for MathResearch.C0001 with static audit, dependency closure, axiom profile, and statement-equivalence reports.",
+      summary: `Clean Lean/Lake replay passed for ${leanProject.theoremName} via ${leanProject.primaryDependency} with static audit, dependency closure, axiom profile, and statement-equivalence reports.`,
       artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id]
     });
     const metadataReadyClaim = applyGatePromotedClaim(input.project_root, {
@@ -800,10 +833,42 @@ export async function replayCampaign(input: CampaignTickInput): Promise<Campaign
   if (!claim) {
     throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
   }
-  const leanProject = createNatAddZeroLeanProject({
+  const obligation = campaign.open_obligations[0];
+  if (!obligation) {
+    throw new ComathError("campaign has no open proof obligation", { statusCode: 400, code: "CAMPAIGN_NO_OBLIGATION" });
+  }
+  if (campaign.terminal_state === "completed_refutation") {
+    return {
+      campaign,
+      obligation,
+      blocker: "completed refutation campaigns do not have a proof replay"
+    };
+  }
+  if (campaign.status === "terminal" && campaign.terminal_state !== "completed_formal_proof") {
+    const terminalBlockerReason = campaign.blockers
+      .map((blocker) => blocker.reason)
+      .find((reason): reason is string => typeof reason === "string");
+    return {
+      campaign,
+      obligation,
+      blocker: terminalBlockerReason ?? "terminal campaign does not have a proof replay"
+    };
+  }
+  const theoremFamily = findTheoremFamilyForObligation(obligation);
+  if (!theoremFamily) {
+    return blockCampaignAtFinalReplay({
+      projectRoot: input.project_root,
+      campaign,
+      obligation,
+      actor: input.actor ?? "campaign",
+      reason: "unsupported final replay target"
+    });
+  }
+  const leanProject = createLeanProjectForTheorem({
     projectRoot: input.project_root,
     claim_id: claim.id,
-    locked_statement_hash: claim.statement_hash
+    locked_statement_hash: claim.statement_hash,
+    theoremFamily
   });
   const replay = runCleanLeanReplay({
     projectRoot: input.project_root,

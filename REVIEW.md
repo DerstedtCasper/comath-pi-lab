@@ -1078,6 +1078,80 @@ Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
 
+## Phase 23 Proof-Kernel Theorem-Family Registry Review Log
+
+### Scope
+
+Generalized the native proof-kernel proof campaign from a single hardcoded `Nat.add_zero` proof slice into an explicit registered theorem-family layer. Phase 23 adds the second true elementary Nat theorem family, `Nat.mul_zero`, while preserving the existing `Nat.add_zero` proof path, exact `n + 1 = n` refutation path, 8-candidate ensemble shape, `C0001` Lean target, `PO-0001` obligation contract, and v3 public campaign states.
+
+This is not arbitrary theorem proving. Only registered theorem families can produce proof candidates or clean replay projects; unsupported goals still fail closed.
+
+### TDD And Review Evidence
+
+```text
+corepack pnpm --filter @comath/comathd exec node tests/integration/phase23-ga-theorem-family-generalization.test.mjs
+Initial RED result: exit 1; `n * 0 = 0 for natural numbers` was incorrectly locked as `n + 0 = n` because `classifyLockedProblem()` used `natural` as an add-zero fallback.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after introducing theorem-family registry, Lean project generation, replay command parameterization, and candidate-runner parameterization.
+
+corepack pnpm --filter @comath/comathd exec node tests/integration/phase23-ga-theorem-family-generalization.test.mjs
+Result: exit 0; `Nat.mul_zero` campaign locks `n * 0 = 0`, generates family-specific candidates, writes Lean/FormalSpec/Audit files, passes clean replay, promotes through the gate, and passes replay route.
+
+corepack pnpm --filter @comath/comathd exec node tests/integration/phase23-ga-integrity-boundaries.test.mjs
+Review-strengthened RED result: exit 1; unsupported campaigns could return stale ensemble data from a prior supported campaign in the same project root.
+
+corepack pnpm --filter @comath/comathd exec node tests/integration/phase23-ga-integrity-boundaries.test.mjs
+Result: exit 0; integrity-boundary regressions now cover stale ensemble prevention, theorem-family/proposition mismatch blocking, and completed-refutation replay immutability.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/src/proof-kernel/lean/theorem-family.ts` with registered `nat_add_zero` and `nat_mul_zero` family definitions.
+- Added `createLeanProjectForTheorem()` while keeping `createNatAddZeroLeanProject()` as a compatibility wrapper.
+- Parameterized clean Lean replay commands over the generated Lean project instead of hardcoding only the add-zero theorem body.
+- Added `runTheoremFamilyCandidates()` while keeping `runTrivialNatAddZeroCandidates()` as a compatibility wrapper.
+- Added theorem-family metadata to candidate manifests and final replay manifests: family id, canonical proposition, primary dependency, normalized statement, and locked statement hash.
+- Hardened promotion so `formally_checked` requires a passed proof-kernel replay manifest whose locked statement hash matches the claim statement hash.
+- Hardened campaign replay so completed refutation campaigns return a read-only blocker instead of mutating `completed_refutation` into a blocked proof-replay state.
+- Hardened unsupported campaign blocking so no stale ensemble decision is returned and unsupported goals fail closed before theorem-family candidates are fabricated.
+- Added `phase23-ga-theorem-family-generalization.test.mjs` and `phase23-ga-integrity-boundaries.test.mjs` to the default `@comath/comathd` test chain.
+- Added `proof_kernel_theorem_family_registry` to `getComathdStatus()`.
+
+### Boundary And Integrity Notes
+
+The theorem-family id is advisory only unless it matches the locked proposition, locked natural-language statement, and Lean target. A mismatched obligation is blocked before candidate generation. Final replay evidence is now bound to the promoted claim through the claim statement hash, reducing the risk that a replay of one registered theorem is attached to a different claim.
+
+The registered families still share the public `MathResearch.C0001` target for compatibility with the existing Phase 18/19/20 contracts, but the replay manifest carries the family id, canonical proposition, normalized statement, primary dependency, and locked statement hash so audit consumers do not have to infer the proved proposition from the theorem name alone.
+
+### Residual Risks
+
+- The proof-kernel supports registered elementary Nat families only: `Nat.add_zero` and `Nat.mul_zero`, plus exact refutation of `n + 1 = n`.
+- There is still no broad theorem synthesis, Lean parser integration, semantic statement equivalence, or real MathProve proof search.
+- Candidate artifact paths still use the Phase 18 `PO-0001`/`C0001` layout; multi-obligation and multi-theorem campaigns remain future work.
+- Production Pi runtime registration, real persistent child-agent scheduling, native TriviumDB target validation, and generic runner re-execution remain deferred.
+
+### Final Root Validation
+
+Fresh Phase 23 validation completed on 2026-05-27:
+
+```text
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-23 package tests passed, including theorem-family generalization and integrity-boundary coverage.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; Pi extension tests passed after comathd manifest/schema hardening.
+
+corepack pnpm build
+Result: exit 0; root recursive build passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; Phase 0/design smoke, workspace package tests, Phase 23 comathd tests, Pi extension regressions, and Phase 17 integrity evaluation passed.
+```
+
 ## Phase 22 Pi Research Campaign Loop Review Log
 
 ### Scope

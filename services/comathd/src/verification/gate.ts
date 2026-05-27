@@ -190,7 +190,7 @@ function runnerReportsForEvidence(
 
 function hasPassedProofKernelReplay(
   projectRoot: string,
-  request: Pick<ClaimPromotionRequest, "claim_id">,
+  request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
   artifacts: ArtifactRef[]
 ): boolean {
   for (const artifact of artifacts) {
@@ -203,6 +203,7 @@ function hasPassedProofKernelReplay(
       if (
         replay.success &&
         replay.data.claim_id === request.claim_id &&
+        replay.data.locked_statement_hash === request.locked_statement_hash &&
         replay.data.result === "pass" &&
         replay.data.exit_code === 0
       ) {
@@ -263,7 +264,7 @@ function evidenceBindingVetoes(projectRoot: string, request: ClaimPromotionReque
   return vetoes;
 }
 
-function statusEvidenceVetoes(projectRoot: string, request: ClaimPromotionRequest): string[] {
+function statusEvidenceVetoes(projectRoot: string, claim: Claim, request: ClaimPromotionRequest): string[] {
   const evidence = evidenceForRequest(projectRoot, request);
   const artifacts = artifactsForRequest(projectRoot, request);
   const kinds = new Set(evidence.map((record) => record.kind));
@@ -341,7 +342,7 @@ function statusEvidenceVetoes(projectRoot: string, request: ClaimPromotionReques
     if (!artifactKinds.has("code") && !artifactKinds.has("runner_output")) {
       vetoes.push("formally_checked requires proof artifact");
     }
-    if (!hasPassedProofKernelReplay(projectRoot, request, artifacts)) {
+    if (!hasPassedProofKernelReplay(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts)) {
       vetoes.push("formally_checked requires passed proof-kernel final replay manifest");
     }
   }
@@ -359,7 +360,7 @@ function vetoesForRequest(projectRoot: string, claim: Claim, request: ClaimPromo
     vetoes.push("promotion requires linked artifact_ids");
   }
   vetoes.push(...evidenceBindingVetoes(projectRoot, request));
-  vetoes.push(...statusEvidenceVetoes(projectRoot, request));
+  vetoes.push(...statusEvidenceVetoes(projectRoot, claim, request));
 
   if (request.target_status === "formally_checked") {
     if (claim.formalization_status !== "kernel_checked") {

@@ -32,7 +32,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "proof_kernel_ensemble_recovery",
       "campaign_state_machine_v3",
       "claim_evidence_gate_read_models",
-      "pi_research_campaign_loop"
+      "pi_research_campaign_loop",
+      "proof_kernel_theorem_family_registry"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

@@ -213,6 +213,11 @@ try {
     "blocked",
     "blocked final replay attempts must not be recorded as completed stage runs"
   );
+  assert.equal(
+    unsupported.finalTick.campaign.stage_runs.at(-1).stage,
+    "candidate_generation",
+    "unsupported goals must fail closed before fabricating theorem-family candidates"
+  );
 } finally {
   await server.close();
   rmSync(proofRoot, { recursive: true, force: true });

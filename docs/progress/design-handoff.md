@@ -27,6 +27,7 @@ The repository has completed:
 - Phase 20 GA canonical ResearchCampaign state-machine coverage;
 - Phase 21 service read-model routes and dashboard aggregation;
 - Phase 22 Pi research campaign loop;
+- Phase 23 proof-kernel theorem-family registry;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -35,7 +36,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, and Phase 22 adds a Pi-side one-command research campaign loop. Phase 18-22 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, and Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`. Phase 18-23 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -54,10 +55,10 @@ Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA pr
 Next correct action:
 
 ```text
-/goal Start the next generalization phase for generic proof planning, real MathProve execution, Pi runtime registration, TriviumDB native evaluation, and runner re-execution replay.
+/goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, real MathProve execution, Pi runtime registration, TriviumDB native evaluation, and runner re-execution replay.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-22 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-23 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -221,6 +222,15 @@ Apply it as follows:
 - Added `extensions/comath-pi/tests/phase22-research-loop.test.mjs`.
 - Kept proof authority and trusted state mutation in `comathd`; the loop starts and ticks campaigns through service routes and returns the service-backed dashboard.
 - Production Pi runtime registration and a real persistent child-agent scheduler remain deferred.
+
+## Phase 23 Completion Notes
+
+- Added `services/comathd/src/proof-kernel/lean/theorem-family.ts` as the registered theorem-family layer for supported elementary Nat proof targets.
+- Added `Nat.mul_zero` campaign support without changing the public `C0001`, `PO-0001`, 8-candidate, or v3 campaign-state contracts.
+- Added `services/comathd/tests/integration/phase23-ga-theorem-family-generalization.test.mjs` for the `n * 0 = 0` proof campaign and replay route.
+- Added `services/comathd/tests/integration/phase23-ga-integrity-boundaries.test.mjs` for family/proposition mismatch blocking, stale ensemble prevention, and completed-refutation replay immutability.
+- Final replay manifests now include theorem family, canonical proposition, normalized statement, primary dependency, and locked statement hash; promotion requires replay hash binding to the promoted claim.
+- Broad theorem synthesis, real MathProve execution, production Pi runtime registration, native TriviumDB validation, and generic runner re-execution remain deferred.
 
 ## Verification To Run At Phase Boundary
 

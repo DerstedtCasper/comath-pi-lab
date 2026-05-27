@@ -77,9 +77,9 @@ export function runCleanLeanReplay(input: {
     reportPath: dependencyPathRel
   });
 
-  const theoremCheck = runCommand("lake", ["env", "lean", "MathResearch/C0001.lean"], cleanRoot);
-  const build = runCommand("lake", ["build", "MathResearch.C0001", "Audit.C0001"], cleanRoot);
-  const audit = runCommand("lake", ["env", "lean", "Audit/C0001.lean"], cleanRoot);
+  const theoremCheck = runCommand("lake", ["env", "lean", input.leanProject.theoremFileRel], cleanRoot);
+  const build = runCommand("lake", ["build", ...input.leanProject.buildTargets], cleanRoot);
+  const audit = runCommand("lake", ["env", "lean", input.leanProject.auditFileRel], cleanRoot);
   const stdout = [theoremCheck.stdout, build.stdout, audit.stdout].filter(Boolean).join("\n");
   const stderr = [theoremCheck.stderr, build.stderr, audit.stderr].filter(Boolean).join("\n");
 
@@ -115,11 +115,16 @@ export function runCleanLeanReplay(input: {
     campaign_id: input.campaign_id,
     claim_id: input.claim_id,
     theorem_name: input.leanProject.theoremName,
+    theorem_family: input.leanProject.theoremFamilyId,
+    canonical_proposition: input.leanProject.canonicalProposition,
+    normalized_statement: input.leanProject.formalSpec.normalized_statement,
+    primary_dependency: input.leanProject.primaryDependency,
+    locked_statement_hash: input.leanProject.formalSpec.locked_statement_hash,
     clean_workspace_path: relative(input.projectRoot, cleanRoot).replace(/\\/g, "/"),
     lean_toolchain: readFileSync(input.leanProject.toolchainFile, "utf8").trim(),
     lakefile_hash: sha256FileSync(input.leanProject.lakefile).sha256,
     local_file_hashes: hashLeanProjectFiles(input.leanProject.leanRoot),
-    command: "lake build MathResearch.C0001 Audit.C0001",
+    command: input.leanProject.replayCommand,
     exit_code,
     stdout_path: stdoutPathRel.replace(/\\/g, "/"),
     stderr_path: stderrPathRel.replace(/\\/g, "/"),

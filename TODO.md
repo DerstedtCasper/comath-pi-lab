@@ -285,11 +285,19 @@
 - [x] Add Phase 22 Pi extension coverage for start/tick/dashboard flow, capability fail-closed behavior, and no direct trusted-state mutation from the extension.
 - [x] Keep production Pi runtime registration and real child-agent scheduling deferred; the loop is a tested thin-client product path over `comathd`.
 
+## Phase 23: Proof-Kernel Theorem-Family Registry
+
+- [x] Add a registered theorem-family layer for supported elementary Nat targets while keeping `C0001`, `PO-0001`, and the 8-candidate ensemble contract stable.
+- [x] Add a positive Lean campaign slice for `Nat.mul_zero`: lock `n * 0 = 0`, generate family-specific candidates, run clean replay, promote the claim, and support `/campaign/:id/replay`.
+- [x] Keep `Nat.add_zero` and exact `n + 1 = n` refutation regressions compatible with the v3 campaign state machine.
+- [x] Block unsupported goals before fabricating theorem-family candidates and keep broad theorem synthesis deferred.
+- [x] Wire Phase 23 coverage into the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Generic proof planning and Lean project generation beyond the implemented Phase 18-22 `Nat.add_zero` and `n + 1 = n` vertical slices.
+- [ ] Broad proof planning and theorem synthesis beyond registered theorem families (`Nat.add_zero`, `Nat.mul_zero`) and exact `n + 1 = n` refutation.
 - [ ] Real MathProve execution beyond the fail-closed bridge mock and native CoMath proof-kernel slices.
 - [ ] Real agent runner/scheduler that launches and rate-limits persistent Pi/Codex child agents rather than only static definitions and service-owned campaign ticks.
 - [ ] Production Pi extension runtime registration, after official API assumptions are revalidated against the installed Pi version.
