@@ -1,5 +1,40 @@
 # REVIEW
 
+## Phase 45 Pi/comathd Install-Session E2E Review Log
+
+### Scope
+
+Phase 45 adds a root-level local install-session e2e that crosses the package boundary: it starts a real `comathd` HTTP server, imports the built Pi extension from `extensions/comath-pi/package.json` `pi.extensions[0]`, registers the extension into a fake Pi host, and drives campaign/agent command flows through `createComathClient({ baseUrl })` rather than mocked client calls.
+
+### TDD Evidence
+
+Initial RED/debugging results:
+
+```text
+node tests/e2e/phase45-pi-comathd-install-session.test.mjs
+Result: exit 1; the test initially assumed a nonexistent `details.project.project_id` field, exposing the real `/campaign/start` return shape.
+
+node tests/e2e/phase45-pi-comathd-install-session.test.mjs
+Result: exit 1; the install-session command used invalid run id `ARUN-PHASE45`, and comathd correctly rejected it against the stable-id regex.
+```
+
+Final focused validation:
+
+```text
+node tests/e2e/phase45-pi-comathd-install-session.test.mjs
+Result: exit 0; real HTTP comathd server, built Pi entrypoint import, fake Pi host registration, live client wiring, host confirmation, campaign start/status/tick, agent package listing, packaged adapter prepare-launch, project status, and resources discovery passed.
+```
+
+### Implementation Notes
+
+- Added `tests/e2e/phase45-pi-comathd-install-session.test.mjs`.
+- Wired the Phase 45 e2e into root `corepack pnpm test` after workspace package tests and before Phase 17 evaluation.
+- Verified the installed-session path preserves `rpm=4`, `comathd_only` trusted-state access, Pi host confirmation for mutating tools/commands, operator notifications, and non-authoritative packaged adapter launch visibility.
+
+### Boundary Statement
+
+Phase 45 is an automated local install-session e2e, not a full manual real-host Pi UX certification. It proves the built extension and local service can run through a realistic HTTP session with host-confirmed mutations. Richer operator UI, service lifecycle management, and real Pi host manual install walkthrough remain separate GA hardening targets.
+
 ## Phase 44 Codex CLI External Adapter Invocation Review Log
 
 ### Scope

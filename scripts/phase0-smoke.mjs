@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-44")) {
-  invariantFailures.push("README must describe the current Phase 18-44 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-45")) {
+  invariantFailures.push("README must describe the current Phase 18-45 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -122,6 +122,14 @@ if (!acceptanceMatrix.includes("42 AgentRun observability")) {
 
 if (!acceptanceMatrix.includes("43 Agent adapter package registry")) {
   invariantFailures.push("acceptance matrix must include Phase 43 agent adapter package registry acceptance");
+}
+
+if (!acceptanceMatrix.includes("44 Codex CLI external adapter invocation")) {
+  invariantFailures.push("acceptance matrix must include Phase 44 external Codex adapter acceptance");
+}
+
+if (!acceptanceMatrix.includes("45 Pi/comathd install-session e2e")) {
+  invariantFailures.push("acceptance matrix must include Phase 45 Pi/comathd install-session acceptance");
 }
 
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
@@ -222,6 +230,10 @@ if (!acceptanceMatrix.includes("/cm:agent logs") || !acceptanceMatrix.includes("
 
 if (!acceptanceMatrix.includes("/cm:agent prepare-package") || !acceptanceMatrix.includes("/cm:agent execute-package")) {
   invariantFailures.push("acceptance matrix must include Phase 43 Pi packaged-adapter command coverage language");
+}
+
+if (!acceptanceMatrix.includes("phase45-pi-comathd-install-session.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 45 install-session e2e test coverage language");
 }
 
 for (const [content, label] of [

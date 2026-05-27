@@ -11,7 +11,7 @@
   "scripts": {
     "build": "corepack pnpm -r --if-present build",
     "typecheck": "corepack pnpm -r --if-present typecheck",
-    "test": "node scripts/phase0-smoke.mjs && corepack pnpm -r --workspace-concurrency=1 --if-present test && node tests/evaluation/phase17-integrity-evaluation.test.mjs"
+    "test": "node scripts/phase0-smoke.mjs && corepack pnpm -r --workspace-concurrency=1 --if-present test && node tests/e2e/phase45-pi-comathd-install-session.test.mjs && node tests/evaluation/phase17-integrity-evaluation.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
