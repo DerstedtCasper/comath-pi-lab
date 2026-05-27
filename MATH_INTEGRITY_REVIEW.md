@@ -75,6 +75,7 @@ Remaining mathematical work:
 - Phase 21 service read-model coverage: `services/comathd/tests/integration/phase21-read-model-routes.test.mjs` and `extensions/comath-pi/tests/phase15-dashboard.test.mjs`.
 - Phase 22 Pi research-loop coverage: `extensions/comath-pi/tests/phase22-research-loop.test.mjs`.
 - Phase 23 theorem-family registry and integrity-boundary coverage: `services/comathd/src/proof-kernel/lean/theorem-family.ts`, `services/comathd/tests/integration/phase23-ga-theorem-family-generalization.test.mjs`, and `services/comathd/tests/integration/phase23-ga-integrity-boundaries.test.mjs`.
+- Phase 24 runner re-execution replay coverage: `services/comathd/src/artifacts/replay.ts`, `services/comathd/src/artifacts/snapshots.ts`, `services/comathd/tests/unit/phase10-compute-runners.test.mjs`, and `services/comathd/tests/unit/phase16-snapshot-replay.test.mjs`.
 
 ### Current Invariants
 
@@ -87,6 +88,7 @@ Remaining mathematical work:
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
+- Strict replay now re-executes replayable `sympy-exact` and `counterexample-search` reports from service-owned canonical input, reconstructs commands from the fixed runner registry, and rejects script/input/argv/result drift. This is integrity evidence only; it does not add proof authority beyond the existing promotion gates.
 
 ### Evaluation Coverage
 
@@ -154,12 +156,19 @@ Phase 23 adds coverage for:
 - unsupported goals blocking before theorem-family candidates are fabricated;
 - proof replay requests for completed refutations returning read-only blockers without mutating the `completed_refutation` terminal state.
 
+Phase 24 adds coverage for:
+
+- compute runner reports preserving canonical replay input JSON and matching input hashes;
+- strict replay route re-executing the implemented Python compute runners instead of trusting replay manifest descriptors;
+- placeholder runners remaining explicitly skipped rather than silently treated as replayable;
+- fail-closed detection for replay/report drift, static snapshot vetoes before Python execution, script hash drift, canonical input hash drift, oversized replay timeout, report-local stdio hash drift, untrusted replay argv, and result-hash mismatch paths.
+
 ### Residual Risks
 
-- Real Lean kernel checking is implemented for the registered Phase 18-23 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
+- Real Lean kernel checking is implemented for the registered Phase 18-24 `Nat.add_zero` and `Nat.mul_zero` vertical slices and their clean replay gate. General Lean proof planning, theorem synthesis, richer statement equivalence, and broader domain automation remain unimplemented.
 - MathProve bridge output is still a fail-closed mock and should not be interpreted as proof search performance or proof authority.
 - Citation condition matching is conservative string/condition matching, not semantic theorem equivalence.
-- Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, but generic computation runner re-execution remains deferred.
+- Snapshot replay now reruns the Phase 18 campaign Lean proof replay after restore, and Phase 24 reruns the implemented deterministic Python compute runners. Stronger OS/network sandboxing, dependency locks, cross-machine replay, and broader runner families remain unimplemented.
 - Braid domain scripts provide exact/combinatorial evidence and risk flags; they do not prove physical interpretations or category-level equivalences.
 - Phase 21 read models improve inspection fidelity but are not mathematical authorities; claim promotion remains gated by evidence, artifacts, and proof-kernel replay where applicable.
 - Phase 22 improves Pi-side orchestration, but the loop is not a proof authority and does not validate production Pi runtime registration or a real child-agent scheduler.

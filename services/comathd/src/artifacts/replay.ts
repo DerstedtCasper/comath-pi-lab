@@ -1,7 +1,23 @@
+import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
+import { promisify } from "node:util";
+import { sha256File } from "./hash.js";
 import { assertPathAllowed } from "../security/path-policy.js";
-import { canonicalJson, runnerResultSha256, scrubHostPaths, sha256Text } from "../verification/runner-contracts.js";
+import {
+  canonicalJson,
+  pythonScriptPath,
+  runnerResultSha256,
+  runnerSpecs,
+  scrubHostPaths,
+  sha256Text,
+  type RunnerSpec
+} from "../verification/runner-contracts.js";
+
+const execFileAsync = promisify(execFile);
+const OUTPUT_LIMIT = 64 * 1024;
+const DEFAULT_REEXECUTION_TIMEOUT_MS = 5_000;
+const MAX_REEXECUTION_TIMEOUT_MS = 30_000;
 
 export type ReplayRunStatus = "replayable" | "unreplayable";
 
@@ -50,6 +66,10 @@ export type RunnerReplayIntegrity = {
   warnings: string[];
 };
 
+export type RunnerReexecutionOptions = {
+  cwd?: string;
+};
+
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
@@ -84,6 +104,80 @@ function containsHostPath(value: unknown): boolean {
   return false;
 }
 
+function runnerSpecForReplay(runnerId: string): RunnerSpec | null {
+  const spec = runnerSpecs.find((item) => item.runner_id === runnerId);
+  if (!spec || (spec.runner_id !== "sympy-exact" && spec.runner_id !== "counterexample-search")) {
+    return null;
+  }
+  return spec;
+}
+
+function isPlaceholderRunner(runnerId: string): boolean {
+  return runnerId.endsWith("-placeholder");
+}
+
+function expectedReplayArgv(spec: RunnerSpec): string[] {
+  return ["python", `<runner-path>/${spec.script ?? "unknown"}`, "--input-json", "<canonical-json>"];
+}
+
+function sameStringArray(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function parseReplayInput(inputJson: unknown): { ok: true; value: Record<string, unknown> } | { ok: false } {
+  if (typeof inputJson !== "string") {
+    return { ok: false };
+  }
+  try {
+    const parsed = JSON.parse(inputJson);
+    return parsed && typeof parsed === "object" ? { ok: true, value: parsed as Record<string, unknown> } : { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function trustedReexecutionTimeout(value: unknown): { timeout_ms: number; vetoes: string[] } {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return { timeout_ms: DEFAULT_REEXECUTION_TIMEOUT_MS, vetoes: [] };
+  }
+  if (!Number.isInteger(value) || value <= 0 || value > MAX_REEXECUTION_TIMEOUT_MS) {
+    return { timeout_ms: DEFAULT_REEXECUTION_TIMEOUT_MS, vetoes: ["runner_reexecution_timeout_untrusted"] };
+  }
+  return { timeout_ms: value, vetoes: [] };
+}
+
+function replayResultSha256(stdout: string, spec: RunnerSpec): { sha256?: string; vetoes: string[] } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return { vetoes: ["runner_reexecution_invalid_json"] };
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return { vetoes: ["runner_reexecution_invalid_json"] };
+  }
+  const record = parsed as Record<string, unknown>;
+  if (record.runner_id !== spec.runner_id) {
+    return { vetoes: ["runner_reexecution_runner_id_mismatch"] };
+  }
+
+  const exactness = typeof record.exactness === "string" ? record.exactness : "not_applicable";
+  const supportsStatus = typeof record.supports_status === "string" ? record.supports_status : "none";
+  const vetoes = asStringArray(record.vetoes);
+  const warnings = asStringArray(record.warnings);
+  const sha256 = runnerResultSha256({
+    ok: record.ok === true,
+    runner_id: spec.runner_id,
+    runner_version: spec.runner_version,
+    exactness,
+    supports_status: supportsStatus,
+    result: record.result ?? null,
+    vetoes,
+    warnings
+  });
+  return sha256 ? { sha256, vetoes: [] } : { vetoes: ["runner_reexecution_invalid_json"] };
+}
+
 export function verifyRunnerReportReplayIntegrity(report: unknown): RunnerReplayIntegrity {
   const vetoes: string[] = [];
   const warnings: string[] = [];
@@ -113,6 +207,117 @@ export function verifyRunnerReportReplayIntegrity(report: unknown): RunnerReplay
     if (!Array.isArray(metadata.replay_argv) || metadata.replay_argv.length === 0) {
       vetoes.push("runner_replay_argv_missing");
     }
+    if (isSha256(metadata.stdout_sha256) && metadata.stdout_truncated !== true) {
+      const stdout = typeof result?.stdout === "string" ? result.stdout : undefined;
+      if (stdout === undefined || metadata.stdout_sha256 !== sha256Text(stdout)) {
+        vetoes.push("runner_stdout_hash_mismatch");
+      }
+    }
+    if (isSha256(metadata.stderr_sha256) && metadata.stderr_truncated !== true) {
+      const stderr = typeof result?.stderr === "string" ? result.stderr : undefined;
+      if (stderr === undefined || metadata.stderr_sha256 !== sha256Text(stderr)) {
+        vetoes.push("runner_stderr_hash_mismatch");
+      }
+    }
+  }
+
+  return { ok: vetoes.length === 0, vetoes: Array.from(new Set(vetoes)), warnings };
+}
+
+export async function verifyRunnerReportReexecution(
+  report: unknown,
+  options: RunnerReexecutionOptions = {}
+): Promise<RunnerReplayIntegrity> {
+  const vetoes: string[] = [];
+  const warnings: string[] = [];
+  const record = report && typeof report === "object" ? (report as Record<string, any>) : undefined;
+  const result = record?.result && typeof record.result === "object" ? (record.result as Record<string, any>) : undefined;
+  const metadata = result?.metadata && typeof result.metadata === "object" ? (result.metadata as Record<string, any>) : undefined;
+  const runnerId = String(record?.runner_id ?? result?.runner_id ?? "unknown");
+
+  if (isPlaceholderRunner(runnerId)) {
+    return { ok: true, vetoes, warnings };
+  }
+
+  const spec = runnerSpecForReplay(runnerId);
+  if (!spec || !spec.script) {
+    return { ok: false, vetoes: ["runner_reexecution_unsupported_runner"], warnings };
+  }
+
+  if (!metadata) {
+    return { ok: false, vetoes: ["runner_metadata_missing"], warnings };
+  }
+  if (!result) {
+    return { ok: false, vetoes: ["runner_result_missing"], warnings };
+  }
+
+  const replayArgv = asStringArray(metadata.replay_argv);
+  if (!sameStringArray(replayArgv, expectedReplayArgv(spec))) {
+    vetoes.push("runner_reexecution_argv_untrusted");
+  }
+
+  const inputJson = typeof metadata.replay_input_json === "string" ? metadata.replay_input_json : undefined;
+  if (!inputJson) {
+    vetoes.push("runner_reexecution_input_missing");
+  } else {
+    const inputHash = sha256Text(inputJson);
+    if (metadata.replay_input_sha256 !== inputHash || metadata.input_sha256 !== inputHash) {
+      vetoes.push("runner_reexecution_input_hash_mismatch");
+    }
+    const replayInput = parseReplayInput(inputJson);
+    if (
+      !replayInput.ok ||
+      replayInput.value.runner_id !== spec.runner_id ||
+      replayInput.value.runner_version !== spec.runner_version ||
+      replayInput.value.project_id !== record?.project_id ||
+      replayInput.value.claim_id !== record?.claim_id
+    ) {
+      vetoes.push("runner_reexecution_input_mismatch");
+    }
+  }
+
+  if (result?.runner_version !== spec.runner_version) {
+    vetoes.push("runner_reexecution_runner_version_mismatch");
+  }
+
+  const replayTimeout = trustedReexecutionTimeout(metadata.timeout_ms);
+  vetoes.push(...replayTimeout.vetoes);
+
+  const scriptPath = pythonScriptPath(spec.script);
+  try {
+    const currentScriptHash = await sha256File(scriptPath);
+    if (metadata.script_sha256 !== currentScriptHash.sha256) {
+      vetoes.push("runner_reexecution_script_hash_mismatch");
+    }
+  } catch {
+    vetoes.push("runner_reexecution_unavailable");
+  }
+
+  if (vetoes.length > 0 || !inputJson) {
+    return { ok: false, vetoes: Array.from(new Set(vetoes)), warnings };
+  }
+
+  try {
+    const execution = await execFileAsync("python", [scriptPath, "--input-json", inputJson], {
+      cwd: options.cwd,
+      encoding: "utf8",
+      shell: false,
+      windowsHide: true,
+      timeout: replayTimeout.timeout_ms,
+      maxBuffer: OUTPUT_LIMIT
+    });
+    const replayHash = replayResultSha256(execution.stdout, spec);
+    vetoes.push(...replayHash.vetoes);
+    if (!replayHash.sha256 || result.result_sha256 !== replayHash.sha256) {
+      vetoes.push("runner_reexecution_result_hash_mismatch");
+    }
+    const safeStderr = scrubHostPaths(execution.stderr ?? "");
+    if (isSha256(metadata.stderr_sha256) && metadata.stderr_sha256 !== sha256Text(safeStderr)) {
+      vetoes.push("runner_reexecution_stderr_hash_mismatch");
+    }
+  } catch (error) {
+    const execError = error as { killed?: boolean; code?: unknown };
+    vetoes.push(execError.killed ? "runner_reexecution_timeout" : "runner_reexecution_nonzero_exit");
   }
 
   return { ok: vetoes.length === 0, vetoes: Array.from(new Set(vetoes)), warnings };

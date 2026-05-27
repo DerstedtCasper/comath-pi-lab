@@ -45,6 +45,8 @@ export type RunnerMetadata = {
   shell: false;
   timeout_ms: number;
   seed?: number;
+  replay_input_json: string;
+  replay_input_sha256: string;
   input_sha256: string;
   script_sha256: string | null;
   replay_argv: string[];
@@ -305,6 +307,8 @@ async function buildMetadata(
     shell: false,
     timeout_ms: request.timeout_ms,
     seed: request.seed,
+    replay_input_json: inputJson,
+    replay_input_sha256: sha256Text(inputJson),
     input_sha256: sha256Text(inputJson),
     script_sha256: scriptPath ? (await sha256File(scriptPath)).sha256 : null,
     replay_argv: scriptPath

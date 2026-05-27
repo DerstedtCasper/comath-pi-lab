@@ -293,6 +293,17 @@
 - [x] Block unsupported goals before fabricating theorem-family candidates and keep broad theorem synthesis deferred.
 - [x] Wire Phase 23 coverage into the default `@comath/comathd` test chain.
 
+## Phase 24: Runner Re-Execution Replay
+
+- [x] Persist service-owned canonical runner input JSON and input hash material in runner reports.
+- [x] Add strict `/replay/verify-manifest` runner re-execution for `sympy-exact` and `counterexample-search`.
+- [x] Reconstruct commands from the fixed runner registry instead of trusting replay-manifest paths or user-supplied argv.
+- [x] Fail closed on replay/report mismatch, static snapshot vetoes before Python execution, canonical input mismatch, untrusted argv shape, oversized replay timeout, report-local stdio hash drift, runner-version drift, script hash drift, invalid runner JSON, runner ID mismatch, nonzero exit, timeout, and result hash mismatch.
+- [x] Keep placeholder runners explicitly skipped with `placeholder_runner_has_no_executable_replay`.
+- [x] Return per-runner `runner_reexecution` summaries for replay auditability.
+- [x] Keep ordinary `/snapshot/verify` and restore on static snapshot integrity semantics; strict runner re-execution is owned by `/replay/verify-manifest`.
+- [x] Wire Phase 24 coverage through the existing Phase 10 and Phase 16 tests in the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -302,7 +313,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Real agent runner/scheduler that launches and rate-limits persistent Pi/Codex child agents rather than only static definitions and service-owned campaign ticks.
 - [ ] Production Pi extension runtime registration, after official API assumptions are revalidated against the installed Pi version.
 - [ ] Native TriviumDB performance and persistence validation on the target platform.
-- [ ] Runner re-execution replay under an OS/network sandbox with dependency/version checks.
+- [ ] Stronger runner re-execution sandboxing: OS-level isolation, network-denial enforcement, dependency lock capture, and cross-machine replay validation beyond the Phase 24 service-owned re-execution checks.
 - [ ] Richer statement equivalence, Lean parser integration, and configurable trust profiles for broader mathematical domains.
 
 ## Design Documentation Goal

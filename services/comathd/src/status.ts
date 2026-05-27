@@ -33,14 +33,15 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "campaign_state_machine_v3",
       "claim_evidence_gate_read_models",
       "pi_research_campaign_loop",
-      "proof_kernel_theorem_family_registry"
+      "proof_kernel_theorem_family_registry",
+      "runner_reexecution_replay"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",
       "real_agent_runner_scheduler_deferred",
       "production_pi_runtime_registration_deferred",
       "native_trivium_performance_evaluation_deferred",
-      "runner_reexecution_replay_deferred",
+      "stronger_runner_reexecution_sandbox_deferred",
       "secret_scan_not_full_dlp"
     ]
   };

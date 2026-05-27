@@ -21,7 +21,8 @@ const requiredCapabilities = [
   "literature_condition_matching",
   "working_paper",
   "snapshot_replay",
-  "proof_kernel_ga_vertical_slice"
+  "proof_kernel_ga_vertical_slice",
+  "runner_reexecution_replay"
 ];
 
 for (const capability of requiredCapabilities) {
@@ -33,7 +34,7 @@ for (const capability of requiredCapabilities) {
 const requiredResidualRisks = [
   "generic_proof_planning_deferred",
   "production_pi_runtime_registration_deferred",
-  "runner_reexecution_replay_deferred"
+  "stronger_runner_reexecution_sandbox_deferred"
 ];
 
 for (const risk of requiredResidualRisks) {

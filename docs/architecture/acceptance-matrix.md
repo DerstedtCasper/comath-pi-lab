@@ -41,6 +41,7 @@
 | 21 Service read models | `phase21-read-model-routes.test.mjs` verifies service-owned claim/evidence/gate list routes, and `phase15-dashboard.test.mjs` verifies the Pi dashboard reads those routes without mutation or direct `.comath/` access. |
 | 22 Pi research campaign loop | `phase22-research-loop.test.mjs` verifies quote-aware `/cm:research` input, scoped campaign-loop capability checks, bounded start/tick execution through `comathd`, and dashboard return without direct `.comath/` access. |
 | 23 Proof-kernel theorem-family registry | `phase23-ga-theorem-family-generalization.test.mjs` and `phase23-ga-integrity-boundaries.test.mjs` verify registered `Nat.mul_zero` replay, family-specific candidate manifests, replay-manifest hash binding, unsupported-goal fail-closed behavior, and refutation replay immutability. |
+| 24 Runner re-execution replay | `phase10-compute-runners.test.mjs` verifies canonical replay input capture, and `phase16-snapshot-replay.test.mjs` verifies strict `/replay/verify-manifest` re-executes `sympy-exact` and `counterexample-search`, skips placeholders explicitly, and fails closed on replay/report drift, static snapshot vetoes, script hash drift, input hash drift, oversized replay timeout, report-local stdio hash drift, and untrusted replay argv. |
 
 ## Security Acceptance
 
@@ -68,6 +69,7 @@
 | Dashboard read models are not proof authority | Phase 21 read-model routes expose claim/evidence/gate state for inspection only; the dashboard remains read-only and cannot promote, repair, or mutate mathematical state. |
 | Pi research loop is not proof authority | Phase 22 loop orchestration can start and tick campaigns, but proof authority remains in service-owned gates, artifacts, and final replay. |
 | Theorem-family metadata cannot override locked statements | Phase 23 integrity tests block mismatched family/proposition/Lean-target obligations before candidate generation and bind final replay manifests to the claim statement hash. |
+| Replay manifests cannot substitute for re-execution | Phase 24 strict replay reconstructs known runner commands from the service registry, uses stored canonical input, and rejects replay/report, script/input/argv/result, timeout, and report-local stdio drift instead of trusting manifest descriptors. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -82,6 +84,7 @@
 | Dashboard service read model | `phase21-read-model-routes.test.mjs` and `phase15-dashboard.test.mjs` cover `claim/evidence/gate` list routes and read-only dashboard aggregation. | Covered for product inspection; not mathematical authority. |
 | One-command Pi campaign loop | `phase22-research-loop.test.mjs` covers command parsing, scoped capability enforcement, bounded campaign ticks, and dashboard return. | Covered in a mock Pi thin-client harness; installed runtime registration remains deferred. |
 | Registered theorem-family proof replay | `phase23-ga-theorem-family-generalization.test.mjs` runs `Nat.mul_zero` through the same campaign, 8-candidate, clean replay, promotion, and replay route path while preserving `Nat.add_zero` compatibility. | Covered for two elementary Nat theorem families. |
-| Global GA readiness | Current test evidence does not cover arbitrary theorem planning, real MathProve execution, production Pi runtime registration, native TriviumDB validation, or generic runner re-execution replay. | Not achieved; blocked by deferred generalization work. |
+| Compute runner re-execution replay | `phase16-snapshot-replay.test.mjs` verifies strict replay route re-execution for the implemented Python compute runners and per-runner audit summaries. | Covered for service-owned deterministic runner replay; stronger OS/network sandbox and dependency lock replay remain deferred. |
+| Global GA readiness | Current test evidence does not cover arbitrary theorem planning, real MathProve execution, production Pi runtime registration, native TriviumDB validation, stronger OS/network replay sandboxing, or broad theorem synthesis. | Not achieved; blocked by deferred generalization work. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the registered Phase 23 theorem families. | Deferred. |
 | Production Pi runtime registration | Extension descriptors and tool mappings exist; installed runtime API registration is not validated. | Deferred. |

@@ -145,6 +145,7 @@ Remaining security requirements:
 9. **Snapshot/replay are exposed only through `comathd`.** HTTP routes now cover snapshot export, verify, restore, and replay-manifest verification; Pi extension entries are descriptors/commands only and do not read or write `.comath/` directly.
 10. **Phase 18 proof-kernel replay remains service-owned.** Campaign routes, candidate artifacts, Lean replay outputs, and counterexample evidence write only under path-policy-controlled `.comath/` directories; Pi campaign tools call `comathd` and do not mutate trusted files directly.
 11. **Formal promotion requires replay evidence.** The gate rejects preloaded kernel metadata unless the requested artifacts include a passed proof-kernel `final_replay_manifest.json` for the same claim.
+12. **Compute runner replay no longer trusts manifest descriptors alone.** Strict `/replay/verify-manifest` reconstructs allowlisted runner commands from service code, uses persisted canonical runner input, and fails closed on replay/report drift, static snapshot vetoes before Python execution, script hash drift, input hash drift, oversized replay timeout, report-local stdio hash drift, untrusted replay argv, runner-version drift, nonzero exit, timeout, invalid JSON, runner ID mismatch, and result hash mismatch.
 
 ### Validation Commands
 
@@ -184,6 +185,6 @@ Result: exit 0; includes Pi research/campaign command and tool descriptor tests.
 
 - Secret scanning is pattern-based. It is suitable as a fail-closed Research Alpha import/export gate but not a full DLP classifier.
 - Snapshot manifests are integrity-checked but not cryptographically signed by an external trust anchor. Untrusted imported snapshots still require operator review and future signature support.
-- Snapshot/replay verifies deterministic envelopes and stale outputs, and Phase 18 reruns the campaign Lean proof replay after restore. Generic computation runner re-execution remains deferred.
+- Snapshot/replay verifies deterministic envelopes and stale outputs, Phase 18 reruns the campaign Lean proof replay after restore, and Phase 24 reruns the implemented Python compute runners through strict replay. Stronger OS-level sandboxing, network-denial enforcement, dependency lock capture, and cross-machine replay validation remain deferred.
 - `comathd` still lacks lock/session semantics for multi-process writers; current tests exercise single-process Research Alpha behavior.
 - Production Pi runtime permissions must be revalidated before enabling installed runtime registration.

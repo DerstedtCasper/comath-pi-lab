@@ -20,6 +20,7 @@ import { sha256File } from "./hash.js";
 import {
   createReplayManifest,
   replayManifestPath,
+  verifyRunnerReportReexecution,
   verifyRunnerReportReplayIntegrity,
   type ReplayManifest
 } from "./replay.js";
@@ -83,7 +84,27 @@ export type VerifySnapshotResult = {
   ok: boolean;
   vetoes: string[];
   warnings: string[];
+  runner_reexecution: RunnerReexecutionSummary[];
   manifest?: SnapshotManifest;
+};
+
+export type VerifySnapshotOptions = {
+  reexecuteRunners?: boolean;
+};
+
+export type RunnerReexecutionSummary = {
+  report_relative_path: string;
+  runner_id: string;
+  ok: boolean;
+  skipped: boolean;
+  reason?: string;
+  vetoes: string[];
+  warnings: string[];
+};
+
+type PendingRunnerReexecution = {
+  entry: SnapshotEntry;
+  report: any;
 };
 
 export type RestoreSnapshotResult = {
@@ -273,6 +294,44 @@ function manifestHash(manifest: SnapshotManifest): string {
   return sha256Text(canonicalJson(materialForIntegrity(manifest)));
 }
 
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function isSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
+function optionalSha256(value: unknown): string | null | undefined {
+  if (isSha256(value)) {
+    return value;
+  }
+  return value === null ? null : undefined;
+}
+
+function replayRunMatchesReport(run: ReplayManifest["runs"][number], report: any, relativePath: string): boolean {
+  const result = report?.result ?? {};
+  const metadata = result?.metadata ?? {};
+  const runnerId = String(report?.runner_id ?? result?.runner_id ?? "unknown");
+  return (
+    run.report_relative_path === normalizeRelativePath(relativePath) &&
+    run.project_id === (typeof report?.project_id === "string" ? report.project_id : undefined) &&
+    run.claim_id === (typeof report?.claim_id === "string" ? report.claim_id : undefined) &&
+    run.runner_id === runnerId &&
+    run.runner_version === (typeof result?.runner_version === "string" ? result.runner_version : undefined) &&
+    run.exactness === (typeof result?.exactness === "string" ? result.exactness : undefined) &&
+    run.supports_status === (typeof result?.supports_status === "string" ? result.supports_status : undefined) &&
+    run.seed === (typeof metadata?.seed === "number" ? metadata.seed : undefined) &&
+    run.timeout_ms === (typeof metadata?.timeout_ms === "number" ? metadata.timeout_ms : undefined) &&
+    run.input_sha256 === (isSha256(metadata?.input_sha256) ? metadata.input_sha256 : undefined) &&
+    run.script_sha256 === optionalSha256(metadata?.script_sha256) &&
+    run.result_sha256 === (isSha256(result?.result_sha256) ? result.result_sha256 : undefined) &&
+    run.stdout_sha256 === (isSha256(metadata?.stdout_sha256) ? metadata.stdout_sha256 : undefined) &&
+    run.stderr_sha256 === (isSha256(metadata?.stderr_sha256) ? metadata.stderr_sha256 : undefined) &&
+    JSON.stringify(run.replay_argv) === JSON.stringify(asStringArray(metadata?.replay_argv))
+  );
+}
+
 function readManifest(path: string): SnapshotManifest {
   return JSON.parse(readFileSync(path, "utf8")) as SnapshotManifest;
 }
@@ -378,14 +437,19 @@ export async function exportSnapshot(projectRoot: string, input: ExportSnapshotI
   return { snapshot_root: snapshotRoot, manifest_path: manifestPath, replay_manifest_path: replayPath, manifest };
 }
 
-export async function verifySnapshot(manifestPath: string): Promise<VerifySnapshotResult> {
+export async function verifySnapshot(
+  manifestPath: string,
+  options: VerifySnapshotOptions = {}
+): Promise<VerifySnapshotResult> {
   const vetoes: string[] = [];
   const warnings: string[] = [];
+  const runnerReexecution: RunnerReexecutionSummary[] = [];
+  const pendingRunnerReexecution: PendingRunnerReexecution[] = [];
   let manifest: SnapshotManifest;
   try {
     manifest = readManifest(manifestPath);
   } catch {
-    return { ok: false, vetoes: ["manifest_unreadable"], warnings };
+    return { ok: false, vetoes: ["manifest_unreadable"], warnings, runner_reexecution: runnerReexecution };
   }
 
   const snapshotRoot = dirname(manifestPath);
@@ -423,6 +487,28 @@ export async function verifySnapshot(manifestPath: string): Promise<VerifySnapsh
     }
   }
 
+  const runnerEntryPaths = new Set(
+    manifest.entries
+      .filter((entry) => entry.category === "runner_output")
+      .map((entry) => normalizeRelativePath(entry.relative_path))
+  );
+  const replayRunsByPath = new Map<string, ReplayManifest["runs"][number]>();
+  for (const run of manifest.replay.runs) {
+    const reportPath = normalizeRelativePath(run.report_relative_path);
+    if (replayRunsByPath.has(reportPath)) {
+      vetoes.push("replay_run_duplicate");
+    }
+    replayRunsByPath.set(reportPath, run);
+    if (!runnerEntryPaths.has(reportPath)) {
+      vetoes.push("replay_run_report_missing");
+    }
+  }
+  for (const reportPath of runnerEntryPaths) {
+    if (!replayRunsByPath.has(reportPath)) {
+      vetoes.push("replay_run_missing");
+    }
+  }
+
   for (const entry of manifest.entries) {
     const snapshotPath = join(snapshotRoot, entry.snapshot_path);
     if (!isInsideRoot(snapshotRoot, snapshotPath)) {
@@ -451,13 +537,58 @@ export async function verifySnapshot(manifestPath: string): Promise<VerifySnapsh
         const integrity = verifyRunnerReportReplayIntegrity(report);
         vetoes.push(...integrity.vetoes);
         warnings.push(...integrity.warnings);
+        if (options.reexecuteRunners) {
+          const runnerId = String(report?.runner_id ?? report?.result?.runner_id ?? "unknown");
+          const replayRun = replayRunsByPath.get(normalizeRelativePath(entry.relative_path));
+          if (replayRun && !replayRunMatchesReport(replayRun, report, entry.relative_path)) {
+            vetoes.push("replay_run_report_mismatch");
+          }
+          if (integrity.ok) {
+            pendingRunnerReexecution.push({ entry, report });
+          }
+        }
       } catch {
         vetoes.push("runner_report_unreadable");
       }
     }
   }
 
-  return { ok: vetoes.length === 0, vetoes: Array.from(new Set(vetoes)), warnings: Array.from(new Set(warnings)), manifest };
+  if (options.reexecuteRunners && vetoes.length === 0) {
+    for (const item of pendingRunnerReexecution) {
+      const runnerId = String(item.report?.runner_id ?? item.report?.result?.runner_id ?? "unknown");
+      if (runnerId.endsWith("-placeholder")) {
+        runnerReexecution.push({
+          report_relative_path: item.entry.relative_path,
+          runner_id: runnerId,
+          ok: true,
+          skipped: true,
+          reason: "placeholder_runner_has_no_executable_replay",
+          vetoes: [],
+          warnings: []
+        });
+        continue;
+      }
+      const reexecution = await verifyRunnerReportReexecution(item.report, { cwd: snapshotRoot });
+      vetoes.push(...reexecution.vetoes);
+      warnings.push(...reexecution.warnings);
+      runnerReexecution.push({
+        report_relative_path: item.entry.relative_path,
+        runner_id: runnerId,
+        ok: reexecution.ok,
+        skipped: false,
+        vetoes: reexecution.vetoes,
+        warnings: reexecution.warnings
+      });
+    }
+  }
+
+  return {
+    ok: vetoes.length === 0,
+    vetoes: Array.from(new Set(vetoes)),
+    warnings: Array.from(new Set(warnings)),
+    runner_reexecution: runnerReexecution,
+    manifest
+  };
 }
 
 export async function restoreSnapshot(

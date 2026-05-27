@@ -939,7 +939,7 @@ Result: exit 0; Phase 6 extension tests passed, including snapshot/replay comman
 
 ### Current Verdict
 
-CoMath Pi Lab is now a working Research Alpha local mathematical workbench prototype with service-mediated mutation, auditable artifacts, gates, paper provenance, snapshot verification, and Pi thin-client descriptors. It is not yet a production mathematical workbench or proof authority: Lean/MathProve kernel execution, production Pi runtime registration, native TriviumDB target validation, OS/network sandboxing, multi-process locks, and runner re-execution replay remain Research Beta work.
+At Phase 16, CoMath Pi Lab was a working Research Alpha local mathematical workbench prototype with service-mediated mutation, auditable artifacts, gates, paper provenance, snapshot verification, and Pi thin-client descriptors. It was not yet a production mathematical workbench or proof authority: Lean/MathProve kernel execution, production Pi runtime registration, native TriviumDB target validation, OS/network sandboxing, multi-process locks, and runner re-execution replay remained Research Beta work.
 
 ## Phase 17 Review Log
 
@@ -1006,7 +1006,7 @@ The Phase 17 evaluation suite covers mathematical safety, failed-runner promotio
 
 ### Residual Risks
 
-Research Alpha remains an auditable local prototype. Real Lean kernel proof checking, production Pi runtime registration, native TriviumDB performance evaluation, full DLP-grade secret scanning, and runner re-execution replay are Research Beta candidates rather than completed Phase 17 capabilities.
+At Phase 17, Research Alpha remained an auditable local prototype. Real Lean kernel proof checking, production Pi runtime registration, native TriviumDB performance evaluation, full DLP-grade secret scanning, and runner re-execution replay were Research Beta candidates rather than completed Phase 17 capabilities.
 
 ## Phase 18 GA Proof-Kernel Vertical Slice Review Log
 
@@ -1058,7 +1058,7 @@ Pi remains a thin client. Campaign tools call `comathd` routes and mutating desc
 - Statement equivalence and axiom/dependency trust profiles are conservative file/output checks, not a full Lean AST equivalence engine.
 - The 8-candidate ensemble is implemented for the Phase 18 vertical slice; a general proof-route scheduler and real persistent child-agent runner remain deferred.
 - MathProve is still a fail-closed bridge mock outside this native proof-kernel slice.
-- Snapshot replay reruns the Lean proof-kernel replay for the campaign proof, but generic runner re-execution under OS/network sandbox remains deferred.
+- Snapshot replay reruns the Lean proof-kernel replay for the campaign proof; Phase 24 later added deterministic compute runner re-execution, while OS/network sandboxing remains deferred.
 
 ### Final Root Validation
 
@@ -1077,6 +1077,76 @@ Result: exit 0; Phase 0/design smoke, all workspace tests, Phase 18 comathd proo
 Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
 Result: False; no repository-root runtime state was left behind.
 ```
+
+## Phase 24 Runner Re-Execution Replay Review Log
+
+### Scope
+
+Added service-owned deterministic re-execution for replayable compute runner reports. Phase 24 strengthens `/replay/verify-manifest` so it no longer relies only on snapshot/replay manifest integrity: `sympy-exact` and `counterexample-search` reports are rerun from stored canonical input, while placeholder runners remain explicitly skipped.
+
+This is not a full OS-level sandbox or cross-machine reproducibility layer. Stronger network-denial enforcement, dependency lock capture, and cross-machine replay validation remain deferred.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase10-compute-runners.test.mjs
+Initial RED result: exit 1; runner reports did not contain `metadata.replay_input_json`, so canonical replay input could not be reconstructed.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding canonical replay input metadata.
+
+node services/comathd/tests/unit/phase10-compute-runners.test.mjs
+Result: exit 0; compute runner reports now persist canonical replay input JSON and matching input hashes.
+
+node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs
+Initial RED result: exit 1; strict replay route still returned `ok=true` after a snapshot-local runner report's script hash was forged.
+
+node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs
+Review-strengthened RED result: exit 1; `/replay/verify-manifest` returned no per-runner `runner_reexecution` summaries.
+
+node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs
+Review-strengthened RED result: exit 1; replay manifest/report drift with recomputed manifest hashes was not rebound to the actual runner report fields.
+
+node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs
+Review-strengthened RED result: exit 1; snapshot entry hash mismatch still allowed the test to reach runner-level re-execution checks.
+
+node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs
+Review-strengthened RED result: exit 1; a replay report with an oversized `timeout_ms` still passed strict replay after manifest hashes were recomputed.
+
+node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs
+Review-strengthened RED result: exit 1; report-local `stdout_sha256` metadata could be forged alongside replay manifest hashes without a static stdio self-consistency veto.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding strict runner re-execution and replay summaries.
+
+node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs
+Result: exit 0; strict replay route re-executes `sympy-exact` and `counterexample-search`, skips placeholders, and fails closed on replay/report drift, static snapshot vetoes, script hash drift, canonical input hash drift, oversized replay timeout, report-local stdio hash drift, and untrusted replay argv.
+```
+
+### Changed Surfaces
+
+- Added `replay_input_json` and `replay_input_sha256` to compute runner metadata in `services/comathd/src/verification/runner-contracts.ts`.
+- Added `verifyRunnerReportReexecution()` in `services/comathd/src/artifacts/replay.ts`.
+- Added `VerifySnapshotOptions.reexecuteRunners` and per-runner `runner_reexecution` summaries in `services/comathd/src/artifacts/snapshots.ts`.
+- Added replay/report binding vetoes (`replay_run_duplicate`, `replay_run_report_missing`, `replay_run_missing`, `replay_run_report_mismatch`) so replay runs must match the actual snapshot runner report fields before Python execution is considered.
+- Changed `/replay/verify-manifest` to call `verifySnapshot(..., { reexecuteRunners: true })` while ordinary `/snapshot/verify` and restore remain static snapshot-integrity checks.
+- Added Phase 24 coverage to `phase10-compute-runners.test.mjs` and `phase16-snapshot-replay.test.mjs`.
+- Added `runner_reexecution_replay` to `getComathdStatus()` and replaced the old residual risk with `stronger_runner_reexecution_sandbox_deferred`.
+
+### Boundary And Integrity Notes
+
+Strict runner replay reconstructs command shape from the fixed service runner registry. It does not trust report-local absolute paths, manifest replay descriptors, or arbitrary argv. The stored canonical input must hash back to the recorded input hash, report-local stdio fields must match their metadata hashes when untruncated, oversized report-supplied replay timeouts are rejected, and the current runner script hash must match the recorded script hash before re-execution can pass.
+
+Runner reports do not currently carry a report-local `self_hash` or host `report_path`. Snapshot binding is instead represented by snapshot entry `relative_path`, `sha256`, and `size_bytes`, plus replay manifest `report_relative_path` and runner-field matching. This avoids host path leakage while still rebinding replay runs to the actual copied runner report.
+
+Replay success is an integrity signal for prior compute evidence, not a claim-promotion authority. Symbolic/computational promotion still goes through the existing evidence/artifact/audit gate, and formal proof authority still belongs to service-owned Lean replay artifacts.
+
+### Residual Risks
+
+- Strict replay currently covers the implemented Python compute runners only: `sympy-exact` and `counterexample-search`.
+- It relies on the local Python/SymPy environment and script hash checks, not a captured dependency lockfile or container image.
+- It uses `execFile` with `shell:false`, timeouts, fixed scripts, and fixed argv shape, but it is not yet an OS-level sandbox with enforced network denial.
+- Cross-machine replay validation, dependency-version capture, richer runner families, and external signed snapshot verification remain future work.
 
 ## Phase 23 Proof-Kernel Theorem-Family Registry Review Log
 
@@ -1129,7 +1199,7 @@ The registered families still share the public `MathResearch.C0001` target for c
 - The proof-kernel supports registered elementary Nat families only: `Nat.add_zero` and `Nat.mul_zero`, plus exact refutation of `n + 1 = n`.
 - There is still no broad theorem synthesis, Lean parser integration, semantic statement equivalence, or real MathProve proof search.
 - Candidate artifact paths still use the Phase 18 `PO-0001`/`C0001` layout; multi-obligation and multi-theorem campaigns remain future work.
-- Production Pi runtime registration, real persistent child-agent scheduling, native TriviumDB target validation, and generic runner re-execution remain deferred.
+- Production Pi runtime registration, real persistent child-agent scheduling, native TriviumDB target validation, and stronger OS/network runner replay sandboxing remain deferred.
 
 ### Final Root Validation
 
@@ -1372,7 +1442,7 @@ V8 remains a heuristic stress/revision artifact. It can generate objections, rep
 
 - Ensemble recovery is covered for the implemented elementary `Nat.add_zero` slice, not arbitrary proof domains.
 - The V8 artifact is currently deterministic template output from the native runner, not a real child-agent prompt execution result.
-- General proof-route scheduling, real MathProve execution, production Pi runtime registration, native TriviumDB target validation, generic runner re-execution, and richer statement equivalence remain deferred.
+- General proof-route scheduling, real MathProve execution, production Pi runtime registration, native TriviumDB target validation, stronger OS/network runner replay sandboxing, and richer statement equivalence remain deferred.
 
 ### Final Root Validation
 

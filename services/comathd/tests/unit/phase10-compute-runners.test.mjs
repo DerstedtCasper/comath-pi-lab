@@ -198,6 +198,9 @@ try {
   const runnerReport = JSON.parse(readFileSync(exact.report_path, "utf8"));
   assert.equal(runnerReport.result.runner_id, "sympy-exact");
   assert.equal(runnerReport.result.metadata.replay_argv.includes("--input-json"), true);
+  assert.equal(typeof runnerReport.result.metadata.replay_input_json, "string");
+  assert.equal(runnerReport.result.metadata.input_sha256, runnerReport.result.metadata.replay_input_sha256);
+  assert.equal(runnerReport.result.metadata.replay_input_json.includes('"runner_id":"sympy-exact"'), true);
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }

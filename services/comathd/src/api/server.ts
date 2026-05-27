@@ -394,7 +394,7 @@ async function route(method: string, path: string, body: unknown, context: Route
       "POST /replay/verify-manifest",
       async (payload) => {
         const body = payload as { manifest_path: string };
-        const result = await verifySnapshot(body.manifest_path);
+        const result = await verifySnapshot(body.manifest_path, { reexecuteRunners: true });
         return {
           ...result,
           replay: result.manifest?.replay ?? null

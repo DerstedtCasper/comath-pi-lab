@@ -70,6 +70,19 @@ function recomputeSnapshotManifest(manifest, snapshotRoot) {
   return next;
 }
 
+function findRunnerEntry(snapshot, runnerId) {
+  const manifest = readJson(snapshot.manifest_path);
+  const entry = manifest.entries.find((candidate) => {
+    if (!candidate.relative_path.includes("/runners/RUN-")) {
+      return false;
+    }
+    const report = readJson(join(snapshot.snapshot_root, candidate.snapshot_path));
+    return report.runner_id === runnerId;
+  });
+  assert.ok(entry);
+  return { manifest, entry, report_path: join(snapshot.snapshot_root, entry.snapshot_path) };
+}
+
 function assertNoAbsolutePaths(value) {
   const text = JSON.stringify(value);
   assert.equal(/[A-Za-z]:\\\\|[A-Za-z]:\//.test(text), false, "snapshot manifest must not leak Windows absolute paths");
@@ -212,6 +225,20 @@ try {
     assert.equal(routeReplay.status, 200);
     assert.equal(routeReplay.body.ok, true);
     assert.equal(routeReplay.body.replay.runs.length >= 2, true);
+    assert.equal(routeReplay.body.runner_reexecution.some((run) => run.runner_id === "sympy-exact" && run.ok), true);
+    assert.equal(
+      routeReplay.body.runner_reexecution.some((run) => run.runner_id === "counterexample-search" && run.ok),
+      true
+    );
+    assert.equal(
+      routeReplay.body.runner_reexecution.some(
+        (run) =>
+          run.runner_id === "sage-placeholder" &&
+          run.skipped === true &&
+          run.reason === "placeholder_runner_has_no_executable_replay"
+      ),
+      true
+    );
 
     const routeRestoreRoot = mkdtempSync(join(tmpdir(), "comath-snapshot-route-restore-"));
     try {
@@ -298,6 +325,196 @@ try {
   const replayRunsCheck = await verifySnapshot(replayRunsTamper.manifest_path);
   assert.equal(replayRunsCheck.ok, false);
   assert.equal(replayRunsCheck.vetoes.includes("replay_runs_hash_mismatch"), true);
+
+  const replayBindingDrift = await exportSnapshot(projectRoot, { project_id: project.project_id, actor: "phase16-test" });
+  const {
+    manifest: replayBindingDriftManifest,
+    entry: replayBindingDriftEntry
+  } = findRunnerEntry(replayBindingDrift, "sympy-exact");
+  const replayBindingRun = replayBindingDriftManifest.replay.runs.find(
+    (run) => run.report_relative_path === replayBindingDriftEntry.relative_path
+  );
+  assert.ok(replayBindingRun);
+  replayBindingRun.input_sha256 = "0".repeat(64);
+  replayBindingDriftManifest.replay.integrity.runs_sha256 = sha256Text(
+    canonicalJson(replayBindingDriftManifest.replay.runs)
+  );
+  replayBindingDriftManifest.integrity.replay_manifest_sha256 = sha256Text(
+    canonicalJson(replayBindingDriftManifest.replay)
+  );
+  replayBindingDriftManifest.integrity.manifest_sha256 = sha256Text(
+    canonicalJson(materialForIntegrity(replayBindingDriftManifest))
+  );
+  writeJson(replayBindingDrift.manifest_path, replayBindingDriftManifest);
+  writeJson(join(replayBindingDrift.snapshot_root, "replay_manifest.json"), replayBindingDriftManifest.replay);
+  const replayBindingDriftCheck = await server.inject({
+    method: "POST",
+    path: "/replay/verify-manifest",
+    body: { manifest_path: replayBindingDrift.manifest_path }
+  });
+  assert.equal(replayBindingDriftCheck.status, 200);
+  assert.equal(replayBindingDriftCheck.body.ok, false);
+  assert.equal(replayBindingDriftCheck.body.vetoes.includes("replay_run_report_mismatch"), true);
+  assert.equal(replayBindingDriftCheck.body.runner_reexecution.length, 0);
+
+  const invalidManifestNoExec = await exportSnapshot(projectRoot, { project_id: project.project_id, actor: "phase16-test" });
+  const { report_path: invalidManifestNoExecReportPath } = findRunnerEntry(invalidManifestNoExec, "sympy-exact");
+  const invalidManifestNoExecReport = readJson(invalidManifestNoExecReportPath);
+  invalidManifestNoExecReport.result.metadata.script_sha256 = "0".repeat(64);
+  writeJson(invalidManifestNoExecReportPath, invalidManifestNoExecReport);
+  const invalidManifestNoExecReplay = await server.inject({
+    method: "POST",
+    path: "/replay/verify-manifest",
+    body: { manifest_path: invalidManifestNoExec.manifest_path }
+  });
+  assert.equal(invalidManifestNoExecReplay.status, 200);
+  assert.equal(invalidManifestNoExecReplay.body.ok, false);
+  assert.equal(invalidManifestNoExecReplay.body.vetoes.includes("entry_hash_mismatch"), true);
+  assert.equal(invalidManifestNoExecReplay.body.vetoes.includes("runner_reexecution_script_hash_mismatch"), false);
+  assert.equal(invalidManifestNoExecReplay.body.runner_reexecution.length, 0);
+
+  const scriptDrift = await exportSnapshot(projectRoot, { project_id: project.project_id, actor: "phase16-test" });
+  const {
+    manifest: scriptDriftManifest,
+    entry: scriptDriftEntry,
+    report_path: scriptDriftReportPath
+  } = findRunnerEntry(scriptDrift, "sympy-exact");
+  const scriptDriftReport = readJson(scriptDriftReportPath);
+  scriptDriftReport.result.metadata.script_sha256 = "0".repeat(64);
+  const scriptDriftRun = scriptDriftManifest.replay.runs.find(
+    (run) => run.report_relative_path === scriptDriftEntry.relative_path
+  );
+  assert.ok(scriptDriftRun);
+  scriptDriftRun.script_sha256 = "0".repeat(64);
+  scriptDriftManifest.replay.integrity.runs_sha256 = sha256Text(canonicalJson(scriptDriftManifest.replay.runs));
+  writeJson(scriptDriftReportPath, scriptDriftReport);
+  writeJson(scriptDrift.manifest_path, recomputeSnapshotManifest(scriptDriftManifest, scriptDrift.snapshot_root));
+  writeJson(join(scriptDrift.snapshot_root, "replay_manifest.json"), readJson(scriptDrift.manifest_path).replay);
+  const scriptDriftReplay = await server.inject({
+    method: "POST",
+    path: "/replay/verify-manifest",
+    body: { manifest_path: scriptDrift.manifest_path }
+  });
+  assert.equal(scriptDriftReplay.status, 200);
+  assert.equal(scriptDriftReplay.body.ok, false);
+  assert.equal(scriptDriftReplay.body.vetoes.includes("runner_reexecution_script_hash_mismatch"), true);
+  assert.equal(
+    scriptDriftReplay.body.runner_reexecution.some(
+      (run) => run.runner_id === "sympy-exact" && run.vetoes.includes("runner_reexecution_script_hash_mismatch")
+    ),
+    true
+  );
+
+  const inputDrift = await exportSnapshot(projectRoot, { project_id: project.project_id, actor: "phase16-test" });
+  const {
+    manifest: inputDriftManifest,
+    report_path: inputDriftReportPath
+  } = findRunnerEntry(inputDrift, "sympy-exact");
+  const inputDriftReport = readJson(inputDriftReportPath);
+  inputDriftReport.result.metadata.replay_input_json = inputDriftReport.result.metadata.replay_input_json.replace(
+    '"expected":"0"',
+    '"expected":"1"'
+  );
+  writeJson(inputDriftReportPath, inputDriftReport);
+  writeJson(inputDrift.manifest_path, recomputeSnapshotManifest(inputDriftManifest, inputDrift.snapshot_root));
+  const inputDriftReplay = await server.inject({
+    method: "POST",
+    path: "/replay/verify-manifest",
+    body: { manifest_path: inputDrift.manifest_path }
+  });
+  assert.equal(inputDriftReplay.status, 200);
+  assert.equal(inputDriftReplay.body.ok, false);
+  assert.equal(inputDriftReplay.body.vetoes.includes("runner_reexecution_input_hash_mismatch"), true);
+
+  const timeoutDrift = await exportSnapshot(projectRoot, { project_id: project.project_id, actor: "phase16-test" });
+  const {
+    manifest: timeoutDriftManifest,
+    entry: timeoutDriftEntry,
+    report_path: timeoutDriftReportPath
+  } = findRunnerEntry(timeoutDrift, "sympy-exact");
+  const timeoutDriftReport = readJson(timeoutDriftReportPath);
+  timeoutDriftReport.result.metadata.timeout_ms = 3_600_000;
+  const timeoutDriftRun = timeoutDriftManifest.replay.runs.find(
+    (run) => run.report_relative_path === timeoutDriftEntry.relative_path
+  );
+  assert.ok(timeoutDriftRun);
+  timeoutDriftRun.timeout_ms = timeoutDriftReport.result.metadata.timeout_ms;
+  timeoutDriftManifest.replay.integrity.runs_sha256 = sha256Text(canonicalJson(timeoutDriftManifest.replay.runs));
+  writeJson(timeoutDriftReportPath, timeoutDriftReport);
+  writeJson(timeoutDrift.manifest_path, recomputeSnapshotManifest(timeoutDriftManifest, timeoutDrift.snapshot_root));
+  writeJson(join(timeoutDrift.snapshot_root, "replay_manifest.json"), readJson(timeoutDrift.manifest_path).replay);
+  const timeoutDriftReplay = await server.inject({
+    method: "POST",
+    path: "/replay/verify-manifest",
+    body: { manifest_path: timeoutDrift.manifest_path }
+  });
+  assert.equal(timeoutDriftReplay.status, 200);
+  assert.equal(timeoutDriftReplay.body.ok, false);
+  assert.equal(timeoutDriftReplay.body.vetoes.includes("runner_reexecution_timeout_untrusted"), true);
+  assert.equal(
+    timeoutDriftReplay.body.runner_reexecution.some(
+      (run) => run.runner_id === "sympy-exact" && run.vetoes.includes("runner_reexecution_timeout_untrusted")
+    ),
+    true
+  );
+
+  const stdoutMetadataDrift = await exportSnapshot(projectRoot, { project_id: project.project_id, actor: "phase16-test" });
+  const {
+    manifest: stdoutMetadataDriftManifest,
+    entry: stdoutMetadataDriftEntry,
+    report_path: stdoutMetadataDriftReportPath
+  } = findRunnerEntry(stdoutMetadataDrift, "sympy-exact");
+  const stdoutMetadataDriftReport = readJson(stdoutMetadataDriftReportPath);
+  stdoutMetadataDriftReport.result.metadata.stdout_sha256 = "0".repeat(64);
+  const stdoutMetadataDriftRun = stdoutMetadataDriftManifest.replay.runs.find(
+    (run) => run.report_relative_path === stdoutMetadataDriftEntry.relative_path
+  );
+  assert.ok(stdoutMetadataDriftRun);
+  stdoutMetadataDriftRun.stdout_sha256 = stdoutMetadataDriftReport.result.metadata.stdout_sha256;
+  stdoutMetadataDriftManifest.replay.integrity.runs_sha256 = sha256Text(
+    canonicalJson(stdoutMetadataDriftManifest.replay.runs)
+  );
+  writeJson(stdoutMetadataDriftReportPath, stdoutMetadataDriftReport);
+  writeJson(
+    stdoutMetadataDrift.manifest_path,
+    recomputeSnapshotManifest(stdoutMetadataDriftManifest, stdoutMetadataDrift.snapshot_root)
+  );
+  writeJson(join(stdoutMetadataDrift.snapshot_root, "replay_manifest.json"), readJson(stdoutMetadataDrift.manifest_path).replay);
+  const stdoutMetadataDriftReplay = await server.inject({
+    method: "POST",
+    path: "/replay/verify-manifest",
+    body: { manifest_path: stdoutMetadataDrift.manifest_path }
+  });
+  assert.equal(stdoutMetadataDriftReplay.status, 200);
+  assert.equal(stdoutMetadataDriftReplay.body.ok, false);
+  assert.equal(stdoutMetadataDriftReplay.body.vetoes.includes("runner_stdout_hash_mismatch"), true);
+  assert.equal(stdoutMetadataDriftReplay.body.runner_reexecution.length, 0);
+
+  const untrustedArgv = await exportSnapshot(projectRoot, { project_id: project.project_id, actor: "phase16-test" });
+  const {
+    manifest: untrustedArgvManifest,
+    entry: untrustedArgvEntry,
+    report_path: untrustedArgvReportPath
+  } = findRunnerEntry(untrustedArgv, "sympy-exact");
+  const untrustedArgvReport = readJson(untrustedArgvReportPath);
+  untrustedArgvReport.result.metadata.replay_argv = ["python", "../evil.py", "--input-json", "<canonical-json>"];
+  const untrustedArgvRun = untrustedArgvManifest.replay.runs.find(
+    (run) => run.report_relative_path === untrustedArgvEntry.relative_path
+  );
+  assert.ok(untrustedArgvRun);
+  untrustedArgvRun.replay_argv = untrustedArgvReport.result.metadata.replay_argv;
+  untrustedArgvManifest.replay.integrity.runs_sha256 = sha256Text(canonicalJson(untrustedArgvManifest.replay.runs));
+  writeJson(untrustedArgvReportPath, untrustedArgvReport);
+  writeJson(untrustedArgv.manifest_path, recomputeSnapshotManifest(untrustedArgvManifest, untrustedArgv.snapshot_root));
+  writeJson(join(untrustedArgv.snapshot_root, "replay_manifest.json"), readJson(untrustedArgv.manifest_path).replay);
+  const untrustedArgvReplay = await server.inject({
+    method: "POST",
+    path: "/replay/verify-manifest",
+    body: { manifest_path: untrustedArgv.manifest_path }
+  });
+  assert.equal(untrustedArgvReplay.status, 200);
+  assert.equal(untrustedArgvReplay.body.ok, false);
+  assert.equal(untrustedArgvReplay.body.vetoes.includes("runner_reexecution_argv_untrusted"), true);
 
   const linkedRoot = mkdtempSync(join(tmpdir(), "comath-snapshot-linked-"));
   const { project: linkedProject } = initProject({ name: "Linked Snapshot Project", root_path: linkedRoot });

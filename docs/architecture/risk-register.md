@@ -8,7 +8,7 @@
 | TriviumDB numeric IDs leak into business contracts | High | 1, 5, 13 | Stable string IDs only; internal `StableIdMap`. |
 | Multiple processes open `.tdb` | Medium | 13 | Only `comathd` owns DB connection; document single-process ownership. |
 | MathProve overtrusted as proof oracle | High | 4, 9 | Position as evidence producer/gate runner; final status requires durable artifacts and gate checks. |
-| Phase 18-23 proof-kernel slices overclaimed as arbitrary theorem proving | High | 18+ | Document the implemented `Nat.add_zero`, `Nat.mul_zero`, and refutation slices; require registered theorem-family tests before broadening theorem classes. |
+| Phase 18-24 slices overclaimed as arbitrary theorem proving | High | 18+ | Document the implemented `Nat.add_zero`, `Nat.mul_zero`, refutation, and runner-reexecution slices; require registered theorem-family tests before broadening theorem classes. |
 | Proof candidate voting mistaken for proof evidence | High | 18+ | Candidate selection filters hard vetoes and statement drift before scoring; `formally_checked` requires replay-bound artifacts. |
 | V8 dialectical stress mistaken for proof evidence | High | 19+ | Persist `proof_authority: none`, require downstream Lean/exact-computation/citation gates, and test that ensemble recovery selects Lean-valid evidence rather than stress artifacts. |
 | Internal proof-stage names mistaken for public campaign states | Medium | 20+ | Public `ResearchCampaign.current_stage` uses v3 canonical states; internal proof-kernel stages such as `lemma_sprint` stay confined to candidate/gate artifacts. |
@@ -16,6 +16,7 @@
 | Dashboard read model mistaken for proof authority | Medium | 21+ | Claim/evidence/gate list routes are read-only inspection surfaces; promotions still require gate-mediated evidence and proof-kernel replay where applicable. |
 | Pi research loop mistaken for production runtime registration | Medium | 22+ | Phase 22 verifies a thin-client orchestration helper with scoped capability checks; installed Pi runtime registration and persistent child-agent scheduling remain separate blockers. |
 | Theorem-family metadata drift binds the wrong proof to a claim | High | 23+ | Phase 23 requires family/proposition/Lean-target/locked-statement consistency and replay-manifest locked-hash binding before promotion. |
+| Replay manifest descriptors mistaken for executable evidence | High | 24+ | Phase 24 strict replay reconstructs allowlisted runner commands from service code, stores canonical runner input, and fails closed on script/input/argv/result drift. |
 | Agent consensus mistaken for proof | High | 4+ | Gate rules say reviewer/agent votes are advisory only. |
 | Workstream patch pollutes trusted graph | High | 7+ | `GraphPatch` review state; no auto-apply. |
 | Arbitrary shell execution from workstream | High | 10 | Runner sandbox, deny-by-default commands, timeout/memory limits. |
@@ -28,13 +29,14 @@
 
 ## Current Risk Posture
 
-After Phase 23:
+After Phase 24:
 
 - Runtime safety risks are active code-path risks, so validation must run against `comathd` routes, Pi descriptors, and proof-kernel replay artifacts rather than docs alone.
-- TriviumDB native persistence, production Pi runtime registration, real child-agent scheduling, real MathProve execution, and generic runner re-execution remain intentionally deferred behind adapter/gate boundaries.
-- The largest immediate risk is proof-scope overclaiming: Phase 18-23 cover bounded GA vertical slices, two registered elementary Nat theorem families, an exact refutation path, an ensemble recovery benchmark, canonical campaign-state flow, product read models, and a Pi loop, not arbitrary theorem proving.
+- TriviumDB native persistence, production Pi runtime registration, real child-agent scheduling, real MathProve execution, and stronger OS/network runner sandboxing remain intentionally deferred behind adapter/gate boundaries.
+- The largest immediate risk is proof-scope overclaiming: Phase 18-24 cover bounded GA vertical slices, two registered elementary Nat theorem families, an exact refutation path, an ensemble recovery benchmark, canonical campaign-state flow, product read models, a Pi loop, and deterministic compute-runner replay, not arbitrary theorem proving.
 - Phase 20 validates public campaign state semantics, not autonomous GA research completion.
 - Phase 21 improves product inspection through read-only claim/evidence/gate routes; it does not alter proof authority or promotion rules.
 - Phase 22 improves the user-facing Pi entry path; it does not validate installed Pi API registration or replace a real scheduler.
 - Phase 23 improves registered theorem-family replay; it does not implement broad theorem synthesis, semantic Lean parsing, or real MathProve proof search.
+- Phase 24 improves deterministic runner replay; it does not provide OS-level sandboxing, network-denial enforcement, dependency lock capture, or cross-machine replay validation.
 - Subagent concurrency is intentionally small (`rpm=4`); prefer local deterministic commands and reserve child agents for bounded review or disjoint work.
