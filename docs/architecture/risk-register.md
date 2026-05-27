@@ -10,6 +10,7 @@
 | MathProve overtrusted as proof oracle | High | 4, 9 | Position as evidence producer/gate runner; final status requires durable artifacts and gate checks. |
 | Phase 18 proof-kernel vertical slice overclaimed as arbitrary theorem proving | High | 18+ | Document the implemented `Nat.add_zero`/refutation slices and require new tests before broadening theorem classes. |
 | Proof candidate voting mistaken for proof evidence | High | 18+ | Candidate selection filters hard vetoes and statement drift before scoring; `formally_checked` requires replay-bound artifacts. |
+| V8 dialectical stress mistaken for proof evidence | High | 19+ | Persist `proof_authority: none`, require downstream Lean/exact-computation/citation gates, and test that ensemble recovery selects Lean-valid evidence rather than stress artifacts. |
 | Agent consensus mistaken for proof | High | 4+ | Gate rules say reviewer/agent votes are advisory only. |
 | Workstream patch pollutes trusted graph | High | 7+ | `GraphPatch` review state; no auto-apply. |
 | Arbitrary shell execution from workstream | High | 10 | Runner sandbox, deny-by-default commands, timeout/memory limits. |
@@ -22,9 +23,9 @@
 
 ## Current Risk Posture
 
-After Phase 18:
+After Phase 19:
 
 - Runtime safety risks are active code-path risks, so validation must run against `comathd` routes, Pi descriptors, and proof-kernel replay artifacts rather than docs alone.
 - TriviumDB native persistence, production Pi runtime registration, real MathProve execution, and generic runner re-execution remain intentionally deferred behind adapter/gate boundaries.
-- The largest immediate risk is proof-scope overclaiming: Phase 18 proves bounded GA vertical slices, not arbitrary theorem proving.
+- The largest immediate risk is proof-scope overclaiming: Phase 18-19 cover bounded GA vertical slices and an ensemble recovery benchmark, not arbitrary theorem proving.
 - Subagent concurrency is intentionally small (`rpm=4`); prefer local deterministic commands and reserve child agents for bounded review or disjoint work.

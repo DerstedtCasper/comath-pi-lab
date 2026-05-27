@@ -70,6 +70,7 @@ Remaining mathematical work:
 - Braid statistics domain pack: `services/comathd/src/domain/braid-statistics/`, `python/braid/check_braid.py`.
 - Phase 17 evaluation: `tests/evaluation/phase17-integrity-evaluation.test.mjs`.
 - Phase 18 native proof-kernel slice: `services/comathd/src/proof-kernel/`, `services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs`, `services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs`, `services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs`, and `services/comathd/tests/integration/phase18-ga-snapshot-replay.test.mjs`.
+- Phase 19 ensemble recovery and V8 stress coverage: `services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs`, `dialecticalStressSchema`, and the V8 `dialectical_stress.json` artifact writer.
 
 ### Current Invariants
 
@@ -111,6 +112,13 @@ Phase 18 adds coverage for:
 - preservation of 8 candidate manifests and candidate audit artifacts;
 - exact counterexample refutation of `n + 1 = n` at `n=0`;
 - snapshot restore followed by fresh campaign proof replay.
+
+Phase 19 adds coverage for:
+
+- the v3 16.4 ensemble recovery benchmark in the implemented elementary slice: seven failed candidates plus one Lean-valid candidate selects the Lean-valid candidate;
+- preservation of all seven failed routes in proof memory;
+- a typed V8 dialectical stress artifact with `P`, `not_P`, `Q`, `not_Q`, `R`, `U`, `proof_authority: none`, and explicit downstream check authorities;
+- a regression boundary that V8 remains objection/repair generation, not proof evidence.
 
 ### Residual Risks
 

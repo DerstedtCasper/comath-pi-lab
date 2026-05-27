@@ -373,6 +373,24 @@ export const candidateManifestSchema = z
   })
   .strict();
 
+export const dialecticalStressSchema = z
+  .object({
+    candidate_id: stableId,
+    variant_id: z.literal("V8"),
+    stage: campaignStageSchema,
+    obligation_id: stableId,
+    locked_statement_hash: z.string().min(1),
+    P: z.string().min(1),
+    not_P: z.array(z.string().min(1)).min(1),
+    Q: z.array(z.string().min(1)).min(1),
+    not_Q: z.array(z.string().min(1)).min(1),
+    R: z.array(z.string().min(1)).min(1),
+    U: z.array(z.string().min(1)).min(1),
+    proof_authority: z.literal("none"),
+    must_be_checked_by: z.array(z.enum(["Lean", "exact computation", "citation gate"])).min(1)
+  })
+  .strict();
+
 export const gateDecisionSchema = z
   .object({
     gate_id: stableId,
@@ -569,6 +587,7 @@ export type ProofObligation = z.infer<typeof proofObligationSchema>;
 export type CandidateVariantId = z.infer<typeof candidateVariantIdSchema>;
 export type CandidateRun = z.infer<typeof candidateRunSchema>;
 export type CandidateManifest = z.infer<typeof candidateManifestSchema>;
+export type DialecticalStress = z.infer<typeof dialecticalStressSchema>;
 export type GateDecision = z.infer<typeof gateDecisionSchema>;
 export type FinalLeanReplay = z.infer<typeof finalLeanReplaySchema>;
 export type StageRunRef = z.infer<typeof stageRunRefSchema>;

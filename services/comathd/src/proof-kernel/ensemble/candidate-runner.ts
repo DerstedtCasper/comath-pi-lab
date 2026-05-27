@@ -4,6 +4,7 @@ import { assertPathAllowed } from "../../security/path-policy.js";
 import {
   candidateManifestSchema,
   candidateRunSchema,
+  dialecticalStressSchema,
   type CandidateManifest,
   type CandidateRun,
   type ProofObligation,
@@ -71,6 +72,42 @@ function writeCandidateAuditArtifacts(input: {
   });
 }
 
+function writeDialecticalStressArtifact(input: {
+  projectRoot: string;
+  workspaceRel: string;
+  manifest: CandidateManifest;
+  obligation: ProofObligation;
+}): void {
+  const artifact = dialecticalStressSchema.parse({
+    candidate_id: input.manifest.candidate_id,
+    variant_id: input.manifest.variant_id,
+    stage: input.manifest.stage,
+    obligation_id: input.manifest.obligation_id,
+    locked_statement_hash: input.manifest.locked_statement_hash,
+    P: input.obligation.locked_statement_nl,
+    not_P: [
+      "Check boundary cases before trusting the route, especially the smallest natural number.",
+      "Check whether the proof attempt silently changes the order, domain, or operation in the locked statement."
+    ],
+    Q: [
+      "Reconcile the route by proving the exact locked statement in Lean without adding assumptions.",
+      "Prefer a standard library theorem only when statement equivalence and dependency closure remain exact."
+    ],
+    not_Q: [
+      "A plausible reconciliation is still not evidence until Lean replay, static audit, and statement equivalence pass.",
+      "Any revised theorem must return to problem lock before it can replace the current target."
+    ],
+    R: [
+      "The route is admissible only if the candidate statement hash equals the locked statement hash.",
+      "The route is admissible only if no unauthorized sorry, axiom, constant, unsafe, or opaque escape hatch appears."
+    ],
+    U: [input.obligation.locked_statement_nl],
+    proof_authority: "none",
+    must_be_checked_by: ["Lean", "exact computation", "citation gate"]
+  });
+  writeJson(input.projectRoot, join(input.workspaceRel, "dialectical_stress.json"), artifact);
+}
+
 export function runTrivialNatAddZeroCandidates(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
@@ -121,6 +158,14 @@ export function runTrivialNatAddZeroCandidates(input: {
       manifest,
       isDirectWinner
     });
+    if (variant.variant_id === "V8") {
+      writeDialecticalStressArtifact({
+        projectRoot: input.projectRoot,
+        workspaceRel,
+        manifest,
+        obligation: input.obligation
+      });
+    }
     writeFileSync(
       join(workspacePath, "report.md"),
       [

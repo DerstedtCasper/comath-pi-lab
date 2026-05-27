@@ -1079,3 +1079,64 @@ Result: False; no repository-root runtime state was left behind.
 ```
 
 One Phase 17 evaluation assertion was updated after root-cause analysis: dashboard-only files still forbid `client.post`, filesystem writes, service-internal imports, and direct `.comath` access, while the extension entrypoint is checked separately so Phase 18 thin-client mutating campaign tools may call `comathd` without direct runtime-file writes.
+
+## Phase 19 GA Ensemble Recovery Review Log
+
+### Scope
+
+Implemented the v3 16.4 ensemble recovery regression for the existing elementary proof-kernel slice. Phase 19 does not broaden theorem synthesis; it makes the current 8-candidate path preserve the required seven-failures-plus-one-Lean-pass evidence shape and turns V8 dialectical stress into a typed artifact.
+
+### TDD Evidence
+
+```text
+node services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs
+Initial RED result: exit 1; failed on missing V8 dialectical_stress.json existence assertion.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after implementation.
+
+node services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs
+Result: exit 0; Phase 19 GA ensemble recovery tests passed.
+```
+
+### Changed Surfaces
+
+- Added `services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs`.
+- Added `dialecticalStressSchema` and `DialecticalStress` to `services/comathd/src/types/schemas.ts`.
+- Added V8 `dialectical_stress.json` writing in `services/comathd/src/proof-kernel/ensemble/candidate-runner.ts`.
+- Added the Phase 19 unit test to `@comath/comathd` default test chain.
+- Added `proof_kernel_ensemble_recovery` to `getComathdStatus()`.
+- Updated README, TODO, acceptance matrix, math integrity notes, risk register, and handoff documentation.
+
+### Boundary And Integrity Notes
+
+The recovery test verifies that eight candidates are generated, exactly seven are failed routes, the Lean-valid candidate is selected, and every failed route is preserved in proof memory. The V8 artifact records `P`, `not_P`, `Q`, `not_Q`, `R`, `U`, `proof_authority: none`, and downstream authorities `Lean`, `exact computation`, and `citation gate`.
+
+V8 remains a heuristic stress/revision artifact. It can generate objections, repairs, and assumption audits, but it cannot promote a claim, certify a proof, or override final Lean replay.
+
+### Residual Risks
+
+- Ensemble recovery is covered for the implemented elementary `Nat.add_zero` slice, not arbitrary proof domains.
+- The V8 artifact is currently deterministic template output from the native runner, not a real child-agent prompt execution result.
+- General proof-route scheduling, real MathProve execution, production Pi runtime registration, native TriviumDB target validation, generic runner re-execution, and richer statement equivalence remain deferred.
+
+### Final Root Validation
+
+Fresh Phase 19 validation completed on 2026-05-27:
+
+```text
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; comathd Phase 0-18 tests plus Phase 19 ensemble recovery test passed.
+
+corepack pnpm build
+Result: exit 0; root recursive build passed for extensions/comath-pi and services/comathd.
+
+corepack pnpm test
+Result: exit 0; Phase 0/design smoke, all workspace tests, Phase 19 comathd test, Phase 18 Pi campaign tool tests, and Phase 17 integrity evaluation passed.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repository-root runtime state was left behind.
+```

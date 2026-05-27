@@ -23,6 +23,7 @@ The repository has completed:
 - Phase 16 snapshot and replay;
 - Phase 17 evaluation, security, and mathematical-integrity audit;
 - Phase 18 GA proof-kernel vertical slices;
+- Phase 19 GA ensemble recovery and V8 dialectical stress coverage;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -31,7 +32,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, and Phase 18 adds native GA proof-kernel vertical slices. Final validation evidence is recorded in `REVIEW.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, and Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage. Final validation evidence is recorded in `REVIEW.md`.
 
 ## Authoritative Files
 
@@ -53,7 +54,7 @@ Next correct action:
 /goal Start the next generalization phase for generic proof planning, real MathProve execution, Pi runtime registration, TriviumDB native evaluation, and runner re-execution replay.
 ```
 
-Do not start generalization implementation without opening a new explicit goal. Research Alpha and Phase 18 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. Research Alpha and Phase 18-19 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -182,6 +183,14 @@ Apply it as follows:
 - Added exact counterexample refutation for `n + 1 = n` and snapshot restore followed by proof replay.
 - Added Pi `/cm:research`, `/cm:campaign`, and campaign tool descriptors that call `comathd` without direct `.comath/` writes.
 - Remaining generalization work: broader proof planning, real MathProve execution, production Pi registration, native TriviumDB target validation, generic runner re-execution, richer statement equivalence, and a real persistent child-agent runner.
+
+## Phase 19 Completion Notes
+
+- Added `services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs` for the v3 16.4 benchmark: seven failed candidates plus one Lean-valid candidate must select the Lean-valid candidate.
+- Verified all seven failed routes are preserved in proof memory.
+- Added `dialecticalStressSchema` and a V8 `dialectical_stress.json` artifact writer under the native proof-kernel candidate runner.
+- Kept the dialectical stress cycle as a structured heuristic for objections, repairs, and assumption audits; `proof_authority` remains `none`.
+- Added `proof_kernel_ensemble_recovery` to the service status capability list.
 
 ## Verification To Run At Phase Boundary
 

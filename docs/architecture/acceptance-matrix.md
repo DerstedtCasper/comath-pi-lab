@@ -36,6 +36,7 @@
 | 16 Snapshot/replay | service routes, export/verify/restore smoke tests, replay manifest verification, tamper checks, and secret scan gates pass. |
 | 17 Evaluation/audits | security review, math integrity review, and evaluation suite exist. |
 | 18 GA proof-kernel vertical slices | ResearchCampaign routes, proof-kernel replay manifest gate, 8-candidate artifacts, statement-drift/cheat rejection, exact refutation, snapshot restore/replay, and Pi campaign tool tests pass. |
+| 19 GA ensemble recovery | `phase19-ga-ensemble-recovery.test.mjs` verifies seven failed candidates plus one Lean-valid candidate selects the Lean-valid candidate, preserves all failed routes, and writes the V8 dialectical stress artifact. |
 
 ## Security Acceptance
 
@@ -58,6 +59,7 @@
 | Failed routes preserved | workstream/evidence tests. |
 | Paper wording cannot overclaim | paper check tests require block-bound margin provenance and reject theorem-like unsupported syntax. |
 | GA proof promotion is replay-bound | Phase 18 proof-kernel gate tests require passed final replay manifest for the same claim and reject fake metadata, statement drift, `sorry`, and `axiom`. |
+| Candidate voting is not proof | Phase 19 ensemble recovery test selects the only Lean-valid candidate despite seven failures and preserves those failures as proof memory. |
 
 ## GA V3 Vertical-Slice Coverage
 
@@ -67,5 +69,6 @@
 | Statement drift and cheat rejection | `phase18-ga-proof-kernel-gates.test.mjs` rejects drift, fake metadata, `sorry`, and `axiom`. | Covered for current static checks. |
 | Refutation path | `phase18-ga-refutation-path.test.mjs` records exact `n=0` counterexample for `n + 1 = n`. | Covered for the implemented Nat false theorem slice. |
 | Snapshot restore plus proof replay | `phase18-ga-snapshot-replay.test.mjs` restores a snapshot and reruns campaign replay. | Covered for campaign proof replay. |
+| Ensemble recovery | `phase19-ga-ensemble-recovery.test.mjs` covers the v3 16.4 benchmark and verifies the V8 `dialectical_stress.json` schema. | Covered for the implemented elementary slice. |
 | General theorem synthesis | No broad proof planner or Lean project generator beyond the Phase 18 slices. | Deferred. |
 | Production Pi runtime registration | Extension descriptors and tool mappings exist; installed runtime API registration is not validated. | Deferred. |

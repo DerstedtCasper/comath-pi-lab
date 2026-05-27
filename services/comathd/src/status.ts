@@ -28,7 +28,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "read_only_dashboard",
       "snapshot_replay",
       "phase17_integrity_evaluation",
-      "proof_kernel_ga_vertical_slice"
+      "proof_kernel_ga_vertical_slice",
+      "proof_kernel_ensemble_recovery"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

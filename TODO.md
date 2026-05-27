@@ -254,6 +254,14 @@
 - [x] Persist candidate `dependency_delta.json`, `assumption_delta.json`, `replay_commands.json`, `failure_routes.json`, and `graph_patch.json` artifacts.
 - [x] Preserve the Pi extension boundary: no direct `.comath/` writes, no service-internal imports, mutating tools require confirmation.
 
+## Phase 19: GA Ensemble Recovery And Dialectical Stress
+
+- [x] Add a regression test for the v3 16.4 ensemble recovery benchmark: seven failed candidates plus one Lean-valid candidate select the Lean-valid candidate.
+- [x] Verify all seven failed routes are preserved in proof memory rather than discarded after selection.
+- [x] Persist a structured V8 `dialectical_stress.json` artifact with `P`, `not_P`, `Q`, `not_Q`, `R`, `U`, `proof_authority`, and `must_be_checked_by`.
+- [x] Keep V8 as a heuristic stress/revision artifact only; it does not certify proof validity or bypass Lean replay.
+- [x] Wire the Phase 19 test into the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
 - [ ] Generic proof planning, stage gates, and Lean project generation beyond the implemented Phase 18 `Nat.add_zero` and `n + 1 = n` vertical slices.
