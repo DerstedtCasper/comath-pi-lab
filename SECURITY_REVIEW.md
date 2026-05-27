@@ -172,6 +172,7 @@ Remaining security requirements:
 33. **Codex API backend is service-configured and secret-free at the Pi boundary.** Phase 51 lets Pi select only `backend=codex-api`; API key, base URL, and model are resolved by `comathd`. Prepare-launch responses expose `COMATH_CODEX_API_KEY_REF` and configured metadata, not the API key value, and API output is wrapped as untrusted AgentRun report/log material.
 34. **Codex API retry telemetry is bounded and secret-free.** Phase 52 retries only retryable `429`/`5xx` responses, caps `Retry-After`, bounds attempts through `COMATH_CODEX_API_MAX_ATTEMPTS`, records status/rate-limit telemetry, and fails closed without writing API keys to reports, logs, or Pi payloads.
 35. **Installed Codex CLI validation remains service-configured and path-secret-free.** Phase 53 resolves the external CLI only from `COMATH_CODEX_CLI_PROGRAM` plus optional service prefix args, runs bounded `--version` and `--health` probes with `shell:false` and `COMATH_PROOF_AUTHORITY=none`, and omits the configured executable path from route responses and audit payloads.
+36. **Lean declaration parser is fail-closed target binding, not execution.** Phase 54 parses theorem/lemma declaration headers from already supplied Lean source, rejects ambiguous and comment-only substring matches, records the signature source, and does not execute code or add proof authority.
 
 ### Validation Commands
 
@@ -397,6 +398,10 @@ Phase 53 targeted validation:
 
 - `node services/comathd/tests/unit/phase53-installed-codex-cli-validation.test.mjs`
 
+Phase 54 targeted validation:
+
+- `node services/comathd/tests/unit/phase54-lean-declaration-parser.test.mjs`
+
 Result: exit 0; retryable 429/5xx handling, capped retry telemetry, exhausted-attempt fail-closed behavior, audit events, and API-key non-disclosure passed with an injected client.
-- Phase 37 registers alias equivalence data in-process and does not add a new external execution boundary; richer Lean parser/logical-equivalence machinery remains a future proof-authority hardening target.
+- Phase 54 adds in-process declaration-header parsing and does not add a new external execution boundary; richer proof-producing logical-equivalence machinery remains a future proof-authority hardening target.
 - Phase 38 loads native TriviumDB only through dynamic adapter probing and explicit evaluation. Broader multi-platform native benchmarking and production default-backend rollout remain separate decisions.

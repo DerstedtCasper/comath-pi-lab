@@ -548,6 +548,13 @@
 - [x] Add `/agent/adapter/package/validate-installed-cli` plus audit event `agent_adapter.installed_codex_cli_validated` without exposing configured executable paths.
 - [x] Wire Phase 53 into the default `@comath/comathd` test chain and smoke status capabilities.
 
+## Phase 54: Lean Declaration Parser Signature Fallback
+
+- [x] Add a conservative Lean theorem/lemma declaration parser for target statement signatures when `#check` output is missing.
+- [x] Support namespace-qualified theorem binding, multi-line binder/type headers, and report `signature_source: lean_declaration_parser` in statement-equivalence reports.
+- [x] Fail closed on ambiguous declarations and comment-only substring matches.
+- [x] Wire Phase 54 into the default `@comath/comathd` test chain and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -558,7 +565,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance: OS-level isolation, enforced network denial, and cross-machine replay validation.
 - [ ] OS-level process sandboxing beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, Phase 39 project-level lock primitive, and Phase 40 AgentRun scheduler lock integration.
-- [ ] Richer statement equivalence beyond Phase 37 registered aliases: Lean parser integration, proof-producing definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
+- [ ] Richer statement equivalence beyond Phase 54 declaration parsing and Phase 37 registered aliases: proof-producing definitional/logical equivalence classes, transitive dependency semantics, and broader mathematical-domain trust profiles.
 
 ## Design Documentation Goal
 

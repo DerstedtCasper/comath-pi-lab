@@ -1,7 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { assertPathAllowed } from "../../security/path-policy.js";
-import { extractLeanStatementSignature, type LeanStatementSignature } from "./statement-signature.js";
+import {
+  extractLeanStatementSignature,
+  extractLeanTheoremDeclarationSignature,
+  type LeanStatementSignature
+} from "./statement-signature.js";
 
 export type StatementEquivalenceReport = {
   result: "pass" | "fail";
@@ -17,6 +21,7 @@ export type StatementEquivalenceReport = {
   formal_spec_statement: string;
   lean_check_output: string;
   theorem_name: string;
+  signature_source: "lean_check_output" | "lean_declaration_parser";
   target_signature?: LeanStatementSignature;
   equivalence_witness?: {
     kind: "registered_definitional_alias";
@@ -65,11 +70,18 @@ export function checkStatementEquivalence(input: {
   locked_statement_hash: string;
   formal_spec_statement: string;
   lean_check_output: string;
+  lean_source?: string;
   theorem_name: string;
   allowed_definitional_aliases?: StatementDefinitionalAlias[];
 }): StatementEquivalenceReport {
   const normalizedExpected = normalizeStatement(input.formal_spec_statement);
-  const target = extractLeanStatementSignature(input);
+  const leanCheckTarget = extractLeanStatementSignature(input);
+  const declarationTarget =
+    leanCheckTarget.result === "ok" || !input.lean_source
+      ? undefined
+      : extractLeanTheoremDeclarationSignature({ lean_source: input.lean_source, theorem_name: input.theorem_name });
+  const target = leanCheckTarget.result === "ok" || !declarationTarget ? leanCheckTarget : declarationTarget;
+  const signatureSource = target === declarationTarget ? "lean_declaration_parser" : "lean_check_output";
   const exact = target.result === "ok" && target.signature.normalized_signature === normalizedExpected;
   const aliasWitness =
     target.result === "ok"
@@ -95,6 +107,7 @@ export function checkStatementEquivalence(input: {
     formal_spec_statement: input.formal_spec_statement,
     lean_check_output: input.lean_check_output,
     theorem_name: input.theorem_name,
+    signature_source: signatureSource,
     ...(target.result === "ok" ? { target_signature: target.signature } : {}),
     ...(aliasWitness ? { equivalence_witness: aliasWitness } : {}),
     signature_matches: target.matches,

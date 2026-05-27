@@ -1,3 +1,35 @@
+## Phase 54 Lean Declaration Parser Signature Fallback Review Log
+
+Scope: Phase 54 adds a conservative Lean theorem/lemma declaration parser as a fallback for statement-equivalence binding when target `#check` output is absent. It parses declaration headers from Lean source, supports namespace-qualified theorem binding and multi-line binders, records `signature_source: lean_declaration_parser`, and preserves fail-closed behavior for ambiguous declarations and comment-only substring matches.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/unit/phase54-lean-declaration-parser.test.mjs
+```
+
+Result: exit 1; the test failed because `extractLeanTheoremDeclarationSignature` was not exported. This was the expected missing-parser-entrypoint failure.
+
+GREEN evidence:
+
+```text
+corepack pnpm --filter @comath/comathd build
+node services/comathd/tests/unit/phase54-lean-declaration-parser.test.mjs
+```
+
+Result: both exited 0 after implementation; the focused test validates multi-line declaration parsing, namespace-qualified target binding, statement-equivalence fallback, ambiguous declaration rejection, and comment-only substring rejection.
+
+Implementation notes:
+
+- Added `extractLeanTheoremDeclarationSignature()` in `statement-signature.ts` for target theorem/lemma declaration headers.
+- Extended `checkStatementEquivalence()` with optional `lean_source` and `signature_source` reporting.
+- Kept existing `#check` output as the preferred source when available; declaration parsing is a fallback, not a replacement for Lean kernel checks.
+- Wired Phase 54 into the default `@comath/comathd` test chain and status capability `lean_declaration_parser_signature_fallback`.
+
+Residual risk:
+
+This is not a full Lean elaborator, proof-producing definitional equality engine, transitive logical-equivalence system, or broad mathematical-domain trust profile. It improves target binding for declaration headers only; final authority remains clean Lean replay plus the existing gate path.
+
 ## Phase 53 Installed Codex CLI Validation Review Log
 
 Scope: Phase 53 adds a service-owned validation path for an installed external Codex-compatible CLI. `validateExternalCodexCliInstallation()` resolves `COMATH_CODEX_CLI_PROGRAM` and optional service prefix args inside `comathd`, runs bounded `--version` and `--health --profile <profile>` probes with `COMATH_PROOF_AUTHORITY=none`, exposes `/agent/adapter/package/validate-installed-cli`, and records audit telemetry without returning the configured executable path.

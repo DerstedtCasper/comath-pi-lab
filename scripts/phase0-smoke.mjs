@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-53")) {
-  invariantFailures.push("README must describe the current Phase 18-53 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-54")) {
+  invariantFailures.push("README must describe the current Phase 18-54 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -164,6 +164,10 @@ if (!acceptanceMatrix.includes("53 Installed Codex CLI validation")) {
   invariantFailures.push("acceptance matrix must include Phase 53 installed Codex CLI validation acceptance");
 }
 
+if (!acceptanceMatrix.includes("54 Lean declaration parser signature fallback")) {
+  invariantFailures.push("acceptance matrix must include Phase 54 Lean declaration parser signature fallback acceptance");
+}
+
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
 }
@@ -232,6 +236,10 @@ if (!acceptanceMatrix.includes("Installed Codex CLI validation is service-config
   invariantFailures.push("acceptance matrix must include Phase 53 installed Codex CLI validation security acceptance");
 }
 
+if (!acceptanceMatrix.includes("Lean declaration parsing is in-process and fail-closed")) {
+  invariantFailures.push("acceptance matrix must include Phase 54 Lean declaration parser security acceptance");
+}
+
 if (!acceptanceMatrix.includes("Native memory backend evidence is non-promotional")) {
   invariantFailures.push("acceptance matrix must include Phase 38 native memory mathematical-integrity boundary");
 }
@@ -286,6 +294,10 @@ if (!acceptanceMatrix.includes("Codex API retry telemetry is not proof authority
 
 if (!acceptanceMatrix.includes("Installed CLI validation is not proof authority")) {
   invariantFailures.push("acceptance matrix must include Phase 53 installed CLI validation mathematical-integrity boundary");
+}
+
+if (!acceptanceMatrix.includes("Declaration parser output is not proof authority")) {
+  invariantFailures.push("acceptance matrix must include Phase 54 declaration parser mathematical-integrity boundary");
 }
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
@@ -356,6 +368,10 @@ if (!acceptanceMatrix.includes("installed_codex_cli_validation")) {
   invariantFailures.push("acceptance matrix must include Phase 53 installed_codex_cli_validation capability language");
 }
 
+if (!acceptanceMatrix.includes("lean_declaration_parser_signature_fallback")) {
+  invariantFailures.push("acceptance matrix must include Phase 54 lean_declaration_parser_signature_fallback capability language");
+}
+
 if (!acceptanceMatrix.includes("/cm:agent prepare-package") || !acceptanceMatrix.includes("/cm:agent execute-package")) {
   invariantFailures.push("acceptance matrix must include Phase 43 Pi packaged-adapter command coverage language");
 }
@@ -418,6 +434,10 @@ if (!acceptanceMatrix.includes("phase52-codex-api-retry-telemetry.test.mjs")) {
 
 if (!acceptanceMatrix.includes("phase53-installed-codex-cli-validation.test.mjs")) {
   invariantFailures.push("acceptance matrix must include Phase 53 installed Codex CLI validation test coverage language");
+}
+
+if (!acceptanceMatrix.includes("phase54-lean-declaration-parser.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 54 Lean declaration parser test coverage language");
 }
 
 for (const [content, label] of [
