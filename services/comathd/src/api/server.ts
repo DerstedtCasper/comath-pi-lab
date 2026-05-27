@@ -44,6 +44,7 @@ import {
   executeProfileAgentRun,
   cancelAgentRunFromOperator,
   getAgentProfile,
+  formatAgentRunLogSseSession,
   listAgentAdapterPackages,
   readAgentRunOperatorPanel,
   listAgentProfiles,
@@ -694,6 +695,40 @@ async function route(method: string, path: string, body: unknown, context: Route
             connection: "keep-alive"
           },
           body: snapshot.body
+        };
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const agentRunLogSessionMatch = /^\/agent\/run\/([^/]+)\/log-session$/.exec(url.pathname);
+    if (agentRunLogSessionMatch) {
+      try {
+        const maxBytes = url.searchParams.get("max_bytes");
+        const maxEvents = url.searchParams.get("max_events");
+        const stdoutCursor = url.searchParams.get("stdout_cursor");
+        const stderrCursor = url.searchParams.get("stderr_cursor");
+        const retryMs = url.searchParams.get("retry_ms");
+        const session = formatAgentRunLogSseSession(url.searchParams.get("project_root") ?? "", {
+          project_id: url.searchParams.get("project_id") ?? "",
+          run_id: decodeURIComponent(agentRunLogSessionMatch[1] ?? ""),
+          cursor: {
+            stdout: stdoutCursor ? Number(stdoutCursor) : 0,
+            stderr: stderrCursor ? Number(stderrCursor) : 0
+          },
+          max_bytes: maxBytes ? Number(maxBytes) : undefined,
+          max_events: maxEvents ? Number(maxEvents) : undefined,
+          retry_ms: retryMs ? Number(retryMs) : undefined,
+          actor: url.searchParams.get("actor") ?? "api"
+        });
+        return {
+          status: 200,
+          headers: {
+            "content-type": session.content_type,
+            "cache-control": "no-cache",
+            connection: "keep-alive"
+          },
+          body: session.body
         };
       } catch (error) {
         return dynamicRouteError(error);

@@ -75,6 +75,27 @@ export type AgentRunLogSseSnapshot = {
   stream: AgentRunLogStream;
 };
 
+export type FormatAgentRunLogSseSessionInput = FormatAgentRunLogSseSnapshotInput & {
+  max_events?: number;
+};
+
+export type AgentRunLogSseSessionEvent = {
+  id: string;
+  stream: AgentRunLogStream;
+  complete: boolean;
+};
+
+export type AgentRunLogSseSession = {
+  project_id: string;
+  run_id: string;
+  content_type: "text/event-stream; charset=utf-8";
+  proof_authority: "none";
+  body: string;
+  events: AgentRunLogSseSessionEvent[];
+  next_cursor: AgentRunLogCursor;
+  complete: boolean;
+};
+
 export type ReadAgentRunOperatorPanelInput = StreamAgentRunLogsInput;
 
 export type AgentRunOperatorPanel = {
@@ -157,6 +178,16 @@ function assertSseRetryMs(value: number, field: string): void {
   throw new ComathError(`${field} must be an integer between 0 and 600000`, {
     statusCode: 400,
     code: "AGENT_OBSERVABILITY_INVALID_RETRY"
+  });
+}
+
+function assertSseMaxEvents(value: number, field: string): void {
+  if (Number.isInteger(value) && value > 0 && value <= 100) {
+    return;
+  }
+  throw new ComathError(`${field} must be an integer between 1 and 100`, {
+    statusCode: 400,
+    code: "AGENT_OBSERVABILITY_INVALID_EVENT_LIMIT"
   });
 }
 
@@ -419,6 +450,92 @@ export function formatAgentRunLogSseSnapshot(projectRoot: string, input: FormatA
     proof_authority: "none",
     stream,
     body: [`retry: ${retryMs}`, "event: agent_run.log_chunk", `id: ${eventId}`, sseDataLines(payload), ""].join("\n")
+  };
+}
+
+function formatLogChunkPayload(stream: AgentRunLogStream): Record<string, unknown> {
+  return {
+    event: "agent_run.log_chunk",
+    project_id: stream.project_id,
+    run_id: stream.run_id,
+    status: stream.status,
+    proof_authority: "none" as const,
+    cursor: stream.cursor,
+    next_cursor: stream.next_cursor,
+    chunks: stream.chunks,
+    truncated: stream.truncated,
+    sizes: stream.sizes,
+    complete: stream.complete
+  };
+}
+
+function formatSseLogChunkFrame(retryMs: number | undefined, stream: AgentRunLogStream): { id: string; body: string } {
+  const id = `${stream.run_id}:${stream.next_cursor.stdout}:${stream.next_cursor.stderr}`;
+  const lines = [
+    ...(retryMs === undefined ? [] : [`retry: ${retryMs}`]),
+    "event: agent_run.log_chunk",
+    `id: ${id}`,
+    sseDataLines(formatLogChunkPayload(stream)),
+    ""
+  ];
+  return { id, body: lines.join("\n") };
+}
+
+export function formatAgentRunLogSseSession(projectRoot: string, input: FormatAgentRunLogSseSessionInput): AgentRunLogSseSession {
+  const retryMs = input.retry_ms ?? 1000;
+  assertSseRetryMs(retryMs, "retry_ms");
+  const maxEvents = input.max_events ?? 5;
+  assertSseMaxEvents(maxEvents, "max_events");
+  const frames: string[] = [];
+  const events: AgentRunLogSseSessionEvent[] = [];
+  let cursor: AgentRunLogCursor = {
+    stdout: input.cursor?.stdout ?? 0,
+    stderr: input.cursor?.stderr ?? 0
+  };
+  let stream: AgentRunLogStream | undefined;
+  for (let index = 0; index < maxEvents; index += 1) {
+    stream = streamAgentRunLogs(projectRoot, { ...input, cursor });
+    const frame = formatSseLogChunkFrame(index === 0 ? retryMs : undefined, stream);
+    frames.push(frame.body);
+    events.push({ id: frame.id, stream, complete: stream.complete });
+    cursor = stream.next_cursor;
+    if (stream.complete) {
+      break;
+    }
+    if (stream.next_cursor.stdout === stream.cursor.stdout && stream.next_cursor.stderr === stream.cursor.stderr) {
+      break;
+    }
+  }
+  if (!stream) {
+    throw new ComathError("log session produced no events", {
+      statusCode: 500,
+      code: "AGENT_OBSERVABILITY_EMPTY_SESSION"
+    });
+  }
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_run.logs_sse_session",
+    actor: input.actor ?? "api",
+    target_id: stream.run_id,
+    payload: {
+      event_count: events.length,
+      next_cursor: cursor,
+      max_events: maxEvents,
+      max_bytes: input.max_bytes ?? defaultLogMaxBytes,
+      retry_ms: retryMs,
+      complete: stream.complete,
+      proof_authority: "none"
+    }
+  });
+  return {
+    project_id: stream.project_id,
+    run_id: stream.run_id,
+    content_type: "text/event-stream; charset=utf-8",
+    proof_authority: "none",
+    body: frames.join("\n"),
+    events,
+    next_cursor: cursor,
+    complete: stream.complete
   };
 }
 

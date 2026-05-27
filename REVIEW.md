@@ -1,3 +1,44 @@
+## Phase 50 Bounded Multi-Event AgentRun Log Session Review Log
+
+Scope: Phase 50 extends the Phase 46/47 log surfaces from single cursor reads and one-frame SSE snapshots to a bounded multi-event SSE response. The service emits multiple `agent_run.log_chunk` frames by advancing stdout/stderr cursors through `streamAgentRunLogs()`, stops at `max_events`, terminal completion, or no cursor progress, and records `agent_run.logs_sse_session`. Pi exposes the read-only surface as `comath.agent.logSession` and `/cm:agent log-session` through `getText()`.
+
+TDD RED evidence:
+
+```text
+node services/comathd/tests/unit/phase50-agent-log-session.test.mjs
+Result: exit 1; `formatAgentRunLogSseSession` was not exported before implementation.
+
+node extensions/comath-pi/tests/phase50-agent-log-session-tools.test.mjs
+Result: exit 1; `comath.agent.logSession` was not registered before implementation.
+```
+
+Focused GREEN evidence:
+
+```text
+node services/comathd/tests/unit/phase50-agent-log-session.test.mjs
+Result: exit 0; bounded multi-event SSE log-session formatting, route handling, max-event limiting, completion/no-progress termination, audit events, and `proof_authority=none` payloads passed.
+
+node extensions/comath-pi/tests/phase50-agent-log-session-tools.test.mjs
+Result: exit 0; Pi tool schema, text GET routing, runtime registration, `/cm:agent log-session`, and operator notification output passed.
+```
+
+Implementation summary:
+
+- Added `formatAgentRunLogSseSession()` in AgentRun observability on top of cursor-bounded `streamAgentRunLogs()`.
+- Added `GET /agent/run/:id/log-session` returning `text/event-stream` and service status capability `agent_run_log_session_sse`.
+- Added Pi `comath.agent.logSession` and `/cm:agent log-session` as read-only text-client surfaces.
+- Wired Phase 50 focused tests into the default `@comath/comathd` and `@comath/pi-extension` test chains.
+
+Boundary notes:
+
+Phase 50 is a bounded multi-event SSE response, not an indefinite browser-held WebSocket/SSE operator session, terminal emulator, cross-process scheduler channel, or proof-authority path. Log-session frames remain observability artifacts with `proof_authority=none`; they cannot certify claims, apply GraphPatch, promote candidate correctness, or replace Lean replay/static audit.
+
+Residual risks:
+
+- Indefinite WebSocket/SSE sessions and richer browser/operator UX remain deferred.
+- Cross-process scheduler recovery and cancellation remain deferred.
+- Production Codex CLI/API validation and OS-enforced adapter isolation remain deferred.
+
 ## Phase 49 Scheduler-Backed AgentRun Operator Cancellation Review Log
 
 Scope: Phase 49 turns the Phase 48 operator panel's cancellation placeholder into a real same-process control path. The service now keeps an active scheduler registry for launched AgentRuns, exposes `cancelAgentRunFromOperator()` plus `POST /agent/run/:id/cancel`, and enables panel cancellation only while the active registry can prove that the run is cancellable. Pi exposes the control as a host-confirmed mutation via `comath.agent.cancelRun` and `/cm:agent cancel`.
@@ -73,7 +114,7 @@ Implementation summary:
 
 Boundary notes:
 
-Phase 48 is a read-only operator control panel, not a live terminal, not persistent multi-event SSE/WebSocket, and not a scheduler-registry-backed cancellation API. Operator panel payloads remain observability metadata with `proof_authority=none`; they cannot certify claims, apply GraphPatch, mutate `.comath/` directly from Pi, or replace final Lean replay/static audit.
+Phase 48 is a read-only operator control panel, not a live terminal, not an indefinite browser-held SSE/WebSocket session, and not a scheduler-registry-backed cancellation API. Operator panel payloads remain observability metadata with `proof_authority=none`; they cannot certify claims, apply GraphPatch, mutate `.comath/` directly from Pi, or replace final Lean replay/static audit.
 
 Residual risks:
 
@@ -123,7 +164,7 @@ Result: exit 0; Pi text client, tool schema, text route payload, runtime registr
 
 ### Boundary Statement
 
-Phase 47 is an SSE-compatible snapshot frame, not a persistent multi-event server loop, browser UI, or terminal session. It gives operators a real `text/event-stream` surface that can be polled or composed by a host, while all frame payloads remain untrusted observability material with `proof_authority=none`.
+Phase 47 is an SSE-compatible snapshot frame, not an indefinite server loop, browser UI, or terminal session. It gives operators a real `text/event-stream` surface that can be polled or composed by a host, while all frame payloads remain untrusted observability material with `proof_authority=none`.
 
 ### Residual Risks
 

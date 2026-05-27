@@ -54,6 +54,7 @@ The repository has completed:
 - Phase 47 SSE-style AgentRun log subscription snapshot;
 - Phase 48 AgentRun operator panel read model;
 - Phase 49 scheduler-backed AgentRun operator cancellation;
+- Phase 50 bounded multi-event AgentRun log session;
 - full target development plan;
 - full Codex goal runbook;
 - end-state blueprint;
@@ -62,7 +63,7 @@ The repository has completed:
 - agent operating model;
 - Phase 0 handoff.
 
-Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, Phase 34 scopes ensemble candidate/decision artifacts by campaign, Phase 35 makes final replay audit paths claim-scoped, Phase 36 records runner sandbox/dependency provenance with fail-closed replay-integrity checks, Phase 37 accepts only explicitly registered Lean definitional-alias signatures with a witness while preserving fail-closed mismatch behavior, Phase 38 validates the optional native TriviumDB backend on the target Windows x64 platform with fail-closed reports, real native smoke, and performance/persistence metrics, Phase 39 adds a service-owned project writer session lock primitive with exclusive acquisition, token-gated release, stale takeover provenance, and malformed-lock fail-closed behavior, Phase 40 wires the service-side AgentRun scheduler through that lock before child-process mutation, Phase 41 adds live profile-backed adapter execution through comathd and Pi, Phase 42 adds capped AgentRun log readback plus bounded adapter health probes through comathd and Pi, Phase 43 adds a service-owned `codex-cli` adapter package registry plus bundled launcher lifecycle, Phase 44 adds service-configured external Codex-compatible CLI invocation behind the package contract with fail-closed missing configuration and untrusted output wrapping, Phase 45 adds a local Pi/comathd install-session e2e over a real HTTP server and built Pi package entrypoint, Phase 46 adds cursor-based AgentRun log-stream polling through comathd and Pi, Phase 47 adds SSE-compatible AgentRun log subscription snapshots through comathd and Pi, Phase 48 adds read-only AgentRun operator panels through comathd and Pi, and Phase 49 adds same-process scheduler-backed AgentRun operator cancellation through comathd and Pi. Phase 18-49 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
+Phase 0-17 Research Alpha implementation is complete, Phase 18 adds native GA proof-kernel vertical slices, Phase 19 adds the v3 ensemble recovery/V8 dialectical stress regression coverage, Phase 20 aligns public ResearchCampaign states with the v3 goal instruction, Phase 21 adds service-owned read models for dashboard inspection, Phase 22 adds a Pi-side one-command research campaign loop, Phase 23 adds a proof-kernel theorem-family registry covering `Nat.add_zero` and `Nat.mul_zero`, Phase 24 adds service-owned deterministic runner re-execution replay for the implemented Python compute runners, Phase 25 adds a controlled external MathProve evidence-runner bridge, Phase 26 adds Pi 0.75.5-compatible runtime registration with package manifest, default export factory, CoMath registration contract, Pi host-side mutating-tool confirmation gates, Phase 27 adds an AgentRun runtime boundary for child-agent persistence, scoped writes, report validation, producer/reviewer separation, and failure memory, Phase 28 adds a real allowlisted AgentRun process scheduler with logging, timeout/cancel, concurrency, and rpm controls, Phase 29 adds service-owned GA agent profiles plus profile/run/launch APIs, Phase 30 exposes those profile APIs through Pi runtime tools and `/cm:agent`, Phase 31 hardens Lean final-proof authority around configurable axiom trust profiles and skeleton-only `sorry` allowance, Phase 32 binds statement equivalence to a unique target theorem signature, Phase 33 writes campaign-scoped proof-obligation DAG, line-map, per-obligation YAML, and skeleton/report planning artifacts across the open-obligation closure, Phase 34 scopes ensemble candidate/decision artifacts by campaign, Phase 35 makes final replay audit paths claim-scoped, Phase 36 records runner sandbox/dependency provenance with fail-closed replay-integrity checks, Phase 37 accepts only explicitly registered Lean definitional-alias signatures with a witness while preserving fail-closed mismatch behavior, Phase 38 validates the optional native TriviumDB backend on the target Windows x64 platform with fail-closed reports, real native smoke, and performance/persistence metrics, Phase 39 adds a service-owned project writer session lock primitive with exclusive acquisition, token-gated release, stale takeover provenance, and malformed-lock fail-closed behavior, Phase 40 wires the service-side AgentRun scheduler through that lock before child-process mutation, Phase 41 adds live profile-backed adapter execution through comathd and Pi, Phase 42 adds capped AgentRun log readback plus bounded adapter health probes through comathd and Pi, Phase 43 adds a service-owned `codex-cli` adapter package registry plus bundled launcher lifecycle, Phase 44 adds service-configured external Codex-compatible CLI invocation behind the package contract with fail-closed missing configuration and untrusted output wrapping, Phase 45 adds a local Pi/comathd install-session e2e over a real HTTP server and built Pi package entrypoint, Phase 46 adds cursor-based AgentRun log-stream polling through comathd and Pi, Phase 47 adds SSE-compatible AgentRun log subscription snapshots through comathd and Pi, Phase 48 adds read-only AgentRun operator panels through comathd and Pi, Phase 49 adds same-process scheduler-backed AgentRun operator cancellation through comathd and Pi, and Phase 50 adds bounded multi-event AgentRun log-session responses through comathd and Pi. Phase 18-50 vertical-slice validation evidence is recorded in `REVIEW.md`; global GA readiness is still blocked by the deferred items in `TODO.md`.
 
 ## Authoritative Files
 
@@ -84,7 +85,7 @@ Next correct action:
 /goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search/final-audit semantics, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, and OS-level scheduled-process isolation.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-49 validation evidence is recorded in `REVIEW.md`.
+Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-50 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -465,7 +466,7 @@ Apply it as follows:
 - Added `GET /agent/run/:id/log-subscription`, `text/event-stream` route responses, audit event `agent_run.logs_sse_snapshot`, and status capability `agent_run_log_subscription_sse`.
 - Added Pi `ComathClient.getText()`, `comath.agent.subscribeLogs`, and `/cm:agent subscribe-logs` as read-only operator subscription surfaces without host mutation confirmation.
 - Added `services/comathd/tests/unit/phase47-agent-log-subscription.test.mjs` and `extensions/comath-pi/tests/phase47-agent-log-subscription-tools.test.mjs` to default package test chains.
-- Remaining agent hardening: persistent multi-event WebSocket/SSE sessions, richer interactive operator controls, production Codex CLI/API validation, and OS-level sandbox/network denial.
+- Remaining agent hardening: indefinite WebSocket/SSE sessions, richer interactive operator controls, production Codex CLI/API validation, and OS-level sandbox/network denial.
 
 ## Phase 48 Completion Notes
 
@@ -473,7 +474,7 @@ Apply it as follows:
 - Added `GET /agent/run/:id/operator-panel`, audit event `agent_run.operator_panel_read`, and status capability `agent_run_operator_panel`.
 - Added Pi `comath.agent.operatorPanel` and `/cm:agent panel` as read-only operator panel surfaces without host mutation confirmation or direct `.comath/` access.
 - Added `services/comathd/tests/unit/phase48-agent-operator-panel.test.mjs` and `extensions/comath-pi/tests/phase48-agent-operator-panel-tools.test.mjs` to default package test chains.
-- Remaining agent hardening: true scheduler-backed live cancellation, persistent multi-event WebSocket/SSE sessions, production Codex CLI/API validation, and OS-level sandbox/network denial.
+- Remaining agent hardening: true scheduler-backed live cancellation, indefinite WebSocket/SSE sessions, production Codex CLI/API validation, and OS-level sandbox/network denial.
 
 ## Phase 49 Completion Notes
 
@@ -482,7 +483,15 @@ Apply it as follows:
 - Updated operator panels so cancellation is enabled only while the active scheduler registry can cancel the run.
 - Added Pi `comath.agent.cancelRun` and `/cm:agent cancel` behind host confirmation.
 - Added `services/comathd/tests/unit/phase49-agent-operator-cancel.test.mjs` and `extensions/comath-pi/tests/phase49-agent-operator-cancel-tools.test.mjs` to default package test chains.
-- Remaining agent hardening: cross-process cancellation/recovery, persistent multi-event WebSocket/SSE sessions, production Codex CLI/API validation, and OS-level sandbox/network denial.
+- Remaining agent hardening: cross-process cancellation/recovery, indefinite WebSocket/SSE sessions, production Codex CLI/API validation, and OS-level sandbox/network denial.
+
+## Phase 50 Completion Notes
+
+- Added service-owned `formatAgentRunLogSseSession()` to emit multiple `agent_run.log_chunk` frames over cursor-bounded stdout/stderr reads.
+- Added `GET /agent/run/:id/log-session`, audit event `agent_run.logs_sse_session`, and status capability `agent_run_log_session_sse`.
+- Added Pi `comath.agent.logSession` and `/cm:agent log-session` as read-only operator log-session paths without host mutation confirmation.
+- Added `services/comathd/tests/unit/phase50-agent-log-session.test.mjs` and `extensions/comath-pi/tests/phase50-agent-log-session-tools.test.mjs` to default package test chains.
+- Remaining agent hardening: indefinite WebSocket/SSE operator sessions, richer browser/operator UX, cross-process scheduler recovery, production Codex CLI/API validation, and OS-level sandbox/network denial.
 
 ## Verification To Run At Phase Boundary
 

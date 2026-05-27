@@ -103,6 +103,7 @@ Remaining mathematical work:
 - Phase 47 SSE-style AgentRun log subscription snapshots remain inspection-only. Event-stream frames carry untrusted stdout/stderr chunks and `proof_authority: none`; they cannot certify candidate correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
 - Phase 48 AgentRun operator panels remain inspection-only. Run status, action availability, cursor chunks, and subscription metadata carry `proof_authority: none`; they cannot certify candidate correctness, promote claims, apply GraphPatch, cancel runs without a real scheduler registry, or replace Lean replay/static audit.
 - Phase 49 AgentRun operator cancellation remains runtime control only. A cancellation decision and resulting `cancelled` AgentRun state carry `proof_authority: none`; stopping a process cannot certify candidate correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
+- Phase 50 bounded multi-event AgentRun log sessions remain inspection-only. Multi-frame SSE payloads carry untrusted stdout/stderr chunks and `proof_authority: none`; they cannot certify candidate correctness, promote claims, apply GraphPatch, or replace Lean replay/static audit.
 - Successful gate-mediated promotions raise evidence level conservatively: literature/computation to at least 2, symbolic/Lean skeleton to at least 3, formal to 5.
 - Paper export is blocked when paper checks detect theorem-like overclaiming, manually written theorem syntax without claim metadata, hidden blockers, stale statements, missing provenance, invalid margin notes, missing block-bound margin-note provenance, rendered block hash mismatch, or missing literature condition support.
 - Snapshot/replay detects stale runner output by recomputing canonical runner `result_sha256`, checks replay `runs_sha256`, and vetoes runner report host-path leaks; stale, tampered, or unreplayable computation cannot silently support a privileged state.
@@ -268,7 +269,7 @@ Phase 41 adds coverage for:
 - Phase 42 makes runtime inspection product-real for capped logs and bounded adapter health probes, but these artifacts remain non-evidential for formal proof authority.
 - Phase 43 makes packaged adapter selection product-real for a service-owned Codex launcher, but the launcher remains non-evidential for formal proof authority.
 - Phase 44 makes service-configured external Codex-compatible CLI invocation product-real for draft AgentRun material, but it remains non-evidential for formal proof authority and is not validation against a production Codex API backend.
-- Phase 45 makes local Pi/comathd install-session wiring product-real for an automated HTTP session, Phase 48 makes a read-only AgentRun operator panel product-real for status/action inspection, and Phase 49 makes same-process live cancellation product-real, but real Pi operator UX, cross-process cancellation/recovery, and service lifecycle management remain outside mathematical authority.
+- Phase 45 makes local Pi/comathd install-session wiring product-real for an automated HTTP session, Phase 48 makes a read-only AgentRun operator panel product-real for status/action inspection, Phase 49 makes same-process live cancellation product-real, and Phase 50 makes bounded multi-event log-session readback product-real, but real Pi operator UX, indefinite operator sessions, cross-process cancellation/recovery, and service lifecycle management remain outside mathematical authority.
 
 Phase 42 mathematical-integrity validation:
 
@@ -317,3 +318,10 @@ Phase 49 mathematical-integrity validation:
 - `node extensions/comath-pi/tests/phase49-agent-operator-cancel-tools.test.mjs`
 
 Result: both exited 0; scheduler-backed cancellation preserves `proof_authority: none`, requires active same-process scheduler ownership, and remains runtime control rather than proof evidence.
+
+Phase 50 mathematical-integrity validation:
+
+- `node services/comathd/tests/unit/phase50-agent-log-session.test.mjs`
+- `node extensions/comath-pi/tests/phase50-agent-log-session-tools.test.mjs`
+
+Result: both exited 0; bounded multi-event log sessions preserve `proof_authority: none`, expose only untrusted stdout/stderr observability frames, and remain non-evidential for formal proof status.
