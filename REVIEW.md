@@ -1,3 +1,47 @@
+## Goal 2 Task 9 / Comprehensive Check-Debug Loop 3
+
+Scope: third Goal 2 comprehensive check-debug loop over Tasks 7-8 and the surrounding proof-kernel, proof-memory, campaign, Pi, and root surfaces. This loop verifies that Lean Authority v2 final replay binding and failed-route proof-memory retrieval did not weaken claim-promotion gates, introduce tracked runtime artifacts, make Pi a trusted-state writer, or reclassify MathProve/AgentRun output as proof authority.
+
+Verification evidence:
+
+```text
+corepack pnpm build
+Result: exit 0; workspace build passed for `extensions/comath-pi` and `services/comathd`.
+
+corepack pnpm typecheck
+Result: exit 0; workspace TypeScript no-emit checks passed for `extensions/comath-pi` and `services/comathd`.
+
+corepack pnpm test
+Result: exit 0; root Phase 0 smoke, Pi extension tests through Phase 59, comathd tests through Phase 65, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation passed.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repo-root runtime `.comath` directory was left behind.
+
+git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'
+Result: no output; no runtime, dependency, or build-output paths from those patterns are tracked.
+
+git status -sb --ignored
+Result: clean tracked tree; only ignored `.pnpm-store/`, `.worktrees/`, package `dist/`, and `node_modules/` directories were present.
+```
+
+Static scan result:
+
+- Claim-gate/status scan found expected status reads, process-result status checks, and the service-owned `applyGatePromotedClaim` / `promoteClaim` surfaces only; no direct privileged `formally_checked` assignment was found in Pi or non-gate code.
+- Pi direct-write scan found only `.comath` strings used for service authority descriptors and scoped subagent workstream policy; no Pi `writeFileSync`, `appendFileSync`, `mkdirSync`, `rmSync`, `unlinkSync`, or `createWriteStream` direct runtime-state mutation was found.
+- MathProve/proof-authority scan continues to describe MathProve, AgentRun, adapter, and runner outputs as non-authoritative evidence or orchestration material with `proof_authority: none`; no MathProve-as-`formally_checked` authority regression was found.
+- Overclaim scan continues to mark global GA readiness, arbitrary theorem proving, broad MathProve proof authority, production Pi/Codex hardening, OS sandboxing, and broader theorem synthesis as deferred or not achieved.
+
+Requirement drift result: Tasks 7-8 are still aligned with Goal 2 v3 direction. Phase 64 strengthened final promotion by hash-binding fresh Lean replay artifacts, while Phase 65 made failed proof routes retrievable memory without adding proof authority. The product is ready to move from proof-kernel/memory hardening into Task 10 Pi goal-compatible campaign UX work.
+
+Boundary notes: no high-risk implementation defect was found during this check-debug loop, so no product-code repair was required. The remaining work is product development, not more review: Pi goal-compatible UX, an end-to-end v3 formal campaign slice, release-level negative slices, documentation synchronization, and the final v3 GA completion audit remain open.
+
+Residual risks:
+
+- Task 10 still needs Pi command/API alignment for goal-compatible campaign start, status, tick, next actions, final audit, and replay UX.
+- Task 11 still needs an end-to-end v3 formal campaign slice from user goal intake to final clean replay and promotion.
+- Task 13 still needs consolidated release-level negative GA slices for statement drift, cheating artifact rejection, false-theorem refutation, all-candidate recovery, and clean replay from snapshot.
+- Task 14 and Task 15 still need documentation/evidence synchronization and the final v3 GA completion audit.
+
 ## Goal 2 Task 8 / Phase 65 Failed-Route Proof Memory Retrieval
 
 Scope: make failed routes first-class proof-memory records that can be read and retrieved by later obligations with explicit stale/superseded warnings. This closes the Task 8 gap where previous phases preserved failed routes and aggregates, but did not yet expose an obligation-level retrieval surface or inject it into campaign context.
