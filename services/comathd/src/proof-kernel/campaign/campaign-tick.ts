@@ -42,6 +42,23 @@ export type CampaignTickInput = {
   actor?: string;
 };
 
+export type StageGateRepairResumeInput = CampaignTickInput & {
+  blocker_artifact_path: string;
+  repaired_artifacts: string[];
+};
+
+export type StageGateRepairResumeResult = {
+  campaign: ResearchCampaign;
+  repair: {
+    status: "accepted";
+    blocker_artifact_path: string;
+    repair_artifact_path: string;
+    rewind_target: ResearchCampaign["current_stage"];
+    repaired_artifacts: string[];
+    proof_authority: "none";
+  };
+};
+
 export type CampaignTickResult = {
   campaign: ResearchCampaign;
   obligation?: ProofObligation;
@@ -112,6 +129,17 @@ function campaignProofRel(campaign: ResearchCampaign, rel: string): string {
 
 function artifactExists(projectRoot: string, rel: string): boolean {
   return existsSync(assertPathAllowed(projectRoot, rel, { purpose: "read" }));
+}
+
+function readJsonArtifact(projectRoot: string, rel: string): unknown {
+  try {
+    return JSON.parse(readFileSync(assertPathAllowed(projectRoot, rel, { purpose: "read", resolveRealpath: true }), "utf8"));
+  } catch {
+    throw new ComathError("stage-gate blocker artifact is unreadable", {
+      statusCode: 409,
+      code: "CAMPAIGN_REPAIR_BLOCKER_UNREADABLE"
+    });
+  }
 }
 
 function knowledgePackArtifacts(campaign: ResearchCampaign): string[] {
@@ -208,6 +236,142 @@ function blockForMissingArtifacts(input: {
     input.actor
   );
   return { campaign: next, obligation: { ...input.obligation, status: "blocked" }, blocker: "missing_required_stage_artifact" };
+}
+
+function sameArtifactSet(a: string[], b: string[]): boolean {
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function stageGateBlockerPayload(payload: unknown): {
+  code?: unknown;
+  campaign_id?: unknown;
+  attempted_stage?: unknown;
+  rewind_target?: unknown;
+  missing_artifacts?: unknown;
+} {
+  return payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+}
+
+export function repairStageGateAndResume(input: StageGateRepairResumeInput): StageGateRepairResumeResult {
+  const actor = input.actor ?? "campaign";
+  if (!Array.isArray(input.repaired_artifacts)) {
+    throw new ComathError("repair request must include repaired_artifacts", {
+      statusCode: 400,
+      code: "CAMPAIGN_REPAIR_INVALID_REQUEST"
+    });
+  }
+  const campaign = getCampaign(input.project_root, input.campaign_id);
+  if (!campaign) {
+    throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
+  }
+  if (campaign.status === "terminal") {
+    throw new ComathError("terminal campaigns cannot be repair-resumed", {
+      statusCode: 409,
+      code: "CAMPAIGN_TERMINAL"
+    });
+  }
+  if (campaign.status !== "blocked") {
+    throw new ComathError("only blocked stage-gate campaigns can be repair-resumed", {
+      statusCode: 409,
+      code: "CAMPAIGN_NOT_BLOCKED"
+    });
+  }
+
+  const blocker = campaign.blockers
+    .slice()
+    .reverse()
+    .find((item) => item.code === "MISSING_REQUIRED_STAGE_ARTIFACT" && item.artifact_path === input.blocker_artifact_path);
+  if (!blocker) {
+    throw new ComathError("stage-gate blocker artifact does not match this campaign", {
+      statusCode: 409,
+      code: "CAMPAIGN_REPAIR_BLOCKER_MISMATCH"
+    });
+  }
+
+  const payload = stageGateBlockerPayload(readJsonArtifact(input.project_root, input.blocker_artifact_path));
+  const missingArtifacts = Array.isArray(payload.missing_artifacts)
+    ? payload.missing_artifacts.filter((item): item is string => typeof item === "string")
+    : [];
+  if (
+    payload.code !== "MISSING_REQUIRED_STAGE_ARTIFACT" ||
+    payload.campaign_id !== campaign.campaign_id ||
+    payload.attempted_stage !== blocker.attempted_stage ||
+    payload.rewind_target !== blocker.rewind_target ||
+    !sameArtifactSet(missingArtifacts, Array.isArray(blocker.missing_artifacts) ? (blocker.missing_artifacts as string[]) : [])
+  ) {
+    throw new ComathError("stage-gate blocker artifact is stale or inconsistent", {
+      statusCode: 409,
+      code: "CAMPAIGN_REPAIR_BLOCKER_MISMATCH"
+    });
+  }
+
+  if (!sameArtifactSet(input.repaired_artifacts, missingArtifacts)) {
+    throw new ComathError("repair request must cite the exact missing artifact set", {
+      statusCode: 409,
+      code: "CAMPAIGN_REPAIR_ARTIFACT_SET_MISMATCH"
+    });
+  }
+
+  const stillMissing = input.repaired_artifacts.filter((rel) => !artifactExists(input.project_root, rel));
+  if (stillMissing.length > 0) {
+    throw new ComathError("stage-gate repair artifacts are still missing", {
+      statusCode: 409,
+      code: "CAMPAIGN_REPAIR_INCOMPLETE"
+    });
+  }
+
+  const rewindTarget = blocker.rewind_target as ResearchCampaign["current_stage"];
+  const repairRel = writeSimpleStageArtifact(input.project_root, campaign, "stage_gate_repair.json", {
+    code: "STAGE_GATE_REPAIR_ACCEPTED",
+    campaign_id: campaign.campaign_id,
+    blocker_artifact_path: input.blocker_artifact_path,
+    attempted_stage: blocker.attempted_stage,
+    rewind_target: rewindTarget,
+    repaired_artifacts: input.repaired_artifacts,
+    proof_authority: "none",
+    can_promote_claim: false,
+    created_at: now()
+  });
+  const openObligations = campaign.open_obligations.map((obligation, index) =>
+    index === 0 && obligation.status === "blocked" ? { ...obligation, status: "queued" as const } : obligation
+  );
+  const repairedBlockers = campaign.blockers.map((item) =>
+    item === blocker
+      ? {
+          ...item,
+          resolved: true,
+          resolved_at: now(),
+          repair_artifact_path: repairRel
+        }
+      : item
+  );
+  const next = writeCampaign(
+    input.project_root,
+    researchCampaignSchema.parse({
+      ...campaign,
+      status: "running",
+      current_stage: rewindTarget,
+      open_obligations: openObligations,
+      blockers: repairedBlockers,
+      accepted_artifacts: campaign.accepted_artifacts,
+      next_actions: [`tick campaign to continue from repaired ${rewindTarget} gate`]
+    }),
+    actor
+  );
+
+  return {
+    campaign: next,
+    repair: {
+      status: "accepted",
+      blocker_artifact_path: input.blocker_artifact_path,
+      repair_artifact_path: repairRel,
+      rewind_target: rewindTarget,
+      repaired_artifacts: input.repaired_artifacts,
+      proof_authority: "none"
+    }
+  };
 }
 
 function requiredArtifactsBeforeStage(

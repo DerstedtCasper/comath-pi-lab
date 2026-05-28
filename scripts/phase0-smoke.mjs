@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-70")) {
-  invariantFailures.push("README must describe the current Phase 18-70 GA/v3 vertical-slice evidence");
+if (!readme.includes("Phase 18-71")) {
+  invariantFailures.push("README must describe the current Phase 18-71 GA/v3 vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -195,7 +195,8 @@ const goal2AcceptanceMarkers = [
   ["67 v3 end-to-end formal campaign slice", "phase67-v3-formal-campaign-slice.test.mjs"],
   ["68 v3 negative GA slice runner", "phase68-v3-negative-ga-slices.test.mjs"],
   ["69 v3 terminal vocabulary compatibility", "phase69-v3-terminal-vocabulary.test.mjs"],
-  ["70 broad theorem planning slice", "phase70-broad-theorem-planning-slice.test.mjs"]
+  ["70 broad theorem planning slice", "phase70-broad-theorem-planning-slice.test.mjs"],
+  ["71 stage-gate repair/resume", "phase71-stage-gate-repair-resume.test.mjs"]
 ];
 
 for (const [marker, testName] of goal2AcceptanceMarkers) {
@@ -233,6 +234,10 @@ if (!acceptanceMatrix.includes("external_v3_terminal_state")) {
 
 if (!acceptanceMatrix.includes("broad_synthesis_plan.json")) {
   invariantFailures.push("acceptance matrix must include Phase 70 broad theorem planning artifact language");
+}
+
+if (!acceptanceMatrix.includes("stage_gate_repair.json")) {
+  invariantFailures.push("acceptance matrix must include Phase 71 stage-gate repair artifact language");
 }
 
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {

@@ -668,6 +668,14 @@
 - [x] Keep `proof_authority: "none"` and `can_promote_claim: false` on broad-planning artifacts, and leave the root claim `conjectural` until a theorem-specific Lean declaration, candidate manifest, statement-equivalence, dependency-closure, axiom-profile, and final clean replay exist.
 - [x] Add `phase70-broad-theorem-planning-slice.test.mjs` and wire Phase 70 into the default `@comath/comathd` test chain.
 
+## Phase 71: Stage-Gate Repair/Resume
+
+- [x] Add service-owned `repairStageGateAndResume()` plus `POST /campaign/:id/repair-resume` for campaigns blocked by `MISSING_REQUIRED_STAGE_ARTIFACT`.
+- [x] Require repair requests to cite the persisted `stage_gate_blocker.json` and the exact missing artifact set before a blocked campaign can return to `running`.
+- [x] Keep ordinary `/campaign/:id/resume` scoped to paused campaigns; blocked campaigns now return `CAMPAIGN_REPAIR_REQUIRED` instead of bypassing stage-gate evidence.
+- [x] Persist `stage_gate_repair.json` with `proof_authority: "none"` / `can_promote_claim: false`, preserve historical blockers/stage runs, and resume only to the recorded rewind target.
+- [x] Add `phase71-stage-gate-repair-resume.test.mjs` and wire Phase 71 into the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.

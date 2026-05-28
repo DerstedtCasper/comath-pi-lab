@@ -35,7 +35,12 @@ import {
   writeWorkstreamReport
 } from "../workstream/workstream-store.js";
 import { getCampaign, writeCampaign } from "../proof-kernel/campaign/research-campaign.js";
-import { replayCampaign, startCampaign, tickCampaign } from "../proof-kernel/campaign/campaign-tick.js";
+import {
+  repairStageGateAndResume,
+  replayCampaign,
+  startCampaign,
+  tickCampaign
+} from "../proof-kernel/campaign/campaign-tick.js";
 import { withExternalV3CampaignResult, withExternalV3TerminalState } from "../proof-kernel/campaign/external-terminal-vocabulary.js";
 import { runV3NegativeGaSlices } from "../release/v3-negative-ga-slices.js";
 import {
@@ -940,10 +945,48 @@ async function route(method: string, path: string, body: unknown, context: Route
         if (campaign.status === "terminal") {
           return success({ campaign: withExternalV3TerminalState(campaign) });
         }
+        if (campaign.status === "blocked") {
+          return {
+            status: 409,
+            body: {
+              ok: false,
+              code: "CAMPAIGN_REPAIR_REQUIRED",
+              error: "blocked campaigns require stage-gate repair evidence before resume"
+            }
+          };
+        }
+        if (campaign.status !== "paused") {
+          return success({ campaign: withExternalV3TerminalState(campaign) });
+        }
         return success({
           campaign: withExternalV3TerminalState(
             writeCampaign(request.project_root, { ...campaign, status: "running" }, request.actor ?? "api")
           )
+        });
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const repairResumeMatch = /^\/campaign\/([^/]+)\/repair-resume$/.exec(url.pathname);
+    if (repairResumeMatch) {
+      try {
+        const request = body as {
+          project_root: string;
+          actor?: string;
+          blocker_artifact_path: string;
+          repaired_artifacts: string[];
+        };
+        const result = repairStageGateAndResume({
+          project_root: request.project_root,
+          campaign_id: decodeURIComponent(repairResumeMatch[1] ?? ""),
+          actor: request.actor,
+          blocker_artifact_path: request.blocker_artifact_path,
+          repaired_artifacts: request.repaired_artifacts
+        });
+        return success({
+          ...result,
+          campaign: withExternalV3TerminalState(result.campaign)
         });
       } catch (error) {
         return dynamicRouteError(error);

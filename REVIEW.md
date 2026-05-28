@@ -1,3 +1,27 @@
+## Goal 2 Task 18 / Phase 71 Stage-Gate Repair/Resume
+
+Scope: implement a narrow service-owned repair/resume path for campaigns blocked by missing required stage-gate artifacts. This closes the Phase 63 residual gap without turning repair/resume into proof repair, theorem synthesis, or claim promotion.
+
+Implementation:
+
+- Added `repairStageGateAndResume()` in `services/comathd/src/proof-kernel/campaign/campaign-tick.ts`.
+- Added `POST /campaign/:id/repair-resume` in `services/comathd/src/api/server.ts`.
+- Tightened ordinary `POST /campaign/:id/resume` so it no longer unblocks `status: "blocked"` campaigns; blocked campaigns now return `CAMPAIGN_REPAIR_REQUIRED`.
+- Repair requests must cite the persisted `stage_gate_blocker.json` and the exact missing artifact set. The service re-reads the blocker, verifies campaign/stage/rewind/missing-artifact consistency, checks all repaired artifacts exist under the project root, writes `stage_gate_repair.json`, and resumes only to the recorded rewind target.
+- The repair artifact carries `proof_authority: "none"` and `can_promote_claim: false`. Historical blockers and blocked stage runs remain preserved.
+
+Verification:
+
+```text
+corepack pnpm --filter @comath/comathd build
+Result: exit 0.
+
+node services/comathd/tests/unit/phase71-stage-gate-repair-resume.test.mjs
+Result: exit 0. The test first failed before implementation because ordinary /resume returned 200 for a blocked missing-artifact campaign. After implementation it verifies blocked /resume, incomplete repair rejection, exact blocker/artifact matching, non-promotional repair artifact evidence, unchanged conjectural claim status, and continuation from the rewind target.
+```
+
+Boundary notes: Phase 71 handles `MISSING_REQUIRED_STAGE_ARTIFACT` recovery only. It does not implement arbitrary theorem repair loops, Lean proof synthesis, semantic-equivalence search, or broad promotion authority. Future theorem-specific Lean project generation remains a separate global-GA blocker.
+
 ## Goal 2 Task 17 / Phase 70 Broad Theorem Planning Slice
 
 Scope: implement a bounded product slice beyond the registered Nat theorem-family replay path without claiming arbitrary theorem proving. Phase 70 upgrades non-template theorem targets from a one-line unsupported blocker into replayable service-owned planning/synthesis evidence while preserving the Lean Authority v2 promotion boundary.
