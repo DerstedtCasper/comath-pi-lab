@@ -483,9 +483,15 @@ async function route(method: string, path: string, body: unknown, context: Route
     [
       "POST /graph-patch/propose",
       (payload) => {
-        const body = payload as Parameters<typeof buildGraphPatchFromWorkstream>[1] & { project_root: string };
+        const body = payload as Parameters<typeof buildGraphPatchFromWorkstream>[1] & {
+          project_root: string;
+          actor?: string;
+        };
         return {
-          patch: buildGraphPatchFromWorkstream(body.project_root, body)
+          patch: buildGraphPatchFromWorkstream(body.project_root, {
+            ...body,
+            created_by: body.created_by ?? body.actor ?? "api"
+          })
         };
       }
     ],

@@ -96,6 +96,34 @@ try {
   assert.equal(proposed.status, 200);
   assert.equal(proposed.body.patch.state, "proposed");
 
+  const actorOnlyWorkstream = await server.inject({
+    method: "POST",
+    path: "/workstream/spawn",
+    body: {
+      project_root: projectRoot,
+      project_id: projectId,
+      kind: "literature",
+      goal: "Route-level actor fallback proposal",
+      actor: "route-test"
+    }
+  });
+  assert.equal(actorOnlyWorkstream.status, 200);
+
+  const actorOnlyProposed = await server.inject({
+    method: "POST",
+    path: "/graph-patch/propose",
+    body: {
+      project_root: projectRoot,
+      project_id: projectId,
+      workstream_id: actorOnlyWorkstream.body.workstream.workstream_id,
+      actor: "pi-tool-actor",
+      new_nodes: [node("C-0003", projectId, "Actor fallback route claim", { status: "draft" })],
+      new_edges: []
+    }
+  });
+  assert.equal(actorOnlyProposed.status, 200);
+  assert.equal(actorOnlyProposed.body.patch.provenance.created_by, "pi-tool-actor");
+
   const skipReview = await server.inject({
     method: "POST",
     path: "/graph-patch/review",
