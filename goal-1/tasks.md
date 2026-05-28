@@ -24,18 +24,18 @@ Completion record:
 
 ## Task 2: Product-Scope Requirement Matrix
 
-- [ ] Derive a concrete requirement matrix from the objective, `COMATH_PI_LAB_DEV_PLAN.md`, `CODEX_GOAL_RUNBOOK.md`, `AGENTS.md`, `TODO.md`, and `REVIEW.md`.
-- [ ] Classify every deferred item as accepted non-goal, bounded product limitation, or missing required product functionality.
-- [ ] Add/update an auditable product-readiness document under `docs/progress/` or `docs/architecture/`.
-- [ ] Verify the matrix does not claim broad theorem proving, MathProve authority, production Pi/Codex hardening, or native Trivium default behavior beyond evidence.
+- [x] Derive a concrete requirement matrix from the objective, `COMATH_PI_LAB_DEV_PLAN.md`, `CODEX_GOAL_RUNBOOK.md`, `AGENTS.md`, `TODO.md`, and `REVIEW.md`.
+- [x] Classify every deferred item as accepted non-goal, bounded product limitation, or missing required product functionality.
+- [x] Add/update an auditable product-readiness document under `docs/progress/` or `docs/architecture/`.
+- [x] Verify the matrix does not claim broad theorem proving, MathProve authority, production Pi/Codex hardening, or native Trivium default behavior beyond evidence.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: Added `docs/progress/product-readiness-matrix.md` to define the bounded product claim for Goal 1, map core requirements to current evidence and follow-up tasks, classify all `TODO.md` deferred items, and state explicit overclaim guardrails. The matrix distinguishes the current Research Alpha plus Phase 18-58 product from global GA readiness, arbitrary theorem proving, MathProve proof authority, production Codex/Pi hardening, default native TriviumDB rollout, OS sandboxing, and broad semantic statement equivalence.
+- Verification evidence: Re-read `goal-1/input.md`, `goal-1/plan.md`, `goal-1/tasks.md`, `AGENTS.md`, `COMATH_PI_LAB_DEV_PLAN.md`, `CODEX_GOAL_RUNBOOK.md`, `TODO.md`, `REVIEW.md`, and `docs/architecture/module-boundaries.md`. Ran `rg` checks on `docs/progress/product-readiness-matrix.md` for boundary phrases including `not global GA readiness`, `not an arbitrary theorem prover`, `not a MathProve proof-authority`, `not a production Codex/Pi`, `not an OS-sandboxed`, `accepted non-goal`, `deferred global-GA`, and `must remain false`; all required guardrails were present. `git status -sb` showed only the new matrix file before this task record update.
+- Residual risk: Task 2 is a documentation/audit matrix only. It does not prove the product complete or run root validation; broad validation and implementation-surface audits remain assigned to Tasks 3-11.
+- Next step: Task 3 must run the first comprehensive check-debug loop, including build/typecheck/tests as feasible and static scans for `.comath`/gate-bypass risks.
+- Commit: pending commit for Task 2 completion.
 
 ## Task 3: Comprehensive Check-Debug Loop 1
 
