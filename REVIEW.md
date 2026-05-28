@@ -1,3 +1,46 @@
+## Goal 2 Task 15 / Final v3 GA Completion Audit
+
+Scope: close the final-audit gate quickly and return the goal to product implementation. This audit used the four external v3 documents plus `Goal 指令.txt` as the requirement source, checked the current Phase 18-68 implementation evidence, and deliberately did not convert vertical-slice evidence into a global GA claim.
+
+Subagent lanes used for this task:
+
+- Retriever lane: extracted the remaining requirement deltas from the v3 blueprint/spec/team prompts and the local readiness matrices.
+- Verifier lane: cross-checked current code/tests for external v3 terminal-vocabulary support and confirmed this is an executable API gap, not only a documentation mismatch.
+- Builder lane: synchronized `goal-2/tasks.md` so the next continuation starts with product implementation rather than another review.
+
+Requirement result:
+
+| Requirement family | Current evidence | Task 15 decision |
+| --- | --- | --- |
+| Native CoMath proof-kernel path for implemented slices | Phase 18, 57, 63, 64, 67 tests; final replay hash binding; positive v3 formal slice. | Covered for registered elementary Nat theorem-family slices. |
+| ResearchCampaign as service-owned workflow | Phase 20, 60, 63, 66, 67 evidence. | Covered for bounded resumable product slices. |
+| 8-way ensemble and evidence-weighted arbitration | Phase 19, 61, 62, 67 evidence. | Covered for registered theorem-family slices and required failure aggregate paths. |
+| Failed-route memory | Phase 61 and 65 evidence. | Covered with deterministic retrieval and stale/superseded warnings. |
+| Lean Authority v2 final promotion gate | Phase 31-37, 54, 56, 57, 64 evidence. | Covered for registered slices with fail-closed replay artifact hash binding. |
+| Positive v3 formal campaign | Phase 67 `.comath/campaign/<CAM>/v3_formal_campaign_slice.json` evidence. | Covered for `n + 0 = n`. |
+| Required negative GA slices | Phase 68 `.comath/release/v3_negative_ga_slices.json` evidence. | Covered for statement drift, cheat artifact, false theorem, all-candidate failure, and snapshot-only promotion rejection. |
+| Full external terminal vocabulary | `TODO.md` still records missing aliases for `formal_proof_verified`, `verified_counterexample`, `user_visible_theorem_repair_required`, `replayable_environment_blocker`, and `user_cancelled`. | Not complete; promoted to Task 16 product code. |
+| Broad theorem planning/synthesis | Current theorem registry remains bounded to registered Nat families and exact refutation slices. | Not complete; remains a global-GA blocker. |
+| Broad MathProve proof search / MathProve-as-authority | MathProve runners remain non-authoritative evidence only. | Not complete as global GA proof path; do not mark the goal complete. |
+| Production Pi/Codex lifecycle and OS sandboxing | Existing slices cover bounded local adapters, fake-host/runtime registration, local install e2e, provenance, and environment gates. | Not complete as production hardening. |
+
+Verification evidence:
+
+```text
+corepack pnpm build
+corepack pnpm typecheck
+corepack pnpm test
+git diff --check
+Test-Path D:\MATH _Studio\comath-pi-lab\.comath
+git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'
+rg -n 'claim\.status\s*=' services/comathd/src
+rg -n 'shell:\s*true|exec\(|execSync\(' services/comathd/src
+```
+
+Result: the Task 15 verification pass exited 0 for the root build/typecheck/test gates, `git diff --check`, and runtime/build artifact tracking checks. `.comath/` was absent from the repo root, no runtime/build artifacts were tracked, and static scans found no direct privileged claim-status assignment or service shell-execution regression. The root test chain covered Phase 0 smoke, Pi extension tests through Phase 66, comathd tests through Phase 68, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation. The read-only subagent checks independently confirmed that external v3 terminal names are required by the v3 docs but currently rejected or absent from the product API.
+
+Decision: Goal 2 is not complete. The repository has real Phase 18-68 product code and evidence, but final global v3 GA remains blocked by executable-feature gaps. The next continuation must start Task 16, a product-code task for external v3 terminal-vocabulary compatibility, rather than extending review text.
+
 ## Goal 2 Task 14 / Documentation And Release Evidence Synchronization
 
 Scope: synchronize release-facing documentation with the actual Goal 2 Phase 18-68 implementation, especially the Phase 67 positive v3 formal campaign slice and Phase 68 negative GA slice runner. This task updates evidence matrices and guardrails only; it does not claim final global v3 GA completion.
