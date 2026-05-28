@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-73")) {
-  invariantFailures.push("README must describe the current Phase 18-73 GA/v3 vertical-slice evidence");
+if (!readme.includes("Phase 18-74")) {
+  invariantFailures.push("README must describe the current Phase 18-74 GA/v3 vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -198,7 +198,8 @@ const goal2AcceptanceMarkers = [
   ["70 broad theorem planning slice", "phase70-broad-theorem-planning-slice.test.mjs"],
   ["71 stage-gate repair/resume", "phase71-stage-gate-repair-resume.test.mjs"],
   ["72 theorem-specific Lean target package", "phase72-theorem-specific-lean-generation.test.mjs"],
-  ["73 bounded theorem-specific proof-body synthesis", "phase73-bounded-lean-proof-body-synthesis.test.mjs"]
+  ["73 bounded theorem-specific proof-body synthesis", "phase73-bounded-lean-proof-body-synthesis.test.mjs"],
+  ["74 bounded Lean Authority report preparation", "phase74-bounded-authority-report-preparation.test.mjs"]
 ];
 
 for (const [marker, testName] of goal2AcceptanceMarkers) {
@@ -248,6 +249,10 @@ if (!acceptanceMatrix.includes("theorem_specific_lean_project.json")) {
 
 if (!acceptanceMatrix.includes("bounded_proof_body_synthesis.json")) {
   invariantFailures.push("acceptance matrix must include Phase 73 bounded proof-body synthesis artifact language");
+}
+
+if (!acceptanceMatrix.includes("bounded_authority_report_preparation.json")) {
+  invariantFailures.push("acceptance matrix must include Phase 74 bounded authority report preparation artifact language");
 }
 
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {

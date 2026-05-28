@@ -76,7 +76,7 @@ try {
   assert.equal(target.theorem_name, "MathResearch.Target.C0001");
   assert.equal(target.normalized_target_header, "theorem C0001 (n : Nat) : n + n = 2 * n");
   assert.equal(target.replay_command, "lake env lean MathResearch/Target.lean");
-  assert.equal(target.status, "proof_body_synthesized_unreplayed");
+  assert.equal(target.status, "authority_reports_prepared_nonpromotional");
   assert.equal(target.proof_authority, "none");
   assert.equal(target.can_promote_claim, false);
   assert.equal(target.can_run_clean_replay, false);
@@ -87,10 +87,10 @@ try {
   assert.equal(target.lean_files.target, draftTheoremRel);
   assert.equal(target.lean_files.lakefile, lakefileRel);
   assert.equal(target.lean_files.toolchain, toolchainRel);
-  assert.equal(target.blocked_until, "final Lean Authority v2 reports exist");
+  assert.equal(target.blocked_until, "final clean Lean replay manifest exists");
 
   const replayTarget = readJson(join(projectRoot, replayTargetRel));
-  assert.equal(replayTarget.status, "proof_body_synthesized_unreplayed");
+  assert.equal(replayTarget.status, "authority_reports_prepared_nonpromotional");
   assert.equal(replayTarget.theorem_name, "MathResearch.Target.C0001");
   assert.equal(replayTarget.replay_command, target.replay_command);
   assert.equal(replayTarget.lean_project_target_path, projectTargetRel);
@@ -109,7 +109,7 @@ try {
   const failure = readJson(join(projectRoot, failureRel));
   assert.equal(failure.replayable_evidence.lean_project_target, projectTargetRel);
   assert.equal(failure.promotion_blocked, true);
-  assert.equal(failure.reason, "bounded theorem-specific proof body synthesized but final Lean Authority v2 reports are missing");
+  assert.equal(failure.reason, "bounded Lean Authority v2 reports prepared but final clean replay is missing");
 
   const lastRun = finalTick.campaign.stage_runs.at(-1);
   assert.equal(lastRun.stage, "candidate_generation");

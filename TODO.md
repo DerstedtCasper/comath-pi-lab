@@ -694,11 +694,20 @@
 - [x] Keep negative/non-proof prompts from receiving the positive proof-body synthesis package.
 - [x] Add `phase73-bounded-lean-proof-body-synthesis.test.mjs`, wire Phase 73 into the default `@comath/comathd` test chain, and expose `bounded_theorem_specific_proof_body_synthesis`.
 
+## Phase 74: Bounded Lean Authority Report Preparation
+
+- [x] Add bounded non-promotional authority-report preparation for the Phase 73 `n + n = 2 * n` proof-body candidate.
+- [x] Persist `.comath/campaign/<CAM>/bounded_authority_report_preparation.json`, `bounded_authority_static_audit_preview.json`, `bounded_authority_statement_equivalence_preview.json`, `bounded_authority_dependency_closure_preview.json`, and `bounded_authority_axiom_profile_preview.json`.
+- [x] Bind the preview reports to the theorem-specific target package, proof-body synthesis artifact, target Lean file, problem lock, obligation DAG, line map, formal spec, and locked statement hash.
+- [x] Keep the preview reports campaign-scoped and non-authoritative with `proof_authority: "none"`, `can_run_clean_replay: false`, `can_promote_claim: false`, and `final_replay_manifest_path: null`.
+- [x] Keep the campaign fail-closed as `blocked_with_replayable_reason` and the root claim `conjectural`; no `.comath/evidence/<CLAIM>/lean/final_replay_manifest.json` or promotion gate is produced by report preparation alone.
+- [x] Add `phase74-bounded-authority-report-preparation.test.mjs`, wire Phase 74 into the default `@comath/comathd` test chain, and expose `bounded_lean_authority_report_preparation`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72 bounded theorem-specific Lean target package, the Phase 73 bounded proof-body candidate for `n + n = 2 * n`, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 73 generates a proof-body candidate only; it does not produce Lean Authority v2 reports, run final clean replay, or promote arbitrary claims.
+- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72 bounded theorem-specific Lean target package, the Phase 73 bounded proof-body candidate, the Phase 74 bounded authority-report previews for `n + n = 2 * n`, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 74 generates preview reports only; it does not run final clean replay or promote arbitrary claims.
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.

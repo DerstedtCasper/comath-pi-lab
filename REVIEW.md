@@ -1,3 +1,27 @@
+## Goal 2 Task 22 / Phase 74 Bounded Lean Authority Report Preparation
+
+Scope: implement bounded, non-promotional Lean Authority v2 report-preparation artifacts for the Phase 73 `n + n = 2 * n` proof-body candidate, without creating final replay authority.
+
+Implementation:
+
+- Added campaign-scoped `bounded_authority_report_preparation.json`.
+- Added preview reports for static audit, statement equivalence, dependency closure, and axiom profile.
+- Bound the preview package to the theorem-specific target package, proof-body synthesis artifact, target Lean file, problem lock, obligation DAG, line map, formal spec, and locked statement hash.
+- Kept all preview reports non-authoritative with `proof_authority: "none"`, `can_run_clean_replay: false`, `can_promote_claim: false`, and `final_replay_manifest_path: null`.
+- Updated `theorem_specific_lean_project.json`, `broad_replay_target.json`, and `broad_synthesis_failure.json` to point at the report-preparation package while preserving terminal `blocked_with_replayable_reason` and root claim `conjectural`.
+- Added `phase74-bounded-authority-report-preparation.test.mjs`, wired it into the default `@comath/comathd` test chain, exposed `bounded_lean_authority_report_preparation`, and updated README, TODO, acceptance/readiness docs, and smoke markers.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/integration/phase74-bounded-authority-report-preparation.test.mjs
+Initial RED result: exit 1; `.comath/campaign/CAM-0001/bounded_authority_report_preparation.json` was missing.
+```
+
+Boundary notes: Phase 74 does not call `runCleanLeanReplay()`, `applyGatePromotedClaim()`, or `promoteClaim()`. It writes no `.comath/evidence/<CLAIM>/lean/final_replay_manifest.json`, produces no final replay result, and keeps the root claim `conjectural`. The axiom-profile preview is explicitly blocked until clean replay supplies authoritative `#print axioms` output.
+
+Residual risks: Phase 74 is still not final proof authority for the broad target. It does not run clean replay, produce final hash-bound authority reports under the claim evidence directory, promote the claim, or generalize beyond the bounded `n + n = 2 * n` target.
+
 ## Goal 2 Task 21 / Phase 73 Bounded Theorem-Specific Proof-Body Synthesis
 
 Scope: implement a bounded proof-body synthesis artifact for the Phase 72 non-template target `Prove in Lean that n + n = 2 * n for natural numbers.`, without treating the synthesized body as final proof authority.

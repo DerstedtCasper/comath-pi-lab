@@ -106,15 +106,17 @@ try {
   assert.doesNotMatch(draftLean, /\b(sorry|admit|axiom|unsafe|opaque|constant)\b/);
 
   const target = readJson(join(projectRoot, targetRel));
-  assert.equal(target.status, "proof_body_synthesized_unreplayed");
+  assert.equal(target.status, "authority_reports_prepared_nonpromotional");
   assert.equal(target.proof_body_synthesis_path, proofBodyRel);
   assert.equal(target.proof_body_static_audit_path, auditRel);
+  assert.equal(typeof target.authority_report_preparation_path, "string");
   assert.equal(target.can_run_clean_replay, false);
   assert.equal(target.can_promote_claim, false);
 
   const replayTarget = readJson(join(projectRoot, replayTargetRel));
-  assert.equal(replayTarget.status, "proof_body_synthesized_unreplayed");
+  assert.equal(replayTarget.status, "authority_reports_prepared_nonpromotional");
   assert.equal(replayTarget.proof_body_synthesis_path, proofBodyRel);
+  assert.equal(typeof replayTarget.authority_report_preparation_path, "string");
   assert.equal(replayTarget.can_run_clean_replay, false);
   assert.equal(replayTarget.can_promote_claim, false);
   assert.equal(replayTarget.required_before_replay.includes("final clean Lean replay manifest"), true);
@@ -122,8 +124,9 @@ try {
   const failure = readJson(join(projectRoot, failureRel));
   assert.equal(failure.replayable_evidence.proof_body_synthesis, proofBodyRel);
   assert.equal(failure.replayable_evidence.proof_body_static_audit, auditRel);
+  assert.equal(typeof failure.replayable_evidence.authority_report_preparation, "string");
   assert.equal(failure.promotion_blocked, true);
-  assert.equal(failure.reason, "bounded theorem-specific proof body synthesized but final Lean Authority v2 reports are missing");
+  assert.equal(failure.reason, "bounded Lean Authority v2 reports prepared but final clean replay is missing");
 
   const lastRun = finalTick.campaign.stage_runs.at(-1);
   assert.equal(lastRun.stage, "candidate_generation");
