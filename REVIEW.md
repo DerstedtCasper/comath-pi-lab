@@ -1,3 +1,55 @@
+## Goal 2 Task 7 / Phase 64 Lean Authority v2 Final Gate Hash Binding
+
+Scope: harden the final Lean authority path so `formally_checked` promotion is bound not only to a passed replay manifest for the claim, but also to fresh, hash-bound final replay artifacts: replay stdout/stderr, final static audit, axiom profile, dependency closure, and statement-equivalence reports.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs
+Initial RED result: exit 1; the promotion gate accepted an old-format final replay manifest with `result: "pass"` but no hash-bound final replay reports, promoting the claim instead of rejecting it.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after schema, clean replay, gate, and test-chain updates.
+
+node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs
+Result: exit 0; Phase 64 rejects both old-format stale replay manifests and hash-bound replay manifests whose live replay log has drifted after import.
+
+node services/comathd/tests/unit/phase31-lean-trust-profile.test.mjs
+node services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs
+node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs
+node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs
+Result: exit 0; existing unauthorized construct, axiom-profile, statement-signature, alias, and registered-equivalence checks still pass.
+
+node services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs
+Result: exit 0; final replay stage-run artifact paths remain claim-scoped after adding replay artifact hashes.
+
+node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs
+node services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs
+Result: exit 0; existing proof-kernel promotion boundaries and native v3 stage-gate artifact coverage still pass.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0; comathd no-emit typecheck passed.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; full comathd default test chain passed with Phase 64 included.
+```
+
+Changed surfaces:
+
+- Extended `FinalLeanReplay` with `artifact_hashes` for final replay stdout, stderr, static audit, axiom profile, dependency closure, and statement equivalence.
+- Updated `runCleanLeanReplay()` to hash each final replay report after writing it and before serializing `final_replay_manifest.json`.
+- Hardened the promotion gate with a fresh-artifact check that re-reads every path named by the final replay manifest and compares its current SHA-256 and size to the manifest-bound values.
+- Added `formally_checked requires hash-bound fresh final replay artifacts` as a separate fail-closed veto while preserving the older `passed proof-kernel final replay manifest` veto for missing or invalid manifests.
+- Added `services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs`, wired it into `@comath/comathd test`, and exposed `lean_authority_v2_final_gate_hash_binding` in service status.
+
+Boundary notes: this task completes the high-value final promotion binding gap for the current native theorem-family Lean replay path. It does not broaden Lean theorem synthesis, add arbitrary-domain equivalence proof search, or replace the existing Phase 31/32/37/56 trust and statement-equivalence checks.
+
+Residual risks:
+
+- Dependency closure and axiom profile reports remain as strong native audit reports for the current generated Lean project, but deeper transitive Lake/mathlib provenance and richer proof-search-grade equivalence are still bounded by the existing implementation.
+- Required negative GA slices still need a later consolidated Task 13 run to prove statement drift, cheating artifacts, false-theorem refutation, all-candidate failure recovery, and clean replay from snapshot as release-level slices.
+- Failure-memory retrieval remains Task 8.
+
 ## Goal 2 Task 6 / Comprehensive Check-Debug Loop 2
 
 Scope: second Goal 2 comprehensive check-debug loop over Tasks 4-5. This loop verifies the Phase 62 evidence-weighted decision forest and Phase 63 native stage-gate artifact guard together, then checks root build/typecheck/test, stage-gate outputs, failure preservation, no-premature-closure semantics, Pi thin-client boundaries, runtime artifact cleanliness, and documentation overclaim risk.

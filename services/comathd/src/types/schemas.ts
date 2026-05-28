@@ -500,6 +500,16 @@ export const finalLeanReplaySchema = z
     axiom_profile_path: z.string().min(1),
     dependency_closure_path: z.string().min(1),
     statement_equivalence_path: z.string().min(1),
+    artifact_hashes: z
+      .object({
+        stdout: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        stderr: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        static_audit: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        axiom_profile: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        dependency_closure: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        statement_equivalence: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict()
+      })
+      .strict(),
     result: z.enum(["pass", "fail"])
   })
   .strict();

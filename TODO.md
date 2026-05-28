@@ -615,6 +615,13 @@
 - [x] Extend final replay stage-run evidence to include final replay log, static audit, axiom profile, dependency closure, statement equivalence, and replay manifest paths, then append a memory update stage-run with proof-memory, handoff, and replay snapshot artifacts.
 - [x] Add `phase63-v3-stage-gate-artifact-coverage.test.mjs`, wire Phase 63 into the default `@comath/comathd` test chain, and expose `native_stage_gate_artifact_guard`.
 
+## Phase 64: Lean Authority v2 Final Gate Hash Binding
+
+- [x] Extend `final_replay_manifest.json` with content hashes and sizes for final replay stdout/stderr, static audit, axiom profile, dependency closure, and statement-equivalence reports.
+- [x] Require `formally_checked` promotion to re-read those final replay artifact paths and reject stale, old-format, missing, or tampered replay evidence before promotion.
+- [x] Add `phase64-lean-authority-v2-final-gate.test.mjs` covering old-format stale manifests and hash-bound manifests whose live replay log drifts after import.
+- [x] Wire Phase 64 into the default `@comath/comathd` test chain and expose `lean_authority_v2_final_gate_hash_binding`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.

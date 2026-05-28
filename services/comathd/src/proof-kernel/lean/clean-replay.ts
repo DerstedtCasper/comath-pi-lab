@@ -119,6 +119,14 @@ export function runCleanLeanReplay(input: {
 
   write(assertPathAllowed(input.projectRoot, stdoutPathRel, { purpose: "runtime-write" }), stdout);
   write(assertPathAllowed(input.projectRoot, stderrPathRel, { purpose: "runtime-write" }), stderr);
+  const artifact_hashes = {
+    stdout: sha256FileSync(assertPathAllowed(input.projectRoot, stdoutPathRel, { purpose: "read", resolveRealpath: true })),
+    stderr: sha256FileSync(assertPathAllowed(input.projectRoot, stderrPathRel, { purpose: "read", resolveRealpath: true })),
+    static_audit: sha256FileSync(assertPathAllowed(input.projectRoot, staticAuditPathRel, { purpose: "read", resolveRealpath: true })),
+    axiom_profile: sha256FileSync(assertPathAllowed(input.projectRoot, axiomPathRel, { purpose: "read", resolveRealpath: true })),
+    dependency_closure: sha256FileSync(assertPathAllowed(input.projectRoot, dependencyPathRel, { purpose: "read", resolveRealpath: true })),
+    statement_equivalence: sha256FileSync(assertPathAllowed(input.projectRoot, statementPathRel, { purpose: "read", resolveRealpath: true }))
+  };
 
   const exit_code =
     theoremCheck.exit_code === 0 && build.exit_code === 0 && audit.exit_code === 0 ? 0 : theoremCheck.exit_code || build.exit_code || audit.exit_code;
@@ -151,6 +159,7 @@ export function runCleanLeanReplay(input: {
     axiom_profile_path: axiomPathRel.replace(/\\/g, "/"),
     dependency_closure_path: dependencyPathRel.replace(/\\/g, "/"),
     statement_equivalence_path: statementPathRel.replace(/\\/g, "/"),
+    artifact_hashes,
     result: allGatesPassed ? "pass" : "fail"
   });
 
