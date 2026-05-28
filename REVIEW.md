@@ -1,3 +1,37 @@
+## Goal 2 Task 26 / Comprehensive Check-Debug Loop 8
+
+Scope: comprehensive check-debug loop over Phase 75 bounded final clean replay promotion and Phase 76 registered Nat linear identity target registry.
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/integration/phase76-registered-nat-linear-targets.test.mjs`
+- `node services/comathd/tests/integration/phase75-bounded-final-clean-replay.test.mjs`
+- `node services/comathd/tests/integration/phase72-theorem-specific-lean-generation.test.mjs`
+- `node services/comathd/tests/integration/phase73-bounded-lean-proof-body-synthesis.test.mjs`
+- `node services/comathd/tests/integration/phase74-bounded-authority-report-preparation.test.mjs`
+- `node services/comathd/tests/integration/phase70-broad-theorem-planning-slice.test.mjs`
+- `node scripts/phase0-smoke.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+
+All commands exited 0. Root build/typecheck/test gates were not rerun in this loop because the task found no cross-package defect and made no product-code or package-interface changes; the default `@comath/comathd` test chain already exercised the Phase 72-76 proof path plus the older campaign, Lean authority, Pi/service, AgentRun, Codex-adapter, formal-slice, and negative-slice regressions.
+
+Static audit:
+
+- `git diff --check` exited 0.
+- `Test-Path D:\MATH _Studio\comath-pi-lab\.comath` returned `False`.
+- `git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'` returned no tracked runtime/build artifacts.
+- Direct claim-status mutation scan found no `claim.status =` writes in `services/comathd/src`; hits were read-only status comparisons in paper rendering.
+- Proof-authority scan found the Phase 75/76 promotion path still routed through `runCleanLeanReplay()`, `applyGatePromotedClaim()`, and `promoteClaim()` with `final_replay_manifest.json` binding; preview artifacts remain non-authoritative.
+- Current-facing documentation scans continue to describe Phase 75/76 as bounded registered-target evidence and continue to mark arbitrary theorem proving, broad MathProve proof authority, production Pi/Codex lifecycle validation, OS/network sandboxing, indefinite operator sessions/cross-process recovery, and broad statement-equivalence proof search as deferred or not achieved.
+
+Repair:
+
+- No high-risk product-code or documentation defect was found, so no product behavior repair was made in this loop.
+
+Residual risks: Phase 75-76 remain bounded registered-target slices. Global GA still needs further product work on arbitrary theorem synthesis beyond registered target tables, broad MathProve proof authority semantics, production Pi/Codex lifecycle validation, OS/network sandboxing, indefinite operator sessions/cross-process recovery, and broad statement-equivalence proof search.
+
 ## Goal 2 Task 25 / Phase 76 Registered Nat Linear Identity Targets
 
 Scope: replace the single hardcoded bounded non-template target path with a small registered Nat linear identity target table, adding a second final-clean-replay-positive target without claiming arbitrary theorem proving.
