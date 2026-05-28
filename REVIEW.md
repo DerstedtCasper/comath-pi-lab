@@ -1,3 +1,71 @@
+## Goal 2 Task 20 / Comprehensive Check-Debug Loop 6
+
+Scope: comprehensive check-debug loop over the recent global-GA product-code slices: Phase 70 broad theorem planning, Phase 71 stage-gate repair/resume, and Phase 72 theorem-specific Lean target package.
+
+Checks performed:
+
+- Rechecked Phase 70-72 requirement drift and proof-authority boundaries.
+- Re-ran focused campaign/proof-kernel tests for Phase 70, Phase 71, Phase 72, Phase 20, and Phase 63.
+- Re-ran root build, typecheck, and test gates.
+- Audited runtime artifact cleanliness, tracked generated files, repo-root `.comath`, stale current-state docs, and overclaim language.
+- Used a read-only verifier lane for Phases 70-72; it found no promotion/authority or Pi trusted-state issue, but did identify stale current-state wording in `COMATH_PI_LAB_DEV_PLAN.md`, `AGENTS.md`, and `docs/progress/design-handoff.md`.
+
+Verification:
+
+```text
+corepack pnpm --filter @comath/comathd build
+Result: exit 0.
+
+node services/comathd/tests/integration/phase70-broad-theorem-planning-slice.test.mjs
+Result: exit 0.
+
+node services/comathd/tests/unit/phase71-stage-gate-repair-resume.test.mjs
+Result: exit 0.
+
+node services/comathd/tests/integration/phase72-theorem-specific-lean-generation.test.mjs
+Result: exit 0.
+
+node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs
+Result: exit 0.
+
+node services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs
+Result: exit 0.
+
+node scripts/phase0-smoke.mjs
+Result: exit 0; Phase 0/design smoke check passed for 25 required entries and 28 invariants.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0.
+
+corepack pnpm build
+Result: exit 0.
+
+corepack pnpm typecheck
+Result: exit 0.
+
+corepack pnpm test
+Result: exit 0; root test included Phase 0 smoke, Pi extension tests through Phase 66, comathd tests through Phase 72, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation.
+
+git diff --check
+Result: exit 0 with only Windows LF-to-CRLF warnings.
+
+Test-Path D:\MATH _Studio\comath-pi-lab\.comath
+Result: False.
+
+git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'
+Result: no tracked runtime/build artifacts.
+```
+
+Static audit result: targeted stale-current-state scan found no remaining `Phase 18-58` / `Current repository state after Phase 58` / `no broad Lean project generator` wording in current-facing docs after the repair. Overclaim scan hits are explicit guardrails or non-authority statements such as `proof_authority: none`, `can_promote_claim: false`, "not an arbitrary theorem prover", and "not final global v3 GA".
+
+Changed surfaces:
+
+- Updated `COMATH_PI_LAB_DEV_PLAN.md` current status from Phase 18-58 to Phase 18-72 and clarified that Phase 70/72 are bounded planning/target-package evidence, not proof synthesis.
+- Updated `AGENTS.md` current frontier through Phase 72 while preserving the no-broad-discovery guardrail.
+- Updated `docs/progress/design-handoff.md` to retire stale "broad planning next" wording and point the next blocker at proof-body synthesis and remaining global-GA hardening.
+
+Residual risks: no high-risk regression was found in Phases 70-72. Global GA is still incomplete: arbitrary proof-body synthesis beyond the bounded target-package slice, broad MathProve proof search/proof-authority semantics, OS/network sandboxing, richer real-host Pi UX lifecycle, production Codex API/network validation, indefinite operator sessions/cross-process recovery, and broader statement-equivalence proof search remain open.
+
 ## Goal 2 Task 19 / Phase 72 Theorem-Specific Lean Target Package
 
 Scope: implement a bounded theorem-specific Lean target package for one non-template broad-planning goal, `Prove in Lean that n + n = 2 * n for natural numbers.`, without claiming arbitrary theorem proving or proof authority.
