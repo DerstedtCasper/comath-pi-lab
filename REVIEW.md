@@ -1,3 +1,52 @@
+## Goal 2 Task 13 / Phase 68 v3 Negative GA Slice Runner
+
+Scope: implement product code for the release-level negative GA slices required by the v3 external documents. This is a `comathd` runner and API route, not a review-only checklist: it creates runtime evidence for statement drift rejection, cheating Lean artifact rejection, false-theorem refutation, all-candidate failure recovery, and snapshot replay that still cannot promote without fresh hash-bound final replay artifacts.
+
+TDD / implementation evidence:
+
+```text
+node services/comathd/tests/integration/phase68-v3-negative-ga-slices.test.mjs
+Initial RED result: exit 1; `POST /release/v3-negative-ga-slices` returned 404, proving the release negative-slice runner was not product code yet.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build and agent-adapter copy step completed after adding the release runner, route, export, and status capability.
+
+node services/comathd/tests/integration/phase68-v3-negative-ga-slices.test.mjs
+Result: exit 0; Phase 68 created `.comath/release/v3_negative_ga_slices.json`, covered all five required negative slices, kept every final claim out of `formally_checked`, preserved evidence paths, and reported `all_required_slices_passed: true`.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0; no-emit TypeScript check passed after switching negative promotion attempts to the normal `promoteClaim()` path.
+
+node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs
+Result: exit 0; existing proof-kernel claim promotion gate behavior still passes.
+
+node services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs
+Result: exit 0; evidence-weighted all-candidate failure/recovery arbitration still passes.
+
+node services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs
+Result: exit 0; false theorem refutation path still reaches the refutation terminal behavior.
+
+node services/comathd/tests/integration/phase18-ga-snapshot-replay.test.mjs
+Result: exit 0; existing snapshot replay integrity behavior still passes.
+
+node services/comathd/tests/integration/phase67-v3-formal-campaign-slice.test.mjs
+Result: exit 0; the positive v3 formal campaign slice still passes after adding the negative release runner.
+```
+
+Changed surfaces:
+
+- Added `services/comathd/src/release/v3-negative-ga-slices.ts` as a service-owned release runner that writes `.comath/release/v3_negative_ga_slices.json`.
+- Added `POST /release/v3-negative-ga-slices`, exported the runner from `@comath/comathd`, exposed `v3_negative_ga_slice_runner`, and wired Phase 68 into the default comathd test chain.
+- Added `services/comathd/tests/integration/phase68-v3-negative-ga-slices.test.mjs` asserting all five negative slices block promotion and preserve evidence.
+
+Requirement result: Task 13 now has executable release evidence for the negative GA paths named in the v3 blueprint/spec: statement drift cannot promote, Lean escape hatches are rejected by static audit, a registered false theorem returns a refutation rather than proof-looking text, eight failed candidates aggregate into recovery evidence, and a restored snapshot replay is preserved but insufficient for a different claim without fresh hash-bound final replay artifacts.
+
+Residual risks:
+
+- This runner covers the registered theorem-family/product slice evidence required for Task 13; it is not a claim of arbitrary theorem proving or final global GA completion.
+- Task 14 must still synchronize release-facing docs and matrices with Phase 68 evidence.
+- Task 15 must still run the final v3 GA completion audit before marking the overall goal complete.
+
 ## Goal 2 Task 12 / Comprehensive Check-Debug Loop 4
 
 Scope: fourth Goal 2 comprehensive check-debug loop over the Phase 67 v3 formal campaign slice and release-facing root gates. This loop verifies that the final positive v3 slice did not leave stale Phase 18-58 smoke invariants, tracked runtime artifacts, secrets, direct Pi trusted-state writes, claim-gate bypasses, or documentation overclaims before moving to the required negative GA slices.

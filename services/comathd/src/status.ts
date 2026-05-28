@@ -42,6 +42,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "native_stage_gate_artifact_guard",
       "lean_authority_v2_final_gate_hash_binding",
       "proof_memory_failed_route_retrieval",
+      "v3_negative_ga_slice_runner",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
       "mathprove_final_audit_external_runner",

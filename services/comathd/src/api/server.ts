@@ -36,6 +36,7 @@ import {
 } from "../workstream/workstream-store.js";
 import { getCampaign, writeCampaign } from "../proof-kernel/campaign/research-campaign.js";
 import { replayCampaign, startCampaign, tickCampaign } from "../proof-kernel/campaign/campaign-tick.js";
+import { runV3NegativeGaSlices } from "../release/v3-negative-ga-slices.js";
 import {
   buildAgentProfileLaunch,
   buildAgentAdapterPackageLaunch,
@@ -132,6 +133,17 @@ async function route(method: string, path: string, body: unknown, context: Route
             user_goal: string;
             domain?: string;
             strict_mode?: boolean;
+            actor?: string;
+          }
+        )
+    ],
+    [
+      "POST /release/v3-negative-ga-slices",
+      (payload) =>
+        runV3NegativeGaSlices(
+          payload as {
+            project_root: string;
+            project_name?: string;
             actor?: string;
           }
         )

@@ -52,3 +52,4 @@ export * from "./proof-kernel/lean/statement-equivalence.js";
 export * from "./proof-kernel/lean/dependency-closure.js";
 export * from "./proof-kernel/lean/axiom-profile.js";
 export * from "./proof-kernel/lean/clean-replay.js";
+export * from "./release/v3-negative-ga-slices.js";
