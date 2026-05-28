@@ -72,18 +72,18 @@ Completion record:
 
 ## Task 5: comathd Service And Gate Integrity Audit And Repair
 
-- [ ] Audit API routes, claim registry, promotion gate, GraphPatch apply, path policy, writer locks, AgentRun scheduler, snapshot/replay, runner provenance, and status capabilities.
-- [ ] Verify no gate can promote privileged claim states without required evidence.
-- [ ] Verify service status capabilities match implemented tests and smoke requirements.
-- [ ] Run focused comathd tests and repair defects found.
+- [x] Audit API routes, claim registry, promotion gate, GraphPatch apply, path policy, writer locks, AgentRun scheduler, snapshot/replay, runner provenance, and status capabilities.
+- [x] Verify no gate can promote privileged claim states without required evidence.
+- [x] Verify service status capabilities match implemented tests and smoke requirements.
+- [x] Run focused comathd tests and repair defects found.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: Audited `comathd` API route dispatch, status capabilities, claim registry, promotion gate, GraphPatch proposal/review/apply, path policy, writer locks, AgentRun scheduler, snapshot/replay, runner provenance, and MathProve final-audit boundaries. Found one concrete service/Pi contract mismatch left exposed by Task 4: Pi now sends `actor` for `comath.graph.proposePatch`, while the service route passed the raw body to `buildGraphPatchFromWorkstream()` which requires `created_by`. Added a RED route regression for actor-only GraphPatch proposal, then fixed only the public `/graph-patch/propose` route to normalize `created_by: body.created_by ?? body.actor ?? "api"`. The GraphPatch core state machine remains unchanged: proposals still require workstream ownership, protected claim-field schema checks, review transition discipline, reviewer separation, and explicit accepted-patch apply.
+- Verification evidence: The actor-only route regression first failed with `AssertionError: 400 !== 200` in `phase7-workstream-routes.test.mjs`; after the route normalization, `corepack pnpm --filter @comath/comathd build` exited 0 and `node services/comathd/tests/integration/phase7-workstream-routes.test.mjs` exited 0. Focused service integrity checks exited 0: `node services/comathd/tests/unit/phase4-claim-gate.test.mjs`, `node services/comathd/tests/unit/phase2-path-policy.test.mjs`, `node services/comathd/tests/unit/phase7-workstream-graphpatch.test.mjs`, `node services/comathd/tests/integration/phase7-workstream-routes.test.mjs`, `node services/comathd/tests/unit/phase16-snapshot-replay.test.mjs`, `node services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs`, `node services/comathd/tests/unit/phase39-project-session-lock.test.mjs`, `node services/comathd/tests/unit/phase40-agent-scheduler-session-lock.test.mjs`, `node services/comathd/tests/unit/phase55-runner-cross-machine-replay.test.mjs`, `node services/comathd/tests/unit/phase58-mathprove-final-audit-runner.test.mjs`, and `node services/comathd/tests/phase0-smoke.test.mjs`. A direct root-cwd run of `node services/comathd/tests/unit/phase28-agent-run-scheduler.test.mjs` failed because that test reads `src/agents/agent-run-scheduler.ts` relative to package cwd; rerunning it from `services/comathd` as `node tests/unit/phase28-agent-run-scheduler.test.mjs` exited 0. Full `corepack pnpm --filter @comath/comathd test` exited 0 across the package build, smoke, Phase 1-58 unit/integration chain, GraphPatch route regression, path/gate/snapshot/replay/provenance/writer-lock/AgentRun tests, and proof-kernel integration tails. Static scans used during the audit found no privileged claim status writes outside the proof-kernel refutation/metadata path and ordinary gate promotion path; no `shell: true` hits appeared in `services/comathd/src`; file writes are routed through `assertPathAllowed()` or AgentRun scoped-write helpers on the audited service-owned surfaces. `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` returned `False` after validation.
+- Residual risk: Task 5 validates the current service/gate surface and repairs the concrete GraphPatch route mismatch, but it does not replace Task 6's broader post-Task-4/5 check-debug loop or the later focused audits for MathProve/Lean/proof-kernel runner boundaries, memory/artifact/paper/snapshot behavior, documentation synchronization, and final requirement-by-requirement product completion. Existing bounded product limits remain: broad theorem synthesis, broad MathProve authority, OS-level sandboxing, indefinite operator sessions, and richer Pi lifecycle remain documented deferred items.
+- Next step: Task 6 must run the second comprehensive check-debug loop after Tasks 4-5, including build/typecheck/test gates, safety/data/path-policy/doc synchronization checks, and any high-risk regression repair.
+- Commit: `f9fe612` (`Align GraphPatch proposal route actor fallback`).
 
 ## Task 6: Comprehensive Check-Debug Loop 2
 
