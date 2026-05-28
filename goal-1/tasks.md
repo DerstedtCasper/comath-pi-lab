@@ -87,18 +87,18 @@ Completion record:
 
 ## Task 6: Comprehensive Check-Debug Loop 2
 
-- [ ] Re-run build/typecheck/test gates appropriate after Tasks 4-5.
-- [ ] Check code, safety, data consistency, path policy, permissions, and documentation synchronization.
-- [ ] Re-scan for host absolute paths in committed docs/reports where they should be scrubbed, while allowing normal local path references in repository docs.
-- [ ] Repair any high-risk product defect discovered.
+- [x] Re-run build/typecheck/test gates appropriate after Tasks 4-5.
+- [x] Check code, safety, data consistency, path policy, permissions, and documentation synchronization.
+- [x] Re-scan for host absolute paths in committed docs/reports where they should be scrubbed, while allowing normal local path references in repository docs.
+- [x] Repair any high-risk product defect discovered.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: Performed the second comprehensive check-debug loop after the Pi product-surface routing repair and the `comathd` service/gate repair. Re-read the required Goal Mode and project boundary files, confirmed the starting working tree was clean on `ga-v3-implementation-20260527`, verified that the repository-root `.comath/` runtime directory was absent, ran fresh root build/typecheck/test gates, and audited gate-promotion, process execution, Pi runtime-boundary, host-path, and secret-scan surfaces. No confirmed high-risk product defect was discovered in this loop, so no product code repair was made.
+- Verification evidence: `git status -sb` showed a clean `ga-v3-implementation-20260527` working tree before this record update, with recent history at `6821aea` / `f9fe612`. `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` returned `False` before validation and after the static scans. `corepack pnpm build` exited 0 for both workspace packages; `corepack pnpm typecheck` exited 0 for both workspace packages; `corepack pnpm test` exited 0 across the Phase 0/design smoke check, Pi extension tests through Phase 59, `comathd` build plus Phase 0-58 unit/integration chain, Phase 45 install-session e2e, and Phase 17 integrity evaluation. Static scans run: `rg -n 'status:\s*"(literature_supported|computationally_supported|symbolically_checked|lean_skeleton|formally_checked|human_accepted)"|applyGatePromotedClaim|promoteClaim\(|claim\.status\s*=|status:\s*gate\.target_status' services/comathd/src`; `rg -n 'shell:\s*true|exec\(|execSync\(|spawn\(|spawnSync\(|execFile\(' services/comathd/src`; `rg -n '\.comath|writeFile|appendFile|mkdir|rmSync|unlink|createWriteStream|readFile|readdir|statSync|existsSync|services/comathd/src' extensions/comath-pi/src extensions/tools`; `rg -n 'D:\\|D:/|C:\\|C:/|\\\\\?|/Users/|/home/' docs README.md REVIEW.md SECURITY_REVIEW.md MATH_INTEGRITY_REVIEW.md goal-1`; and `rg -n 'sk-[A-Za-z0-9]|OPENAI_API_KEY\s*=|COMATH_CODEX_API_KEY\s*=|ghp_[A-Za-z0-9]|private key|BEGIN .*PRIVATE KEY' . --glob '!node_modules/**' --glob '!.git/**'`. Follow-up focused scans showed no `shell: true` in `services/comathd/src` and no direct `claim.status =` assignments. Interpreted findings: privileged-status hits were ordinary gate/promotion checks, proof-kernel refutation/metadata staging, or paper read checks; process hits were fixed/validated argv runner and adapter boundaries; Pi/runtime hits were documentation strings, forbidden-core-file scope strings, dashboard text rendering, or service-authority metadata; host paths were historical local validation records or allowed local repository references; secret hits were policy text, scanner implementation patterns, and deterministic fake secret test fixtures.
+- Residual risk: Task 6 proves the post-Task-4/5 repository passes current root gates and broad static safety scans, but it is not the final product completion audit. The later focused audits for MathProve/Lean/proof-kernel runner boundaries, memory/Trivium/artifact/paper/snapshot behavior, documentation synchronization, and requirement-by-requirement release readiness remain required. Existing bounded product limits remain unchanged: broad theorem synthesis, broad MathProve authority, production Pi/Codex hardening, OS-level sandboxing, indefinite operator sessions, and richer statement equivalence are deferred global-GA items.
+- Next step: Task 7 must audit MathProve, Lean, proof-kernel, and runner product boundaries, then run the focused Phase 57/58/proof-kernel/replay validations before any further completion claim.
+- Commit: pending.
 
 ## Task 7: MathProve, Lean, Proof-Kernel, And Runner Product Audit
 
