@@ -133,20 +133,20 @@ Completion record:
 
 ## Task 9: Comprehensive Check-Debug Loop 3
 
-- [ ] Run root `corepack pnpm build`.
-- [ ] Run root `corepack pnpm typecheck`.
-- [ ] Run root `corepack pnpm test`.
-- [ ] Check no repository-root `.comath/` runtime state remains.
-- [ ] Check git status and diff for accidental large/generated/runtime artifacts.
-- [ ] Repair all high-risk regressions found.
+- [x] Run root `corepack pnpm build`.
+- [x] Run root `corepack pnpm typecheck`.
+- [x] Run root `corepack pnpm test`.
+- [x] Check no repository-root `.comath/` runtime state remains.
+- [x] Check git status and diff for accidental large/generated/runtime artifacts.
+- [x] Repair all high-risk regressions found.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: Performed the third Goal 1 comprehensive check-debug loop after the Task 8 memory snapshot portability repair. Re-read the required Goal Mode and project boundary files, confirmed the working tree started clean at `100b215`, verified no repository-root `.comath/` runtime directory or tracked `.comath` entries existed, ran the root build/typecheck/test gates, and audited post-test runtime/generated artifacts and git state. No high-risk regression was reproduced in this loop, so no product code repair was made.
+- Verification evidence: Starting `git status -sb` showed clean `## ga-v3-implementation-20260527`; `git log --oneline --decorate -6` showed HEAD at `100b215` after Task 8; `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` returned `False`; `git ls-files .comath` returned no tracked entries. `corepack pnpm build` exited 0 for `extensions/comath-pi` and `services/comathd`; `corepack pnpm typecheck` exited 0 for both workspace packages; `corepack pnpm test` exited 0 across Phase 0/design smoke, Pi extension tests through Phase 59, `comathd` package build plus Phase 0-58 unit/integration chain, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation. Post-test `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` again returned `False`; `git status -sb --ignored` showed only ignored `.pnpm-store/`, `.worktrees/`, `extensions/comath-pi/dist/`, `node_modules/`, `services/comathd/dist/`, and `services/comathd/node_modules/`; `git diff --stat` returned no tracked diff before this task record update; `git ls-files .comath .tmp dist node_modules services/comathd/dist extensions/comath-pi/dist` returned no tracked generated/runtime entries; `git ls-files -o --exclude-standard` returned no untracked commit candidates. `.gitignore` covers `.comath/`, `.tmp/`, `node_modules/`, `.pnpm-store/`, `.worktrees/`, and `dist/`.
+- Residual risk: Task 9 proves the current post-Task-8 repository passes fresh root build/typecheck/test gates and leaves no accidental tracked or untracked runtime artifacts. It does not replace the upcoming documentation synchronization and final requirement-by-requirement completion audit. Existing bounded product limits remain: broad theorem synthesis, broad MathProve proof authority, production Pi/Codex hardening, OS-level sandboxing, indefinite operator sessions, and richer statement equivalence are still documented deferred global-GA items.
+- Next step: Task 10 must synchronize README, TODO, REVIEW, SECURITY_REVIEW, MATH_INTEGRITY_REVIEW, acceptance/risk/handoff documents, and product-readiness wording with the current implementation and Task 8/9 evidence without overclaiming global GA capability.
+- Commit: pending.
 
 ## Task 10: Documentation, README, Acceptance Matrix, And Handoff Synchronization
 
