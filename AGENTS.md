@@ -85,8 +85,10 @@ Current implementation frontier:
 - Phase 70 is complete as fail-closed broad theorem planning evidence.
 - Phase 71 is complete as stage-gate repair/resume for missing required artifacts.
 - Phase 72 is complete as a bounded theorem-specific Lean target package for `n + n = 2 * n`; it is not proof synthesis.
+- Phase 73 is complete as a bounded non-authoritative proof-body candidate for `n + n = 2 * n`; it is not final proof authority.
+- Phase 74 is complete as bounded non-authoritative Lean Authority preview-report preparation for that target; it is not clean replay or claim promotion.
 
-Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, production Codex/Pi adapter hardening, broad MathProve proof search or MathProve-as-proof-authority semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-72 vertical slices as a claim of broad mathematical discovery capability.
+Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, production Codex/Pi adapter hardening, broad MathProve proof search or MathProve-as-proof-authority semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-74 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
 

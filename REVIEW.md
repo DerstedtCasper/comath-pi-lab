@@ -1,3 +1,36 @@
+## Goal 2 Task 23 / Comprehensive Check-Debug Loop 7
+
+Scope: comprehensive check-debug loop over Phase 72 theorem-specific Lean target package, Phase 73 bounded proof-body synthesis, and Phase 74 bounded authority-report preparation.
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/integration/phase72-theorem-specific-lean-generation.test.mjs`
+- `node services/comathd/tests/integration/phase73-bounded-lean-proof-body-synthesis.test.mjs`
+- `node services/comathd/tests/integration/phase74-bounded-authority-report-preparation.test.mjs`
+- `node services/comathd/tests/integration/phase70-broad-theorem-planning-slice.test.mjs`
+- `node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs`
+- `node scripts/phase0-smoke.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+- `corepack pnpm build`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+
+All commands exited 0.
+
+Static audit:
+
+- Proof authority boundaries were rechecked around Phase 72-74 artifacts. The bounded target package, proof-body package, and authority-preview package remain non-promotional; `bounded_authority_report_preparation.json` keeps `final_replay_manifest_path: null`, and the Phase 73/74 tests assert no claim-scoped final replay manifest is written.
+- `runCleanLeanReplay()`, `applyGatePromotedClaim()`, and `promoteClaim()` remain in the existing refutation/final-replay promotion paths, not in the Phase 72-74 preview/report-preparation branch.
+- Runtime/generated cleanliness checks found no repo-root `.comath` and no tracked `.comath`, `.tmp`, `dist`, `node_modules`, `services/comathd/dist`, or `extensions/comath-pi/dist` artifacts.
+
+Repair:
+
+- Updated `COMATH_PI_LAB_DEV_PLAN.md`, `AGENTS.md`, and `docs/progress/design-handoff.md` to stop describing the current state as only Phase 18-72 and to include Phase 73 bounded proof-body candidate plus Phase 74 bounded authority-preview reports without overclaiming proof authority.
+
+Residual risks: no high-risk regression was found in Phases 72-74. Global GA remains incomplete: the bounded broad target still lacks final clean replay/promotion, and arbitrary theorem synthesis, broad MathProve proof authority, OS/network sandboxing, production Pi/Codex lifecycle validation, indefinite operator sessions/cross-process recovery, and broader statement-equivalence proof search remain open.
+
 ## Goal 2 Task 22 / Phase 74 Bounded Lean Authority Report Preparation
 
 Scope: implement bounded, non-promotional Lean Authority v2 report-preparation artifacts for the Phase 73 `n + n = 2 * n` proof-body candidate, without creating final replay authority.
