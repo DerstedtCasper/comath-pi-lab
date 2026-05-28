@@ -1,3 +1,74 @@
+## Goal 2 Task 6 / Comprehensive Check-Debug Loop 2
+
+Scope: second Goal 2 comprehensive check-debug loop over Tasks 4-5. This loop verifies the Phase 62 evidence-weighted decision forest and Phase 63 native stage-gate artifact guard together, then checks root build/typecheck/test, stage-gate outputs, failure preservation, no-premature-closure semantics, Pi thin-client boundaries, runtime artifact cleanliness, and documentation overclaim risk.
+
+Verification evidence:
+
+```text
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; comathd TypeScript build passed after Task 5 commit.
+
+node services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs
+Result: exit 0; evidence-weighted arbitration still rejects score/vote-as-proof, routes refutation candidates to repair, and blocks no-proof batches.
+
+node services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs
+Result: exit 0; native v3 stage-gate artifact coverage and missing-artifact rewind/blocker behavior still pass.
+
+node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs
+Result: exit 0; campaign state machine follows the v3 native gate sequence.
+
+node services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs
+Result: exit 0; positive formal campaign still reaches `completed_formal_proof`.
+
+node services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs
+Result: exit 0; final replay and memory-update artifact paths remain claim-scoped and recorded.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0; comathd no-emit typecheck passed.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; full comathd default test chain passed with Phases 62 and 63 included.
+
+corepack pnpm build
+Result: exit 0; root recursive build passed for `extensions/comath-pi` and `services/comathd`.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed for `extensions/comath-pi` and `services/comathd`.
+
+corepack pnpm test
+Result: exit 0; root smoke, Pi extension tests, comathd tests, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation all passed.
+```
+
+Audit scans:
+
+```text
+Test-Path D:\MATH _Studio\comath-pi-lab\.comath
+Result: False; no runtime campaign state was left in the repository root.
+
+git status -sb --ignored
+Result: clean tracked tree; only ignored `.pnpm-store/`, `.worktrees/`, `extensions/comath-pi/dist/`, `node_modules/`, `services/comathd/dist/`, and `services/comathd/node_modules/` were present.
+
+git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'
+Result: no tracked runtime/build/dependency artifacts.
+
+rg over Pi extension source for direct `.comath` writes
+Result: no direct Pi runtime-state write APIs in source; `.comath` occurrences are capability/write-scope strings or tests. Pi remains a thin client over `comathd`.
+
+rg over proof-kernel campaign and Phase 62/63 tests for stage blockers, proof authority, formal promotion, and memory update
+Result: `stage_gate_blocker`, `MISSING_REQUIRED_STAGE_ARTIFACT`, `refutation_red_team`, `integration_refactor`, `memory_update`, and `target_status: "formally_checked"` are covered by service-owned campaign code and focused tests.
+
+rg over docs/review files for GA/proof-authority overclaim language
+Result: docs continue to describe global GA readiness, arbitrary theorem proving, broad MathProve proof authority, production Pi/Codex hardening, OS sandboxing, and broader theorem synthesis as deferred or not achieved.
+```
+
+Result: no high-risk regression was found, so no product-code repair was made in this loop. The Task 4-5 implementation is coherent with the current v3 direction, while remaining explicitly bounded to the registered theorem-family campaign slices and the current native stage-gate artifact guard.
+
+Residual risks:
+
+- Stage-gate blocker repair/resume remains a later product task; blocked campaigns preserve evidence and rewind target but do not yet have a dedicated gate repair command.
+- Failure-memory retrieval and similar-obligation warning behavior remain Task 8.
+- Lean Authority v2 stale-log, unauthorized-construct, dependency drift, axiom-profile mismatch, and statement mismatch negative slices remain Task 7 / Task 13.
+
 ## Goal 2 Task 5 / Phase 63 v3 Native Stage-Gate Artifact Coverage
 
 Scope: add native, service-owned stage-gate artifact coverage for the v3 campaign path. This task turns the previous implicit/merged planning and review stages into explicit campaign stage runs for knowledge, notation, skeleton, line-map, refutation/red-team, integration/refactor, final replay evidence, and memory handoff, with fail-closed artifact guards.
