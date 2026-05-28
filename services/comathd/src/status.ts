@@ -38,6 +38,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "campaign_pause_tick_guard",
       "candidate_manifest_v3_contract",
       "failure_route_aggregate_memory",
+      "evidence_weighted_decision_forest",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
       "mathprove_final_audit_external_runner",

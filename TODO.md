@@ -598,6 +598,15 @@
 - [x] Persist and return a campaign-scoped `FailureRouteAggregate` with failed candidate ids, clusters, hard vetoes, proof authority `none`, and repair/refutation recommendations while preserving existing JSONL failure-route memory.
 - [x] Add `phase61-v3-candidate-contract.test.mjs`, update the Phase 18 hand-built candidate fixture to satisfy the v3 manifest contract, wire Phase 61 into the default `@comath/comathd` test chain, and expose `candidate_manifest_v3_contract` / `failure_route_aggregate_memory`.
 
+## Phase 62: v3 Evidence-Weighted Decision Forest
+
+- [x] Replace score-only candidate ordering with evidence-layered arbitration that only selects manifest-valid, hard-veto-free `candidate_kernel_checked` candidates for proof integration.
+- [x] Weight kernel check, statement-equivalence claim, dependency/replay evidence, maintainability, lemma/dependency reuse, and only a capped low-weight candidate score/agreement signal.
+- [x] Require bound candidate statement hashes, proof-grade `exact`/`equivalent` statement-equivalence claims, no manifest hard vetoes, and no unapproved introduced assumptions before any kernel candidate can be selected.
+- [x] Route verified `candidate_refutes_step` candidates to `repair_required` theorem repair/counterexample protocol when no kernel-checked proof candidate exists.
+- [x] Block skeleton/plausible/failed-only batches with an explicit recovery plan instead of selecting the highest-scored non-proof candidate.
+- [x] Add `phase62-v3-decision-forest.test.mjs`, wire Phase 62 into the default `@comath/comathd` test chain, and expose `evidence_weighted_decision_forest`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.

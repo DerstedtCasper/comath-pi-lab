@@ -1,3 +1,52 @@
+## Goal 2 Task 4 / Phase 62 v3 Evidence-Weighted Decision Forest
+
+Scope: harden candidate arbitration so it follows the v3 rule that the decision forest is not proof authority and must not treat majority, raw score, or plausibility as proof. This task builds on Phase 61 manifest validation and closes the specific Task 4 gap: evidence-weighted selection, verified refutation priority, and no-proof recovery behavior.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs
+Initial RED result: exit 1; decision output did not expose `selection_mode: "evidence_weighted"` and lacked the v3 decision metadata/branch semantics expected by the new regression.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after decision forest changes.
+
+node services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs
+Result: exit 0; Phase 62 decision-forest regression passed. It proves high-score plausible-only candidates cannot beat a kernel-checked candidate, verified refutation enters `repair_required`, and skeleton/plausible-only batches block with a recovery plan.
+
+node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs
+Result: exit 0; existing gate and statement-drift regressions still pass.
+
+node services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs
+Result: exit 0; seven-failures-plus-one-Lean-pass ensemble recovery still selects the Lean-valid candidate and preserves failures.
+
+node services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs
+Result: exit 0; v3 candidate manifest validation and failure aggregate contract still pass.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0; comathd no-emit typecheck passed.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; default comathd test chain passed with Phase 62 included.
+```
+
+Changed surfaces:
+
+- Extended `EnsembleDecision` with `selection_mode`, optional `refutation_candidate_id`, and `proof_authority: "none"`.
+- Replaced score-only ordering with evidence-layered scoring over manifest-valid kernel-checked exact/equivalent candidates: kernel check, statement-equivalence claim, dependency/replay evidence, maintainability, dependency/lemma reuse, and only capped low-weight candidate score/agreement.
+- Kept candidate/manifest hard vetoes, missing statement-hash binding, statement drift, non-proof-grade statement-equivalence claims, and unapproved introduced assumptions as disqualifiers for proof selection.
+- Added a verified-refutation branch that returns no selected proof candidate, records `refutation_candidate_id`, sets gate result `repair_required`, and supplies theorem repair/counterexample recovery actions.
+- Added a no-proof branch that blocks with explicit failure aggregation and split/repair/refutation recovery instructions.
+- Added `services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs`, wired it into `@comath/comathd test`, and exposed `evidence_weighted_decision_forest` in service status.
+
+Boundary notes: this decision forest remains an artifact selector, not proof authority. Final claim promotion still requires the ordinary CoMath proof-kernel replay and promotion gate. Agreement/raw score is capped as a tie-break-like weak signal and cannot select a non-proof-grade candidate.
+
+Residual risks:
+
+- The evidence scorer uses current manifest fields as proxy evidence. Later Lean Authority v2 work should hash-bind final replay, statement equivalence, dependency closure, and axiom-profile artifacts more tightly into candidate manifests and decisions.
+- Verified refutation at the decision-forest layer routes to repair/counterexample protocol; full campaign-stage refutation/red-team artifact coverage is Task 5/Task 13 work.
+- The current implementation does not yet persist a separate decision-forest score breakdown artifact for every candidate.
+
 ## Goal 2 Task 3 / Comprehensive Check-Debug Loop 1
 
 Scope: perform the first Goal 2 comprehensive check-debug loop after Phase 60 and Phase 61. This loop verifies the new campaign pause/tick guard and v3 candidate-manifest/failure-aggregate contract against the current v3 GA scope without re-running the older Goal 1 audit as the development objective.
