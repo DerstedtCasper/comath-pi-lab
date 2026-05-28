@@ -703,11 +703,20 @@
 - [x] Keep the campaign fail-closed as `blocked_with_replayable_reason` and the root claim `conjectural`; no `.comath/evidence/<CLAIM>/lean/final_replay_manifest.json` or promotion gate is produced by report preparation alone.
 - [x] Add `phase74-bounded-authority-report-preparation.test.mjs`, wire Phase 74 into the default `@comath/comathd` test chain, and expose `bounded_lean_authority_report_preparation`.
 
+## Phase 75: Bounded Final Clean Replay Promotion
+
+- [x] Add a strictly gated final clean replay path for the bounded Phase 72-74 target `Prove in Lean that n + n = 2 * n for natural numbers.`
+- [x] Write claim-scoped final static-audit, statement-equivalence, dependency-closure, axiom-profile, stdout/stderr, and `final_replay_manifest.json` artifacts under `.comath/evidence/<CLAIM>/lean/`.
+- [x] Bind the final replay manifest to artifact hashes and the generated theorem-specific Lean package, not to campaign-scoped preview reports alone.
+- [x] Promote the bounded claim to `formally_checked` only through the existing Lean Authority v2 promotion gate after clean replay and all final reports pass.
+- [x] Keep negative/non-proof prompts from receiving final clean replay authority.
+- [x] Add `phase75-bounded-final-clean-replay.test.mjs`, wire Phase 75 into the default `@comath/comathd` test chain, and expose `bounded_final_clean_replay_promotion`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72 bounded theorem-specific Lean target package, the Phase 73 bounded proof-body candidate, the Phase 74 bounded authority-report previews for `n + n = 2 * n`, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 74 generates preview reports only; it does not run final clean replay or promote arbitrary claims.
+- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72-75 bounded final-clean-replay path for `n + n = 2 * n`, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 75 proves one bounded non-template target; it does not implement arbitrary theorem proving.
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.

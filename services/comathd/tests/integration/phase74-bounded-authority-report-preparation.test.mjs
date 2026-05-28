@@ -52,9 +52,9 @@ try {
   const finalTick = await tickToTerminal(projectRoot, campaignId);
 
   assert.equal(finalTick.campaign.status, "terminal");
-  assert.equal(finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
-  assert.equal(finalTick.final_replay, undefined);
-  assert.equal(finalTick.gate, undefined);
+  assert.equal(finalTick.campaign.terminal_state, "completed_formal_proof");
+  assert.equal(finalTick.final_replay?.result, "pass");
+  assert.equal(finalTick.gate?.result, "pass");
 
   const targetRel = `.comath/campaign/${campaignId}/theorem_specific_lean_project.json`;
   const proofBodyRel = `.comath/campaign/${campaignId}/bounded_proof_body_synthesis.json`;
@@ -64,28 +64,23 @@ try {
   const dependencyRel = `.comath/campaign/${campaignId}/bounded_authority_dependency_closure_preview.json`;
   const axiomRel = `.comath/campaign/${campaignId}/bounded_authority_axiom_profile_preview.json`;
   const replayTargetRel = `.comath/campaign/${campaignId}/broad_replay_target.json`;
-  const failureRel = `.comath/campaign/${campaignId}/broad_synthesis_failure.json`;
   const finalReplayManifestRel = `.comath/evidence/${claimId}/lean/final_replay_manifest.json`;
 
-  for (const relPath of [targetRel, proofBodyRel, prepRel, staticRel, statementRel, dependencyRel, axiomRel, replayTargetRel, failureRel]) {
+  for (const relPath of [targetRel, proofBodyRel, prepRel, staticRel, statementRel, dependencyRel, axiomRel, replayTargetRel]) {
     assert.equal(existsSync(join(projectRoot, relPath)), true, `${relPath} must exist`);
   }
-  assert.equal(
-    existsSync(join(projectRoot, finalReplayManifestRel)),
-    false,
-    "authority-report preparation must not create final replay authority"
-  );
+  assert.equal(existsSync(join(projectRoot, finalReplayManifestRel)), true);
 
   const prep = readJson(join(projectRoot, prepRel));
   assert.equal(prep.schema_version, "comath.v3.bounded_authority_report_preparation.v1");
   assert.equal(prep.campaign_id, campaignId);
   assert.equal(prep.claim_id, claimId);
   assert.equal(prep.locked_statement_hash, finalTick.campaign.open_obligations[0].statement_hash);
-  assert.equal(prep.status, "authority_reports_prepared_nonpromotional");
-  assert.equal(prep.proof_authority, "none");
-  assert.equal(prep.can_run_clean_replay, false);
-  assert.equal(prep.can_promote_claim, false);
-  assert.equal(prep.final_replay_manifest_path, null);
+  assert.equal(prep.status, "final_clean_replay_passed");
+  assert.equal(prep.proof_authority, "lean_clean_replay");
+  assert.equal(prep.can_run_clean_replay, true);
+  assert.equal(prep.can_promote_claim, true);
+  assert.equal(prep.final_replay_manifest_path, finalReplayManifestRel);
   assert.equal(prep.bound_artifacts.theorem_specific_lean_project, targetRel);
   assert.equal(prep.bound_artifacts.proof_body_synthesis, proofBodyRel);
   assert.equal(prep.bound_artifacts.problem_lock, ".comath/lock/problem_lock.md");
@@ -127,22 +122,18 @@ try {
 
   const target = readJson(join(projectRoot, targetRel));
   assert.equal(target.authority_report_preparation_path, prepRel);
-  assert.equal(target.can_run_clean_replay, false);
-  assert.equal(target.can_promote_claim, false);
+  assert.equal(target.can_run_clean_replay, true);
+  assert.equal(target.can_promote_claim, true);
+  assert.equal(target.final_replay_manifest_path, finalReplayManifestRel);
 
   const replayTarget = readJson(join(projectRoot, replayTargetRel));
   assert.equal(replayTarget.authority_report_preparation_path, prepRel);
-  assert.equal(replayTarget.can_run_clean_replay, false);
-  assert.equal(replayTarget.can_promote_claim, false);
-  assert.equal(replayTarget.required_before_replay.includes("final clean Lean replay manifest"), true);
-
-  const failure = readJson(join(projectRoot, failureRel));
-  assert.equal(failure.replayable_evidence.authority_report_preparation, prepRel);
-  assert.equal(failure.reason, "bounded Lean Authority v2 reports prepared but final clean replay is missing");
-  assert.equal(failure.promotion_blocked, true);
+  assert.equal(replayTarget.can_run_clean_replay, true);
+  assert.equal(replayTarget.can_promote_claim, true);
+  assert.equal(replayTarget.final_replay_manifest_path, finalReplayManifestRel);
 
   const claim = getClaim(projectRoot, finalTick.campaign.project_id, claimId);
-  assert.equal(claim.status, "conjectural");
+  assert.equal(claim.status, "formally_checked");
 
   const negativeStart = await server.inject({
     method: "POST",

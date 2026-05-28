@@ -1,3 +1,27 @@
+## Goal 2 Task 24 / Phase 75 Bounded Final Clean Replay Promotion
+
+Scope: convert the bounded Phase 72-74 `n + n = 2 * n` target from campaign-scoped preview evidence into claim-scoped final Lean Authority v2 evidence, without generalizing to arbitrary theorem proving.
+
+Implementation:
+
+- Added a bounded final clean replay path for the theorem-specific `n + n = 2 * n` target.
+- The bounded target now writes the missing `Audit/Target.lean` file and is represented as a proper `LeanProjectFiles` replay package.
+- Reused the existing `runCleanLeanReplay()` and `promoteClaim()` gate path through a shared final replay/promotion helper.
+- Wrote claim-scoped final static audit, statement equivalence, dependency closure, axiom profile, stdout/stderr, and `final_replay_manifest.json` under `.comath/evidence/<CLAIM>/lean/`.
+- Updated the bounded target package, authority-preparation package, and broad replay target to `final_clean_replay_passed` only after the final gate passes.
+- Added `phase75-bounded-final-clean-replay.test.mjs`, wired it into the default `@comath/comathd` test chain, and exposed `bounded_final_clean_replay_promotion`.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/integration/phase75-bounded-final-clean-replay.test.mjs
+Initial RED result: exit 1; bounded broad target still terminated at `blocked` instead of `completed_formal_proof`.
+```
+
+Boundary notes: Phase 75 does not add direct claim-status mutation. It promotes only through the existing Lean Authority v2 gate after `runCleanLeanReplay()` writes fresh hash-bound final artifacts. Negative/non-proof prompts containing `n + n = 2 * n` still receive no final clean replay authority.
+
+Residual risks: Phase 75 proves one bounded non-template target. It does not implement arbitrary theorem proving, broad proof search, broad MathProve proof authority, OS-enforced sandboxing, production Pi/Codex lifecycle hardening, or broad statement-equivalence proof search.
+
 ## Goal 2 Task 23 / Comprehensive Check-Debug Loop 7
 
 Scope: comprehensive check-debug loop over Phase 72 theorem-specific Lean target package, Phase 73 bounded proof-body synthesis, and Phase 74 bounded authority-report preparation.

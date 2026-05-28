@@ -26,6 +26,7 @@ const requiredCapabilities = [
   "theorem_specific_lean_target_package",
   "bounded_theorem_specific_proof_body_synthesis",
   "bounded_lean_authority_report_preparation",
+  "bounded_final_clean_replay_promotion",
   "runner_reexecution_replay",
   "mathprove_external_evidence_runner",
   "mathprove_final_audit_external_runner",

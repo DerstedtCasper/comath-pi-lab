@@ -12,7 +12,7 @@ import { promoteClaim } from "../../verification/gate.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
 import { runTheoremFamilyCandidates } from "../ensemble/candidate-runner.js";
-import { createLeanProjectForTheorem } from "../lean/lean-project.js";
+import { createLeanProjectForTheorem, type LeanProjectFiles } from "../lean/lean-project.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
 import { findTheoremFamilyForGoal, findTheoremFamilyForObligation } from "../lean/theorem-family.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
@@ -438,6 +438,7 @@ type TheoremSpecificLeanTarget = {
   proof_body: string;
   replay_command: string;
   theorem_file_rel: string;
+  audit_file_rel: string;
   formal_spec_rel: string;
   lakefile_rel: string;
   toolchain_rel: string;
@@ -649,6 +650,7 @@ function theoremSpecificLeanTarget(campaign: ResearchCampaign, obligation: Proof
     proof_body: "by omega",
     replay_command: "lake env lean MathResearch/Target.lean",
     theorem_file_rel: `${root}/MathResearch/Target.lean`,
+    audit_file_rel: `${root}/Audit/Target.lean`,
     formal_spec_rel: `${root}/FormalSpec/target.json`,
     lakefile_rel: `${root}/lakefile.lean`,
     toolchain_rel: `${root}/lean-toolchain`
@@ -677,6 +679,8 @@ function writeTheoremSpecificLeanProject(input: {
       "",
       "lean_lib MathResearch where",
       "",
+      "lean_lib Audit where",
+      "",
       ""
     ].join("\n")
   );
@@ -701,6 +705,17 @@ function writeTheoremSpecificLeanProject(input: {
       `#print axioms C0001`,
       "",
       `end ${input.target.namespace}`,
+      ""
+    ].join("\n")
+  );
+  writeRuntimeFile(
+    input.projectRoot,
+    input.target.audit_file_rel,
+    [
+      "import MathResearch.Target",
+      "",
+      `#check ${input.target.theorem_name}`,
+      `#print axioms ${input.target.theorem_name}`,
       ""
     ].join("\n")
   );
@@ -752,6 +767,7 @@ function writeTheoremSpecificLeanProject(input: {
     },
     lean_files: {
       target: input.target.theorem_file_rel,
+      audit: input.target.audit_file_rel,
       formal_spec: input.target.formal_spec_rel,
       lakefile: input.target.lakefile_rel,
       toolchain: input.target.toolchain_rel
@@ -765,6 +781,49 @@ function writeTheoremSpecificLeanProject(input: {
     ],
     created_at: now()
   });
+}
+
+function createLeanProjectForTheoremSpecificTarget(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  claim_id: string;
+  locked_statement_hash: string;
+  target: TheoremSpecificLeanTarget;
+}): LeanProjectFiles {
+  const leanRootRel = `.comath/lean/broad/${input.campaign.campaign_id}`;
+  const theoremFileRel = "MathResearch/Target.lean";
+  const auditFileRel = "Audit/Target.lean";
+  const leanRoot = assertPathAllowed(input.projectRoot, leanRootRel, { purpose: "runtime-write" });
+  return {
+    projectRoot: input.projectRoot,
+    leanRoot,
+    theoremFile: assertPathAllowed(input.projectRoot, input.target.theorem_file_rel, { purpose: "runtime-write" }),
+    theoremFileRel,
+    formalSpecFile: assertPathAllowed(input.projectRoot, input.target.formal_spec_rel, { purpose: "runtime-write" }),
+    auditFile: assertPathAllowed(input.projectRoot, input.target.audit_file_rel, { purpose: "runtime-write" }),
+    auditFileRel,
+    lakefile: assertPathAllowed(input.projectRoot, input.target.lakefile_rel, { purpose: "runtime-write" }),
+    toolchainFile: assertPathAllowed(input.projectRoot, input.target.toolchain_rel, { purpose: "runtime-write" }),
+    theoremName: input.target.theorem_name,
+    theoremFamilyId: "bounded_nat_double",
+    canonicalProposition: "n + n = 2 * n",
+    buildTargets: ["MathResearch.Target", "Audit.Target"],
+    replayCommand: "lake build MathResearch.Target Audit.Target",
+    primaryDependency: "Std omega tactic",
+    formalSpec: {
+      claim_id: input.claim_id,
+      theorem_name: input.target.theorem_name,
+      namespace: input.target.namespace,
+      normalized_statement: `${input.target.theorem_name} (n : Nat) : n + n = 2 * n`,
+      locked_statement_hash: input.locked_statement_hash
+    }
+  };
+}
+
+function patchRuntimeJson(projectRoot: string, rel: string, patch: Record<string, unknown>): void {
+  const path = assertPathAllowed(projectRoot, rel, { purpose: "runtime-write" });
+  const existing = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  writeRuntimeFile(projectRoot, rel, `${JSON.stringify({ ...existing, ...patch, updated_at: now() }, null, 2)}\n`);
 }
 
 function hashTextSha256(value: string): string {
@@ -1344,6 +1403,260 @@ function blockCampaignAtFinalReplay(input: {
   };
 }
 
+async function runFinalReplayAndPromotion(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  actor: string;
+  leanProject: LeanProjectFiles;
+  proofRoute: string;
+  patchAuthorityArtifacts?: (details: { finalReplayManifestRel: string; replay: CleanReplayResult }) => void;
+}): Promise<CampaignTickResult> {
+  const claim = getClaim(input.projectRoot, input.campaign.project_id, input.campaign.root_claim_id);
+  if (!claim) {
+    throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
+  }
+  const replay = runCleanLeanReplay({
+    projectRoot: input.projectRoot,
+    campaign_id: input.campaign.campaign_id,
+    claim_id: claim.id,
+    leanProject: input.leanProject
+  });
+
+  const proofArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.campaign.project_id,
+    source_path: input.leanProject.theoremFile,
+    kind: "code",
+    actor: input.actor
+  });
+  const finalReplayManifestRel = join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/");
+  const replayArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.campaign.project_id,
+    source_path: assertPathAllowed(input.projectRoot, finalReplayManifestRel, {
+      purpose: "read",
+      resolveRealpath: true
+    }),
+    kind: "runner_output",
+    actor: input.actor
+  });
+  const auditArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.campaign.project_id,
+    source_path: assertPathAllowed(input.projectRoot, replay.final_replay.static_audit_path, {
+      purpose: "read",
+      resolveRealpath: true
+    }),
+    kind: "runner_output",
+    actor: input.actor
+  });
+  const evidence = appendEvidenceRecord(input.projectRoot, {
+    project_id: input.campaign.project_id,
+    claim_id: claim.id,
+    kind: "lean",
+    summary: `Clean Lean/Lake replay passed for ${input.leanProject.theoremName} via ${input.leanProject.primaryDependency} with static audit, dependency closure, axiom profile, and statement-equivalence reports.`,
+    artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id]
+  });
+  const metadataReadyClaim = applyGatePromotedClaim(input.projectRoot, {
+    ...claim,
+    formalization_status: "kernel_checked",
+    dependency_closure_status: "all_dependencies_present",
+    audit_state: "audit_passed",
+    updated_at: now()
+  });
+  appendAuditEvent(input.projectRoot, {
+    project_id: input.campaign.project_id,
+    event_type: "proof_kernel.metadata_ready",
+    actor: input.actor,
+    target_id: metadataReadyClaim.id,
+    payload: {
+      replay_id: replay.final_replay.replay_id,
+      evidence_id: evidence.id
+    }
+  });
+  const promotion = promoteClaim(input.projectRoot, {
+    project_id: input.campaign.project_id,
+    claim_id: claim.id,
+    target_status: "formally_checked",
+    evidence_ids: [evidence.id],
+    artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id],
+    actor: input.actor
+  });
+  const ok = replay.final_replay.result === "pass" && promotion.gate.ok;
+  const sliceSummaryRel = campaignRel(input.campaign, "v3_formal_campaign_slice.json");
+  const finalReplayArtifactPaths = [
+    replay.final_replay.stdout_path,
+    replay.final_replay.static_audit_path,
+    replay.final_replay.axiom_profile_path,
+    replay.final_replay.dependency_closure_path,
+    replay.final_replay.statement_equivalence_path,
+    finalReplayManifestRel
+  ];
+  const finalReplayRun = stageRun(input.campaign, "final_global_replay", ok ? "completed" : "blocked", finalReplayArtifactPaths);
+  const memoryArtifactPaths = ok
+    ? [
+        ".comath/memory/proof_memory_events.jsonl",
+        ".comath/context_lake/shards/final-handoff.md",
+        ".comath/snapshots/replay/final_manifest.json",
+        sliceSummaryRel
+      ]
+    : [];
+  if (ok) {
+    input.patchAuthorityArtifacts?.({ finalReplayManifestRel, replay });
+    const memoryRun = completedStageRun({ ...input.campaign, stage_runs: [...input.campaign.stage_runs, finalReplayRun] }, "memory_update", memoryArtifactPaths);
+    const finalStageRuns = [...input.campaign.stage_runs, finalReplayRun, memoryRun];
+    const storedDecision = readStoredDecision(input.projectRoot, input.campaign, input.obligation.obligation_id);
+    writeRuntimeFile(
+      input.projectRoot,
+      ".comath/memory/proof_memory_events.jsonl",
+      `${JSON.stringify({
+        type: "FormalProofVerified",
+        campaign_id: input.campaign.campaign_id,
+        claim_id: claim.id,
+        theorem_name: replay.final_replay.theorem_name,
+        final_theorem_hash: proofArtifact.sha256,
+        proof_route: input.proofRoute,
+        failed_routes_preserved_at: ".comath/proof_memory/events.jsonl",
+        created_at: now()
+      })}\n`
+    );
+    writeRuntimeFile(
+      input.projectRoot,
+      ".comath/context_lake/shards/final-handoff.md",
+      [
+        "# Final Handoff",
+        "",
+        `campaign_id: ${input.campaign.campaign_id}`,
+        `claim_id: ${claim.id}`,
+        `theorem_name: ${replay.final_replay.theorem_name}`,
+        `final_replay_manifest: .comath/evidence/${claim.id}/lean/final_replay_manifest.json`,
+        "",
+        "The claim was promoted only after final static audit, dependency closure, axiom profile, statement equivalence, and clean replay passed.",
+        ""
+      ].join("\n")
+    );
+    writeRuntimeFile(
+      input.projectRoot,
+      ".comath/snapshots/replay/final_manifest.json",
+      `${JSON.stringify(
+        {
+          campaign_id: input.campaign.campaign_id,
+          claim_id: claim.id,
+          replay_id: replay.final_replay.replay_id,
+          final_replay_manifest: finalReplayManifestRel,
+          proof_memory_events: ".comath/memory/proof_memory_events.jsonl",
+          created_at: now()
+        },
+        null,
+        2
+      )}\n`
+    );
+    writeRuntimeFile(
+      input.projectRoot,
+      sliceSummaryRel,
+      `${JSON.stringify(
+        {
+          schema_version: "comath.v3.formal_campaign_slice.v1",
+          campaign_id: input.campaign.campaign_id,
+          project_id: input.campaign.project_id,
+          claim_id: claim.id,
+          user_goal: input.campaign.user_goal,
+          obligation_id: input.obligation.obligation_id,
+          locked_statement_hash: input.obligation.statement_hash,
+          theorem_family: replay.final_replay.theorem_family,
+          canonical_proposition: replay.final_replay.canonical_proposition,
+          terminal_state: "completed_formal_proof",
+          final_claim_status: promotion.claim.status,
+          proof_authority: "lean_clean_replay",
+          stage_sequence: finalStageRuns.map((run) => run.stage),
+          candidate_summary: {
+            total_candidates: storedDecision?.candidates.length ?? 0,
+            selected_candidate_id: storedDecision?.decision.selected_candidate_id ?? null,
+            selection_mode: storedDecision?.decision.selection_mode ?? "recovery_required",
+            trivial_bypass_logged: (storedDecision?.candidates.length ?? 0) === 0,
+            candidate_artifact_paths: storedDecision?.candidates.map((candidate) => candidate.manifest_path).filter(Boolean) ?? []
+          },
+          final_audit: {
+            result: replay.static_audit.result,
+            artifact_path: replay.final_replay.static_audit_path,
+            hard_vetoes: replay.static_audit.hard_vetoes,
+            warnings: replay.static_audit.warnings
+          },
+          clean_replay: {
+            result: replay.final_replay.result,
+            replay_id: replay.final_replay.replay_id,
+            replay_command: replay.final_replay.command,
+            final_replay_manifest: finalReplayManifestRel,
+            stdout_path: replay.final_replay.stdout_path,
+            stderr_path: replay.final_replay.stderr_path
+          },
+          promotion: {
+            result: promotion.gate.ok ? "pass" : "blocked",
+            gate_id: promotion.gate.id,
+            evidence_ids: [evidence.id],
+            artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id]
+          },
+          replayable_artifact_bundle: {
+            final_replay_manifest: finalReplayManifestRel,
+            final_static_audit: replay.final_replay.static_audit_path,
+            final_replay_log: replay.final_replay.stdout_path,
+            final_replay_stderr: replay.final_replay.stderr_path,
+            axiom_profile: replay.final_replay.axiom_profile_path,
+            dependency_closure: replay.final_replay.dependency_closure_path,
+            statement_equivalence: replay.final_replay.statement_equivalence_path,
+            proof_memory_events: ".comath/memory/proof_memory_events.jsonl",
+            snapshot_final_manifest: ".comath/snapshots/replay/final_manifest.json",
+            final_handoff: ".comath/context_lake/shards/final-handoff.md"
+          },
+          created_at: now()
+        },
+        null,
+        2
+      )}\n`
+    );
+  }
+  const memoryRun = ok
+    ? completedStageRun({ ...input.campaign, stage_runs: [...input.campaign.stage_runs, finalReplayRun] }, "memory_update", memoryArtifactPaths)
+    : undefined;
+  const next = writeCampaign(
+    input.projectRoot,
+    researchCampaignSchema.parse({
+      ...input.campaign,
+      current_stage: ok ? "completed_formal_proof" : "blocked",
+      status: "terminal",
+      terminal_state: ok ? "completed_formal_proof" : "blocked_with_replayable_reason",
+      open_obligations: [{ ...input.obligation, status: ok ? "integrated" : "blocked" }],
+      accepted_artifacts: [proofArtifact, replayArtifact, auditArtifact],
+      blockers: ok ? [] : [{ reason: "final replay or promotion gate failed", gate: promotion.gate }],
+      stage_runs: [...input.campaign.stage_runs, finalReplayRun, ...(memoryRun ? [memoryRun] : [])],
+      next_actions: ok ? [] : ["inspect final replay logs and promotion gate vetoes"]
+    }),
+    input.actor
+  );
+  return {
+    campaign: next,
+    obligation: input.obligation,
+    ensemble: readStoredDecision(input.projectRoot, input.campaign, input.obligation.obligation_id),
+    gate: {
+      gate_id: "GD-0002",
+      campaign_id: input.campaign.campaign_id,
+      stage: "final_global_lean_replay",
+      subject_id: claim.id,
+      result: ok ? "pass" : "blocked",
+      evidence: [proofArtifact, replayArtifact, auditArtifact],
+      hard_vetoes: promotion.gate.vetoes,
+      warnings: promotion.gate.warnings,
+      decision_rationale_summary: ok
+        ? "Claim promoted only after static audit, clean Lean replay, statement equivalence, dependency closure, and axiom profile passed."
+        : "Final replay or claim promotion gate failed.",
+      created_at: now()
+    },
+    final_replay: replay.final_replay,
+    static_audit: replay.static_audit
+  };
+}
+
 async function completeVerifiedCounterexample(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
@@ -1756,6 +2069,118 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     }
     const theoremFamily = findTheoremFamilyForObligation(obligation);
     if (!theoremFamily) {
+      const target = theoremSpecificLeanTarget(campaign, obligation);
+      if (target) {
+        const leanProjectRel = writeTheoremSpecificLeanProject({
+          projectRoot: input.project_root,
+          campaign,
+          obligation,
+          target
+        });
+        const proofBody = writeBoundedProofBodySynthesis({
+          projectRoot: input.project_root,
+          campaign,
+          obligation,
+          target,
+          leanProjectRel
+        });
+        bindProofBodyToTheoremSpecificLeanProject({
+          projectRoot: input.project_root,
+          campaign,
+          leanProjectRel,
+          proofBody
+        });
+        const authorityPreparation = writeBoundedAuthorityReportPreparation({
+          projectRoot: input.project_root,
+          campaign,
+          obligation,
+          target,
+          leanProjectRel,
+          proofBody
+        });
+        bindAuthorityPreparationToTheoremSpecificLeanProject({
+          projectRoot: input.project_root,
+          leanProjectRel,
+          authorityPreparation
+        });
+        const replayTargetRel = writeSimpleStageArtifact(input.project_root, campaign, "broad_replay_target.json", {
+          schema_version: "comath.v3.broad_replay_target.v1",
+          campaign_id: campaign.campaign_id,
+          claim_id: campaign.root_claim_id,
+          obligation_id: obligation.obligation_id,
+          locked_statement_hash: obligation.statement_hash,
+          target_formal_system: "Lean4",
+          status: "authority_reports_prepared_clean_replay_ready",
+          theorem_name: target.theorem_name,
+          lean_target: obligation.lean_target ?? null,
+          replay_command: target.replay_command,
+          lean_project_target_path: leanProjectRel,
+          proof_body_synthesis_path: proofBody.proofBodyRel,
+          proof_body_static_audit_path: proofBody.auditRel,
+          authority_report_preparation_path: authorityPreparation.preparationRel,
+          can_promote_claim: false,
+          required_before_replay: [
+            "fresh final static audit report",
+            "fresh statement equivalence report",
+            "fresh dependency closure report",
+            "fresh axiom profile report",
+            "final clean Lean replay manifest",
+            "fresh promotion gate decision"
+          ],
+          proof_authority: "none",
+          can_run_clean_replay: true,
+          created_at: now()
+        });
+        const replay = await runFinalReplayAndPromotion({
+          projectRoot: input.project_root,
+          campaign: {
+            ...campaign,
+            stage_runs: [
+              ...campaign.stage_runs,
+              completedStageRun(campaign, "candidate_generation", [
+                replayTargetRel,
+                leanProjectRel,
+                proofBody.proofBodyRel,
+                proofBody.auditRel,
+                authorityPreparation.preparationRel,
+                authorityPreparation.staticRel,
+                authorityPreparation.statementRel,
+                authorityPreparation.dependencyRel,
+                authorityPreparation.axiomRel
+              ])
+            ]
+          },
+          obligation,
+          actor,
+          leanProject: createLeanProjectForTheoremSpecificTarget({
+            projectRoot: input.project_root,
+            campaign,
+            claim_id: campaign.root_claim_id,
+            locked_statement_hash: obligation.statement_hash,
+            target
+          }),
+          proofRoute: "bounded_nat_double_final_clean_replay",
+          patchAuthorityArtifacts: ({ finalReplayManifestRel }) => {
+            const finalPatch = {
+              status: "final_clean_replay_passed",
+              proof_authority: "lean_clean_replay",
+              can_run_clean_replay: true,
+              can_promote_claim: true,
+              final_replay_manifest_path: finalReplayManifestRel,
+              final_report_paths: {
+                static_audit: `.comath/evidence/${campaign.root_claim_id}/lean/final_static_audit.json`,
+                statement_equivalence: `.comath/evidence/${campaign.root_claim_id}/lean/statement_equivalence.json`,
+                dependency_closure: `.comath/evidence/${campaign.root_claim_id}/lean/dependency_closure.json`,
+                axiom_profile: `.comath/evidence/${campaign.root_claim_id}/lean/axiom_profile.json`
+              }
+            };
+            patchRuntimeJson(input.project_root, leanProjectRel, finalPatch);
+            patchRuntimeJson(input.project_root, authorityPreparation.preparationRel, finalPatch);
+            patchRuntimeJson(input.project_root, replayTargetRel, finalPatch);
+          }
+        });
+        return replay;
+      }
       return blockForBroadSynthesisPlanning({
         projectRoot: input.project_root,
         campaign,

@@ -52,9 +52,9 @@ try {
   const finalTick = await tickToTerminal(projectRoot, campaignId);
 
   assert.equal(finalTick.campaign.status, "terminal");
-  assert.equal(finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
-  assert.equal(finalTick.final_replay, undefined);
-  assert.equal(finalTick.gate, undefined);
+  assert.equal(finalTick.campaign.terminal_state, "completed_formal_proof");
+  assert.equal(finalTick.final_replay?.result, "pass");
+  assert.equal(finalTick.gate?.result, "pass");
 
   const projectTargetRel = `.comath/campaign/${campaignId}/theorem_specific_lean_project.json`;
   const draftTheoremRel = `.comath/lean/broad/${campaignId}/MathResearch/Target.lean`;
@@ -62,9 +62,9 @@ try {
   const lakefileRel = `.comath/lean/broad/${campaignId}/lakefile.lean`;
   const toolchainRel = `.comath/lean/broad/${campaignId}/lean-toolchain`;
   const replayTargetRel = `.comath/campaign/${campaignId}/broad_replay_target.json`;
-  const failureRel = `.comath/campaign/${campaignId}/broad_synthesis_failure.json`;
+  const finalReplayManifestRel = `.comath/evidence/${claimId}/lean/final_replay_manifest.json`;
 
-  for (const relPath of [projectTargetRel, draftTheoremRel, formalSpecRel, lakefileRel, toolchainRel, replayTargetRel, failureRel]) {
+  for (const relPath of [projectTargetRel, draftTheoremRel, formalSpecRel, lakefileRel, toolchainRel, replayTargetRel, finalReplayManifestRel]) {
     assert.equal(existsSync(join(projectRoot, relPath)), true, `${relPath} must exist`);
   }
 
@@ -76,10 +76,11 @@ try {
   assert.equal(target.theorem_name, "MathResearch.Target.C0001");
   assert.equal(target.normalized_target_header, "theorem C0001 (n : Nat) : n + n = 2 * n");
   assert.equal(target.replay_command, "lake env lean MathResearch/Target.lean");
-  assert.equal(target.status, "authority_reports_prepared_nonpromotional");
-  assert.equal(target.proof_authority, "none");
-  assert.equal(target.can_promote_claim, false);
-  assert.equal(target.can_run_clean_replay, false);
+  assert.equal(target.status, "final_clean_replay_passed");
+  assert.equal(target.proof_authority, "lean_clean_replay");
+  assert.equal(target.can_promote_claim, true);
+  assert.equal(target.can_run_clean_replay, true);
+  assert.equal(target.final_replay_manifest_path, finalReplayManifestRel);
   assert.equal(target.bound_artifacts.problem_lock, ".comath/lock/problem_lock.md");
   assert.equal(target.bound_artifacts.obligation_dag, `.comath/campaign/${campaignId}/proof/lemma_dag.json`);
   assert.equal(target.bound_artifacts.line_map, `.comath/campaign/${campaignId}/proof/line_map.json`);
@@ -87,17 +88,16 @@ try {
   assert.equal(target.lean_files.target, draftTheoremRel);
   assert.equal(target.lean_files.lakefile, lakefileRel);
   assert.equal(target.lean_files.toolchain, toolchainRel);
-  assert.equal(target.blocked_until, "final clean Lean replay manifest exists");
 
   const replayTarget = readJson(join(projectRoot, replayTargetRel));
-  assert.equal(replayTarget.status, "authority_reports_prepared_nonpromotional");
+  assert.equal(replayTarget.status, "final_clean_replay_passed");
   assert.equal(replayTarget.theorem_name, "MathResearch.Target.C0001");
   assert.equal(replayTarget.replay_command, target.replay_command);
   assert.equal(replayTarget.lean_project_target_path, projectTargetRel);
-  assert.equal(replayTarget.can_run_clean_replay, false);
-  assert.equal(replayTarget.can_promote_claim, false);
-  assert.equal(replayTarget.proof_authority, "none");
-  assert.equal(replayTarget.required_before_replay.includes("final clean Lean replay manifest"), true);
+  assert.equal(replayTarget.can_run_clean_replay, true);
+  assert.equal(replayTarget.can_promote_claim, true);
+  assert.equal(replayTarget.proof_authority, "lean_clean_replay");
+  assert.equal(replayTarget.final_replay_manifest_path, finalReplayManifestRel);
 
   const draftLean = readFileSync(join(projectRoot, draftTheoremRel), "utf8");
   assert.match(draftLean, /namespace MathResearch\.Target/);
@@ -106,18 +106,12 @@ try {
   assert.match(draftLean, /theorem C0001 \(n : Nat\) : n \+ n = 2 \* n := by omega/);
   assert.doesNotMatch(draftLean, /\b(sorry|admit|axiom|unsafe|opaque|constant)\b/);
 
-  const failure = readJson(join(projectRoot, failureRel));
-  assert.equal(failure.replayable_evidence.lean_project_target, projectTargetRel);
-  assert.equal(failure.promotion_blocked, true);
-  assert.equal(failure.reason, "bounded Lean Authority v2 reports prepared but final clean replay is missing");
-
   const lastRun = finalTick.campaign.stage_runs.at(-1);
-  assert.equal(lastRun.stage, "candidate_generation");
-  assert.equal(lastRun.status, "blocked");
-  assert.equal(lastRun.artifact_paths.includes(projectTargetRel), true);
+  assert.equal(lastRun.stage, "memory_update");
+  assert.equal(lastRun.status, "completed");
 
   const claim = getClaim(projectRoot, finalTick.campaign.project_id, claimId);
-  assert.equal(claim.status, "conjectural");
+  assert.equal(claim.status, "formally_checked");
 
   const negativeStart = await server.inject({
     method: "POST",
