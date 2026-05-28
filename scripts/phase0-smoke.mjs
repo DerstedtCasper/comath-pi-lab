@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-76")) {
-  invariantFailures.push("README must describe the current Phase 18-76 GA/v3 vertical-slice evidence");
+if (!readme.includes("Phase 18-77")) {
+  invariantFailures.push("README must describe the current Phase 18-77 GA/v3 vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -201,7 +201,8 @@ const goal2AcceptanceMarkers = [
   ["73 bounded theorem-specific proof-body synthesis", "phase73-bounded-lean-proof-body-synthesis.test.mjs"],
   ["74 bounded Lean Authority report preparation", "phase74-bounded-authority-report-preparation.test.mjs"],
   ["75 bounded final clean replay promotion", "phase75-bounded-final-clean-replay.test.mjs"],
-  ["76 registered Nat linear identity targets", "phase76-registered-nat-linear-targets.test.mjs"]
+  ["76 registered Nat linear identity targets", "phase76-registered-nat-linear-targets.test.mjs"],
+  ["77 Runner network sandbox policy", "phase77-runner-network-sandbox-policy.test.mjs"]
 ];
 
 for (const [marker, testName] of goal2AcceptanceMarkers) {

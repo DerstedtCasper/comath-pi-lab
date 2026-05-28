@@ -1,3 +1,47 @@
+## Goal 2 Task 27 / Phase 77 Runner Network Sandbox Policy
+
+Scope: add a service-level runner network-denial contract for compute-runner execution and replay, narrowing the runner sandbox GA blocker without claiming OS-enforced isolation.
+
+Changes:
+
+- Added shared `runnerNetworkDenialPolicy` with `COMATH_RUNNER_NETWORK=disabled`.
+- Compute-runner metadata now records `sandbox_policy.network_denial` and `runner_env`.
+- Initial Python runner execution and replay re-execution both launch with the same network-denial environment marker.
+- Replay integrity and re-execution preflight now fail closed with `runner_network_denial_policy_missing` when the network-denial contract or runner environment marker is absent.
+- Replay manifests preserve the network-denial contract and runner environment marker.
+- Added `phase77-runner-network-sandbox-policy.test.mjs`, wired it into the default `@comath/comathd` test chain, smoke/status markers, and current-facing docs.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase77-runner-network-sandbox-policy.test.mjs
+Initial RED result: exit 1; runner reports lacked sandbox_policy.network_denial and runner_env.
+```
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/unit/phase77-runner-network-sandbox-policy.test.mjs`
+- `node services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs`
+- `node services/comathd/tests/unit/phase55-runner-cross-machine-replay.test.mjs`
+- `node services/comathd/tests/unit/phase10-compute-runners.test.mjs`
+- `node scripts/phase0-smoke.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+
+All commands exited 0.
+
+Static audit:
+
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path D:\MATH _Studio\comath-pi-lab\.comath` returned `False`.
+- `git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'` returned no tracked runtime/build artifacts.
+- Current-facing docs now describe Phase 18-77 and distinguish the service-level network-denial policy from still-deferred OS/kernel/firewall-enforced network sandboxing.
+
+Boundary notes: Phase 77 is a service process-environment policy and replay preflight gate. It does not prove OS-level network isolation; that remains deferred.
+
+Residual risks: OS-level runner process sandboxing, kernel/firewall-enforced network denial, broader runner-family lockfiles, arbitrary theorem synthesis, broad MathProve proof authority, production Pi/Codex lifecycle validation, indefinite operator sessions/cross-process recovery, and broad statement-equivalence proof search remain open global-GA blockers.
+
 ## Goal 2 Task 26 / Comprehensive Check-Debug Loop 8
 
 Scope: comprehensive check-debug loop over Phase 75 bounded final clean replay promotion and Phase 76 registered Nat linear identity target registry.

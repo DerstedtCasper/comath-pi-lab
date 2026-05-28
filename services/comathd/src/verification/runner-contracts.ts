@@ -16,6 +16,12 @@ import { nextSequentialId } from "../utils/id.js";
 
 const execFileAsync = promisify(execFile);
 const OUTPUT_LIMIT = 64 * 1024;
+export const runnerNetworkDenialPolicy = {
+  mode: "service_process_env",
+  env_var: "COMATH_RUNNER_NETWORK",
+  env_value: "disabled",
+  enforcement: "contractual_process_boundary"
+} as const;
 
 export type RunnerId = "sympy-exact" | "counterexample-search" | "sage-placeholder" | "sat-placeholder";
 export type RunnerExactness = "exact_symbolic" | "numeric_search" | "inexact" | "not_applicable";
@@ -49,7 +55,9 @@ export type RunnerMetadata = {
     cwd_policy: "project_root";
     allowed_executables: string[];
     os_isolation: "process_boundary_only";
+    network_denial: typeof runnerNetworkDenialPolicy;
   };
+  runner_env: Record<typeof runnerNetworkDenialPolicy.env_var, typeof runnerNetworkDenialPolicy.env_value>;
   dependency_lock: {
     runner_id: RunnerId;
     runner_version: string;
@@ -326,7 +334,11 @@ async function buildMetadata(
       network: "denied_by_contract",
       cwd_policy: "project_root",
       allowed_executables: scriptPath ? ["python"] : [],
-      os_isolation: "process_boundary_only"
+      os_isolation: "process_boundary_only",
+      network_denial: runnerNetworkDenialPolicy
+    },
+    runner_env: {
+      [runnerNetworkDenialPolicy.env_var]: runnerNetworkDenialPolicy.env_value
     },
     dependency_lock: {
       runner_id: spec.runner_id,
@@ -441,6 +453,10 @@ export async function runPythonRunner(
   try {
     const execution = await execFileAsync("python", [scriptPath, "--input-json", inputJson], {
       cwd: projectRoot,
+      env: {
+        ...process.env,
+        [runnerNetworkDenialPolicy.env_var]: runnerNetworkDenialPolicy.env_value
+      },
       encoding: "utf8",
       shell: false,
       windowsHide: true,

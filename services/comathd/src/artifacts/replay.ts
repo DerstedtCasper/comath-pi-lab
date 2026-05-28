@@ -8,6 +8,7 @@ import {
   canonicalJson,
   pythonScriptPath,
   runnerResultSha256,
+  runnerNetworkDenialPolicy,
   runnerSpecs,
   scrubHostPaths,
   sha256Text,
@@ -45,7 +46,9 @@ export type ReplayRunManifest = {
     cwd_policy: "project_root";
     allowed_executables: string[];
     os_isolation: "process_boundary_only";
+    network_denial: typeof runnerNetworkDenialPolicy;
   };
+  runner_env?: Record<typeof runnerNetworkDenialPolicy.env_var, typeof runnerNetworkDenialPolicy.env_value>;
   dependency_lock?: {
     runner_id: string;
     runner_version?: string;
@@ -160,7 +163,32 @@ function hasValidSandboxPolicy(value: unknown): boolean {
     policy.cwd_policy === "project_root" &&
     Array.isArray(policy.allowed_executables) &&
     policy.allowed_executables.every((item) => typeof item === "string") &&
-    policy.os_isolation === "process_boundary_only"
+    policy.os_isolation === "process_boundary_only" &&
+    hasValidNetworkDenialPolicy(policy.network_denial)
+  );
+}
+
+function hasValidNetworkDenialPolicy(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const policy = value as Record<string, unknown>;
+  return (
+    policy.mode === runnerNetworkDenialPolicy.mode &&
+    policy.env_var === runnerNetworkDenialPolicy.env_var &&
+    policy.env_value === runnerNetworkDenialPolicy.env_value &&
+    policy.enforcement === runnerNetworkDenialPolicy.enforcement
+  );
+}
+
+function hasValidRunnerEnv(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const env = value as Record<string, unknown>;
+  return (
+    Object.keys(env).length === 1 &&
+    env[runnerNetworkDenialPolicy.env_var] === runnerNetworkDenialPolicy.env_value
   );
 }
 
@@ -241,6 +269,9 @@ export function verifyRunnerReportReplayIntegrity(report: unknown): RunnerReplay
     if (!hasValidSandboxPolicy(metadata.sandbox_policy)) {
       vetoes.push("runner_sandbox_policy_missing");
     }
+    if (!hasValidNetworkDenialPolicy(metadata.sandbox_policy?.network_denial) || !hasValidRunnerEnv(metadata.runner_env)) {
+      vetoes.push("runner_network_denial_policy_missing");
+    }
     if (!hasValidDependencyLock(metadata.dependency_lock, String(record?.runner_id ?? result?.runner_id ?? "unknown"), result?.runner_version, metadata.script_sha256)) {
       vetoes.push("runner_dependency_lock_missing");
     }
@@ -304,6 +335,9 @@ export async function verifyRunnerReportReexecution(
   if (!sameStringArray(replayArgv, expectedReplayArgv(spec))) {
     vetoes.push("runner_reexecution_argv_untrusted");
   }
+  if (!hasValidNetworkDenialPolicy(metadata.sandbox_policy?.network_denial) || !hasValidRunnerEnv(metadata.runner_env)) {
+    vetoes.push("runner_network_denial_policy_missing");
+  }
 
   const inputJson = typeof metadata.replay_input_json === "string" ? metadata.replay_input_json : undefined;
   if (!inputJson) {
@@ -349,6 +383,10 @@ export async function verifyRunnerReportReexecution(
   try {
     const execution = await execFileAsync("python", [scriptPath, "--input-json", inputJson], {
       cwd: options.cwd,
+      env: {
+        ...process.env,
+        [runnerNetworkDenialPolicy.env_var]: runnerNetworkDenialPolicy.env_value
+      },
       encoding: "utf8",
       shell: false,
       windowsHide: true,
@@ -411,6 +449,7 @@ function runFromReport(projectRoot: string, projectId: string, reportRelativePat
     stderr_sha256: isSha256(metadata.stderr_sha256) ? metadata.stderr_sha256 : undefined,
     replay_argv: replayArgv,
     sandbox_policy: hasValidSandboxPolicy(metadata.sandbox_policy) ? metadata.sandbox_policy : undefined,
+    runner_env: hasValidRunnerEnv(metadata.runner_env) ? metadata.runner_env : undefined,
     dependency_lock: hasValidDependencyLock(metadata.dependency_lock, runnerId, runnerVersion, metadata.script_sha256)
       ? metadata.dependency_lock
       : undefined,

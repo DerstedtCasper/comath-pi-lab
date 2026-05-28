@@ -65,6 +65,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "campaign_scoped_ensemble_artifacts",
       "claim_scoped_final_replay_artifacts",
       "runner_replay_sandbox_dependency_provenance",
+      "runner_network_denial_process_env_policy",
       "runner_cross_machine_replay_environment_gate",
       "trivium_target_platform_evaluation",
       "project_writer_session_lock",
@@ -86,7 +87,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "generic_proof_planning_deferred",
       "broad_mathprove_proof_search_deferred",
       "full_interactive_pi_e2e_install_flow_deferred",
-      "runner_os_network_sandbox_enforcement_deferred",
+      "runner_os_level_network_sandbox_enforcement_deferred",
       "agent_process_os_sandbox_deferred",
       "lean_logical_equivalence_deferred",
       "secret_scan_not_full_dlp"

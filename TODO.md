@@ -720,6 +720,14 @@
 - [x] Keep unregistered broad goals fail-closed without theorem-specific target packages or final replay authority.
 - [x] Add `phase76-registered-nat-linear-targets.test.mjs`, wire Phase 76 into the default `@comath/comathd` test chain, and expose `registered_nat_linear_identity_targets`.
 
+## Phase 77: Runner Network Sandbox Policy
+
+- [x] Add a service-owned runner network-denial policy contract to compute-runner metadata.
+- [x] Bind `COMATH_RUNNER_NETWORK=disabled` into runner reports and replay manifests.
+- [x] Fail closed during replay integrity and re-execution preflight when the network-denial contract or runner environment marker is missing.
+- [x] Start Python runner execution and re-execution with the same network-denial environment marker.
+- [x] Add `phase77-runner-network-sandbox-policy.test.mjs`, wire Phase 77 into the default `@comath/comathd` test chain, and expose `runner_network_denial_process_env_policy`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -728,7 +736,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
-- [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance and Phase 55 environment drift gates: OS-level isolation and enforced network denial.
+- [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance, Phase 55 environment drift gates, and Phase 77 service-level network-denial environment policy: OS-level isolation and kernel/firewall-enforced network denial.
 - [ ] OS-level process sandboxing beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, Phase 39 project-level lock primitive, and Phase 40 AgentRun scheduler lock integration.
 - [ ] Richer statement equivalence beyond Phase 54 declaration parsing, Phase 37 registered aliases, and Phase 56 registered logical-equivalence witnesses: proof search for equivalence lemmas, transitive semantic equivalence, and broader mathematical-domain trust profiles.
 
