@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import {
@@ -67,6 +68,28 @@ export type StatementEquivalenceSearchPlan = {
     proof_authority: "none";
     can_promote_claim: false;
   }>;
+};
+
+export type StatementEquivalenceWitnessMaterialization = {
+  result: "materialized_registered_logical_equivalence_witness";
+  proof_authority: "none";
+  can_promote_claim: false;
+  source_plan_path: string;
+  locked_statement_hash: string;
+  formal_spec_statement: string;
+  equivalent_signature: string;
+  witness_kind: "lean_kernel_checked_equivalence";
+  witness_artifact_id: string;
+  witness_artifact_sha256: string;
+  lemma_names: string[];
+  justification: string;
+  required_final_authority: readonly [
+    "final_static_audit",
+    "statement_equivalence_report",
+    "dependency_closure",
+    "axiom_profile",
+    "final_clean_lean_replay"
+  ];
 };
 
 export type StatementDefinitionalAlias = {
@@ -185,6 +208,124 @@ function writeStatementEquivalenceSearchPlan(input: {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
   return plan;
+}
+
+function sha256Json(value: unknown): string {
+  return `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+}
+
+function readStatementEquivalenceSearchPlan(projectRoot: string, planPath: string): StatementEquivalenceSearchPlan {
+  const path = assertPathAllowed(projectRoot, planPath, { purpose: "read" });
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as StatementEquivalenceSearchPlan;
+  if (parsed.result !== "blocked_unproved" || parsed.proof_authority !== "none" || parsed.can_promote_claim !== false) {
+    throw new Error("plan must be non-authoritative and blocked_unproved");
+  }
+  const expectedNextArtifacts: StatementEquivalenceSearchPlan["required_next_artifacts"] = [
+    "lean_kernel_checked_equivalence",
+    "witness_artifact_id",
+    "witness_artifact_sha256",
+    "lemma_names"
+  ];
+  if (
+    !parsed.target_signature ||
+    !parsed.target_signature.normalized_signature ||
+    parsed.obligations.length !== 1 ||
+    parsed.obligations[0]?.kind !== "prove_statement_equivalence" ||
+    parsed.obligations[0]?.status !== "blocked_unproved" ||
+    normalizeStatement(parsed.obligations[0].source_signature) !== normalizeStatement(parsed.formal_spec_statement) ||
+    normalizeStatement(parsed.obligations[0].target_signature) !==
+      normalizeStatement(parsed.target_signature.normalized_signature)
+  ) {
+    throw new Error("plan target binding is invalid");
+  }
+  const obligation = parsed.obligations[0];
+  if (
+    parsed.required_next_artifacts.length !== expectedNextArtifacts.length ||
+    !expectedNextArtifacts.every((artifact, index) => parsed.required_next_artifacts[index] === artifact) ||
+    obligation.candidate_lemma_names.length !== parsed.candidate_lemma_names.length ||
+    !parsed.candidate_lemma_names.every((name, index) => obligation.candidate_lemma_names[index] === name) ||
+    obligation.proof_authority !== "none" ||
+    obligation.can_promote_claim !== false
+  ) {
+    throw new Error("plan witness requirements are invalid");
+  }
+  return parsed;
+}
+
+export function materializeStatementEquivalenceSearchPlan(input: {
+  projectRoot: string;
+  planPath: string;
+  witnessArtifactPath: string;
+  witnessArtifactId: string;
+  allowed_materializations: Array<{
+    formal_spec_statement: string;
+    equivalent_signature: string;
+    witness_kind: "lean_kernel_checked_equivalence";
+    lemma_names: string[];
+    justification: string;
+  }>;
+}): StatementRegisteredLogicalEquivalence {
+  const plan = readStatementEquivalenceSearchPlan(input.projectRoot, input.planPath);
+  const witnessArtifactId = input.witnessArtifactId.trim();
+  if (!witnessArtifactId) {
+    throw new Error("witness artifact id is required");
+  }
+  const planHints = normalizeSafeLeanNameHints(plan.candidate_lemma_names);
+  if (planHints.length !== plan.candidate_lemma_names.length) {
+    throw new Error("plan contains unsafe lemma hints");
+  }
+
+  const materialization = input.allowed_materializations.find(
+    (candidate) =>
+      candidate.witness_kind === "lean_kernel_checked_equivalence" &&
+      normalizeStatement(candidate.formal_spec_statement) === normalizeStatement(plan.formal_spec_statement) &&
+      normalizeStatement(candidate.equivalent_signature) === normalizeStatement(plan.target_signature.normalized_signature) &&
+      normalizeSafeLeanNameHints(candidate.lemma_names).length === candidate.lemma_names.length &&
+      candidate.lemma_names.length > 0 &&
+      candidate.lemma_names.every((name) => planHints.includes(name.trim()))
+  );
+  if (!materialization) {
+    throw new Error("no allowed bounded materialization matches plan");
+  }
+
+  const artifactBase = {
+    result: "materialized_registered_logical_equivalence_witness" as const,
+    proof_authority: "none" as const,
+    can_promote_claim: false as const,
+    source_plan_path: input.planPath.replace(/\\/g, "/"),
+    locked_statement_hash: plan.locked_statement_hash,
+    formal_spec_statement: plan.formal_spec_statement,
+    equivalent_signature: plan.target_signature.normalized_signature,
+    witness_kind: "lean_kernel_checked_equivalence" as const,
+    witness_artifact_id: witnessArtifactId,
+    lemma_names: materialization.lemma_names.map((name) => name.trim()),
+    justification: materialization.justification,
+    required_final_authority: [
+      "final_static_audit",
+      "statement_equivalence_report",
+      "dependency_closure",
+      "axiom_profile",
+      "final_clean_lean_replay"
+    ] as const
+  };
+  const artifact: StatementEquivalenceWitnessMaterialization = {
+    ...artifactBase,
+    witness_artifact_sha256: sha256Json(artifactBase)
+  };
+
+  const path = assertPathAllowed(input.projectRoot, input.witnessArtifactPath, { purpose: "runtime-write" });
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+
+  return {
+    formal_spec_statement: artifact.formal_spec_statement,
+    equivalent_signature: artifact.equivalent_signature,
+    witness_kind: artifact.witness_kind,
+    witness_artifact_id: artifact.witness_artifact_id,
+    witness_artifact_sha256: artifact.witness_artifact_sha256,
+    lemma_names: artifact.lemma_names,
+    justification: artifact.justification
+  };
 }
 
 function findLogicalEquivalenceWitness(input: {

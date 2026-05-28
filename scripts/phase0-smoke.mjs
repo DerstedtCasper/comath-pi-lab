@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-79")) {
-  invariantFailures.push("README must describe the current Phase 18-79 GA/v3 vertical-slice evidence");
+if (!readme.includes("Phase 18-80")) {
+  invariantFailures.push("README must describe the current Phase 18-80 GA/v3 vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -204,7 +204,8 @@ const goal2AcceptanceMarkers = [
   ["76 registered Nat linear identity targets", "phase76-registered-nat-linear-targets.test.mjs"],
   ["77 Runner network sandbox policy", "phase77-runner-network-sandbox-policy.test.mjs"],
   ["78 registered transitive statement-equivalence witnesses", "phase78-lean-transitive-equivalence.test.mjs"],
-  ["79 statement-equivalence proof-search plan artifacts", "phase79-lean-equivalence-search-plan.test.mjs"]
+  ["79 statement-equivalence proof-search plan artifacts", "phase79-lean-equivalence-search-plan.test.mjs"],
+  ["80 bounded equivalence-search witness materialization", "phase80-bounded-equivalence-witness-materialization.test.mjs"]
 ];
 
 for (const [marker, testName] of goal2AcceptanceMarkers) {
@@ -518,6 +519,14 @@ if (!acceptanceMatrix.includes("lean_equivalence_search_plan_artifacts")) {
 
 if (!acceptanceMatrix.includes("equivalence_search_plan.json")) {
   invariantFailures.push("acceptance matrix must include Phase 79 equivalence_search_plan artifact language");
+}
+
+if (!acceptanceMatrix.includes("lean_equivalence_witness_materialization")) {
+  invariantFailures.push("acceptance matrix must include Phase 80 lean_equivalence_witness_materialization capability language");
+}
+
+if (!acceptanceMatrix.includes("equivalence_witness_materialized.json")) {
+  invariantFailures.push("acceptance matrix must include Phase 80 equivalence_witness_materialized artifact language");
 }
 
 if (!acceptanceMatrix.includes("Registered transitive logical equivalence requires closed kernel-witness chains")) {

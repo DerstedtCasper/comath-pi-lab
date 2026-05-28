@@ -744,6 +744,14 @@
 - [x] Fail closed without plan-authority emission for exact matches, accepted registered witnesses, missing/ambiguous target signatures, empty hints, and unsafe hint strings.
 - [x] Add `phase79-lean-equivalence-search-plan.test.mjs`, wire Phase 79 into the default `@comath/comathd` test chain, and expose `lean_equivalence_search_plan_artifacts`.
 
+## Phase 80: Bounded Equivalence-Search Witness Materialization
+
+- [x] Add `materializeStatementEquivalenceSearchPlan()` for bounded materialization of a Phase 79 blocked plan into registered logical-equivalence witness metadata.
+- [x] Require non-authoritative blocked plans, exact formal-spec/target binding, safe registered lemma hints, a non-empty witness artifact id, and an allowlisted bounded materialization before writing witness material.
+- [x] Write `.comath/evidence/<CLAIM>/lean/equivalence_witness_materialized.json` with `proof_authority: "none"`, `can_promote_claim: false`, SHA-256 artifact binding, lemma names, justification, and required final Lean Authority v2 gates.
+- [x] Fail closed for unregistered hints, tampered promotional plans, wrong targets, malformed witness metadata, and missing witness artifact ids without claim promotion.
+- [x] Add `phase80-bounded-equivalence-witness-materialization.test.mjs`, wire Phase 80 into the default `@comath/comathd` test chain, and expose `lean_equivalence_witness_materialization`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -754,7 +762,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance, Phase 55 environment drift gates, and Phase 77 service-level network-denial environment policy: OS-level isolation and kernel/firewall-enforced network denial.
 - [ ] OS-level process sandboxing beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, Phase 39 project-level lock primitive, and Phase 40 AgentRun scheduler lock integration.
-- [ ] Richer statement equivalence beyond Phase 54 declaration parsing, Phase 37 registered aliases, Phase 56 direct registered logical-equivalence witnesses, Phase 78 registered transitive witness chains, and Phase 79 blocked plan artifacts: executing proof-search plans into kernel-checked equivalence witnesses, automatically discovered semantic equivalence, and broader mathematical-domain trust profiles.
+- [ ] Richer statement equivalence beyond Phase 54 declaration parsing, Phase 37 registered aliases, Phase 56 direct registered logical-equivalence witnesses, Phase 78 registered transitive witness chains, Phase 79 blocked plan artifacts, and Phase 80 bounded witness materialization: automatic proof search/execution outside registered bounded materializations, automatically discovered semantic equivalence, and broader mathematical-domain trust profiles.
 
 ## Design Documentation Goal
 

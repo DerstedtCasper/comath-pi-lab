@@ -43,6 +43,7 @@ const requiredCapabilities = [
   "lean_registered_logical_equivalence_witnesses",
   "lean_registered_transitive_logical_equivalence_witnesses",
   "lean_equivalence_search_plan_artifacts",
+  "lean_equivalence_witness_materialization",
   "trivium_target_platform_evaluation",
   "project_writer_session_lock",
   "agent_run_scheduler_writer_lock_integration",
@@ -62,7 +63,7 @@ const requiredResidualRisks = [
   "broad_mathprove_proof_search_deferred",
   "full_interactive_pi_e2e_install_flow_deferred",
   "runner_os_level_network_sandbox_enforcement_deferred",
-  "lean_equivalence_proof_execution_deferred"
+  "lean_equivalence_proof_execution_beyond_registered_materialization_deferred"
 ];
 
 for (const risk of requiredResidualRisks) {

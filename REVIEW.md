@@ -1,3 +1,33 @@
+## Goal 2 Task 31 / Phase 80 Bounded Equivalence-Search Witness Materialization
+
+Scope: materialize a bounded Phase 79 blocked statement-equivalence plan into registered logical-equivalence witness metadata without proof authority or claim promotion.
+
+Changes:
+
+- Added `materializeStatementEquivalenceSearchPlan()` and `StatementEquivalenceWitnessMaterialization`.
+- The materializer reads a non-authoritative `blocked_unproved` plan, validates exact formal-spec/target binding, safe registered lemma hints, non-empty witness artifact id, and a bounded allowlisted materialization.
+- It writes `.comath/evidence/<CLAIM>/lean/equivalence_witness_materialized.json` with `proof_authority: none`, `can_promote_claim: false`, SHA-256 materialization binding, lemma names, justification, and required final Lean Authority v2 gates.
+- The returned witness can be supplied to `checkStatementEquivalence()` through the existing `allowed_registered_logical_equivalences` path.
+- Wired Phase 80 into the default `@comath/comathd` test chain, smoke/status markers, and current-facing docs.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase80-bounded-equivalence-witness-materialization.test.mjs
+Initial RED result: exit 1; materializeStatementEquivalenceSearchPlan was not exported from ../../dist/index.js.
+
+Reviewer-strengthened RED result: exit 1; missing witnessArtifactId was accepted instead of fail-closed.
+```
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/unit/phase80-bounded-equivalence-witness-materialization.test.mjs`
+
+Boundary notes: Phase 80 is bounded witness-metadata materialization only. It does not discover equivalence lemmas, prove arbitrary semantic equivalence, certify proof terms, promote claims, or replace final clean Lean replay/static audit/dependency closure/axiom profile.
+
+Residual risks: automatic proof search/execution beyond registered bounded materializations, broader mathematical-domain trust profiles, arbitrary theorem synthesis, broad MathProve proof authority, production Pi/Codex lifecycle validation, OS-level sandboxing, and indefinite operator/cross-process recovery remain open global-GA blockers.
+
 ## Goal 2 Task 30 / Phase 79 Statement-Equivalence Proof-Search Plan Artifacts
 
 Scope: add a bounded, service-owned, non-authoritative plan artifact for unresolved statement-equivalence mismatches without claiming automatic proof discovery.
