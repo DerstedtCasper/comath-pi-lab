@@ -57,18 +57,18 @@ Completion record:
 
 ## Task 4: Pi Extension Product Surface Audit And Repair
 
-- [ ] Audit `/cm:*` commands, tool descriptors, host confirmation, dashboard/read-model surfaces, agent controls, campaign controls, paper, snapshot, and replay tools.
-- [ ] Verify Pi remains a thin client over `comathd` and does not directly mutate trusted state.
-- [ ] Run Pi extension tests and focused e2e where relevant.
-- [ ] Repair missing or inconsistent product surfaces required by documented Phase 0-58 scope.
+- [x] Audit `/cm:*` commands, tool descriptors, host confirmation, dashboard/read-model surfaces, agent controls, campaign controls, paper, snapshot, and replay tools.
+- [x] Verify Pi remains a thin client over `comathd` and does not directly mutate trusted state.
+- [x] Run Pi extension tests and focused e2e where relevant.
+- [x] Repair missing or inconsistent product surfaces required by documented Phase 0-58 scope.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: Audited the Pi extension product surface for command/tool execution, host confirmation, dashboard read models, agent and campaign controls, paper routes, snapshot routes, and replay verification. Found that several advertised descriptors were not executable through `executeComathTool()`: project open, claim register/get/promotion, GraphPatch proposal, paper init/state/update/render/check/export, snapshot export/verify/restore, and replay manifest verification. Added descriptor-to-`comathd` route mappings while preserving the existing global mutating-tool confirmation gate. Tightened the `comath.graph.proposePatch` schema so it carries `project_root`, `workstream_id`, patch arrays, warnings, and actor metadata expected by the service route. Added Phase 59 Pi product-surface routing coverage and wired it into the Pi package test script.
+- Verification evidence: `rg -n "\.comath|writeFile|appendFile|mkdir|rmSync|unlink|createWriteStream|readFile|readdir|statSync|existsSync" extensions/comath-pi/src extensions/tools` found only documentation/authority strings, dashboard text rendering, and subagent workstream-scope strings; no direct Pi source filesystem mutation of `.comath/` was introduced. `rg -n "services/comathd/src" extensions/comath-pi/src extensions/tools` found only forbidden-write-scope strings in `subagents.ts`, not service-internal imports. `rg -n "confirmation_id|requireToolExecutionConfirmation|confirm" extensions/comath-pi/src/index.ts extensions/comath-pi/src/runtime-registration.ts extensions/comath-pi/tests/phase59-product-surface-tools.test.mjs` confirmed the existing mutating-tool confirmation machinery and new negative restore-without-confirmation coverage. `corepack pnpm --filter @comath/pi-extension build` exited 0; `node extensions/comath-pi/tests/phase59-product-surface-tools.test.mjs` exited 0; `corepack pnpm --filter @comath/pi-extension test` exited 0 including Phase 6, 8, 12, 15, 18, 22, 26, 30, 41-44, 46-51, and 59; `node tests/e2e/phase45-pi-comathd-install-session.test.mjs` exited 0. `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` returned `False` after verification.
+- Residual risk: Task 4 keeps Pi as a thin client and does not add service routes. The legacy `comath.evidence.attach` descriptor remains unsupported by `executeComathTool()` because the current service exposes read-only `GET /evidence/list` but no evidence-attach route; inventing a trusted evidence mutation route belongs in a service/gate task, not this Pi-surface routing repair. Runtime registration still intentionally exposes the narrower Phase 26/30/41-51 tool subset to fake Pi host registration rather than every extension-level descriptor.
+- Next step: Task 5 must audit `comathd` service routes, claim promotion gates, GraphPatch apply, path policy, writer locks, AgentRun scheduler, snapshot/replay, runner provenance, and status capabilities.
+- Commit: `7ef611c` (`Complete Pi product surface routing audit`).
 
 ## Task 5: comathd Service And Gate Integrity Audit And Repair
 
