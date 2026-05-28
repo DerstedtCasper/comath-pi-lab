@@ -427,6 +427,137 @@ function isSupportedProofObligation(obligation: ProofObligation): boolean {
   return Boolean(findTheoremFamilyForObligation(obligation));
 }
 
+const broadSynthesisBlockedReason = "broad theorem synthesis requires checked replay target";
+
+function blockForBroadSynthesisPlanning(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  actor: string;
+}): CampaignTickResult {
+  const obligationDagRel = campaignProofRel(input.campaign, "lemma_dag.json");
+  const lineMapRel = campaignProofRel(input.campaign, "line_map.json");
+  const replayTargetRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "broad_replay_target.json", {
+    schema_version: "comath.v3.broad_replay_target.v1",
+    campaign_id: input.campaign.campaign_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    locked_statement_hash: input.obligation.statement_hash,
+    target_formal_system: "Lean4",
+    status: "unresolved",
+    theorem_name: null,
+    lean_target: input.obligation.lean_target ?? null,
+    required_before_replay: [
+      "theorem-specific Lean declaration",
+      "candidate manifest with checked statement binding",
+      "dependency closure report",
+      "axiom profile report",
+      "statement equivalence report",
+      "final clean replay manifest"
+    ],
+    proof_authority: "none",
+    can_run_clean_replay: false,
+    created_at: now()
+  });
+  const planningRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "broad_synthesis_plan.json", {
+    schema_version: "comath.v3.broad_synthesis_plan.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.campaign.project_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    mode: "fail_closed_planning_slice",
+    proof_authority: "none",
+    locked_problem: {
+      statement: input.obligation.locked_statement_nl,
+      structured: input.obligation.locked_statement_structured,
+      statement_hash: input.obligation.statement_hash,
+      assumptions: input.obligation.assumptions,
+      dependencies: input.obligation.dependencies
+    },
+    obligation_dag_path: obligationDagRel,
+    line_map_path: lineMapRel,
+    replay_target_path: replayTargetRel,
+    candidate_plan: {
+      family: "unregistered_or_workspace_driven",
+      ensemble_variants_required: 8,
+      can_promote_claim: false,
+      synthesis_steps: [
+        "normalize locked natural-language statement into a precise theorem header",
+        "decompose the locked statement into replayable leaf obligations",
+        "retrieve theorem-specific library facts and failed-route memory",
+        "generate candidate manifests that bind every candidate to the locked statement hash",
+        "run statement-equivalence, dependency-closure, axiom-profile, and clean-replay gates before promotion"
+      ],
+      required_gates: [
+        "problem_lock",
+        "obligation_dag",
+        "candidate_manifest",
+        "statement_equivalence",
+        "dependency_closure",
+        "axiom_profile",
+        "final_clean_replay"
+      ]
+    },
+    blocked_until: "a theorem-specific Lean declaration and checked replay target are generated",
+    created_at: now()
+  });
+  const failureRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "broad_synthesis_failure.json", {
+    schema_version: "comath.v3.broad_synthesis_failure.v1",
+    campaign_id: input.campaign.campaign_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    reason: broadSynthesisBlockedReason,
+    fail_closed: true,
+    promotion_blocked: true,
+    proof_authority: "none",
+    replayable_evidence: {
+      problem_lock: ".comath/lock/problem_lock.md",
+      obligation_dag: obligationDagRel,
+      line_map: lineMapRel,
+      planning_artifact: planningRel,
+      replay_target_artifact: replayTargetRel
+    },
+    next_actions: [
+      "synthesize a theorem-specific Lean target before candidate generation",
+      "rerun 8-way candidate generation only after replay target resolution",
+      "promote no claim until final clean replay and promotion gate pass"
+    ],
+    created_at: now()
+  });
+  const blocker = {
+    reason: broadSynthesisBlockedReason,
+    obligation_id: input.obligation.obligation_id,
+    artifact_path: failureRel,
+    planning_artifact_path: planningRel,
+    replay_target_path: replayTargetRel
+  };
+  const next = writeCampaign(
+    input.projectRoot,
+    researchCampaignSchema.parse({
+      ...input.campaign,
+      current_stage: "blocked",
+      status: "terminal",
+      terminal_state: "blocked_with_replayable_reason",
+      open_obligations: [{ ...input.obligation, status: "blocked" }],
+      blockers: [blocker],
+      stage_runs: [
+        ...input.campaign.stage_runs,
+        stageRun(input.campaign, "candidate_generation", "blocked", [planningRel, replayTargetRel, failureRel])
+      ],
+      next_actions: [
+        "resolve a theorem-specific Lean replay target before rerunning broad synthesis",
+        "keep the claim conjectural until final clean replay evidence exists"
+      ]
+    }),
+    input.actor
+  );
+  return {
+    campaign: next,
+    obligation: { ...input.obligation, status: "blocked" },
+    blocker: broadSynthesisBlockedReason
+  };
+}
+
 function blockCampaignAtFinalReplay(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
@@ -883,13 +1014,11 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     }
     const theoremFamily = findTheoremFamilyForObligation(obligation);
     if (!theoremFamily) {
-      return blockCampaignAtFinalReplay({
+      return blockForBroadSynthesisPlanning({
         projectRoot: input.project_root,
         campaign,
         obligation,
-        actor,
-        reason: "unsupported final replay target",
-        stage: "candidate_generation"
+        actor
       });
     }
     const batch = runTheoremFamilyCandidates({ projectRoot: input.project_root, campaign, obligation, theoremFamily });

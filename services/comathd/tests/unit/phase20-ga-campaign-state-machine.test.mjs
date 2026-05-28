@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { campaignStageSchema, campaignTerminalStateSchema, createComathServer, researchCampaignSchema } from "../../dist/index.js";
@@ -217,17 +217,22 @@ try {
   assert.equal(unsupported.finalTick.campaign.status, "terminal");
   assert.equal(unsupported.finalTick.campaign.current_stage, "blocked");
   assert.equal(unsupported.finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
-  assert.equal(unsupported.finalTick.blocker, "unsupported final replay target");
-  assert.equal(unsupported.finalTick.campaign.blockers[0].reason, "unsupported final replay target");
+  assert.equal(unsupported.finalTick.blocker, "broad theorem synthesis requires checked replay target");
+  assert.equal(unsupported.finalTick.campaign.blockers[0].reason, "broad theorem synthesis requires checked replay target");
   assert.equal(
     unsupported.finalTick.campaign.stage_runs.at(-1).status,
     "blocked",
-    "blocked final replay attempts must not be recorded as completed stage runs"
+    "blocked broad-planning attempts must not be recorded as completed stage runs"
   );
   assert.equal(
     unsupported.finalTick.campaign.stage_runs.at(-1).stage,
     "candidate_generation",
     "unsupported goals must fail closed before fabricating theorem-family candidates"
+  );
+  assert.equal(
+    existsSync(join(unsupportedRoot, ".comath", "campaign", unsupported.finalTick.campaign.campaign_id, "broad_synthesis_plan.json")),
+    true,
+    "unsupported goals should preserve broad theorem planning evidence"
   );
 } finally {
   await server.close();

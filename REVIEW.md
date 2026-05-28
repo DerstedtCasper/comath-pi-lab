@@ -1,3 +1,31 @@
+## Goal 2 Task 17 / Phase 70 Broad Theorem Planning Slice
+
+Scope: implement a bounded product slice beyond the registered Nat theorem-family replay path without claiming arbitrary theorem proving. Phase 70 upgrades non-template theorem targets from a one-line unsupported blocker into replayable service-owned planning/synthesis evidence while preserving the Lean Authority v2 promotion boundary.
+
+Code changes:
+
+- Added a fail-closed broad synthesis branch in `tickCampaign()` for non-template obligations at `candidate_generation`.
+- The branch writes `.comath/campaign/<CAM>/broad_synthesis_plan.json`, `broad_replay_target.json`, and `broad_synthesis_failure.json`.
+- The plan binds the locked statement hash, existing problem lock, obligation DAG, line map, candidate-plan requirements, and unresolved replay target.
+- The failure evidence records `proof_authority: "none"`, `can_promote_claim: false`, and the missing theorem-specific Lean replay target.
+- The claim remains `conjectural`; no `final_replay`, promotion gate, or kernel-checked metadata is fabricated.
+- Added `phase70-broad-theorem-planning-slice.test.mjs`, wired it into the default `@comath/comathd` test chain, and updated release-facing docs/smoke checks.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/integration/phase70-broad-theorem-planning-slice.test.mjs
+RED result: exit 1; existing unsupported path returned `unsupported final replay target` and lacked the required broad-planning evidence package.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after adding the broad-planning branch.
+
+node services/comathd/tests/integration/phase70-broad-theorem-planning-slice.test.mjs
+Result: exit 0; Phase 70 writes `broad_synthesis_plan.json`, `broad_replay_target.json`, and `broad_synthesis_failure.json` for a non-template number-theory goal, preserves problem lock / obligation DAG / line-map evidence, terminal-blocks with `blocked_with_replayable_reason`, and keeps the root claim `conjectural`.
+```
+
+Residual risk: Phase 70 is broad-planning evidence, not broad proof synthesis. It does not yet generate theorem-specific Lean projects, run live proof search over arbitrary tactic states, or promote arbitrary claims. Those remain global-GA blockers.
+
 ## Goal 2 Task 16 / Phase 69 v3 Terminal Vocabulary Compatibility
 
 Scope: implement the product-code gap identified by Task 15: external v3 terminal vocabulary compatibility. The change keeps internal campaign state authoritative and adds only a read-only API/Pi projection for the external document names.

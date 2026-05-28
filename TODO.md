@@ -661,11 +661,18 @@
 - [x] Teach the Pi research loop to preserve `external_v3_terminal_state` and treat projected external v3 terminal states as terminal loop outcomes.
 - [x] Add `phase69-v3-terminal-vocabulary.test.mjs`, wire Phase 69 into the default `@comath/comathd` test chain, and extend Phase 22 Pi loop coverage for projection consumption.
 
+## Phase 70: Broad Theorem Planning Slice
+
+- [x] Replace the unsupported-goal one-line blocker at candidate generation with a service-owned fail-closed broad theorem planning/synthesis evidence package.
+- [x] Persist `.comath/campaign/<CAM>/broad_synthesis_plan.json`, `broad_replay_target.json`, and `broad_synthesis_failure.json` for non-template theorem targets, bound to the existing problem lock, obligation DAG, line map, and locked statement hash.
+- [x] Keep `proof_authority: "none"` and `can_promote_claim: false` on broad-planning artifacts, and leave the root claim `conjectural` until a theorem-specific Lean declaration, candidate manifest, statement-equivalence, dependency-closure, axiom-profile, and final clean replay exist.
+- [x] Add `phase70-broad-theorem-planning-slice.test.mjs` and wire Phase 70 into the default `@comath/comathd` test chain.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation.
+- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 70 creates replayable planning/synthesis evidence for non-template targets but does not yet generate theorem-specific Lean projects or promote arbitrary claims.
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
