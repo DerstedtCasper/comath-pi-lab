@@ -16,6 +16,18 @@ The Phase 18-58 slices can lock and replay the elementary Lean theorems `n + 0 =
   - `corepack pnpm typecheck`
   - `corepack pnpm test`
 
+## Usable Product Entrypoints
+
+For local product work, use `comathd` as the trusted runtime owner and the Pi package as the interaction layer:
+
+- Build and validate the whole workspace with `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test` from the repository root.
+- Run focused service validation with `corepack pnpm --filter @comath/comathd test`; this covers the claim gate, proof-kernel, memory, snapshot/replay, AgentRun, MathProve evidence-runner, Lean, and Codex/Pi service surfaces listed below.
+- Run focused Pi validation with `corepack pnpm --filter @comath/pi-extension test`; this covers `/cm:*` command dispatch, tool descriptors, host-confirmed mutations, dashboard renderers, campaign controls, agent controls, snapshot/replay tools, and runtime registration.
+- Use `tests/e2e/phase45-pi-comathd-install-session.test.mjs` as the current local installed-session executable path: it imports the built Pi package entrypoint, starts a real local `comathd` HTTP server, registers a fake Pi host, and exercises campaign plus agent flows through `createComathClient({ baseUrl })`.
+- Treat `.comath/` as runtime-only service state. It is intentionally ignored by Git and must be created or mutated through `comathd`, not by Pi, workstreams, or documentation scripts.
+
+The bounded product entrypoint is therefore: initialize/open a project through `comathd`, operate it through the Pi client/tool layer, and validate with the root or package test gates. It is not a standalone broad theorem-proving CLI, not a MathProve proof authority, and not a production service lifecycle manager.
+
 ## Phase 18-58 GA Vertical-Slice Evidence
 
 - `corepack pnpm --filter @comath/comathd test` includes proof-kernel gate, ensemble recovery, v3 campaign state-machine, campaign, refutation, snapshot replay, runner re-execution replay, runner replay sandbox/dependency provenance, runner cross-machine replay environment gates, real MathProve external evidence-runner bridges for `verify_sympy.py` and `final_audit.py`, AgentRun runtime-boundary, AgentRun process-scheduler, AgentRun scheduler writer-lock integration, live profile-backed adapter execution, AgentRun observability, cursor-based AgentRun log streams, SSE-style AgentRun log subscription snapshots, bounded multi-event AgentRun log sessions, AgentRun operator panels, scheduler-backed operator cancellation, adapter-health probes, Agent adapter package registry, packaged launcher tests, external Codex-compatible CLI invocation tests, installed Codex CLI validation tests, Codex API backend contract and retry-telemetry tests, Agent Profile service integration, Lean trust-profile hardening, Lean statement-signature binding, registered Lean statement-alias equivalence, Lean declaration-parser fallback tests, TriviumDB target-platform evaluation harness, project writer/session lock tests, proof-obligation DAG planning, campaign-scoped ensemble isolation, claim-scoped final replay artifact paths, read-model route, and theorem-family generalization tests.

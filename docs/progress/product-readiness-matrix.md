@@ -41,15 +41,15 @@ For Goal 1, "complete product" means the bounded product described by the curren
 
 ## Product-Readiness Tests Still Required By Goal 1
 
-Task 2 does not assert whole-product completion. The following evidence is still required before Goal 1 can be completed:
+Task 2 did not assert whole-product completion. Goal 1 Tasks 3, 6, and 9 have since run broad build/typecheck/test loops, Tasks 4-8 have run focused Pi, service, proof/runner, and memory/artifact audits, and Task 10 synchronizes the documentation layer. The following evidence still remains required before Goal 1 can be completed:
 
 1. Root `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test` from the current final worktree.
 2. Focused Pi extension audit and tests for `/cm:*`, tool descriptors, confirmation gates, read-only dashboards, agent controls, campaign controls, paper, snapshot, and replay.
 3. Focused `comathd` audit for path policy, claim gates, GraphPatch apply, writer locks, AgentRun scheduler, replay provenance, and status capabilities.
 4. Proof/MathProve/Lean/runner audit showing no proof authority outside clean CoMath proof-kernel replay and gate-mediated promotion.
 5. Memory/Trivium/artifact/literature/paper/snapshot audit showing optional native behavior, stable IDs, provenance, and fail-closed checks.
-6. Documentation synchronization after all audits, especially README, TODO, REVIEW, SECURITY_REVIEW, MATH_INTEGRITY_REVIEW, acceptance matrix, risk register, and design handoff.
-7. Final requirement-by-requirement completion audit with direct evidence for every explicit requirement and no unexpected runtime artifacts.
+6. Documentation synchronization after all audits, especially README, TODO, REVIEW, SECURITY_REVIEW, MATH_INTEGRITY_REVIEW, acceptance matrix, risk register, and design handoff. Task 10 owns this evidence and must keep Phase 58 boundaries explicit.
+7. Final requirement-by-requirement completion audit with direct evidence for every explicit requirement and no unexpected runtime artifacts. Task 11 owns this evidence and is the only step allowed to mark Goal 1 complete.
 
 ## Overclaim Guardrails
 
@@ -62,4 +62,3 @@ The following statements must remain false in final reporting unless a later tas
 - Runner replay has OS-enforced network denial or process isolation.
 - Statement equivalence handles arbitrary transitive semantic equivalence.
 - Pi has a full real-host interactive lifecycle manager beyond current local package/e2e surfaces.
-

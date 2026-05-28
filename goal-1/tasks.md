@@ -150,18 +150,18 @@ Completion record:
 
 ## Task 10: Documentation, README, Acceptance Matrix, And Handoff Synchronization
 
-- [ ] Ensure README presents a usable product entrypoint and bounded capabilities.
-- [ ] Ensure `TODO.md`, `REVIEW.md`, `SECURITY_REVIEW.md`, `MATH_INTEGRITY_REVIEW.md`, acceptance matrix, risk register, and design handoff agree with current implementation.
-- [ ] Make deferred items explicit without undermining the completed bounded product claim.
-- [ ] Verify docs do not overclaim mathematical discovery, proof authority, production hardening, or broad theorem synthesis.
+- [x] Ensure README presents a usable product entrypoint and bounded capabilities.
+- [x] Ensure `TODO.md`, `REVIEW.md`, `SECURITY_REVIEW.md`, `MATH_INTEGRITY_REVIEW.md`, acceptance matrix, risk register, and design handoff agree with current implementation.
+- [x] Make deferred items explicit without undermining the completed bounded product claim.
+- [x] Verify docs do not overclaim mathematical discovery, proof authority, production hardening, or broad theorem synthesis.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: Re-read the required Goal Mode and project boundary files, audited product-facing documentation for stale Phase 28-era status and overclaim risks, added a README "Usable Product Entrypoints" section naming the current bounded product path through `comathd`, the Pi package, root/package validation gates, the Phase 45 local install-session e2e, and runtime-only `.comath/` ownership. Synchronized `COMATH_PI_LAB_DEV_PLAN.md`, `MATH_INTEGRITY_REVIEW.md`, `docs/architecture/acceptance-matrix.md`, `docs/architecture/risk-register.md`, `docs/progress/product-readiness-matrix.md`, and `docs/progress/design-handoff.md` with the current Research Alpha plus Phase 18-58 product state. Added a Task 10 review log to `REVIEW.md` that records the documentation sync scope, bounded-product boundary, MathProve non-authority, optional TriviumDB semantics, and remaining deferred global-GA items.
+- Verification evidence: Starting `git status -sb` showed clean `## ga-v3-implementation-20260527`; `git log --oneline --decorate -6` showed HEAD at `981b70e`; `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` returned `False`. Documentation scans found and corrected stale Phase 18-28 / Phase 28 wording in the plan, risk register, acceptance matrix, and handoff, while preserving historical checkpoint notes where explicitly labeled. Guardrail scans confirmed searchable boundary text for `Usable Product Entrypoints`, `bounded product entrypoint`, `Research Alpha plus Phase 18-58`, `not a production arbitrary theorem prover`, `not global GA readiness`, `TriviumDB remains optional`, Task 10 review notes, and MathProve non-authority language. The scan for `MathProve output can promote`, `TriviumDB is the default production`, and similar overclaim phrases returned only the product-readiness matrix's explicit "must remain false" guardrail section plus bounded/deferred statements. `node scripts/phase0-smoke.mjs` exited 0 with `Phase 0/design smoke check passed (25 required entries and 28 invariants)`. `corepack pnpm build` exited 0 for both workspace packages. Final `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` returned `False`; `git status -sb` showed only intended documentation changes and this task record update.
+- Residual risk: Task 10 is documentation synchronization only. It does not replace Task 11's final requirement-by-requirement product completion audit or the final root build/typecheck/test gate. Historical `REVIEW.md` and early phase notes intentionally retain old local path validation records and checkpoint-specific deferred items, but current-facing docs now identify the corrected Phase 18-58 bounded-product state.
+- Next step: Task 11 must perform the final product completion audit, run full root validation, verify git/runtime cleanliness, repair any remaining high-risk issue, and only then mark Goal 1 complete if evidence supports it.
+- Commit: pending.
 
 ## Task 11: Final Product Completion Audit And Release Commit
 

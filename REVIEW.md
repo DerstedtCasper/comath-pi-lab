@@ -1,3 +1,23 @@
+## Goal 1 Task 10 Documentation Synchronization Review Log
+
+Scope: synchronize the product-facing documentation after Goal 1 Tasks 4-9 so the README, design plan, mathematical-integrity review, acceptance matrix, risk register, product-readiness matrix, and design handoff agree with the current bounded Research Alpha plus Phase 18-58 product state.
+
+Documentation changes:
+
+- Added a README "Usable Product Entrypoints" section naming the current local product path: `comathd` owns trusted runtime state, the Pi package is the interaction layer, root/package validation gates are the executable checks, the Phase 45 local install-session e2e is the current installed-session path, and `.comath/` remains runtime-only.
+- Updated `COMATH_PI_LAB_DEV_PLAN.md` from the stale Phase 18-28 status language to Phase 18-58, including optional TriviumDB target-platform evaluation, local Pi/comathd install-session e2e, AgentRun profile/adapter slices, Codex CLI/API adapter boundaries, Lean statement-binding extensions, and controlled MathProve evidence runners.
+- Updated `MATH_INTEGRITY_REVIEW.md`, `docs/architecture/acceptance-matrix.md`, `docs/architecture/risk-register.md`, `docs/progress/product-readiness-matrix.md`, and `docs/progress/design-handoff.md` so the current deferred set is not confused with already implemented bounded slices.
+
+Boundary notes:
+
+- The synchronized docs still describe CoMath Pi Lab as a bounded local Research Alpha plus Phase 18-58 vertical-slice product, not global GA readiness.
+- `formally_checked` still requires CoMath proof-kernel replay plus the ordinary gate; MathProve final-audit output remains runner evidence only.
+- TriviumDB remains optional and adapter-bound; native evaluation does not make it the default backend.
+- AgentRun/Codex/Pi outputs remain untrusted runtime material with `proof_authority=none`.
+- Remaining deferred work includes broad theorem synthesis, broad MathProve proof authority, OS/network sandboxing, production account/network validation, indefinite operator sessions, richer real-host Pi service lifecycle management, cross-process scheduler recovery, and broader statement-equivalence proof search.
+
+Verification commands for this task are recorded in `goal-1/tasks.md` Task 10.
+
 ## Phase 58 MathProve Final-Audit Runner Review Log
 
 Scope: Phase 58 adds a controlled external runner bridge for `MathProve-Skill` `final_audit.py`. CoMath generates the final-audit steps JSON, owns the workspace, hashes replay input/steps/solution/stdout/stderr/result/script material, archives host-path-scrubbed reports as `external-final-audit`, and feeds final-audit vetoes into the ordinary promotion gate.

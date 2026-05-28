@@ -93,7 +93,13 @@ Next correct action:
 /goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search or MathProve-as-proof-authority semantics, stronger runner replay sandboxing, full interactive Pi/comathd install-session e2e, live Pi/Codex agent adapter execution, and OS-level scheduled-process isolation.
 ```
 
-Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire global GA blockers, not merely add another documentation slice. Research Alpha and Phase 18-58 validation evidence is recorded in `REVIEW.md`.
+Current corrected target wording for a new post-Phase-58 hardening goal would be:
+
+```text
+/goal Start the next GA hardening phase for broad proof planning beyond registered theorem families, broad MathProve proof search or MathProve-as-proof-authority semantics, stronger OS/network runner replay sandboxing, richer real-host Pi UX/service lifecycle management, production Codex API account/network validation, indefinite operator-session and cross-process scheduler recovery hardening, and broader statement-equivalence proof search.
+```
+
+The Phase 45 local install-session e2e and Phase 41-53 live/profile/Codex adapter slices have retired the older descriptor-only blockers. Do not start broad generalization implementation without keeping the active GA goal and validation trail explicit. The next phase should retire current global GA blockers--broad proof planning, broad MathProve proof search or proof-authority semantics, stronger OS/network runner sandboxing, richer real-host Pi UX/service lifecycle management, production Codex API account/network validation, indefinite operator sessions, cross-process scheduler recovery, and broader statement-equivalence proof search--not merely add another documentation slice. Research Alpha and Phase 18-58 validation evidence is recorded in `REVIEW.md`.
 
 ## Concurrency Instruction
 
@@ -223,7 +229,7 @@ Apply it as follows:
 - Added negative coverage for fake formal metadata, static Lean cheats, statement drift, and high-scoring drifted candidates.
 - Added exact counterexample refutation for `n + 1 = n` and snapshot restore followed by proof replay.
 - Added Pi `/cm:research`, `/cm:campaign`, and campaign tool descriptors that call `comathd` without direct `.comath/` writes.
-- Remaining generalization work: broader proof planning, broad MathProve proof search or MathProve-as-proof-authority semantics, full interactive Pi/comathd install-session e2e, stronger OS/network runner replay sandboxing, richer statement equivalence, production Pi/Codex child-agent profile integration, and OS-level scheduled-process isolation.
+- Remaining generalization work: broader proof planning, broad MathProve proof search or MathProve-as-proof-authority semantics, richer real-host Pi UX/service lifecycle management beyond the Phase 45 local e2e, stronger OS/network runner replay sandboxing, richer statement equivalence, production Codex API account/network validation, indefinite operator sessions, cross-process scheduler recovery, and OS-level scheduled-process isolation.
 
 ## Phase 19 Completion Notes
 
@@ -258,7 +264,7 @@ Apply it as follows:
 - Added scoped campaign-loop capability checks for project root, actor, token presence, and tick budget.
 - Added `extensions/comath-pi/tests/phase22-research-loop.test.mjs`.
 - Kept proof authority and trusted state mutation in `comathd`; the loop starts and ticks campaigns through service routes and returns the service-backed dashboard.
-- Full interactive Pi/comathd install-session e2e and production Pi/Codex child-agent profile integration remain deferred.
+- At this historical Phase 22 checkpoint, full interactive Pi/comathd install-session e2e and production Pi/Codex child-agent profile integration were still deferred. Phase 41-45 later added bounded live adapter execution and a local install-session e2e; richer real-host Pi UX and durable service lifecycle management remain deferred.
 
 ## Phase 23 Completion Notes
 
@@ -267,7 +273,7 @@ Apply it as follows:
 - Added `services/comathd/tests/integration/phase23-ga-theorem-family-generalization.test.mjs` for the `n * 0 = 0` proof campaign and replay route.
 - Added `services/comathd/tests/integration/phase23-ga-integrity-boundaries.test.mjs` for family/proposition mismatch blocking, stale ensemble prevention, and completed-refutation replay immutability.
 - Final replay manifests now include theorem family, canonical proposition, normalized statement, primary dependency, and locked statement hash; promotion requires replay hash binding to the promoted claim.
-- Broad theorem synthesis, broad MathProve proof search or MathProve-as-proof-authority semantics, full interactive Pi/comathd install-session e2e, and stronger runner replay sandboxing remain deferred.
+- Broad theorem synthesis, broad MathProve proof search or MathProve-as-proof-authority semantics, richer real-host Pi UX/service lifecycle management beyond the Phase 45 local e2e, and stronger runner replay sandboxing remain deferred.
 
 ## Phase 24 Completion Notes
 
@@ -295,7 +301,7 @@ Apply it as follows:
 - Added a default export runtime factory that registers only currently executable research/campaign tools through Pi while leaving descriptor-only tools out of the production runtime factory.
 - Kept `confirmation_id` host-injected on the Pi runtime path: mutating runtime tools prompt through `ctx.ui.confirm()` and do not expose `confirmation_id` as a model-supplied parameter.
 - Added `extensions/comath-pi/tests/phase26-pi-runtime-registration.test.mjs` and `pi_runtime_registration_v0755` status capability.
-- Remaining Pi hardening: full interactive Pi/comathd install-session e2e, richer runtime permission UX, and production Pi/Codex child-agent profile integration.
+- Remaining Pi hardening: richer real-host Pi UI, manual install walkthrough, durable service lifecycle management, runtime permission UX, production Codex API/network validation, and OS-level adapter isolation.
 
 ## Phase 27 Completion Notes
 
@@ -323,7 +329,7 @@ Apply it as follows:
 - Added `buildAgentProfileLaunch()` to prepare scheduler-compatible launch envelopes with profile env metadata, timeout, concurrency, and rpm options while excluding secret-like env keys.
 - Added service routes for profile list/get, profile-backed AgentRun creation, and profile launch preparation.
 - Added `services/comathd/tests/unit/phase29-agent-profile-integration.test.mjs` and `agent_profile_service_api` status capability.
-- Remaining agent hardening: live Pi/Codex adapter execution, richer profile UI, OS-level process sandboxing/network denial, log streaming APIs, and multi-process writer/session locks.
+- At this historical Phase 29 checkpoint, live Pi/Codex adapter execution, richer profile UI, OS-level process sandboxing/network denial, log streaming APIs, and multi-process writer/session locks remained open. Phase 39-53 later added writer locks, live adapter execution, bounded log/operation surfaces, packaged adapters, external CLI, installed CLI validation, and Codex API backend slices; richer profile UI, OS-level sandboxing/network denial, indefinite sessions, and cross-process recovery remain deferred.
 
 ## Phase 30 Completion Notes
 
@@ -332,7 +338,7 @@ Apply it as follows:
 - Kept mutating agent profile tools behind Pi host confirmation and removed model-supplied `confirmation_id` from runtime schemas.
 - Kept all profile operations as thin `comathd` client calls; the extension still does not read or write `.comath/` directly.
 - Added `extensions/comath-pi/tests/phase30-agent-profile-tools.test.mjs` and wired it into the default `@comath/pi-extension` test chain.
-- Remaining agent hardening: live Pi/Codex adapter execution, richer UI widgets, OS-level process sandboxing/network denial, log streaming APIs, and multi-process writer/session locks.
+- At this historical Phase 30 checkpoint, live Pi/Codex adapter execution, richer UI widgets, OS-level process sandboxing/network denial, log streaming APIs, and multi-process writer/session locks remained open. Phase 39-53 later added the bounded execution, writer-lock, log, operator, and Codex adapter slices; richer UI widgets, OS-level sandboxing/network denial, indefinite sessions, and cross-process recovery remain deferred.
 
 ## Phase 31 Completion Notes
 
@@ -409,7 +415,7 @@ Apply it as follows:
 - Added exclusive initial acquisition, active-lock rejection, token-gated release, stale takeover with `previous_session_id`, and malformed-lock fail-closed behavior.
 - Added `services/comathd/tests/unit/phase39-project-session-lock.test.mjs` and wired it into the default `@comath/comathd` test chain.
 - Added `project_writer_session_lock` to service status and kept `agent_process_multi_process_lock_integration_deferred` as an explicit residual risk.
-- Remaining agent hardening: integrate the lock into AgentRun scheduler mutation paths, add stronger OS-level process sandboxing/network denial, and validate live Pi/Codex adapter execution.
+- At this historical Phase 39 checkpoint, scheduler lock integration and live adapter execution were still pending. Phase 40-53 later added scheduler writer-lock integration, live/profile adapter execution, and bounded Codex adapter surfaces. Stronger OS-level process sandboxing/network denial, indefinite sessions, and cross-process recovery remain deferred.
 
 ## Phase 40 Completion Notes
 
@@ -418,7 +424,7 @@ Apply it as follows:
 - Released scheduler-owned writer sessions after terminal report handling through a `finally` path.
 - Added writer-lock blocked/acquired/released audit events for scheduler execution.
 - Added `services/comathd/tests/unit/phase40-agent-scheduler-session-lock.test.mjs` and wired it into the default `@comath/comathd` test chain.
-- Remaining agent hardening: stronger OS-level process sandboxing/network denial and live Pi/Codex adapter execution.
+- At this historical Phase 40 checkpoint, live adapter execution was still pending. Phase 41-53 later added bounded live/profile/Codex adapter execution and observability slices. Stronger OS-level process sandboxing/network denial, indefinite sessions, and cross-process recovery remain deferred.
 
 ## Phase 41 Completion Notes
 

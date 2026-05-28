@@ -5,15 +5,15 @@
 
 ## 0. Design Status
 
-This document defines the complete target design and implementation goals. The current repository has implemented the Phase 0-17 Research Alpha slice plus Phase 18-28 GA vertical-slice hardening; later generalization work remains explicitly out of scope until a new goal is opened.
+This document defines the complete target design and implementation goals. The current repository has implemented the Phase 0-17 Research Alpha slice plus Phase 18-58 GA vertical-slice hardening; later generalization work remains explicitly out of scope until a new goal is opened.
 
-Current repository state after Phase 28:
+Current repository state after Phase 58:
 
 - Repo bootstrap, contracts, service foundation, artifact/audit kernel, claim registry, fail-closed gate, in-memory memory adapter, workstreams, GraphPatch review, MathProve bridge mock, compute runners, literature condition checks, working paper, optional TriviumDB adapter boundary, braid-statistics domain pack, read-only dashboard, snapshot/replay, Phase 17 audits, deterministic runner re-execution, the external MathProve evidence-runner bridge, AgentRun runtime-boundary contracts, and AgentRun process scheduling are implemented and verified.
 - Native CoMath proof-kernel campaign routes, 8-candidate GA audit artifacts, clean Lean replay for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices, statement-drift/cheat rejection, exact `n + 1 = n` refutation, snapshot restore plus proof replay, Pi research/campaign tools, Pi 0.75.5-compatible runtime registration, auditable child-agent run persistence/write-scope/report contracts, and real absolute-realpath allowlisted child-process launching with concurrency/rpm/timeout/cancel controls, minimal environment inheritance, non-authoritative scheduler report envelopes, byte-capped logs, and process-tree termination attempts are implemented as bounded GA vertical slices.
 - Full design, roadmap, agent model, risk register, acceptance matrix, runbook, TODO, REVIEW, security review, mathematical-integrity review, and Research Alpha retrospective are documented.
-- Research Alpha plus Phase 18-28 is a local auditable prototype with narrow executable proof-kernel slices and an AgentRun scheduler boundary, not a production arbitrary theorem prover.
-- Generic proof planning, broad MathProve proof search/final-audit semantics, production Pi/Codex agent profile integration, native TriviumDB performance validation, full DLP-grade secret scanning, full interactive Pi/comathd install-session e2e, and OS/network sandboxed runner replay remain later candidates.
+- Research Alpha plus Phase 18-58 is a local auditable product slice with narrow executable proof-kernel slices, optional TriviumDB target-platform evaluation, Pi package/runtime registration, local Pi/comathd install-session e2e, AgentRun scheduler/profile/adapter surfaces, service-configured Codex CLI/API adapter boundaries, conservative Lean statement-binding extensions, and controlled MathProve evidence-runner bridges. It is not a production arbitrary theorem prover.
+- Broad proof planning, arbitrary theorem synthesis, broad MathProve proof search or MathProve-as-proof-authority semantics, production Codex API account/network validation, indefinite operator sessions, richer real-host Pi UX/service lifecycle management, full DLP-grade secret scanning, broad statement-equivalence proof search, and OS/network sandboxed runner replay remain later candidates.
 
 ## 1. Product Thesis
 
