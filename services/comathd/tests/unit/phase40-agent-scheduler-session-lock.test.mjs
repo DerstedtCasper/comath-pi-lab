@@ -100,7 +100,7 @@ try {
   const external = acquireProjectSessionLock(projectRoot, {
     owner: "phase40-external-writer",
     staleAfterMs: 60_000,
-    now: () => "2026-05-28T01:00:00.000Z"
+    now: () => new Date().toISOString()
   });
   assert.equal(external.acquired, true);
 

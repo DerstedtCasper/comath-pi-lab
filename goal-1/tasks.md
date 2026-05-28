@@ -39,21 +39,21 @@ Completion record:
 
 ## Task 3: Comprehensive Check-Debug Loop 1
 
-- [ ] Check requirement drift against the objective and Goal Mode rules.
-- [ ] Run `corepack pnpm build`.
-- [ ] Run `corepack pnpm typecheck`.
-- [ ] Run package or root tests as feasible for the current state.
-- [ ] Scan for forbidden direct `.comath/` writes/imports from Pi extension surfaces.
-- [ ] Scan for gate weakening and direct `formally_checked` assignment bypasses.
-- [ ] Record findings and repair any concrete high-risk defect discovered in this task.
+- [x] Check requirement drift against the objective and Goal Mode rules.
+- [x] Run `corepack pnpm build`.
+- [x] Run `corepack pnpm typecheck`.
+- [x] Run package or root tests as feasible for the current state.
+- [x] Scan for forbidden direct `.comath/` writes/imports from Pi extension surfaces.
+- [x] Scan for gate weakening and direct `formally_checked` assignment bypasses.
+- [x] Record findings and repair any concrete high-risk defect discovered in this task.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: Performed the first Goal 1 comprehensive check-debug loop against the bounded Research Alpha plus Phase 18-58 product scope. Re-read the required goal/project boundary files, confirmed Task 3 is a validation/debug loop rather than a scope-expansion task, found and repaired a time-fragile Phase 40 scheduler writer-lock regression test whose fixed timestamp could become stale before `scheduler.launch()` evaluated the active lock, and preserved the production writer-lock semantics unchanged. Ran static scans for Pi direct runtime-file access and claim-promotion bypass risks; no additional high-risk product defect was found.
+- Verification evidence: Initial `corepack pnpm build` exited 0; initial `corepack pnpm typecheck` exited 0; initial `corepack pnpm test` failed in `services/comathd/tests/unit/phase40-agent-scheduler-session-lock.test.mjs` with `AssertionError [ERR_ASSERTION]: Missing expected rejection` because the externally acquired writer lock used a fixed `2026-05-28T01:00:00.000Z` timestamp and had become stale under the real scheduler clock. After changing that fixture to acquire the external lock at current runtime time, `corepack pnpm --filter @comath/comathd build` exited 0 and `node services/comathd/tests/unit/phase40-agent-scheduler-session-lock.test.mjs` exited 0. Fresh post-repair root validation: `corepack pnpm build` exited 0, `corepack pnpm typecheck` exited 0, and `corepack pnpm test` exited 0 including Phase 0/design smoke, Pi extension tests through Phase 51, comathd tests through Phase 58, Phase 45 install-session e2e, and Phase 17 integrity evaluation. Static scans run: `rg -n "\.comath|writeFile|mkdir|rmSync|unlink|appendFile|createWriteStream|readFile|readdir|statSync|existsSync" extensions`; focused production scan over `extensions/comath-pi/src`, `extensions/*.ts`, and `extensions/tools`; `rg -n "formally_checked|promoteClaim|target_status|status\s*:" services/comathd/src`; `rg -n "gate_result.*passed|ok:\s*true|return\s+\{\s*ok:\s*true" services/comathd/src/verification services/comathd/src/claim services/comathd/src/proof-kernel`; focused scans for `status: "formally_checked"`, `target_status: "formally_checked"`, and direct `claim.status` assignment. Pi production hits were documentation/authority strings or subagent workstream-scope strings, while file read/write hits were test-only boundary checks. `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` returned `False` before and after validation.
+- Residual risk: Task 3 proves current root build/typecheck/test health and the first broad static safety sweep, but it does not replace the later focused product audits for Pi extension surface completeness, comathd gate/service integrity, MathProve/Lean/proof-kernel runner boundaries, memory/artifact/paper/snapshot behavior, documentation synchronization, or final requirement-by-requirement completion.
+- Next step: Task 4 must audit and repair the Pi extension product surface while keeping Pi a thin `comathd` client with no direct trusted-state mutation.
+- Commit: `5dc594e` (`Complete Goal 1 check-debug loop 1`).
 
 ## Task 4: Pi Extension Product Surface Audit And Repair
 
