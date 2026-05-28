@@ -62,6 +62,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "lean_declaration_parser_signature_fallback",
       "lean_registered_logical_equivalence_witnesses",
       "lean_registered_transitive_logical_equivalence_witnesses",
+      "lean_equivalence_search_plan_artifacts",
       "proof_obligation_dag_planning",
       "campaign_scoped_ensemble_artifacts",
       "claim_scoped_final_replay_artifacts",
@@ -90,7 +91,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "full_interactive_pi_e2e_install_flow_deferred",
       "runner_os_level_network_sandbox_enforcement_deferred",
       "agent_process_os_sandbox_deferred",
-      "lean_equivalence_proof_search_deferred",
+      "lean_equivalence_proof_execution_deferred",
       "secret_scan_not_full_dlp"
     ]
   };

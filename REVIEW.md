@@ -1,3 +1,35 @@
+## Goal 2 Task 30 / Phase 79 Statement-Equivalence Proof-Search Plan Artifacts
+
+Scope: add a bounded, service-owned, non-authoritative plan artifact for unresolved statement-equivalence mismatches without claiming automatic proof discovery.
+
+Changes:
+
+- Added `StatementEquivalenceSearchPlan` plus optional `equivalence_search_plan_path` and `equivalence_search_hints` inputs to `checkStatementEquivalence()`.
+- When the extracted target signature is unique but mismatched, and no exact, alias, direct registered, or transitive registered witness accepts it, safe lemma-name hints can write `equivalence_search_plan.json`.
+- The plan records `result: blocked_unproved`, `proof_authority: none`, `can_promote_claim: false`, exact formal-spec/target binding, candidate lemma names, and required next artifacts for a future kernel-checked equivalence witness.
+- Exact matches, direct registered witnesses, transitive registered witnesses, missing target output, empty hints, and unsafe hint strings do not write unresolved plans.
+- Wired Phase 79 into the default `@comath/comathd` test chain, smoke/status markers, and current-facing docs.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase79-lean-equivalence-search-plan.test.mjs
+Initial RED result: exit 1; statement-equivalence reports lacked equivalence_search_plan_path for unresolved mismatches.
+```
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/unit/phase79-lean-equivalence-search-plan.test.mjs`
+- `node services/comathd/tests/unit/phase78-lean-transitive-equivalence.test.mjs`
+- `node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs`
+- `node services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs`
+- `node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs`
+
+Boundary notes: Phase 79 is obligation planning evidence only. It does not prove equivalence lemmas, discover arbitrary semantic equivalence, certify proof terms, promote claims, or replace final clean Lean replay/static audit/dependency closure/axiom profile.
+
+Residual risks: executing proof-search plans into kernel-checked equivalence witnesses, broader mathematical-domain trust profiles, arbitrary theorem synthesis, broad MathProve proof authority, production Pi/Codex lifecycle validation, OS-level sandboxing, and indefinite operator/cross-process recovery remain open global-GA blockers.
+
 ## Goal 2 Task 29 / Comprehensive Check-Debug Loop 9
 
 Scope: comprehensive check-debug loop over Phase 77 runner network sandbox policy and Phase 78 registered transitive statement-equivalence witnesses.

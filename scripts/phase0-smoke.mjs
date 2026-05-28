@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-78")) {
-  invariantFailures.push("README must describe the current Phase 18-78 GA/v3 vertical-slice evidence");
+if (!readme.includes("Phase 18-79")) {
+  invariantFailures.push("README must describe the current Phase 18-79 GA/v3 vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -203,7 +203,8 @@ const goal2AcceptanceMarkers = [
   ["75 bounded final clean replay promotion", "phase75-bounded-final-clean-replay.test.mjs"],
   ["76 registered Nat linear identity targets", "phase76-registered-nat-linear-targets.test.mjs"],
   ["77 Runner network sandbox policy", "phase77-runner-network-sandbox-policy.test.mjs"],
-  ["78 registered transitive statement-equivalence witnesses", "phase78-lean-transitive-equivalence.test.mjs"]
+  ["78 registered transitive statement-equivalence witnesses", "phase78-lean-transitive-equivalence.test.mjs"],
+  ["79 statement-equivalence proof-search plan artifacts", "phase79-lean-equivalence-search-plan.test.mjs"]
 ];
 
 for (const [marker, testName] of goal2AcceptanceMarkers) {
@@ -509,6 +510,14 @@ if (!acceptanceMatrix.includes("lean_registered_logical_equivalence_witnesses"))
 
 if (!acceptanceMatrix.includes("lean_registered_transitive_logical_equivalence_witnesses")) {
   invariantFailures.push("acceptance matrix must include Phase 78 lean_registered_transitive_logical_equivalence_witnesses capability language");
+}
+
+if (!acceptanceMatrix.includes("lean_equivalence_search_plan_artifacts")) {
+  invariantFailures.push("acceptance matrix must include Phase 79 lean_equivalence_search_plan_artifacts capability language");
+}
+
+if (!acceptanceMatrix.includes("equivalence_search_plan.json")) {
+  invariantFailures.push("acceptance matrix must include Phase 79 equivalence_search_plan artifact language");
 }
 
 if (!acceptanceMatrix.includes("Registered transitive logical equivalence requires closed kernel-witness chains")) {

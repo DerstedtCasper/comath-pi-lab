@@ -37,8 +37,36 @@ export type StatementEquivalenceReport = {
     lemma_names?: string[];
     transitive_links?: StatementRegisteredLogicalEquivalence[];
   };
+  equivalence_search_plan_path?: string;
+  equivalence_search_plan_status?: "blocked_unproved";
   signature_matches: string[];
   hard_vetoes: string[];
+};
+
+export type StatementEquivalenceSearchPlan = {
+  result: "blocked_unproved";
+  proof_authority: "none";
+  can_promote_claim: false;
+  locked_statement_hash: string;
+  formal_spec_statement: string;
+  target_signature: LeanStatementSignature;
+  theorem_name: string;
+  candidate_lemma_names: string[];
+  required_next_artifacts: [
+    "lean_kernel_checked_equivalence",
+    "witness_artifact_id",
+    "witness_artifact_sha256",
+    "lemma_names"
+  ];
+  obligations: Array<{
+    kind: "prove_statement_equivalence";
+    status: "blocked_unproved";
+    source_signature: string;
+    target_signature: string;
+    candidate_lemma_names: string[];
+    proof_authority: "none";
+    can_promote_claim: false;
+  }>;
 };
 
 export type StatementDefinitionalAlias = {
@@ -101,6 +129,62 @@ function isValidLogicalEquivalenceLink(equivalence: StatementRegisteredLogicalEq
     equivalence.lemma_names.length > 0 &&
     equivalence.lemma_names.every((name) => name.trim().length > 0)
   );
+}
+
+function normalizeSafeLeanNameHints(hints?: string[]): string[] {
+  const safeLeanName = /^[A-Za-z_][A-Za-z0-9_']*(?:\.[A-Za-z_][A-Za-z0-9_']*)*$/;
+  const normalized: string[] = [];
+  for (const hint of hints ?? []) {
+    const trimmed = hint.trim();
+    if (!trimmed || !safeLeanName.test(trimmed) || normalized.includes(trimmed)) {
+      continue;
+    }
+    normalized.push(trimmed);
+  }
+  return normalized;
+}
+
+function writeStatementEquivalenceSearchPlan(input: {
+  projectRoot: string;
+  planPath: string;
+  locked_statement_hash: string;
+  formal_spec_statement: string;
+  target_signature: LeanStatementSignature;
+  theorem_name: string;
+  candidate_lemma_names: string[];
+}): StatementEquivalenceSearchPlan {
+  const plan: StatementEquivalenceSearchPlan = {
+    result: "blocked_unproved",
+    proof_authority: "none",
+    can_promote_claim: false,
+    locked_statement_hash: input.locked_statement_hash,
+    formal_spec_statement: input.formal_spec_statement,
+    target_signature: input.target_signature,
+    theorem_name: input.theorem_name,
+    candidate_lemma_names: input.candidate_lemma_names,
+    required_next_artifacts: [
+      "lean_kernel_checked_equivalence",
+      "witness_artifact_id",
+      "witness_artifact_sha256",
+      "lemma_names"
+    ],
+    obligations: [
+      {
+        kind: "prove_statement_equivalence",
+        status: "blocked_unproved",
+        source_signature: input.formal_spec_statement,
+        target_signature: input.target_signature.normalized_signature,
+        candidate_lemma_names: input.candidate_lemma_names,
+        proof_authority: "none",
+        can_promote_claim: false
+      }
+    ]
+  };
+
+  const path = assertPathAllowed(input.projectRoot, input.planPath, { purpose: "runtime-write" });
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
+  return plan;
 }
 
 function findLogicalEquivalenceWitness(input: {
@@ -183,6 +267,8 @@ export function checkStatementEquivalence(input: {
   allowed_definitional_aliases?: StatementDefinitionalAlias[];
   allowed_registered_logical_equivalences?: StatementRegisteredLogicalEquivalence[];
   allowed_registered_transitive_logical_equivalences?: StatementRegisteredTransitiveLogicalEquivalence[];
+  equivalence_search_plan_path?: string;
+  equivalence_search_hints?: string[];
 }): StatementEquivalenceReport {
   const normalizedExpected = normalizeStatement(input.formal_spec_statement);
   const leanCheckTarget = extractLeanStatementSignature(input);
@@ -227,6 +313,20 @@ export function checkStatementEquivalence(input: {
         : accepted
           ? []
           : ["statement_signature_mismatch", "statement_drift"];
+  const searchHints = normalizeSafeLeanNameHints(input.equivalence_search_hints);
+  const shouldWriteSearchPlan =
+    target.result === "ok" && !accepted && Boolean(input.equivalence_search_plan_path) && searchHints.length > 0;
+  if (shouldWriteSearchPlan && input.equivalence_search_plan_path) {
+    writeStatementEquivalenceSearchPlan({
+      projectRoot: input.projectRoot,
+      planPath: input.equivalence_search_plan_path,
+      locked_statement_hash: input.locked_statement_hash,
+      formal_spec_statement: input.formal_spec_statement,
+      target_signature: target.signature,
+      theorem_name: input.theorem_name,
+      candidate_lemma_names: searchHints
+    });
+  }
   const report: StatementEquivalenceReport = {
     result: hard_vetoes.length === 0 ? "pass" : "fail",
     status: exact
@@ -247,6 +347,12 @@ export function checkStatementEquivalence(input: {
     ...(aliasWitness ? { equivalence_witness: aliasWitness } : {}),
     ...(logicalEquivalenceWitness ? { equivalence_witness: logicalEquivalenceWitness } : {}),
     ...(transitiveLogicalEquivalenceWitness ? { equivalence_witness: transitiveLogicalEquivalenceWitness } : {}),
+    ...(shouldWriteSearchPlan && input.equivalence_search_plan_path
+      ? {
+          equivalence_search_plan_path: input.equivalence_search_plan_path.replace(/\\/g, "/"),
+          equivalence_search_plan_status: "blocked_unproved" as const
+        }
+      : {}),
     signature_matches: target.matches,
     hard_vetoes
   };
