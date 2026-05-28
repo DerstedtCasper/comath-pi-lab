@@ -32,9 +32,14 @@ async function planCampaign(goal) {
   });
   assert.equal(start.status, 200);
 
-  await tick(start.body.campaign.campaign_id);
-  await tick(start.body.campaign.campaign_id);
-  const planned = await tick(start.body.campaign.campaign_id);
+  let planned = null;
+  for (let index = 0; index < 8; index += 1) {
+    planned = await tick(start.body.campaign.campaign_id);
+    if (planned.campaign.current_stage === "candidate_generation") {
+      break;
+    }
+  }
+  assert.ok(planned, "planning ticks should return a body");
   assert.equal(planned.campaign.current_stage, "candidate_generation");
   return planned;
 }
@@ -254,11 +259,13 @@ try {
   assert.match(skeletonReport, /No final proof authority/);
   assert.match(skeletonReport, new RegExp(`\\.comath/campaign/${campaignId}/proof/Skeleton\\.lean`));
 
-  const planningRun = planned.campaign.stage_runs.find((run) => run.stage === "planning");
+  const planningRun = planned.campaign.stage_runs.find((run) => run.stage === "skeleton_gate");
   assert.ok(planningRun, "planning stage run should be recorded");
   assert.equal(planningRun.artifact_paths.includes(`.comath/campaign/${campaignId}/proof/lemma_dag.json`), true);
-  assert.equal(planningRun.artifact_paths.includes(`.comath/campaign/${campaignId}/proof/line_map.json`), true);
   assert.equal(planningRun.artifact_paths.includes(`.comath/campaign/${campaignId}/proof/Skeleton.lean`), true);
+  const lineMapRun = planned.campaign.stage_runs.find((run) => run.stage === "line_map_gate");
+  assert.ok(lineMapRun, "line-map stage run should be recorded");
+  assert.equal(lineMapRun.artifact_paths.includes(`.comath/campaign/${campaignId}/proof/line_map.json`), true);
 
   const secondPlanned = await planCampaign("Prove in Lean that n * 0 = 0 for natural numbers.");
   const secondCampaignId = secondPlanned.campaign.campaign_id;

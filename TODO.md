@@ -607,6 +607,14 @@
 - [x] Block skeleton/plausible/failed-only batches with an explicit recovery plan instead of selecting the highest-scored non-proof candidate.
 - [x] Add `phase62-v3-decision-forest.test.mjs`, wire Phase 62 into the default `@comath/comathd` test chain, and expose `evidence_weighted_decision_forest`.
 
+## Phase 63: v3 Native Stage-Gate Artifact Coverage
+
+- [x] Expand the native campaign tick path from the older `context_built/planning/integration/adversarial_review` sequence into v3 stage-gate runs for `knowledge_pack`, `notation_gate`, `skeleton_gate`, `line_map_gate`, `refutation_red_team`, `integration_refactor`, `final_static_audit`, `final_global_replay`, and `memory_update`.
+- [x] Persist required v3 artifacts for knowledge pack, notation, skeleton, line map, mandatory red-team, integration/refactor, final audit/replay, and final memory handoff.
+- [x] Add a service-owned required-artifact guard so later stages cannot advance when a required native artifact is missing; missing artifacts now record `stage_gate_blocker.json`, set campaign `status: "blocked"`, and rewind `current_stage` to the producing gate.
+- [x] Extend final replay stage-run evidence to include final replay log, static audit, axiom profile, dependency closure, statement equivalence, and replay manifest paths, then append a memory update stage-run with proof-memory, handoff, and replay snapshot artifacts.
+- [x] Add `phase63-v3-stage-gate-artifact-coverage.test.mjs`, wire Phase 63 into the default `@comath/comathd` test chain, and expose `native_stage_gate_artifact_guard`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.

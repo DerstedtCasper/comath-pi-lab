@@ -53,8 +53,19 @@ try {
   const finalReplayRun = final.campaign.stage_runs.find((run) => run.stage === "final_global_replay");
   assert.ok(finalReplayRun, "final replay stage run should be recorded");
   assert.deepEqual(finalReplayRun.artifact_paths, [
-    `.comath/evidence/${secondClaimId}/lean/final_replay_manifest.json`,
-    `.comath/evidence/${secondClaimId}/lean/final_static_audit.json`
+    `.comath/evidence/${secondClaimId}/lean/final_replay.log`,
+    `.comath/evidence/${secondClaimId}/lean/final_static_audit.json`,
+    `.comath/evidence/${secondClaimId}/lean/axiom_profile.json`,
+    `.comath/evidence/${secondClaimId}/lean/dependency_closure.json`,
+    `.comath/evidence/${secondClaimId}/lean/statement_equivalence.json`,
+    `.comath/evidence/${secondClaimId}/lean/final_replay_manifest.json`
+  ]);
+  const memoryRun = final.campaign.stage_runs.find((run) => run.stage === "memory_update");
+  assert.ok(memoryRun, "memory update stage run should be recorded");
+  assert.deepEqual(memoryRun.artifact_paths, [
+    ".comath/memory/proof_memory_events.jsonl",
+    ".comath/context_lake/shards/final-handoff.md",
+    ".comath/snapshots/replay/final_manifest.json"
   ]);
 } finally {
   await server.close();

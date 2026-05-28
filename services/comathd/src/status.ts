@@ -39,6 +39,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "candidate_manifest_v3_contract",
       "failure_route_aggregate_memory",
       "evidence_weighted_decision_forest",
+      "native_stage_gate_artifact_guard",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
       "mathprove_final_audit_external_runner",

@@ -1,3 +1,69 @@
+## Goal 2 Task 5 / Phase 63 v3 Native Stage-Gate Artifact Coverage
+
+Scope: add native, service-owned stage-gate artifact coverage for the v3 campaign path. This task turns the previous implicit/merged planning and review stages into explicit campaign stage runs for knowledge, notation, skeleton, line-map, refutation/red-team, integration/refactor, final replay evidence, and memory handoff, with fail-closed artifact guards.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs
+Initial RED result: exit 1; the campaign had no `knowledge_pack` stage run, proving the test hit the missing v3 native stage-gate behavior rather than an incidental assertion.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after stage-gate implementation.
+
+node services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs
+Result: exit 0; Phase 63 proves the positive campaign records required v3 stage runs and artifacts, and deleting `.comath/campaign/<id>/proof/line_map.json` blocks candidate generation with `stage_gate_blocker.json` and rewind target `line_map_gate`.
+
+node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs
+Result: exit 0; public campaign state-machine regression now follows the v3 native gate sequence.
+
+node services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs
+Result: exit 0; proof-obligation DAG, skeleton, line-map, and obligation YAML artifacts remain generated and campaign-scoped after the stage split.
+
+node services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs
+Result: exit 0; final replay stage runs now record final replay log, static audit, axiom profile, dependency closure, statement equivalence, and replay manifest paths, and memory update records its handoff artifacts.
+
+node services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs
+Result: exit 0; positive formal campaign vertical slice still reaches `completed_formal_proof`.
+
+node services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs
+Result: exit 0; exact refutation path still terminates as `completed_refutation`.
+
+node services/comathd/tests/integration/phase23-ga-integrity-boundaries.test.mjs
+Result: exit 0; unsupported and mismatched integrity-boundary cases still fail closed.
+
+node services/comathd/tests/integration/phase34-campaign-ensemble-isolation.test.mjs
+Result: exit 0; campaign-scoped ensemble isolation still passes.
+
+node services/comathd/tests/unit/phase60-v3-campaign-pause-resume.test.mjs
+Result: exit 0; paused campaign tick guard still blocks mutation, and resume now continues into the v3 `knowledge_pack` stage.
+
+node services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs
+Result: exit 0; evidence-weighted arbitration behavior still passes.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0; comathd no-emit typecheck passed.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; default comathd test chain passed with Phase 63 included.
+```
+
+Changed surfaces:
+
+- Added v3 native public campaign stages to the schema while keeping older compatibility stages accepted for persisted campaigns.
+- Changed new campaign ticks to advance through `knowledge_pack -> notation_gate -> skeleton_gate -> line_map_gate -> candidate_generation -> candidate_verification -> candidate_arbitration -> refutation_red_team -> integration_refactor -> final_static_audit -> final_global_replay -> completed_formal_proof`, with a `memory_update` stage run recorded before terminal completion.
+- Added stage artifacts for knowledge packs, notation definitions/shards, skeleton and line-map gates, mandatory red-team report, integration/refactor outputs, final replay evidence, proof-memory events, final handoff shard, and final replay snapshot manifest.
+- Added a required-artifact guard before downstream stages. Missing artifacts now persist `.comath/campaign/<id>/stage_gate_blocker.json`, set non-terminal `status: "blocked"`, rewind `current_stage` to the producing gate, and record a blocked stage run for the attempted stage.
+- Updated state-machine, DAG, pause/resume, and final replay artifact-path regressions to reflect the v3 stage split.
+
+Boundary notes: this task implements native artifact coverage and fail-closed missing-artifact behavior for the current theorem-family campaign path. It does not yet solve broad theorem synthesis, full terminal-vocabulary aliasing from every external document, richer failure-memory retrieval, or the later Lean Authority v2 stale-artifact/unauthorized-construct negative slices.
+
+Residual risks:
+
+- Blocked stage-gate campaigns currently stop in `status: "blocked"` with a rewind target and recorded blocker; an explicit repair/resume API for re-running just the producing gate remains later product work.
+- Some v3 artifacts are structured native handoff artifacts for the current elementary theorem-family path, not a general literature/RAG pipeline for arbitrary math domains.
+- Final memory update records the formal proof handoff but does not yet retrieve similar failed routes for future obligations; that remains Task 8.
+
 ## Goal 2 Task 4 / Phase 62 v3 Evidence-Weighted Decision Forest
 
 Scope: harden candidate arbitration so it follows the v3 rule that the decision forest is not proof authority and must not treat majority, raw score, or plausibility as proof. This task builds on Phase 61 manifest validation and closes the specific Task 4 gap: evidence-weighted selection, verified refutation priority, and no-proof recovery behavior.

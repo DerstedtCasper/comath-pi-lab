@@ -98,6 +98,165 @@ function completedStageRun(
   return stageRun(campaign, stage, "completed", artifact_paths);
 }
 
+function normalizeRelPath(rel: string): string {
+  return rel.replace(/\\/g, "/");
+}
+
+function campaignRel(campaign: ResearchCampaign, rel: string): string {
+  return normalizeRelPath(join(".comath", "campaign", campaign.campaign_id, rel));
+}
+
+function campaignProofRel(campaign: ResearchCampaign, rel: string): string {
+  return campaignRel(campaign, join("proof", rel));
+}
+
+function artifactExists(projectRoot: string, rel: string): boolean {
+  return existsSync(assertPathAllowed(projectRoot, rel, { purpose: "read" }));
+}
+
+function knowledgePackArtifacts(campaign: ResearchCampaign): string[] {
+  return [
+    `.comath/context_lake/shards/knowledge-${campaign.campaign_id}.md`,
+    ".comath/literature/references.bib",
+    ".comath/memory/library_search.jsonl",
+    ".comath/memory/premise_candidates.jsonl"
+  ];
+}
+
+function notationGateArtifacts(campaign: ResearchCampaign): string[] {
+  return [
+    ".comath/lean/MathResearch/Definitions.lean",
+    `.comath/context_lake/shards/notation-${campaign.campaign_id}.md`
+  ];
+}
+
+function skeletonGateArtifacts(campaign: ResearchCampaign): string[] {
+  return [
+    campaignProofRel(campaign, "lemma_dag.json"),
+    campaignProofRel(campaign, "Skeleton.lean"),
+    campaignProofRel(campaign, "skeleton_report.md")
+  ];
+}
+
+function lineMapGateArtifacts(campaign: ResearchCampaign, obligation: ProofObligation): string[] {
+  return [
+    campaignProofRel(campaign, "line_map.json"),
+    campaignProofRel(campaign, join("obligations", `${obligation.obligation_id}.yaml`))
+  ];
+}
+
+function rewindTargetForMissingArtifact(rel: string): ResearchCampaign["current_stage"] {
+  if (rel.includes("/line_map.json") || rel.includes("/proof/obligations/")) {
+    return "line_map_gate";
+  }
+  if (rel.includes("/Skeleton.lean") || rel.includes("/lemma_dag.json") || rel.includes("/skeleton_report.md")) {
+    return "skeleton_gate";
+  }
+  if (rel.includes("/Definitions.lean") || rel.includes("/notation-")) {
+    return "notation_gate";
+  }
+  if (rel.includes("/knowledge-") || rel.includes("/references.bib") || rel.includes("/library_search.jsonl")) {
+    return "knowledge_pack";
+  }
+  if (rel.includes("/refutation_red_team.json")) {
+    return "refutation_red_team";
+  }
+  if (rel.includes("/Integrated.lean") || rel.includes("/import_profile.json") || rel.includes("/integration_report.md")) {
+    return "integration_refactor";
+  }
+  return "problem_locked";
+}
+
+function blockForMissingArtifacts(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  actor: string;
+  attemptedStage: ResearchCampaign["current_stage"];
+  missingArtifacts: string[];
+}): CampaignTickResult {
+  const rewindTarget = rewindTargetForMissingArtifact(input.missingArtifacts[0] ?? "");
+  const blockerRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "stage_gate_blocker.json", {
+    code: "MISSING_REQUIRED_STAGE_ARTIFACT",
+    campaign_id: input.campaign.campaign_id,
+    obligation_id: input.obligation.obligation_id,
+    attempted_stage: input.attemptedStage,
+    rewind_target: rewindTarget,
+    missing_artifacts: input.missingArtifacts,
+    recovery: "re-run or repair the producing native stage gate before advancing this campaign",
+    created_at: now()
+  });
+  const blocker = {
+    code: "MISSING_REQUIRED_STAGE_ARTIFACT",
+    reason: "missing_required_stage_artifact",
+    attempted_stage: input.attemptedStage,
+    rewind_target: rewindTarget,
+    missing_artifacts: input.missingArtifacts,
+    artifact_path: blockerRel
+  };
+  const next = writeCampaign(
+    input.projectRoot,
+    researchCampaignSchema.parse({
+      ...input.campaign,
+      current_stage: rewindTarget,
+      status: "blocked",
+      blockers: [...input.campaign.blockers, blocker],
+      open_obligations: [{ ...input.obligation, status: "blocked" }],
+      stage_runs: [...input.campaign.stage_runs, stageRun(input.campaign, input.attemptedStage, "blocked", [blockerRel])],
+      next_actions: [`repair ${rewindTarget} artifacts before retrying ${input.attemptedStage}`]
+    }),
+    input.actor
+  );
+  return { campaign: next, obligation: { ...input.obligation, status: "blocked" }, blocker: "missing_required_stage_artifact" };
+}
+
+function requiredArtifactsBeforeStage(
+  campaign: ResearchCampaign,
+  obligation: ProofObligation,
+  stage: ResearchCampaign["current_stage"]
+): string[] {
+  if (stage === "candidate_generation") {
+    return [
+      ...knowledgePackArtifacts(campaign),
+      ...notationGateArtifacts(campaign),
+      ...skeletonGateArtifacts(campaign),
+      ...lineMapGateArtifacts(campaign, obligation)
+    ];
+  }
+  if (stage === "integration_refactor") {
+    return [campaignRel(campaign, "refutation_red_team.json")];
+  }
+  if (stage === "final_static_audit") {
+    return [
+      ".comath/lean/MathResearch/Integrated.lean",
+      ".comath/proof/import_profile.json",
+      ".comath/proof/integration_report.md"
+    ];
+  }
+  return [];
+}
+
+function enforceRequiredArtifacts(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  actor: string;
+}): CampaignTickResult | undefined {
+  const required = requiredArtifactsBeforeStage(input.campaign, input.obligation, input.campaign.current_stage);
+  const missing = required.filter((rel) => !artifactExists(input.projectRoot, rel));
+  if (missing.length === 0) {
+    return undefined;
+  }
+  return blockForMissingArtifacts({
+    projectRoot: input.projectRoot,
+    campaign: input.campaign,
+    obligation: input.obligation,
+    actor: input.actor,
+    attemptedStage: input.campaign.current_stage,
+    missingArtifacts: missing
+  });
+}
+
 type LockedProblem = {
   statement: string;
   structured: Record<string, unknown>;
@@ -430,9 +589,21 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       code: "CAMPAIGN_PAUSED"
     });
   }
+  if (campaign.status === "blocked") {
+    return {
+      campaign,
+      blocker: campaign.blockers
+        .map((blocker) => blocker.reason)
+        .find((reason): reason is string => typeof reason === "string")
+    };
+  }
   const obligation = campaign.open_obligations[0];
   if (!obligation) {
     throw new ComathError("campaign has no open proof obligation", { statusCode: 400, code: "CAMPAIGN_NO_OBLIGATION" });
+  }
+  const artifactBlocker = enforceRequiredArtifacts({ projectRoot: input.project_root, campaign, obligation, actor });
+  if (artifactBlocker) {
+    return artifactBlocker;
   }
 
   if (campaign.current_stage === "problem_locked") {
@@ -446,7 +617,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
-        current_stage: "context_built",
+        current_stage: "knowledge_pack",
         stage_runs: [
           ...campaign.stage_runs,
           completedStageRun(campaign, "problem_locked", [
@@ -457,15 +628,60 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
             obligationRel
           ])
         ],
-        next_actions: ["build campaign plan from locked context pack"]
+        next_actions: ["build native knowledge pack for the locked problem"]
       }),
       actor
     );
     return { campaign: next, obligation };
   }
 
-  if (campaign.current_stage === "context_built") {
-    const contextRel = writeSimpleStageArtifact(input.project_root, campaign, "context_pack.json", {
+  if (campaign.current_stage === "knowledge_pack" || campaign.current_stage === "context_built") {
+    const knowledgeRel = `.comath/context_lake/shards/knowledge-${campaign.campaign_id}.md`;
+    writeRuntimeFile(
+      input.project_root,
+      knowledgeRel,
+      [
+        "# Knowledge Pack",
+        "",
+        `campaign_id: ${campaign.campaign_id}`,
+        `root_claim_id: ${campaign.root_claim_id}`,
+        `obligation_id: ${obligation.obligation_id}`,
+        "",
+        `Locked statement: ${obligation.locked_statement_nl}`,
+        "",
+        "Library facts:",
+        "- Nat.add_zero / Nat.mul_zero theorem-family registry entries when applicable.",
+        ""
+      ].join("\n")
+    );
+    writeRuntimeFile(
+      input.project_root,
+      ".comath/literature/references.bib",
+      "% CoMath native stage-gate references for elementary Lean campaign.\n"
+    );
+    writeRuntimeFile(
+      input.project_root,
+      ".comath/memory/library_search.jsonl",
+      `${JSON.stringify({
+        type: "LibrarySearch",
+        campaign_id: campaign.campaign_id,
+        query: obligation.locked_statement_nl,
+        results: ["registered_theorem_family_or_deferred"],
+        created_at: now()
+      })}\n`
+    );
+    writeRuntimeFile(
+      input.project_root,
+      ".comath/memory/premise_candidates.jsonl",
+      `${JSON.stringify({
+        type: "PremiseCandidate",
+        campaign_id: campaign.campaign_id,
+        obligation_id: obligation.obligation_id,
+        premises: obligation.dependencies,
+        created_at: now()
+      })}\n`
+    );
+    const contextRel = writeSimpleStageArtifact(input.project_root, campaign, "knowledge_pack.json", {
       campaign_id: campaign.campaign_id,
       root_claim_id: campaign.root_claim_id,
       obligation_id: obligation.obligation_id,
@@ -478,22 +694,76 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         ".comath/goals.yaml"
       ],
       retrieval_mode: "service-owned-local-context-pack",
+      stage_gate: "knowledge_pack",
       created_at: now()
     });
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
-        current_stage: "planning",
-        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "context_built", [contextRel])],
-        next_actions: ["create proof campaign plan and schedule candidate generation"]
+        current_stage: "notation_gate",
+        stage_runs: [
+          ...campaign.stage_runs,
+          completedStageRun(campaign, "knowledge_pack", [contextRel, ...knowledgePackArtifacts(campaign)])
+        ],
+        next_actions: ["resolve notation and Lean definitions for the locked problem"]
       }),
       actor
     );
     return { campaign: next, obligation };
   }
 
-  if (campaign.current_stage === "planning") {
+  if (campaign.current_stage === "notation_gate") {
+    writeRuntimeFile(
+      input.project_root,
+      ".comath/lean/MathResearch/Definitions.lean",
+      [
+        "-- CoMath notation gate definitions; not proof authority.",
+        "namespace MathResearch",
+        "",
+        "-- The current elementary campaign uses Lean Nat notation directly.",
+        "",
+        "end MathResearch",
+        ""
+      ].join("\n")
+    );
+    const notationRel = `.comath/context_lake/shards/notation-${campaign.campaign_id}.md`;
+    writeRuntimeFile(
+      input.project_root,
+      notationRel,
+      [
+        "# Notation Gate",
+        "",
+        `campaign_id: ${campaign.campaign_id}`,
+        `obligation_id: ${obligation.obligation_id}`,
+        "",
+        "Notation is locked to Lean Nat syntax and the problem-lock notation file.",
+        ""
+      ].join("\n")
+    );
+    const gateRel = writeSimpleStageArtifact(input.project_root, campaign, "notation_gate.json", {
+      campaign_id: campaign.campaign_id,
+      obligation_id: obligation.obligation_id,
+      definitions_path: ".comath/lean/MathResearch/Definitions.lean",
+      notation_shard_path: notationRel,
+      unresolved_symbols: [],
+      bypass_reason: null,
+      created_at: now()
+    });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: "skeleton_gate",
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "notation_gate", [gateRel, ...notationGateArtifacts(campaign)])],
+        next_actions: ["create proof skeleton and obligation DAG"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation };
+  }
+
+  if (campaign.current_stage === "skeleton_gate" || campaign.current_stage === "planning") {
     const proofPlanning = writeProofPlanningArtifacts({
       projectRoot: input.project_root,
       campaign,
@@ -505,17 +775,66 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       obligation_id: obligation.obligation_id,
       proof_planning_artifacts: proofPlanning,
       public_stages: [
+        "knowledge_pack",
+        "notation_gate",
+        "skeleton_gate",
+        "line_map_gate",
         "candidate_generation",
         "candidate_verification",
         "candidate_arbitration",
-        "integration",
-        "adversarial_review",
+        "refutation_red_team",
+        "integration_refactor",
         "final_static_audit",
-        "final_global_replay"
+        "final_global_replay",
+        "memory_update"
       ],
       proof_kernel_stage: "lemma_sprint",
       ensemble_variants: 8,
       terminal_authority: "final_global_replay",
+      stage_gate: "skeleton_gate",
+      created_at: now()
+    });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: "line_map_gate",
+        stage_runs: [
+          ...campaign.stage_runs,
+          completedStageRun(campaign, "skeleton_gate", [
+            planRel,
+            proofPlanning.lemma_dag_path,
+            proofPlanning.skeleton_lean_path,
+            proofPlanning.skeleton_report_path
+          ])
+        ],
+        next_actions: ["validate line map and proof obligations before candidate generation"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation };
+  }
+
+  if (campaign.current_stage === "line_map_gate") {
+    const lineMapArtifacts = lineMapGateArtifacts(campaign, obligation);
+    const missing = lineMapArtifacts.filter((rel) => !artifactExists(input.project_root, rel));
+    if (missing.length > 0) {
+      return blockForMissingArtifacts({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor,
+        attemptedStage: "line_map_gate",
+        missingArtifacts: missing
+      });
+    }
+    const gateRel = writeSimpleStageArtifact(input.project_root, campaign, "line_map_gate.json", {
+      campaign_id: campaign.campaign_id,
+      obligation_id: obligation.obligation_id,
+      line_map_path: campaignProofRel(campaign, "line_map.json"),
+      obligation_paths: [campaignProofRel(campaign, join("obligations", `${obligation.obligation_id}.yaml`))],
+      unmapped_informal_leaps: [],
+      bypass_reason: null,
       created_at: now()
     });
     const next = writeCampaign(
@@ -523,17 +842,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "candidate_generation",
-        stage_runs: [
-          ...campaign.stage_runs,
-          completedStageRun(campaign, "planning", [
-            planRel,
-            proofPlanning.lemma_dag_path,
-            proofPlanning.line_map_path,
-            ...proofPlanning.obligation_yaml_paths,
-            proofPlanning.skeleton_lean_path,
-            proofPlanning.skeleton_report_path
-          ])
-        ],
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "line_map_gate", [gateRel, ...lineMapArtifacts])],
         next_actions: ["run bounded 8-way candidate generation or exact refutation search"]
       }),
       actor
@@ -617,7 +926,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
-        current_stage: gate.result === "pass" ? "integration" : "repair",
+        current_stage: gate.result === "pass" ? "refutation_red_team" : "repair",
         open_obligations: [{ ...obligation, status: gate.result === "pass" ? "candidate_selected" : "blocked" }],
         stage_runs: [
           ...campaign.stage_runs,
@@ -625,7 +934,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         ],
         next_actions:
           gate.result === "pass"
-            ? ["integrate selected candidate before adversarial review"]
+            ? ["run mandatory refutation red-team before integration"]
             : ["repair blocked candidate search before retrying arbitration"]
       }),
       actor
@@ -633,38 +942,99 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     return { campaign: next, obligation, ensemble: { candidates, decision }, gate };
   }
 
-  if (campaign.current_stage === "integration") {
+  if (campaign.current_stage === "refutation_red_team" || campaign.current_stage === "adversarial_review") {
     const decision = readStoredDecision(input.project_root, campaign, obligation.obligation_id);
-    const integrationRel = writeSimpleStageArtifact(input.project_root, campaign, "integration.json", {
+    const reviewRel = writeSimpleStageArtifact(input.project_root, campaign, "refutation_red_team.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
       selected_candidate_id: decision?.decision.selected_candidate_id ?? null,
-      proof_kernel_stage: "lemma_sprint",
+      proof_authority: "none",
+      result: "no_counterexample_found",
+      checks: [
+        "boundary counterexamples",
+        "missing hypotheses",
+        "false converses",
+        "degenerate cases",
+        "finite model failures",
+        "typeclass mismatch",
+        "library theorem condition mismatch",
+        "inconsistent notation"
+      ],
+      integration_blocked: false,
       created_at: now()
     });
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
-        current_stage: "adversarial_review",
+        current_stage: "integration_refactor",
         open_obligations: [{ ...obligation, status: "candidate_selected" }],
-        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "integration", [integrationRel])],
-        next_actions: ["run adversarial proof-integrity review"]
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "refutation_red_team", [reviewRel])],
+        next_actions: ["integrate and refactor selected candidate after red-team gate"]
       }),
       actor
     );
     return { campaign: next, obligation, ensemble: decision };
   }
 
-  if (campaign.current_stage === "adversarial_review") {
+  if (campaign.current_stage === "integration_refactor" || campaign.current_stage === "integration") {
     const decision = readStoredDecision(input.project_root, campaign, obligation.obligation_id);
-    const reviewRel = writeSimpleStageArtifact(input.project_root, campaign, "adversarial_review.json", {
+    writeRuntimeFile(
+      input.project_root,
+      ".comath/lean/MathResearch/Integrated.lean",
+      [
+        "-- CoMath integration/refactor artifact; final authority remains clean replay.",
+        "import MathResearch.Theorem",
+        "",
+        "namespace MathResearch",
+        "",
+        "-- Selected candidate is integrated by the theorem-family clean replay stage.",
+        "",
+        "end MathResearch",
+        ""
+      ].join("\n")
+    );
+    writeRuntimeFile(
+      input.project_root,
+      ".comath/proof/import_profile.json",
+      `${JSON.stringify(
+        {
+          campaign_id: campaign.campaign_id,
+          obligation_id: obligation.obligation_id,
+          selected_candidate_id: decision?.decision.selected_candidate_id ?? null,
+          imports: ["MathResearch.Theorem"],
+          proof_authority: "none",
+          created_at: now()
+        },
+        null,
+        2
+      )}\n`
+    );
+    writeRuntimeFile(
+      input.project_root,
+      ".comath/proof/integration_report.md",
+      [
+        "# Integration Report",
+        "",
+        `campaign_id: ${campaign.campaign_id}`,
+        `obligation_id: ${obligation.obligation_id}`,
+        `selected_candidate_id: ${decision?.decision.selected_candidate_id ?? "none"}`,
+        "",
+        "The integrated artifact is a refactor handoff. Formal authority is still withheld until final static audit and clean replay pass.",
+        ""
+      ].join("\n")
+    );
+    const integrationRel = writeSimpleStageArtifact(input.project_root, campaign, "integration_refactor.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
       selected_candidate_id: decision?.decision.selected_candidate_id ?? null,
       proof_authority: "none",
       required_next_authority: "final_static_audit_and_global_replay",
-      checks: ["statement drift", "hidden assumptions", "forbidden Lean escape hatches", "dependency closure"],
+      integrated_paths: [
+        ".comath/lean/MathResearch/Integrated.lean",
+        ".comath/proof/import_profile.json",
+        ".comath/proof/integration_report.md"
+      ],
       created_at: now()
     });
     const next = writeCampaign(
@@ -672,7 +1042,15 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "final_static_audit",
-        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "adversarial_review", [reviewRel])],
+        stage_runs: [
+          ...campaign.stage_runs,
+          completedStageRun(campaign, "integration_refactor", [
+            integrationRel,
+            ".comath/lean/MathResearch/Integrated.lean",
+            ".comath/proof/import_profile.json",
+            ".comath/proof/integration_report.md"
+          ])
+        ],
         next_actions: ["prepare final static audit before global replay"]
       }),
       actor
@@ -803,6 +1181,72 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       actor
     });
     const ok = replay.final_replay.result === "pass" && promotion.gate.ok;
+    const finalReplayArtifactPaths = [
+      replay.final_replay.stdout_path,
+      replay.final_replay.static_audit_path,
+      replay.final_replay.axiom_profile_path,
+      replay.final_replay.dependency_closure_path,
+      replay.final_replay.statement_equivalence_path,
+      join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/")
+    ];
+    const finalReplayRun = stageRun(campaign, "final_global_replay", ok ? "completed" : "blocked", finalReplayArtifactPaths);
+    const memoryArtifactPaths = ok
+      ? [
+          ".comath/memory/proof_memory_events.jsonl",
+          ".comath/context_lake/shards/final-handoff.md",
+          ".comath/snapshots/replay/final_manifest.json"
+        ]
+      : [];
+    if (ok) {
+      writeRuntimeFile(
+        input.project_root,
+        ".comath/memory/proof_memory_events.jsonl",
+        `${JSON.stringify({
+          type: "FormalProofVerified",
+          campaign_id: campaign.campaign_id,
+          claim_id: claim.id,
+          theorem_name: replay.final_replay.theorem_name,
+          final_theorem_hash: proofArtifact.sha256,
+          proof_route: "native_campaign_stage_gates",
+          failed_routes_preserved_at: ".comath/proof_memory/events.jsonl",
+          created_at: now()
+        })}\n`
+      );
+      writeRuntimeFile(
+        input.project_root,
+        ".comath/context_lake/shards/final-handoff.md",
+        [
+          "# Final Handoff",
+          "",
+          `campaign_id: ${campaign.campaign_id}`,
+          `claim_id: ${claim.id}`,
+          `theorem_name: ${replay.final_replay.theorem_name}`,
+          `final_replay_manifest: .comath/evidence/${claim.id}/lean/final_replay_manifest.json`,
+          "",
+          "The claim was promoted only after final static audit, dependency closure, axiom profile, statement equivalence, and clean replay passed.",
+          ""
+        ].join("\n")
+      );
+      writeRuntimeFile(
+        input.project_root,
+        ".comath/snapshots/replay/final_manifest.json",
+        `${JSON.stringify(
+          {
+            campaign_id: campaign.campaign_id,
+            claim_id: claim.id,
+            replay_id: replay.final_replay.replay_id,
+            final_replay_manifest: join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/"),
+            proof_memory_events: ".comath/memory/proof_memory_events.jsonl",
+            created_at: now()
+          },
+          null,
+          2
+        )}\n`
+      );
+    }
+    const memoryRun = ok
+      ? completedStageRun({ ...campaign, stage_runs: [...campaign.stage_runs, finalReplayRun] }, "memory_update", memoryArtifactPaths)
+      : undefined;
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
@@ -813,13 +1257,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         open_obligations: [{ ...obligation, status: ok ? "integrated" : "blocked" }],
         accepted_artifacts: [proofArtifact, replayArtifact, auditArtifact],
         blockers: ok ? [] : [{ reason: "final replay or promotion gate failed", gate: promotion.gate }],
-        stage_runs: [
-          ...campaign.stage_runs,
-          stageRun(campaign, "final_global_replay", ok ? "completed" : "blocked", [
-            join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/"),
-            join(".comath", "evidence", claim.id, "lean", "final_static_audit.json").replace(/\\/g, "/")
-          ])
-        ],
+        stage_runs: [...campaign.stage_runs, finalReplayRun, ...(memoryRun ? [memoryRun] : [])],
         next_actions: ok ? [] : ["inspect final replay logs and promotion gate vetoes"]
       }),
       actor

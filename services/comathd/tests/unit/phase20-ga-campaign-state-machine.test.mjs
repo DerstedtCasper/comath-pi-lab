@@ -7,17 +7,24 @@ import { campaignStageSchema, campaignTerminalStateSchema, createComathServer, r
 const requiredCampaignStates = [
   "initialized",
   "problem_locked",
+  "knowledge_pack",
+  "notation_gate",
+  "skeleton_gate",
+  "line_map_gate",
   "context_built",
   "planning",
   "running_stage",
   "candidate_generation",
   "candidate_verification",
   "candidate_arbitration",
+  "refutation_red_team",
+  "integration_refactor",
   "integration",
   "adversarial_review",
   "repair",
   "final_static_audit",
   "final_global_replay",
+  "memory_update",
   "completed_formal_proof",
   "completed_refutation",
   "blocked",
@@ -159,13 +166,15 @@ try {
   assert.equal(proof.finalTick.campaign.terminal_state, "completed_formal_proof");
   assert.deepEqual(proof.seenStages, [
     "problem_locked",
-    "context_built",
-    "planning",
+    "knowledge_pack",
+    "notation_gate",
+    "skeleton_gate",
+    "line_map_gate",
     "candidate_generation",
     "candidate_verification",
     "candidate_arbitration",
-    "integration",
-    "adversarial_review",
+    "refutation_red_team",
+    "integration_refactor",
     "final_static_audit",
     "final_global_replay",
     "completed_formal_proof"
@@ -183,8 +192,10 @@ try {
   assert.equal(refutation.finalTick.counterexample?.assignment.n, 0);
   assert.deepEqual(refutation.seenStages, [
     "problem_locked",
-    "context_built",
-    "planning",
+    "knowledge_pack",
+    "notation_gate",
+    "skeleton_gate",
+    "line_map_gate",
     "candidate_generation",
     "completed_refutation"
   ]);

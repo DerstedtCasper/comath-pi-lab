@@ -83,7 +83,7 @@ try {
     }
   });
   assert.equal(tickAfterResume.status, 200);
-  assert.equal(tickAfterResume.body.campaign.current_stage, "context_built");
+  assert.equal(tickAfterResume.body.campaign.current_stage, "knowledge_pack");
   assert.equal(existsSync(join(projectRoot, ".comath", "proof", "obligations", "PO-0001.json")), true);
 } finally {
   await server.close();
