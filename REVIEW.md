@@ -1,3 +1,33 @@
+## Goal 2 Task 14 / Documentation And Release Evidence Synchronization
+
+Scope: synchronize release-facing documentation with the actual Goal 2 Phase 18-68 implementation, especially the Phase 67 positive v3 formal campaign slice and Phase 68 negative GA slice runner. This task updates evidence matrices and guardrails only; it does not claim final global v3 GA completion.
+
+Documentation changes:
+
+- Updated `README.md` from Phase 18-67 to Phase 18-68 and added the Phase 68 release negative GA slice runner, `.comath/release/v3_negative_ga_slices.json`, and the remaining Task 15 final-audit boundary.
+- Added Phase 60-68 Goal 2 acceptance rows to `docs/architecture/acceptance-matrix.md`, including Phase 68 release artifact/test coverage and non-authority boundaries.
+- Rewrote `docs/progress/product-readiness-matrix.md` from the stale Goal 1 / Phase 18-58 product-scope audit into the current Goal 2 / Phase 18-68 readiness matrix.
+- Updated `SECURITY_REVIEW.md`, `MATH_INTEGRITY_REVIEW.md`, and `docs/architecture/risk-register.md` so Phase 68 is recorded as service-owned release evidence, not proof authority.
+- Extended `scripts/phase0-smoke.mjs` to require current Phase 18-68 README language and Phase 60-68 acceptance/test markers, including `v3_negative_ga_slices.json`.
+
+Verification evidence:
+
+```text
+node scripts/phase0-smoke.mjs
+Result: exit 0; design smoke check passed with current Phase 18-68 README evidence and Phase 60-68 acceptance/test markers.
+
+rg -n "Phase 18-58|Phase 18-67|Goal 1" README.md docs/progress/product-readiness-matrix.md docs/architecture/acceptance-matrix.md SECURITY_REVIEW.md MATH_INTEGRITY_REVIEW.md docs/architecture/risk-register.md
+Result: no stale current-state Goal 1 / Phase 18-58 / Phase 18-67 wording remained in the current-facing release docs. Historical `REVIEW.md` entries are intentionally left as prior-phase records and are not part of this current-facing scan.
+
+rg -n "arbitrary theorem prover|MathProve.*proof authority|MathProve-as-proof-authority|proof_authority|v3_negative_ga_slices" README.md docs/progress/product-readiness-matrix.md docs/architecture/acceptance-matrix.md SECURITY_REVIEW.md MATH_INTEGRITY_REVIEW.md docs/architecture/risk-register.md
+Result: hits are explicit false/guardrail statements or non-authority metadata such as `proof_authority: none`; no current-facing release doc claims arbitrary theorem proving, MathProve proof authority, or release-summary proof authority.
+```
+
+Residual risks:
+
+- Task 14 synchronized docs and smoke invariants; it does not run the final root build/typecheck/test matrix.
+- Task 15 still owns the final v3 GA completion audit, root gates, static scans, and decision whether the overall goal can be marked complete.
+
 ## Goal 2 Task 13 / Phase 68 v3 Negative GA Slice Runner
 
 Scope: implement product code for the release-level negative GA slices required by the v3 external documents. This is a `comathd` runner and API route, not a review-only checklist: it creates runtime evidence for statement drift rejection, cheating Lean artifact rejection, false-theorem refutation, all-candidate failure recovery, and snapshot replay that still cannot promote without fresh hash-bound final replay artifacts.

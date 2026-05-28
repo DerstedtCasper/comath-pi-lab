@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-67")) {
-  invariantFailures.push("README must describe the current Phase 18-67 GA/v3 vertical-slice evidence");
+if (!readme.includes("Phase 18-68")) {
+  invariantFailures.push("README must describe the current Phase 18-68 GA/v3 vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -184,12 +184,45 @@ if (!acceptanceMatrix.includes("58 MathProve final-audit external runner")) {
   invariantFailures.push("acceptance matrix must include Phase 58 MathProve final-audit external runner acceptance");
 }
 
+const goal2AcceptanceMarkers = [
+  ["60 v3 campaign pause/tick contract", "phase60-v3-campaign-pause-resume.test.mjs"],
+  ["61 v3 candidate manifest and failure aggregate", "phase61-v3-candidate-contract.test.mjs"],
+  ["62 v3 evidence-weighted decision forest", "phase62-v3-decision-forest.test.mjs"],
+  ["63 v3 native stage-gate artifact coverage", "phase63-v3-stage-gate-artifact-coverage.test.mjs"],
+  ["64 Lean Authority v2 final gate hash binding", "phase64-lean-authority-v2-final-gate.test.mjs"],
+  ["65 failed-route proof-memory retrieval", "phase65-proof-memory-retrieval.test.mjs"],
+  ["66 Pi goal-compatible campaign UX", "phase66-goal-compatible-campaign-ux.test.mjs"],
+  ["67 v3 end-to-end formal campaign slice", "phase67-v3-formal-campaign-slice.test.mjs"],
+  ["68 v3 negative GA slice runner", "phase68-v3-negative-ga-slices.test.mjs"]
+];
+
+for (const [marker, testName] of goal2AcceptanceMarkers) {
+  if (!acceptanceMatrix.includes(marker)) {
+    invariantFailures.push(`acceptance matrix must include ${marker}`);
+  }
+  if (!acceptanceMatrix.includes(testName)) {
+    invariantFailures.push(`acceptance matrix must include ${testName}`);
+  }
+}
+
 if (!acceptanceMatrix.includes("67 v3 end-to-end formal campaign slice")) {
   invariantFailures.push("acceptance matrix must include Phase 67 v3 formal campaign slice acceptance");
 }
 
 if (!acceptanceMatrix.includes("phase67-v3-formal-campaign-slice.test.mjs")) {
   invariantFailures.push("acceptance matrix must include Phase 67 formal campaign slice test coverage language");
+}
+
+if (!acceptanceMatrix.includes("68 v3 negative GA slice runner")) {
+  invariantFailures.push("acceptance matrix must include Phase 68 v3 negative GA slice runner acceptance");
+}
+
+if (!acceptanceMatrix.includes("phase68-v3-negative-ga-slices.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 68 negative GA slice test coverage language");
+}
+
+if (!acceptanceMatrix.includes("v3_negative_ga_slices.json")) {
+  invariantFailures.push("acceptance matrix must include Phase 68 negative GA release artifact language");
 }
 
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
