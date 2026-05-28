@@ -554,7 +554,7 @@ Apply it as follows:
 - Accepted `logically_equivalent_with_registered_lemmas` only when the registered witness exactly matches the locked formal spec and extracted target signature and includes `lean_kernel_checked_equivalence`, witness artifact id, valid SHA-256 witness artifact hash, and non-empty lemma names.
 - Missing witness hashes, missing lemma names, and wrong target signatures remain hard statement-mismatch vetoes.
 - Added `services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs` to the default `@comath/comathd` test chain and status capability `lean_registered_logical_equivalence_witnesses`.
-- Remaining statement-equivalence hardening: proof search for equivalence lemmas, transitive semantic equivalence, and broader mathematical-domain trust profiles.
+- At Phase 56 completion, remaining statement-equivalence hardening included proof search for equivalence lemmas, transitive semantic equivalence, and broader mathematical-domain trust profiles. Phase 78 later retired the registered-transitive-chain portion while leaving automatic proof search and broader trust profiles open.
 
 ## Phase 78 Completion Notes
 

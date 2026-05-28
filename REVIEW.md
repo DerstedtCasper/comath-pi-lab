@@ -1,3 +1,40 @@
+## Goal 2 Task 29 / Comprehensive Check-Debug Loop 9
+
+Scope: comprehensive check-debug loop over Phase 77 runner network sandbox policy and Phase 78 registered transitive statement-equivalence witnesses.
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/unit/phase77-runner-network-sandbox-policy.test.mjs`
+- `node services/comathd/tests/unit/phase78-lean-transitive-equivalence.test.mjs`
+- `node services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs`
+- `node services/comathd/tests/unit/phase55-runner-cross-machine-replay.test.mjs`
+- `node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs`
+- `node services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs`
+- `node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs`
+- `node scripts/phase0-smoke.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+- `corepack pnpm build`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+
+All commands exited 0. The root test included the Pi package tests, the default `@comath/comathd` chain with Phase 77/78, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation.
+
+Static audit:
+
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path D:\MATH _Studio\comath-pi-lab\.comath` returned `False`.
+- `git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'` returned no tracked runtime/build artifacts.
+- Current-facing stale/overclaim scan found no unqualified `Phase 18-77`, `Phase 18-76`, old `lean_logical_equivalence_deferred`, arbitrary-transitive-equivalence claims, or OS-enforced network-sandbox claims. README hits for `COMATH_RUNNER_NETWORK=disabled` and OS-enforced sandboxing are explicit boundary statements.
+
+Repair:
+
+- Clarified the Phase 56 historical note in `docs/progress/design-handoff.md` so it no longer reads as if transitive registered witness chains remain wholly deferred after Phase 78. The updated wording preserves the remaining global-GA blockers: automatic equivalence proof search and broader mathematical-domain trust profiles.
+- A sidecar subagent verification attempt failed because the agent thread limit was reached, so this loop was completed locally with focused, package, root, e2e, integrity, and static checks.
+
+Residual risks: no high-risk regression was found in Phase 77 or Phase 78. Global GA still needs product-code work on automatic theorem/equivalence proof search, arbitrary theorem synthesis, broad MathProve proof authority semantics, production Pi/Codex lifecycle validation, OS-level runner/process sandboxing, and indefinite operator/cross-process recovery.
+
 ## Goal 2 Task 28 / Phase 78 Registered Transitive Statement-Equivalence Witnesses
 
 Scope: add a conservative registered transitive logical-equivalence statement-binding path without claiming arbitrary equivalence proof search.
