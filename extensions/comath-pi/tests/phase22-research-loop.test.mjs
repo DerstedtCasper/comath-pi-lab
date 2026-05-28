@@ -148,9 +148,10 @@ await assert.rejects(
   /capability project scope mismatch/
 );
 
-function createLoopClient(stages = ["context_built", "planning", "completed_formal_proof"]) {
+function createLoopClient(stages = ["context_built", "planning", "completed_formal_proof"], externalStates = []) {
   const calls = [];
   const tickStages = [...stages];
+  const tickExternalStates = [...externalStates];
   const campaignBase = {
     campaign_id: "CAM-0001",
     project_id: "PRJ-0001",
@@ -210,11 +211,19 @@ function createLoopClient(stages = ["context_built", "planning", "completed_form
       }
       if (path === "/campaign/CAM-0001/tick") {
         const stage = tickStages.shift() ?? "planning";
+        const externalTerminalState =
+          tickExternalStates.shift() ??
+          (stage === "completed_formal_proof"
+            ? "formal_proof_verified"
+            : stage === "completed_refutation"
+              ? "verified_counterexample"
+              : undefined);
         return {
           campaign: {
             ...campaignBase,
             current_stage: stage,
             status: stage.startsWith("completed_") ? "terminal" : "running",
+            external_v3_terminal_state: externalTerminalState,
             next_actions: stage.startsWith("completed_") ? [] : [`continue from ${stage}`]
           }
         };
@@ -229,6 +238,8 @@ const directHarness = createLoopClient();
 const result = await runResearchCampaignLoop(directHarness.client, loopInput);
 assert.equal(result.campaign.campaign_id, "CAM-0001");
 assert.equal(result.campaign.current_stage, "completed_formal_proof");
+assert.equal(result.campaign.external_v3_terminal_state, "formal_proof_verified");
+assert.equal(result.external_v3_terminal_state, "formal_proof_verified");
 assert.equal(result.terminal, true);
 assert.equal(result.stopped_reason, "terminal");
 assert.equal(result.ticks.length, 3);
@@ -287,5 +298,25 @@ const exhausted = await runResearchCampaignLoop(exhaustedHarness.client, {
 assert.equal(exhausted.terminal, false);
 assert.equal(exhausted.stopped_reason, "tick_budget_exhausted");
 assert.equal(exhausted.ticks.length, 0);
+
+const externalOnlyHarness = createLoopClient(["candidate_arbitration"], ["user_visible_theorem_repair_required"]);
+const externalOnly = await runResearchCampaignLoop(externalOnlyHarness.client, {
+  ...loopInput,
+  capability: issueCampaignLoopCapability({
+    project_root: "D:/research/project",
+    actor: "phase22-pi",
+    max_ticks: 1,
+    confirmation: {
+      kind: "mutation_confirmation",
+      target: "/cm:research",
+      allowed: true,
+      confirmation_id: "CONF-EXTERNAL-V3"
+    }
+  }),
+  max_ticks: 1
+});
+assert.equal(externalOnly.terminal, true);
+assert.equal(externalOnly.stopped_reason, "terminal");
+assert.equal(externalOnly.external_v3_terminal_state, "user_visible_theorem_repair_required");
 
 console.log("Phase 22 research loop tests passed.");

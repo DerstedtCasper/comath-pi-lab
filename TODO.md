@@ -653,12 +653,19 @@
 - [x] Ensure negative promotion attempts use the normal promotion gate path so failed gates and audit records are preserved instead of relying on in-memory checks.
 - [x] Add `phase68-v3-negative-ga-slices.test.mjs`, wire Phase 68 into the default `@comath/comathd` test chain, and expose `v3_negative_ga_slice_runner` in service status.
 
+## Phase 69: v3 Terminal Vocabulary Compatibility
+
+- [x] Add a service-owned external terminal vocabulary projection that maps trusted internal states to `formal_proof_verified`, `verified_counterexample`, `user_visible_theorem_repair_required`, `replayable_environment_blocker`, and `user_cancelled`.
+- [x] Expose `campaign.external_v3_terminal_state` from campaign start/status/tick/replay/final-audit/pause/resume responses without writing the projection into persisted campaign state.
+- [x] Keep internal canonical campaign states and proof gates unchanged; the compatibility field is read-only API vocabulary, not a trusted mutation path.
+- [x] Teach the Pi research loop to preserve `external_v3_terminal_state` and treat projected external v3 terminal states as terminal loop outcomes.
+- [x] Add `phase69-v3-terminal-vocabulary.test.mjs`, wire Phase 69 into the default `@comath/comathd` test chain, and extend Phase 22 Pi loop coverage for projection consumption.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation.
-- [ ] Full v3 external-document terminal vocabulary compatibility remains open: the current public API still uses `completed_formal_proof`, `completed_refutation`, `blocked_with_replayable_reason`, and `cancelled_by_user` rather than exposing aliases for `formal_proof_verified`, `verified_counterexample`, `user_visible_theorem_repair_required`, `replayable_environment_blocker`, and `user_cancelled`.
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.

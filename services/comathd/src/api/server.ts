@@ -36,6 +36,7 @@ import {
 } from "../workstream/workstream-store.js";
 import { getCampaign, writeCampaign } from "../proof-kernel/campaign/research-campaign.js";
 import { replayCampaign, startCampaign, tickCampaign } from "../proof-kernel/campaign/campaign-tick.js";
+import { withExternalV3CampaignResult, withExternalV3TerminalState } from "../proof-kernel/campaign/external-terminal-vocabulary.js";
 import { runV3NegativeGaSlices } from "../release/v3-negative-ga-slices.js";
 import {
   buildAgentProfileLaunch,
@@ -126,15 +127,17 @@ async function route(method: string, path: string, body: unknown, context: Route
     [
       "POST /campaign/start",
       (payload) =>
-        startCampaign(
-          payload as {
-            project_root: string;
-            project_name?: string;
-            user_goal: string;
-            domain?: string;
-            strict_mode?: boolean;
-            actor?: string;
-          }
+        withExternalV3CampaignResult(
+          startCampaign(
+            payload as {
+              project_root: string;
+              project_name?: string;
+              user_goal: string;
+              domain?: string;
+              strict_mode?: boolean;
+              actor?: string;
+            }
+          )
         )
     ],
     [
@@ -807,7 +810,7 @@ async function route(method: string, path: string, body: unknown, context: Route
           decodeURIComponent(statusMatch[1] ?? "")
         );
         return campaign
-          ? success({ campaign })
+          ? success({ campaign: withExternalV3TerminalState(campaign) })
           : { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
       } catch (error) {
         return dynamicRouteError(error);
@@ -822,7 +825,11 @@ async function route(method: string, path: string, body: unknown, context: Route
           decodeURIComponent(nextActionsMatch[1] ?? "")
         );
         return campaign
-          ? success({ campaign_id: campaign.campaign_id, next_actions: campaign.next_actions })
+          ? success({
+              campaign_id: campaign.campaign_id,
+              next_actions: campaign.next_actions,
+              external_v3_terminal_state: withExternalV3TerminalState(campaign).external_v3_terminal_state
+            })
           : { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
       } catch (error) {
         return dynamicRouteError(error);
@@ -836,11 +843,13 @@ async function route(method: string, path: string, body: unknown, context: Route
       try {
         const request = body as { project_root: string; actor?: string };
         return success(
-          await tickCampaign({
-            project_root: request.project_root,
-            campaign_id: decodeURIComponent(tickMatch[1] ?? ""),
-            actor: request.actor
-          })
+          withExternalV3CampaignResult(
+            await tickCampaign({
+              project_root: request.project_root,
+              campaign_id: decodeURIComponent(tickMatch[1] ?? ""),
+              actor: request.actor
+            })
+          )
         );
       } catch (error) {
         return dynamicRouteError(error);
@@ -852,11 +861,13 @@ async function route(method: string, path: string, body: unknown, context: Route
       try {
         const request = body as { project_root: string; actor?: string };
         return success(
-          await replayCampaign({
-            project_root: request.project_root,
-            campaign_id: decodeURIComponent(replayMatch[1] ?? ""),
-            actor: request.actor
-          })
+          withExternalV3CampaignResult(
+            await replayCampaign({
+              project_root: request.project_root,
+              campaign_id: decodeURIComponent(replayMatch[1] ?? ""),
+              actor: request.actor
+            })
+          )
         );
       } catch (error) {
         return dynamicRouteError(error);
@@ -868,11 +879,13 @@ async function route(method: string, path: string, body: unknown, context: Route
       try {
         const request = body as { project_root: string; actor?: string };
         return success(
-          await replayCampaign({
-            project_root: request.project_root,
-            campaign_id: decodeURIComponent(finalAuditMatch[1] ?? ""),
-            actor: request.actor
-          })
+          withExternalV3CampaignResult(
+            await replayCampaign({
+              project_root: request.project_root,
+              campaign_id: decodeURIComponent(finalAuditMatch[1] ?? ""),
+              actor: request.actor
+            })
+          )
         );
       } catch (error) {
         return dynamicRouteError(error);
@@ -904,10 +917,12 @@ async function route(method: string, path: string, body: unknown, context: Route
           return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
         }
         if (campaign.status === "terminal") {
-          return success({ campaign });
+          return success({ campaign: withExternalV3TerminalState(campaign) });
         }
         return success({
-          campaign: writeCampaign(request.project_root, { ...campaign, status: "paused" }, request.actor ?? "api")
+          campaign: withExternalV3TerminalState(
+            writeCampaign(request.project_root, { ...campaign, status: "paused" }, request.actor ?? "api")
+          )
         });
       } catch (error) {
         return dynamicRouteError(error);
@@ -923,10 +938,12 @@ async function route(method: string, path: string, body: unknown, context: Route
           return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
         }
         if (campaign.status === "terminal") {
-          return success({ campaign });
+          return success({ campaign: withExternalV3TerminalState(campaign) });
         }
         return success({
-          campaign: writeCampaign(request.project_root, { ...campaign, status: "running" }, request.actor ?? "api")
+          campaign: withExternalV3TerminalState(
+            writeCampaign(request.project_root, { ...campaign, status: "running" }, request.actor ?? "api")
+          )
         });
       } catch (error) {
         return dynamicRouteError(error);

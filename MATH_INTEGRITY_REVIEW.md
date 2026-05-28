@@ -34,6 +34,8 @@ Deferred but mandatory for Phase 4:
 
 Integrity warning for all future phases: MathProve is an evidence producer and gate runner, not an authority that may promote claims by consensus. `symbolically_checked` cannot come from float-only computation, and `literature_supported` cannot come from LLM memory or summaries.
 
+Phase 69 integrity warning: `external_v3_terminal_state` is vocabulary compatibility only. It mirrors trusted internal campaign terminal state for API/Pi consumers and cannot prove a theorem, verify a counterexample, satisfy a replay gate, promote `formally_checked`, or override blocker/cancellation semantics.
+
 ## Phase 4
 
 Implemented the service-level promotion boundary.

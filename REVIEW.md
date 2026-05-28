@@ -1,3 +1,27 @@
+## Goal 2 Task 16 / Phase 69 v3 Terminal Vocabulary Compatibility
+
+Scope: implement the product-code gap identified by Task 15: external v3 terminal vocabulary compatibility. The change keeps internal campaign state authoritative and adds only a read-only API/Pi projection for the external document names.
+
+Code changes:
+
+- Added `services/comathd/src/proof-kernel/campaign/external-terminal-vocabulary.ts` with `projectExternalV3TerminalState()`, `withExternalV3TerminalState()`, and `withExternalV3CampaignResult()`.
+- Wrapped campaign start/status/tick/replay/final-audit/pause/resume responses so returned campaign payloads include `external_v3_terminal_state` when a trusted internal terminal state maps to an external v3 name.
+- Kept persisted `ResearchCampaign` schema and `.comath/campaign/*/status.json` state unchanged; the compatibility field is not a mutation or proof-authority input.
+- Updated the Pi research loop to preserve `external_v3_terminal_state` and treat the projected external v3 terminal state as terminal loop outcome.
+- Added `phase69-v3-terminal-vocabulary.test.mjs`, wired Phase 69 into the default `@comath/comathd` test chain, and extended Phase 22 Pi loop coverage.
+
+Verification evidence:
+
+```text
+node services/comathd/tests/unit/phase69-v3-terminal-vocabulary.test.mjs
+Result: exit 0; service API responses projected `formal_proof_verified`, `verified_counterexample`, and `replayable_environment_blocker`, and the exported projection function covered `user_visible_theorem_repair_required` and `user_cancelled`.
+
+node extensions/comath-pi/tests/phase22-research-loop.test.mjs
+Result: exit 0; Pi loop preserved `external_v3_terminal_state` and treated projected external v3 terminal states as terminal.
+```
+
+Residual risk: this is compatibility vocabulary, not broad theorem planning or production lifecycle hardening. The projection intentionally does not allow Pi/model input to write terminal authority, and later work must still address remaining global-GA blockers.
+
 ## Goal 2 Task 15 / Final v3 GA Completion Audit
 
 Scope: close the final-audit gate quickly and return the goal to product implementation. This audit used the four external v3 documents plus `Goal 指令.txt` as the requirement source, checked the current Phase 18-68 implementation evidence, and deliberately did not convert vertical-slice evidence into a global GA claim.

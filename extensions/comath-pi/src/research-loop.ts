@@ -45,6 +45,7 @@ export type ResearchCampaignLoopResult = {
   obligation?: any;
   ticks: any[];
   dashboard: DashboardSnapshot;
+  external_v3_terminal_state?: string;
   terminal: boolean;
   stopped_reason: "terminal" | "tick_budget_exhausted" | "blocked" | "running";
 };
@@ -148,7 +149,11 @@ function assertCapability(input: ResearchCampaignLoopInput): CampaignLoopCapabil
 }
 
 function isTerminal(campaign: any): boolean {
-  return campaign?.status === "terminal" || String(campaign?.current_stage ?? "").startsWith("completed_");
+  return (
+    campaign?.status === "terminal" ||
+    typeof campaign?.external_v3_terminal_state === "string" ||
+    String(campaign?.current_stage ?? "").startsWith("completed_")
+  );
 }
 
 function stoppedReason(campaign: any, exhausted: boolean): ResearchCampaignLoopResult["stopped_reason"] {
@@ -200,6 +205,8 @@ export async function runResearchCampaignLoop(
     obligation: start.obligation,
     ticks,
     dashboard,
+    external_v3_terminal_state:
+      typeof campaign?.external_v3_terminal_state === "string" ? campaign.external_v3_terminal_state : undefined,
     terminal: isTerminal(campaign),
     stopped_reason: stoppedReason(campaign, exhausted)
   };

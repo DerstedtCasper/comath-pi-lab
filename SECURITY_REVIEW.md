@@ -2,6 +2,8 @@
 
 Current-state note: sections below are chronological. The Phase 0 statement describes the bootstrap-only repository state at that time; later phases now include controlled runtime writes, runner execution, memory mutation, proof-kernel replay, Pi runtime registration, AgentRun scoped write boundaries, and allowlisted AgentRun process scheduling.
 
+Phase 69 security note: external v3 terminal vocabulary is exposed only as a derived response field, `campaign.external_v3_terminal_state`. It is not persisted into `.comath/campaign/*/status.json`, is not accepted from Pi/model input, and cannot mutate campaign, proof, refutation, blocker, cancellation, or claim-promotion authority.
+
 ## Phase 0
 
 No runtime code capable of path writes, shell execution, network calls, claim promotion, or database mutation has been implemented.
