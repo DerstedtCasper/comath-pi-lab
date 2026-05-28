@@ -1,3 +1,30 @@
+## Goal 2 Task 32 / Comprehensive Check-Debug Loop 10
+
+Scope: comprehensive check-debug loop over Phase 79 statement-equivalence proof-search plan artifacts and Phase 80 bounded equivalence-search witness materialization.
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/unit/phase79-lean-equivalence-search-plan.test.mjs`
+- `node services/comathd/tests/unit/phase80-bounded-equivalence-witness-materialization.test.mjs`
+- `node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs`
+- `node services/comathd/tests/unit/phase78-lean-transitive-equivalence.test.mjs`
+- `node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs`
+- `node services/comathd/tests/phase0-smoke.test.mjs`
+- `node scripts/phase0-smoke.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+
+Audit result:
+
+- Phase 79 remains a non-authoritative `blocked_unproved` obligation artifact path. It writes only bounded search-plan metadata for unresolved unique target-signature mismatches with safe lemma hints.
+- Phase 80 remains bounded witness-metadata materialization. It validates exact source/target binding, safe registered hints, non-empty witness artifact id, required next artifacts, and bounded allowlisted materializations before returning a registered witness candidate.
+- Authority scans over the Phase 79/80 source and tests found no `claim.status =`, `formally_checked`, `applyGatePromotedClaim`, or `promoteClaim` usage in the Phase 79/80 surfaces. The only promotional tamper case is the negative test that must fail closed.
+- Runtime/generated cleanliness checks found no repo-root `.comath` and no tracked `.comath`, `.tmp`, `dist`, `node_modules`, `services/comathd/dist`, or `extensions/comath-pi/dist` artifacts.
+- Current-facing documentation continues to state that Phase 79/80 do not provide automatic proof discovery, arbitrary semantic-equivalence discovery, claim promotion, or a replacement for final Lean Authority v2.
+
+Residual risks: no high-risk Phase 79/80 regression was found. Global GA still needs product-code work on automatic proof search/execution beyond registered bounded materializations, broader mathematical-domain trust profiles, arbitrary theorem synthesis, broad MathProve proof authority semantics, production Pi/Codex lifecycle validation, OS-level runner/process sandboxing, and indefinite operator/cross-process recovery.
+
 ## Goal 2 Task 31 / Phase 80 Bounded Equivalence-Search Witness Materialization
 
 Scope: materialize a bounded Phase 79 blocked statement-equivalence plan into registered logical-equivalence witness metadata without proof authority or claim promotion.
