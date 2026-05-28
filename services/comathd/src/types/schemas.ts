@@ -398,17 +398,33 @@ export const candidateRunSchema = z
 export const candidateManifestSchema = z
   .object({
     candidate_id: stableId,
+    campaign_id: stableId,
     variant_id: candidateVariantIdSchema,
     stage: proofKernelStageSchema,
     obligation_id: stableId,
+    workspace_path: z.string().min(1),
     locked_statement_hash: z.string().min(1),
     candidate_statement_hash: z.string().min(1).optional(),
+    state: candidateStateSchema,
     statement_equivalence_claim: z.enum(["exact", "equivalent", "weaker", "stronger", "different", "unknown"]),
     theorem_family: z.string().min(1).optional(),
     canonical_proposition: z.string().min(1).optional(),
     primary_dependency: z.string().min(1).optional(),
+    dependencies: z.array(z.string()).default([]),
+    assumptions: z.array(z.string()).default([]),
     introduced_assumptions: z.array(z.string()).default([]),
     introduced_dependencies: z.array(z.string()).default([]),
+    artifacts: z
+      .array(
+        z
+          .object({
+            path: z.string().min(1),
+            kind: z.string().min(1),
+            required_for: z.array(z.string()).default([])
+          })
+          .strict()
+      )
+      .default([]),
     lean_files: z.array(z.string()).default([]),
     logs: z.array(z.string()).default([]),
     evidence: z.array(z.string()).default([]),

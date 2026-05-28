@@ -23,6 +23,48 @@ function writeProjectFile(relativePath, content) {
   return path;
 }
 
+function writeCandidateManifest(candidate, extra = {}) {
+  const manifestPath = join(candidate.workspace_path, "candidate_manifest.json");
+  writeProjectFile(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        candidate_id: candidate.candidate_id,
+        campaign_id: candidate.campaign_id,
+        variant_id: candidate.variant_id,
+        stage: candidate.stage,
+        obligation_id: candidate.obligation_id,
+        workspace_path: candidate.workspace_path,
+        locked_statement_hash: candidate.locked_statement_hash,
+        candidate_statement_hash: candidate.candidate_statement_hash,
+        state: candidate.state,
+        statement_equivalence_claim:
+          candidate.candidate_statement_hash === candidate.locked_statement_hash ? "exact" : "different",
+        theorem_family: "nat_add_zero",
+        canonical_proposition: "n + 0 = n",
+        primary_dependency: "Nat.add_zero",
+        dependencies: ["Nat.add_zero"],
+        assumptions: [],
+        introduced_assumptions: [],
+        introduced_dependencies: ["Nat.add_zero"],
+        artifacts: [],
+        lean_files: [],
+        logs: [],
+        evidence: [],
+        hard_vetoes: candidate.hard_vetoes,
+        failures: [],
+        replay_command: candidate.replay_command ?? "",
+        summary: "Phase 18 hand-built candidate fixture.",
+        maintainability_notes: "Fixture mirrors v3 candidate manifest contract for arbitration validation.",
+        ...extra
+      },
+      null,
+      2
+    )}\n`
+  );
+  return manifestPath.replace(/\\/g, "/");
+}
+
 try {
   const { project } = initProject({ name: "GA Proof Kernel Gates", root_path: projectRoot });
   const claim = registerClaim(projectRoot, {
@@ -117,6 +159,8 @@ try {
     candidate_statement_hash: `${claim.statement_hash}-drift`,
     score: 999
   };
+  exactCandidate.manifest_path = writeCandidateManifest(exactCandidate);
+  driftCandidate.manifest_path = writeCandidateManifest(driftCandidate);
   const { decision, gate } = decideCandidate({
     projectRoot,
     campaign: {

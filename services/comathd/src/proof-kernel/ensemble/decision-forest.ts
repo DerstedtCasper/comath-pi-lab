@@ -1,7 +1,15 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { ComathError } from "../../errors.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
-import { gateDecisionSchema, type CandidateRun, type GateDecision, type ResearchCampaign } from "../../types/schemas.js";
+import {
+  candidateManifestSchema,
+  gateDecisionSchema,
+  type CandidateManifest,
+  type CandidateRun,
+  type GateDecision,
+  type ResearchCampaign
+} from "../../types/schemas.js";
 import { ensembleDecisionRel } from "./paths.js";
 
 export type EnsembleDecision = {
@@ -11,11 +19,52 @@ export type EnsembleDecision = {
   recovery_plan: string[];
 };
 
+function readCandidateManifest(input: { projectRoot: string; candidate: CandidateRun }): CandidateManifest {
+  if (!input.candidate.manifest_path) {
+    throw new ComathError(`candidate ${input.candidate.candidate_id} is missing manifest_path`, {
+      statusCode: 409,
+      code: "CANDIDATE_MANIFEST_INVALID"
+    });
+  }
+  const path = assertPathAllowed(input.projectRoot, input.candidate.manifest_path, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  const manifest = candidateManifestSchema.parse(JSON.parse(readFileSync(path, "utf8")));
+  const mismatches: string[] = [];
+  for (const key of ["candidate_id", "campaign_id", "stage", "obligation_id", "variant_id", "locked_statement_hash", "state"] as const) {
+    if (manifest[key] !== input.candidate[key]) {
+      mismatches.push(key);
+    }
+  }
+  if (manifest.workspace_path !== input.candidate.workspace_path) {
+    mismatches.push("workspace_path");
+  }
+  if (manifest.candidate_statement_hash !== input.candidate.candidate_statement_hash) {
+    mismatches.push("candidate_statement_hash");
+  }
+  if ((manifest.replay_command || undefined) !== input.candidate.replay_command) {
+    mismatches.push("replay_command");
+  }
+  if (mismatches.length > 0) {
+    throw new ComathError(`candidate manifest statement hash mismatch or metadata mismatch: ${mismatches.join(", ")}`, {
+      statusCode: 409,
+      code: "CANDIDATE_MANIFEST_INVALID"
+    });
+  }
+  return manifest;
+}
+
+function validateCandidateManifests(input: { projectRoot: string; candidates: CandidateRun[] }): CandidateManifest[] {
+  return input.candidates.map((candidate) => readCandidateManifest({ projectRoot: input.projectRoot, candidate }));
+}
+
 export function decideCandidate(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
   candidates: CandidateRun[];
 }): { decision: EnsembleDecision; gate: GateDecision } {
+  validateCandidateManifests({ projectRoot: input.projectRoot, candidates: input.candidates });
   const eligible = input.candidates
     .filter(
       (candidate) =>

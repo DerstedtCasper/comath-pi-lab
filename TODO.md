@@ -591,6 +591,13 @@
 - [x] Preserve resumability by allowing `/campaign/:id/resume` to restore `running` and continue the bounded tick sequence.
 - [x] Wire `phase60-v3-campaign-pause-resume.test.mjs` into the default `@comath/comathd` test chain and expose `campaign_pause_tick_guard` in service status.
 
+## Phase 61: v3 Candidate Manifest And Failure Aggregate Contract
+
+- [x] Extend `candidate_manifest.json` with campaign id, workspace path, candidate state, dependencies, assumptions, artifact descriptors, replay command, and maintainability notes so each candidate can stand as a campaign-scoped audit object.
+- [x] Require `decideCandidate()` to read and validate each candidate manifest before arbitration, failing closed on missing or mismatched manifest metadata.
+- [x] Persist and return a campaign-scoped `FailureRouteAggregate` with failed candidate ids, clusters, hard vetoes, proof authority `none`, and repair/refutation recommendations while preserving existing JSONL failure-route memory.
+- [x] Add `phase61-v3-candidate-contract.test.mjs`, update the Phase 18 hand-built candidate fixture to satisfy the v3 manifest contract, wire Phase 61 into the default `@comath/comathd` test chain, and expose `candidate_manifest_v3_contract` / `failure_route_aggregate_memory`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.

@@ -1,3 +1,47 @@
+## Goal 2 Task 2 / Phase 61 v3 Candidate Manifest And Failure Aggregate Contract
+
+Scope: harden the existing 8-way theorem-family candidate path so candidate artifacts are not merely per-workspace files plus in-memory `CandidateRun` records. This task makes candidate manifests and failed-route aggregation first-class campaign-scoped audit objects before arbitration.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs
+Initial RED result: exit 1; `candidate_manifest.json` did not expose the required `state` field.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after schema, runner, arbiter, and failure aggregate changes.
+
+node services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs
+Result: exit 0; Phase 61 v3 candidate manifest and failure aggregate tests passed.
+
+node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs
+Result: exit 0; hand-built candidate fixture now carries v3 manifests and the existing statement-drift rejection still passes.
+
+node services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs
+Result: exit 0; existing seven-failures-plus-one-Lean-pass ensemble recovery still passes.
+
+node services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs
+Result: exit 0; positive formal campaign vertical slice still passes.
+
+node services/comathd/tests/integration/phase34-campaign-ensemble-isolation.test.mjs
+Result: exit 0; campaign-scoped ensemble isolation still passes.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; default comathd test chain passed with Phase 61 included.
+```
+
+Changed surfaces:
+
+- Extended `candidateManifestSchema` with `campaign_id`, `workspace_path`, `state`, `dependencies`, `assumptions`, and structured candidate artifact descriptors.
+- Updated theorem-family candidate generation to write those fields into each `candidate_manifest.json`.
+- Added arbitration preflight validation in `decideCandidate()` so missing or mismatched candidate manifests fail closed with `CANDIDATE_MANIFEST_INVALID`.
+- Upgraded `recordFailedRoutes()` to return and persist a `FailureRouteAggregate` with clusters, failed candidate ids, hard vetoes, recommendations, proof authority `none`, event-log path, and aggregate path.
+- Added `services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs`, wired it into `@comath/comathd test`, and exposed `candidate_manifest_v3_contract` plus `failure_route_aggregate_memory` in service status.
+
+Boundary notes: this task does not implement Task 4's full evidence-weighted decision forest scoring matrix. It ensures the current arbiter can only operate over validated candidate manifests and that failed routes have an aggregate audit object.
+
+Residual risks: candidate artifact descriptors currently list relative artifact paths and semantic kinds, not content hashes. Full manifest hashing, batch-level candidate index files, and decision-to-aggregate hash binding remain useful hardening targets for later tasks.
+
 ## Goal 2 Task 1 / Phase 60 v3 Campaign Pause-Tick Contract
 
 Scope: continue the v3 GA development line without repeating the Goal 1 audit. This task closes a live ResearchCampaign control-plane gap: `/campaign/:id/pause` persisted `status: "paused"`, but `/campaign/:id/tick` still advanced trusted state and wrote the next stage artifact.

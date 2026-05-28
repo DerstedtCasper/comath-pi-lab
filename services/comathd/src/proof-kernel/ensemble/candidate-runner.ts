@@ -127,19 +127,34 @@ export function runTheoremFamilyCandidates(input: {
     mkdirSync(workspacePath, { recursive: true });
 
     const isDirectWinner = variant.variant_id === "V1";
+    const candidateState = isDirectWinner ? "candidate_kernel_checked" : "candidate_failed";
+    const auditArtifacts = [
+      { path: "dependency_delta.json", kind: "dependency_delta", required_for: ["candidate_verification"] },
+      { path: "assumption_delta.json", kind: "assumption_delta", required_for: ["candidate_verification"] },
+      { path: "replay_commands.json", kind: "replay_commands", required_for: ["candidate_verification", "replay"] },
+      { path: "failure_routes.json", kind: "failure_routes", required_for: ["failure_memory"] },
+      { path: "graph_patch.json", kind: "graph_patch", required_for: ["review"] },
+      { path: "report.md", kind: "report", required_for: ["review"] }
+    ];
     const manifest = candidateManifestSchema.parse({
       candidate_id: candidateId,
+      campaign_id: input.campaign.campaign_id,
       variant_id: variant.variant_id,
       stage: "lemma_sprint",
       obligation_id: input.obligation.obligation_id,
+      workspace_path: workspaceRel.replace(/\\/g, "/"),
       locked_statement_hash: input.obligation.statement_hash,
       candidate_statement_hash: input.obligation.statement_hash,
+      state: candidateState,
       statement_equivalence_claim: "exact",
       theorem_family: input.theoremFamily.id,
       canonical_proposition: input.theoremFamily.proposition,
       primary_dependency: input.theoremFamily.dependency,
+      dependencies: isDirectWinner ? [input.theoremFamily.dependency] : [],
+      assumptions: [],
       introduced_assumptions: [],
       introduced_dependencies: isDirectWinner ? [input.theoremFamily.dependency] : [],
+      artifacts: auditArtifacts,
       lean_files: isDirectWinner ? [`.comath/lean/${input.theoremFamily.theoremFileRel}`] : [],
       logs: [],
       evidence: [],
@@ -191,7 +206,7 @@ export function runTheoremFamilyCandidates(input: {
         workspace_path: relative(input.projectRoot, workspacePath).replace(/\\/g, "/"),
         locked_statement_hash: input.obligation.statement_hash,
         candidate_statement_hash: input.obligation.statement_hash,
-        state: isDirectWinner ? "candidate_kernel_checked" : "candidate_failed",
+        state: candidateState,
         manifest_path: relative(input.projectRoot, manifestAbs).replace(/\\/g, "/"),
         score: isDirectWinner ? 15_500 : -100,
         hard_vetoes: [],
