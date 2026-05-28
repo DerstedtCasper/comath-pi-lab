@@ -1519,6 +1519,44 @@ async function handleCampaignCommand(
     await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.campaign.nextActions", base));
     return;
   }
+  if (subcommand === "final-audit") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.campaign.finalAudit");
+    if (!tool) {
+      throw new Error("campaign final audit tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          ...base,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "replay") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.campaign.replay");
+    if (!tool) {
+      throw new Error("campaign replay tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          ...base,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
   throw new Error(`unsupported campaign command: ${subcommand}`);
 }
 

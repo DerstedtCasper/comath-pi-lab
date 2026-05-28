@@ -1,3 +1,49 @@
+## Goal 2 Task 10 / Phase 66 Pi Goal-Compatible Campaign UX
+
+Scope: align the Pi command/tool UX with the v3 goal-compatible campaign surface required by the external GA docs: `/cm:research --goal`, `/cm:campaign status`, `/cm:campaign tick`, `/cm:campaign next-actions`, `/cm:campaign final-audit`, `/cm:campaign replay`, `/cm:audit final`, and `/cm:replay final`. This task keeps Pi as a thin client and does not move mathematical authority out of `comathd`.
+
+TDD evidence:
+
+```text
+node tests/phase66-goal-compatible-campaign-ux.test.mjs
+Initial RED result: exit 1; `/cm:research --goal "n + 0 = n" --strict` posted `user_goal: "--goal"` to `/campaign/start`, proving the goal-compatible flag form was not safe for unattended Pi goal mode.
+
+corepack pnpm --filter @comath/pi-extension build
+Result: exit 0; TypeScript build completed after command parsing and campaign subcommand routing updates.
+
+node tests/phase66-goal-compatible-campaign-ux.test.mjs
+Result: exit 0; Phase 66 proves `/cm:research --goal "<target>" --strict` sends the real target to `comathd`, and `/cm:campaign final-audit` plus `/cm:campaign replay` route through host-confirmed service-owned tools.
+
+node tests/phase18-research-campaign-tools.test.mjs
+node tests/phase22-research-loop.test.mjs
+node tests/phase26-pi-runtime-registration.test.mjs
+Result: exit 0; existing Pi campaign tool contracts, bounded research loop behavior, and runtime registration boundaries still pass.
+
+corepack pnpm --filter @comath/pi-extension test
+Result: exit 0; full Pi extension package test chain passed with Phase 66 included.
+
+node tests/e2e/phase45-pi-comathd-install-session.test.mjs
+Result: exit 0; installed Pi package can still talk to a real `comathd` HTTP server in the local install-session e2e.
+```
+
+Changed surfaces:
+
+- Fixed `inferGoal()` so both `/cm:research --goal "<target>"` and `/cm:research "<target>" --goal` are parsed as goal-compatible user targets, while the historical `/cm:research start --goal "<target>"` form remains supported.
+- Added `/cm:campaign final-audit` routing to `comath.campaign.finalAudit` with Pi host confirmation and service-owned `/campaign/:id/final-audit` mutation.
+- Added `/cm:campaign replay` routing to `comath.campaign.replay` with Pi host confirmation and service-owned `/campaign/:id/replay` mutation.
+- Added `extensions/comath-pi/tests/phase66-goal-compatible-campaign-ux.test.mjs` and wired it into the default Pi package test chain.
+
+Boundary notes:
+
+- Pi still does not write `.comath/`, assign claim status, certify proofs, run Lean authority, or own trusted campaign state. It submits campaign specs and host-confirmed bounded mutation requests to `comathd`.
+- This task improves the goal-compatible command surface, not the full end-to-end formal campaign evidence. The full `n + 0 = n` v3 formal campaign slice remains Task 11.
+
+Residual risks:
+
+- Task 11 still needs an end-to-end v3 campaign from user goal intake through final clean replay and promotion.
+- Task 13 still needs release-level negative GA slices for statement drift, cheating artifacts, false theorem refutation, all-candidate recovery, and clean replay from snapshot.
+- Documentation and release evidence still need Task 14 synchronization and Task 15 final audit before any v3 GA completion claim.
+
 ## Goal 2 Task 9 / Comprehensive Check-Debug Loop 3
 
 Scope: third Goal 2 comprehensive check-debug loop over Tasks 7-8 and the surrounding proof-kernel, proof-memory, campaign, Pi, and root surfaces. This loop verifies that Lean Authority v2 final replay binding and failed-route proof-memory retrieval did not weaken claim-promotion gates, introduce tracked runtime artifacts, make Pi a trusted-state writer, or reclassify MathProve/AgentRun output as proof authority.

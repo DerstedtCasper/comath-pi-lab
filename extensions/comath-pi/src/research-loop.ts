@@ -86,14 +86,15 @@ function readFlagValue(args: string[], flag: string): string | undefined {
 }
 
 function inferGoal(command: CampaignLoopCommand): string {
-  if (command.subcommand && command.subcommand !== "start") {
-    return command.subcommand;
-  }
-  const explicit = readFlagValue(command.args, "--goal");
+  const tokens =
+    command.subcommand && command.subcommand !== "start"
+      ? [command.subcommand, ...command.args]
+      : command.args;
+  const explicit = readFlagValue(tokens, "--goal");
   if (explicit) {
     return explicit;
   }
-  const positional = command.args.find((arg) => !arg.startsWith("--"));
+  const positional = tokens.find((arg) => !arg.startsWith("--"));
   if (positional) {
     return positional;
   }

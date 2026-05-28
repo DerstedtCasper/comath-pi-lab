@@ -630,6 +630,13 @@
 - [x] Inject failed-route retrieval summaries and warning metadata into the service-owned `knowledge_pack` stage artifact and knowledge shard.
 - [x] Add `phase65-proof-memory-retrieval.test.mjs`, wire Phase 65 into the default `@comath/comathd` test chain, and expose `proof_memory_failed_route_retrieval`.
 
+## Phase 66: Pi Goal-Compatible Campaign UX
+
+- [x] Fix `/cm:research --goal "<target>" --strict` parsing so Pi submits the mathematical target to `comathd` instead of treating `--goal` itself as the target.
+- [x] Route `/cm:campaign final-audit <campaign>` and `/cm:campaign replay <campaign>` through the service-owned `comath.campaign.finalAudit` and `comath.campaign.replay` tools.
+- [x] Preserve Pi as a thin client: host confirmation is still injected by Pi runtime for mutating campaign commands, and trusted campaign state continues to mutate only through `comathd`.
+- [x] Add `phase66-goal-compatible-campaign-ux.test.mjs`, wire Phase 66 into the default `@comath/pi-extension` test chain, and verify the installed Pi/comathd session e2e still passes.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
