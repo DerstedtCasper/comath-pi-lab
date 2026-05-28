@@ -382,7 +382,6 @@ export class TriviumResearchMemoryDB implements ResearchMemoryDB {
     writeFileSync(
       outputPath,
       `${JSON.stringify({
-        projectRoot: this.projectRoot,
         projectId: this.projectId,
         nodes: [...this.nodes.values()],
         edges: [...this.outgoingEdges.values()].flat(),
@@ -394,13 +393,11 @@ export class TriviumResearchMemoryDB implements ResearchMemoryDB {
 
   async restore(snapshotPath: string): Promise<void> {
     const parsed = JSON.parse(readFileSync(snapshotPath, "utf8")) as {
-      projectRoot: string | null;
       projectId: string | null;
       nodes: MemoryNode[];
       edges: MemoryEdge[];
       patches: StoredPatch[];
     };
-    this.projectRoot = parsed.projectRoot;
     this.projectId = parsed.projectId;
     this.nodes.clear();
     this.outgoingEdges.clear();

@@ -107,6 +107,20 @@ try {
   await db.applyPatch("GP-0002", { accepted: false, reviewer: "phase5-test" });
   assert.equal(await db.getNode("C-0004"), null);
 
+  const snapshotPath = join(projectRoot, ".comath", "db", "memory-snapshot.json");
+  await db.snapshot(snapshotPath);
+  const snapshotText = readFileSync(snapshotPath, "utf8");
+  assert.equal(snapshotText.includes(projectRoot), false, "memory snapshots must not leak host projectRoot paths");
+  assert.equal(/[A-Za-z]:[\\/]/.test(snapshotText), false, "memory snapshots must not contain Windows absolute paths");
+  assert.equal(snapshotText.includes('"projectRoot"'), false, "memory snapshots should not persist host projectRoot metadata");
+
+  const restoredDb = new InMemoryResearchMemoryDB();
+  await restoredDb.init(projectRoot, { projectId: "PRJ-0001", backend: "memory" });
+  await restoredDb.restore(snapshotPath);
+  assert.equal((await restoredDb.getNode("C-0003"))?.title, "Gamma claim");
+  assert.equal((await restoredDb.getEdges("C-0002"))[0]?.target_id, "C-0003");
+  await restoredDb.close();
+
   await assert.rejects(
     () =>
       db.beginPatch({

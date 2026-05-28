@@ -118,18 +118,18 @@ Completion record:
 
 ## Task 8: Memory, TriviumDB, Artifacts, Literature, Paper, Snapshot Product Audit
 
-- [ ] Audit in-memory DB, optional Trivium adapter, StableIdMap, GraphPatch lifecycle, artifact import, audit logs, literature condition checks, working paper, and snapshot/replay.
-- [ ] Validate optional Trivium behavior is fail-closed/fallback-safe and not an unverified default production dependency.
-- [ ] Run focused tests for memory/artifact/paper/snapshot/evaluation surfaces.
-- [ ] Repair concrete defects and sync docs.
+- [x] Audit in-memory DB, optional Trivium adapter, StableIdMap, GraphPatch lifecycle, artifact import, audit logs, literature condition checks, working paper, and snapshot/replay.
+- [x] Validate optional Trivium behavior is fail-closed/fallback-safe and not an unverified default production dependency.
+- [x] Run focused tests for memory/artifact/paper/snapshot/evaluation surfaces.
+- [x] Repair concrete defects and sync docs.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: Audited the Task 8 product boundary across `ResearchMemoryDB`, `InMemoryResearchMemoryDB`, `TriviumResearchMemoryDB`, `StableIdMap`, GraphPatch review/apply lifecycle, artifact import, audit JSONL append path, literature citation-condition matching, working-paper margin provenance, and snapshot/replay integrity. Found one concrete portability/privacy defect: both in-memory and Trivium memory adapter snapshots serialized the host absolute `projectRoot`, which could leak machine-specific paths into portable memory snapshot JSON. Added a Phase 5 regression proving memory snapshots omit `projectRoot` and Windows absolute paths while still restoring nodes and edges, then removed persisted `projectRoot` metadata from both memory snapshot formats. The normal initialized runtime root remains set by `init()` and is not reconstructed from snapshot JSON.
+- Verification evidence: The new regression initially failed with `AssertionError [ERR_ASSERTION]: memory snapshots must not contain Windows absolute paths`, reproducing the defect. After the repair, `corepack pnpm --filter @comath/comathd build` exited 0 and `node tests/unit/phase5-memory-db.test.mjs` from `services/comathd` exited 0. Focused Task 8 tests exited 0: `node tests/unit/phase3-artifacts-audit.test.mjs`, `node tests/unit/phase5-memory-db.test.mjs`, `node tests/unit/phase11-literature.test.mjs`, `node tests/unit/phase12-working-paper.test.mjs`, `node tests/unit/phase13-trivium-capability.test.mjs`, `node tests/unit/phase16-snapshot-replay.test.mjs`, and `node tests/unit/phase38-trivium-native-evaluation.test.mjs` from `services/comathd`; `node tests/evaluation/phase17-integrity-evaluation.test.mjs` from the repository root also exited 0. Full `corepack pnpm --filter @comath/comathd test` exited 0 across the package build, smoke, Phase 1-58 unit/integration chain, memory/Trivium/artifact/literature/paper/snapshot/replay tests, proof-kernel regressions, AgentRun regressions, and theorem-template tails. Static scans run: `rg` for direct `triviumdb` imports/dependencies over `services/comathd`, root `package.json`, and `services/comathd/package.json` returned no hits; file-write scans over memory/artifact/literature/audit surfaces showed path-policy-confined service-owned `.comath` writes; promotion/overclaim scans over artifact/literature/memory surfaces found only citation-condition and working-paper fail-closed checks; host-path/secret scans over Task 8 source plus evaluation fixtures found only the deterministic fake `ghp_...` secret fixture used to test snapshot secret blocking. Final `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` returned `False`.
+- Residual risk: Task 8 validates bounded memory, optional Trivium, artifacts, literature, working-paper, audit, and snapshot/replay semantics. It does not make native TriviumDB the default backend, does not prove target-platform native availability beyond the existing evaluation harness, and does not replace the upcoming third comprehensive check-debug loop, documentation synchronization, or final requirement-by-requirement completion audit. Trivium native IDs still exist inside `StableIdMap` and native adapter calls, but public memory IDs and snapshots remain stable string IDs.
+- Next step: Task 9 must run the third comprehensive check-debug loop with root build, typecheck, test, runtime-artifact checks, and accidental generated/runtime artifact review after this memory snapshot repair.
+- Commit: pending.
 
 ## Task 9: Comprehensive Check-Debug Loop 3
 
