@@ -1,3 +1,27 @@
+## Goal 2 Task 21 / Phase 73 Bounded Theorem-Specific Proof-Body Synthesis
+
+Scope: implement a bounded proof-body synthesis artifact for the Phase 72 non-template target `Prove in Lean that n + n = 2 * n for natural numbers.`, without treating the synthesized body as final proof authority.
+
+Implementation:
+
+- Added bounded `by omega` proof-body candidate generation in the broad-planning target branch.
+- Generated `.comath/campaign/<CAM>/bounded_proof_body_synthesis.json` and `bounded_proof_body_static_audit.json`.
+- Bound the proof-body package to the problem lock, obligation DAG, line map, theorem-specific target package, target Lean file, locked statement hash, and formal spec.
+- Updated `theorem_specific_lean_project.json` and `broad_replay_target.json` to record `proof_body_synthesized_unreplayed` while preserving `proof_authority: "none"`, `can_run_clean_replay: false`, and `can_promote_claim: false`.
+- Added negative prompt coverage so negation/non-proof prompts containing `n + n = 2 * n` do not receive the positive proof-body package.
+- Added `phase73-bounded-lean-proof-body-synthesis.test.mjs`, wired it into the default `@comath/comathd` test chain, exposed `bounded_theorem_specific_proof_body_synthesis`, and updated README, TODO, acceptance/readiness docs, and smoke markers.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/integration/phase73-bounded-lean-proof-body-synthesis.test.mjs
+Initial RED result: exit 1; `.comath/campaign/CAM-0001/bounded_proof_body_synthesis.json` was missing.
+```
+
+Boundary notes: Phase 73 is proof-body candidate evidence only. It does not call `runCleanLeanReplay()`, `applyGatePromotedClaim()`, or `promoteClaim()`, produces no final replay manifest, returns no promotion gate, and leaves the root claim `conjectural`. Final Lean Authority v2 remains the only path to `formally_checked`.
+
+Residual risks: Phase 73 is intentionally limited to one bounded target and one proof body. It does not implement arbitrary proof search, statement-equivalence proof search, dependency/axiom final reports for this target, final clean replay, broad MathProve proof authority, production Pi/Codex lifecycle hardening, or OS-enforced sandboxing.
+
 ## Goal 2 Task 20 / Comprehensive Check-Debug Loop 6
 
 Scope: comprehensive check-debug loop over the recent global-GA product-code slices: Phase 70 broad theorem planning, Phase 71 stage-gate repair/resume, and Phase 72 theorem-specific Lean target package.

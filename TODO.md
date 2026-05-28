@@ -685,11 +685,20 @@
 - [x] Add negative statement-binding coverage so formula-containing negation/refutation/non-proof prompts cannot receive a positive `n + n = 2 * n` theorem target package.
 - [x] Add `phase72-theorem-specific-lean-generation.test.mjs`, wire Phase 72 into the default `@comath/comathd` test chain, and expose `theorem_specific_lean_target_package`.
 
+## Phase 73: Bounded Theorem-Specific Proof-Body Synthesis
+
+- [x] Add bounded proof-body synthesis for the Phase 72 non-template target `Prove in Lean that n + n = 2 * n for natural numbers.`
+- [x] Persist `.comath/campaign/<CAM>/bounded_proof_body_synthesis.json` and `bounded_proof_body_static_audit.json`, bound to the theorem-specific target package, problem lock, obligation DAG, line map, target Lean file, and locked statement hash.
+- [x] Write the bounded target Lean file with `theorem C0001 (n : Nat) : n + n = 2 * n := by omega`, `#check C0001`, and `#print axioms C0001`, while keeping `proof_authority: "none"`, `can_run_clean_replay: false`, and `can_promote_claim: false`.
+- [x] Keep the campaign fail-closed as `blocked_with_replayable_reason` and the root claim `conjectural`; no final replay manifest or promotion gate is produced by proof-body synthesis alone.
+- [x] Keep negative/non-proof prompts from receiving the positive proof-body synthesis package.
+- [x] Add `phase73-bounded-lean-proof-body-synthesis.test.mjs`, wire Phase 73 into the default `@comath/comathd` test chain, and expose `bounded_theorem_specific_proof_body_synthesis`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72 bounded theorem-specific Lean target package for `n + n = 2 * n`, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 72 generates a target package only; it does not synthesize a proof body, produce Lean Authority v2 reports, run final clean replay, or promote arbitrary claims.
+- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72 bounded theorem-specific Lean target package, the Phase 73 bounded proof-body candidate for `n + n = 2 * n`, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 73 generates a proof-body candidate only; it does not produce Lean Authority v2 reports, run final clean replay, or promote arbitrary claims.
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.

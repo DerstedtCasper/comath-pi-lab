@@ -76,7 +76,7 @@ try {
   assert.equal(target.theorem_name, "MathResearch.Target.C0001");
   assert.equal(target.normalized_target_header, "theorem C0001 (n : Nat) : n + n = 2 * n");
   assert.equal(target.replay_command, "lake env lean MathResearch/Target.lean");
-  assert.equal(target.status, "target_generated_unproved");
+  assert.equal(target.status, "proof_body_synthesized_unreplayed");
   assert.equal(target.proof_authority, "none");
   assert.equal(target.can_promote_claim, false);
   assert.equal(target.can_run_clean_replay, false);
@@ -87,28 +87,29 @@ try {
   assert.equal(target.lean_files.target, draftTheoremRel);
   assert.equal(target.lean_files.lakefile, lakefileRel);
   assert.equal(target.lean_files.toolchain, toolchainRel);
-  assert.equal(target.blocked_until, "proof body and authority reports exist");
+  assert.equal(target.blocked_until, "final Lean Authority v2 reports exist");
 
   const replayTarget = readJson(join(projectRoot, replayTargetRel));
-  assert.equal(replayTarget.status, "target_generated_unproved");
+  assert.equal(replayTarget.status, "proof_body_synthesized_unreplayed");
   assert.equal(replayTarget.theorem_name, "MathResearch.Target.C0001");
   assert.equal(replayTarget.replay_command, target.replay_command);
   assert.equal(replayTarget.lean_project_target_path, projectTargetRel);
   assert.equal(replayTarget.can_run_clean_replay, false);
   assert.equal(replayTarget.can_promote_claim, false);
   assert.equal(replayTarget.proof_authority, "none");
-  assert.equal(replayTarget.required_before_replay.includes("add kernel-checked proof body"), true);
+  assert.equal(replayTarget.required_before_replay.includes("final clean Lean replay manifest"), true);
 
   const draftLean = readFileSync(join(projectRoot, draftTheoremRel), "utf8");
   assert.match(draftLean, /namespace MathResearch\.Target/);
   assert.match(draftLean, /def targetStatement : Prop := forall n : Nat, n \+ n = 2 \* n/);
   assert.match(draftLean, /expected theorem header: theorem C0001 \(n : Nat\) : n \+ n = 2 \* n/);
+  assert.match(draftLean, /theorem C0001 \(n : Nat\) : n \+ n = 2 \* n := by omega/);
   assert.doesNotMatch(draftLean, /\b(sorry|admit|axiom|unsafe|opaque|constant)\b/);
 
   const failure = readJson(join(projectRoot, failureRel));
   assert.equal(failure.replayable_evidence.lean_project_target, projectTargetRel);
   assert.equal(failure.promotion_blocked, true);
-  assert.equal(failure.reason, "theorem-specific Lean target generated but proof body and authority reports are missing");
+  assert.equal(failure.reason, "bounded theorem-specific proof body synthesized but final Lean Authority v2 reports are missing");
 
   const lastRun = finalTick.campaign.stage_runs.at(-1);
   assert.equal(lastRun.stage, "candidate_generation");
