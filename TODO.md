@@ -622,6 +622,14 @@
 - [x] Add `phase64-lean-authority-v2-final-gate.test.mjs` covering old-format stale manifests and hash-bound manifests whose live replay log drifts after import.
 - [x] Wire Phase 64 into the default `@comath/comathd` test chain and expose `lean_authority_v2_final_gate_hash_binding`.
 
+## Phase 65: Failed-Route Proof Memory Retrieval
+
+- [x] Promote failed candidate routes into typed proof-memory events with locked statement hash, route keys, artifact paths, blockers, repair hints, supersession metadata, and `proof_authority: "none"`.
+- [x] Add `readProofMemoryEvents()` and `retrieveSimilarFailedRoutes()` so later obligations can retrieve prior failed routes by exact statement hash or similar theorem/proposition keys.
+- [x] Emit `.comath/proof_memory/stale_or_superseded_warnings.jsonl` with `stale_fact`, `superseded_fact`, and unresolved-blocker warnings instead of silently treating prior failures as current facts.
+- [x] Inject failed-route retrieval summaries and warning metadata into the service-owned `knowledge_pack` stage artifact and knowledge shard.
+- [x] Add `phase65-proof-memory-retrieval.test.mjs`, wire Phase 65 into the default `@comath/comathd` test chain, and expose `proof_memory_failed_route_retrieval`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.

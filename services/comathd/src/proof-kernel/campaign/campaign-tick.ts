@@ -9,7 +9,7 @@ import { initProject } from "../../project/project-store.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { promoteClaim } from "../../verification/gate.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
-import { recordFailedRoutes } from "../ensemble/failure-aggregator.js";
+import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
 import { runTheoremFamilyCandidates } from "../ensemble/candidate-runner.js";
 import { createLeanProjectForTheorem } from "../lean/lean-project.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
@@ -636,6 +636,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "knowledge_pack" || campaign.current_stage === "context_built") {
+    const priorFailures = retrieveSimilarFailedRoutes({ projectRoot: input.project_root, obligation });
     const knowledgeRel = `.comath/context_lake/shards/knowledge-${campaign.campaign_id}.md`;
     writeRuntimeFile(
       input.project_root,
@@ -651,6 +652,20 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         "",
         "Library facts:",
         "- Nat.add_zero / Nat.mul_zero theorem-family registry entries when applicable.",
+        "",
+        "Prior failed routes:",
+        ...(
+          priorFailures.matches.length > 0
+            ? priorFailures.matches.map((route) => `- ${route.candidate_id} (${route.reason})`)
+            : ["- none"]
+        ),
+        "",
+        "Stale or superseded warnings:",
+        ...(
+          priorFailures.warnings.length > 0
+            ? priorFailures.warnings.map((warning) => `- ${warning.code}: ${warning.candidate_id}`)
+            : ["- none"]
+        ),
         ""
       ].join("\n")
     );
@@ -687,6 +702,13 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       obligation_id: obligation.obligation_id,
       locked_statement_hash: obligation.statement_hash,
       locked_statement_nl: obligation.locked_statement_nl,
+      failed_route_retrieval: {
+        match_count: priorFailures.matches.length,
+        warning_count: priorFailures.warnings.length,
+        warning_log_path: priorFailures.warning_log_path,
+        matched_candidate_ids: priorFailures.matches.map((route) => route.candidate_id),
+        warnings: priorFailures.warnings
+      },
       lock_artifacts: [
         ".comath/lock/problem_lock.md",
         ".comath/lock/assumptions.md",

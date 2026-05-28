@@ -41,6 +41,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "evidence_weighted_decision_forest",
       "native_stage_gate_artifact_guard",
       "lean_authority_v2_final_gate_hash_binding",
+      "proof_memory_failed_route_retrieval",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
       "mathprove_final_audit_external_runner",

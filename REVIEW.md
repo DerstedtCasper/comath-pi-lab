@@ -1,3 +1,47 @@
+## Goal 2 Task 8 / Phase 65 Failed-Route Proof Memory Retrieval
+
+Scope: make failed routes first-class proof-memory records that can be read and retrieved by later obligations with explicit stale/superseded warnings. This closes the Task 8 gap where previous phases preserved failed routes and aggregates, but did not yet expose an obligation-level retrieval surface or inject it into campaign context.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase65-proof-memory-retrieval.test.mjs
+Initial RED result: exit 1; `readProofMemoryEvents` was not exported, proving the existing implementation had no proof-memory read/retrieval API for failed routes.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed after proof-memory event, retrieval, campaign knowledge-pack, status, and test-chain updates.
+
+node services/comathd/tests/unit/phase65-proof-memory-retrieval.test.mjs
+Result: exit 0; Phase 65 proves failed routes carry typed proof-memory fields, similar obligations retrieve prior failures, stale/superseded warnings are written, and a later campaign knowledge pack includes prior failed-route retrieval metadata.
+
+node services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs
+node services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs
+node services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs
+Result: exit 0; existing failure preservation, failure aggregate, and stage-gate artifact regressions still pass.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0; comathd no-emit typecheck passed.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; full comathd default test chain passed with Phase 65 included.
+```
+
+Changed surfaces:
+
+- Extended proof-memory failure events written by `recordFailedRoutes()` with statement hash, theorem/proposition route keys, manifest and candidate artifact paths, blockers, repair hints, supersession fields, final handoff pointer, and `proof_authority: "none"`.
+- Added `readProofMemoryEvents()` and `retrieveSimilarFailedRoutes()` in `services/comathd/src/proof-kernel/ensemble/failure-aggregator.ts`.
+- Retrieval matches exact locked statement hashes and similar theorem/proposition keys, while logging stale/superseded/unresolved-blocker warnings to `.comath/proof_memory/stale_or_superseded_warnings.jsonl`.
+- The `knowledge_pack` campaign stage now calls proof-memory retrieval and writes match/warning summaries into `knowledge_pack.json` and the context-lake knowledge shard.
+- Added `services/comathd/tests/unit/phase65-proof-memory-retrieval.test.mjs`, wired it into `@comath/comathd test`, and exposed `proof_memory_failed_route_retrieval` in service status.
+
+Boundary notes: this task implements native failed-route retrieval for the current proof-kernel theorem-family campaign path. It does not yet add a broad vector/Trivium-backed proof-memory ranking layer, a full automatic repair loop, or a Pi-facing proof-memory browser.
+
+Residual risks:
+
+- Similarity is conservative and deterministic: exact statement hash or normalized theorem/proposition route keys. Richer semantic matching remains future work.
+- Supersession is represented and warned on, but no dedicated repair command yet marks routes superseded automatically after a theorem repair; later repair-loop work should own that lifecycle.
+- Task 9 should run the broader check-debug loop over proof-kernel, memory, campaign, and root surfaces.
+
 ## Goal 2 Task 7 / Phase 64 Lean Authority v2 Final Gate Hash Binding
 
 Scope: harden the final Lean authority path so `formally_checked` promotion is bound not only to a passed replay manifest for the claim, but also to fresh, hash-bound final replay artifacts: replay stdout/stderr, final static audit, axiom profile, dependency closure, and statement-equivalence reports.
