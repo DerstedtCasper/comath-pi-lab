@@ -1,3 +1,56 @@
+## Goal 2 Task 12 / Comprehensive Check-Debug Loop 4
+
+Scope: fourth Goal 2 comprehensive check-debug loop over the Phase 67 v3 formal campaign slice and release-facing root gates. This loop verifies that the final positive v3 slice did not leave stale Phase 18-58 smoke invariants, tracked runtime artifacts, secrets, direct Pi trusted-state writes, claim-gate bypasses, or documentation overclaims before moving to the required negative GA slices.
+
+Verification evidence:
+
+```text
+node services/comathd/tests/integration/phase67-v3-formal-campaign-slice.test.mjs
+Result: exit 0; Phase 67 v3 formal campaign slice passed.
+
+node scripts/phase0-smoke.mjs
+Initial Task 12 finding: root `corepack pnpm test` first failed because the Phase 0 smoke check still required stale Phase 18-58 README evidence while the current product docs correctly describe Phase 18-67.
+Result after repair: exit 0; Phase 0/design smoke check passed with 25 required entries and 28 invariants, including Phase 18-67 README evidence and Phase 67 acceptance-matrix coverage.
+
+corepack pnpm build
+Result: exit 0; workspace build passed for `extensions/comath-pi` and `services/comathd`.
+
+corepack pnpm typecheck
+Result: exit 0; workspace TypeScript no-emit checks passed for `extensions/comath-pi` and `services/comathd`.
+
+corepack pnpm test
+Result: exit 0; root Phase 0 smoke, Pi extension tests through Phase 66, comathd tests through Phase 67, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation passed.
+
+Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repo-root runtime `.comath` directory was left behind.
+
+git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'
+Result: no output; no runtime, dependency, or build-output paths from those patterns are tracked.
+
+git diff --check
+Result: exit 0; no whitespace errors were found in the Task 12 diff.
+```
+
+Static scan result:
+
+- Claim-gate/status scans found status reads and the expected `applyGatePromotedClaim` / `promoteClaim` service-owned surfaces only; no direct `claim.status =` privileged assignment was found.
+- Pi direct-write scan found only service-authority metadata and scoped subagent workstream policy strings; no Pi source `writeFile`, `appendFile`, `mkdir`, `rm`, `rmdir`, or `unlink` trusted-state mutation path was found.
+- Secret scan found only intentional test fixtures such as fake `OPENAI_API_KEY`, `GH_TOKEN`, and `sk-phase51/52-secret` values plus secret-scanner code; no real secret candidate was introduced by Task 12.
+- MathProve/proof-authority and documentation scans continue to mark MathProve, AgentRun, adapter, and runner output as non-authoritative evidence with `proof_authority: none`; current-facing docs still state that arbitrary theorem proving, broad MathProve proof authority, full v3 GA completion, production Pi/Codex hardening, OS sandboxing, and broader theorem synthesis are not achieved or remain deferred.
+
+Changed surfaces:
+
+- Updated `scripts/phase0-smoke.mjs` so the README invariant requires current Phase 18-67 GA/v3 vertical-slice evidence rather than stale Phase 18-58 evidence.
+- Added Phase 67 acceptance-matrix smoke invariants requiring `67 v3 end-to-end formal campaign slice` and `phase67-v3-formal-campaign-slice.test.mjs` coverage language.
+
+Requirement drift result: Task 11's positive v3 formal campaign slice is still aligned with Goal 2, and the root smoke gate now protects that evidence instead of failing on a stale bounded-product checkpoint. No additional high-risk product-code defect was found during this loop.
+
+Residual risks:
+
+- Task 13 still needs release-level negative GA slices for statement drift rejection, cheating Lean artifact rejection, false-theorem refutation, all-candidate failure recovery, and clean replay from snapshot.
+- Task 14 and Task 15 still need documentation/evidence synchronization and the final v3 GA completion audit before any full v3 GA claim.
+- Some historical docs still mention Phase 18-58 as a past bounded checkpoint; that is acceptable as history, but Task 14 must synchronize current-facing release evidence.
+
 ## Goal 2 Task 11 / Phase 67 v3 End-To-End Formal Campaign Slice
 
 Scope: implement and verify the positive v3 formal campaign slice required by the external GA docs: user goal intake for `n + 0 = n`, workspace/runtime creation, problem lock, v3 planning/stage-gate artifacts, 8-way candidate generation, candidate verification, evidence-weighted arbitration, Lean formalization, final static audit, clean replay, `formally_checked` promotion, memory update, and replayable artifact bundle.

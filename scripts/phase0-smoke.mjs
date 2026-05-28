@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-58")) {
-  invariantFailures.push("README must describe the current Phase 18-58 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-67")) {
+  invariantFailures.push("README must describe the current Phase 18-67 GA/v3 vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -182,6 +182,14 @@ if (!acceptanceMatrix.includes("57 Lean theorem template instantiation")) {
 
 if (!acceptanceMatrix.includes("58 MathProve final-audit external runner")) {
   invariantFailures.push("acceptance matrix must include Phase 58 MathProve final-audit external runner acceptance");
+}
+
+if (!acceptanceMatrix.includes("67 v3 end-to-end formal campaign slice")) {
+  invariantFailures.push("acceptance matrix must include Phase 67 v3 formal campaign slice acceptance");
+}
+
+if (!acceptanceMatrix.includes("phase67-v3-formal-campaign-slice.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 67 formal campaign slice test coverage language");
 }
 
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
