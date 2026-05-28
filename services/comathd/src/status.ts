@@ -49,6 +49,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "bounded_lean_authority_report_preparation",
       "bounded_final_clean_replay_promotion",
       "registered_nat_linear_identity_targets",
+      "controlled_nat_linear_identity_synthesis",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
       "mathprove_final_audit_external_runner",

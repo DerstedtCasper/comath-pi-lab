@@ -1,3 +1,39 @@
+## Goal 2 Task 33 / Phase 81 Controlled Nat Linear Identity Synthesis
+
+Scope: move broad theorem synthesis one product step beyond the Phase 76 registered Nat target table by adding a controlled one-variable Nat linear identity synthesizer.
+
+Changes:
+
+- Added a safe Nat linear-expression parser for `n`, natural-number constants, `+`, and constant multiplication with `n`.
+- `theoremSpecificLeanTarget()` can now synthesize targets outside the registered table only when both sides normalize to identical coefficient/constant forms.
+- The synthesized path reuses the existing theorem-specific Lean package, bounded `by omega` proof-body artifact, Lean Authority v2 report-preparation artifacts, final clean replay manifest, and promotion gate.
+- Target and proof-body artifacts now record `synthesis_scope: controlled_nat_linear_identity_synthesis` and `linear_normal_form` for synthesized targets.
+- False identities, negative/refutation prompts, unsafe syntax, unsupported multi-variable syntax, and nonlinear terms such as `n * n` remain fail-closed without theorem-specific packages or final replay authority.
+- Wired Phase 81 into the default `@comath/comathd` test chain, service status capability, README, TODO, acceptance matrix, and readiness matrix without claiming arbitrary theorem proving.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/integration/phase81-controlled-nat-linear-synthesis.test.mjs
+Initial RED result: exit 1; `2 * n + 3 = n + n + 3` stopped at blocked broad synthesis instead of reaching `completed_formal_proof`.
+```
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/integration/phase81-controlled-nat-linear-synthesis.test.mjs`
+- `node services/comathd/tests/integration/phase76-registered-nat-linear-targets.test.mjs`
+- `node services/comathd/tests/integration/phase75-bounded-final-clean-replay.test.mjs`
+- `node services/comathd/tests/integration/phase73-bounded-lean-proof-body-synthesis.test.mjs`
+- `node services/comathd/tests/integration/phase72-theorem-specific-lean-generation.test.mjs`
+- `node services/comathd/tests/phase0-smoke.test.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+
+Boundary notes: Phase 81 is controlled one-variable Nat linear synthesis only. It does not implement arbitrary theorem proving, nonlinear arithmetic synthesis, multi-variable theorem synthesis, broad MathProve proof authority, or automatic statement-equivalence proof search.
+
+Residual risks: global GA still needs product-code work on broader theorem planning/synthesis beyond this safe linear grammar, broad MathProve proof search/proof-authority semantics, production Pi/Codex lifecycle validation, OS-level runner/process sandboxing, indefinite operator sessions, and statement-equivalence proof execution beyond registered bounded materializations.
+
 ## Goal 2 Task 32 / Comprehensive Check-Debug Loop 10
 
 Scope: comprehensive check-debug loop over Phase 79 statement-equivalence proof-search plan artifacts and Phase 80 bounded equivalence-search witness materialization.

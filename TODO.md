@@ -752,11 +752,20 @@
 - [x] Fail closed for unregistered hints, tampered promotional plans, wrong targets, malformed witness metadata, and missing witness artifact ids without claim promotion.
 - [x] Add `phase80-bounded-equivalence-witness-materialization.test.mjs`, wire Phase 80 into the default `@comath/comathd` test chain, and expose `lean_equivalence_witness_materialization`.
 
+## Phase 81: Controlled Nat Linear Identity Synthesis
+
+- [x] Add a service-owned controlled one-variable Nat linear identity synthesizer for safe `n`, natural-number constants, `+`, and constant-`*`-`n` terms.
+- [x] Normalize both sides to coefficient/constant form and generate theorem-specific Lean packages only when the two normal forms match exactly.
+- [x] Reuse the existing theorem-specific Lean package, `by omega` proof-body, Lean Authority v2 report-preparation, final clean replay, and promotion gate path.
+- [x] Record `synthesis_scope: "controlled_nat_linear_identity_synthesis"` and `linear_normal_form` in target/proof-body artifacts without claiming arbitrary theorem proving.
+- [x] Fail closed for false identities, unsafe syntax, negative/refutation prompts, unsupported multi-variable expressions, and nonlinear expressions such as `n * n`.
+- [x] Add `phase81-controlled-nat-linear-synthesis.test.mjs`, wire Phase 81 into the default `@comath/comathd` test chain, and expose `controlled_nat_linear_identity_synthesis`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72-76 registered Nat linear identity target path (`n + n = 2 * n`, `n + 0 + n = 2 * n`), registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 76 proves two bounded non-template targets; it does not implement arbitrary theorem proving.
+- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72-76 registered Nat linear identity target path (`n + n = 2 * n`, `n + 0 + n = 2 * n`), the Phase 81 controlled one-variable Nat linear identity synthesizer, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 81 proves a safe grammar slice such as `2 * n + 3 = n + n + 3`; it does not implement arbitrary theorem proving.
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
