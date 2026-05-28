@@ -1,3 +1,77 @@
+## Goal 2 Task 3 / Comprehensive Check-Debug Loop 1
+
+Scope: perform the first Goal 2 comprehensive check-debug loop after Phase 60 and Phase 61. This loop verifies the new campaign pause/tick guard and v3 candidate-manifest/failure-aggregate contract against the current v3 GA scope without re-running the older Goal 1 audit as the development objective.
+
+Verification evidence:
+
+```text
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; comathd TypeScript build passed after Tasks 1-2.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0; comathd no-emit typecheck passed.
+
+node services/comathd/tests/unit/phase60-v3-campaign-pause-resume.test.mjs
+Result: exit 0; paused campaigns reject tick with no state/artifact mutation and resume continues the bounded tick path.
+
+node services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs
+Result: exit 0; candidate manifests are validated before arbitration and failure aggregates preserve all-failure evidence.
+
+node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs
+Result: exit 0; proof-kernel gate boundaries and v3 manifest fixture compatibility still pass.
+
+node services/comathd/tests/unit/phase19-ga-ensemble-recovery.test.mjs
+Result: exit 0; seven-failures-plus-one-Lean-pass recovery still passes.
+
+node services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs
+Result: exit 0; positive formal campaign vertical slice still passes.
+
+corepack pnpm build
+Result: exit 0; root recursive build passed.
+
+corepack pnpm typecheck
+Result: exit 0; root recursive no-emit typecheck passed.
+
+corepack pnpm test
+Result: exit 0; root test chain passed, including Phase 0/design smoke, Pi package tests, comathd package tests through Phase 61, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation.
+```
+
+Static scan evidence:
+
+```text
+rg -n "applyGatePromotedClaim|promoteClaim\(|formally_checked|gate\.ok" services/comathd/src services/comathd/tests extensions/comath-pi/src README.md TODO.md REVIEW.md MATH_INTEGRITY_REVIEW.md SECURITY_REVIEW.md
+Result: expected hits only in the promotion gate, campaign proof/refutation path, tests, and guardrail documentation. `applyGatePromotedClaim()` remains a low-level store primitive used by the gate-controlled promotion path and campaign proof-kernel paths; no new direct Pi or documentation-driven authority path was found.
+
+rg -n "status\s*=" services/comathd/src services/comathd/tests
+Result: ordinary local variables, assertions, replay metadata mutation in a test fixture, and campaign terminal checks only.
+
+rg -n "\.status\s*=" services/comathd/src services/comathd/tests
+Result: no direct claim-status assignment bypass found.
+
+rg -n "\.comath|writeRuntimeFile|writeFileSync|mkdirSync|rmSync|unlinkSync|appendFileSync|createWriteStream" extensions/comath-pi/src extensions/tools
+Result: expected documentation/subagent scoped-write strings only; no direct Pi trusted `.comath/` runtime-file mutation path found.
+
+git ls-files .comath .tmp dist node_modules services/comathd/dist extensions/comath-pi/dist
+Result: no tracked generated/runtime/dependency artifacts.
+
+git ls-files -o --exclude-standard
+Result: no untracked files before record edits.
+
+Test-Path 'D:\MATH _Studio\comath-pi-lab\.comath'
+Result: False; no repository-root runtime state was left behind.
+```
+
+Requirement drift result: Tasks 1-2 are aligned with Goal 2's v3 direction and do not overclaim full GA. Phase 60 closes a live resumability/control-plane defect by making paused ticks fail closed. Phase 61 makes candidate manifests and failed-route aggregates first-class audit objects before Task 4's deeper decision-forest hardening.
+
+Boundary notes: no high-risk implementation defect was found during this check-debug loop, so no product code repair was required. A sidecar verifier attempt was launched but failed with upstream 429; the final result is based on local build/typecheck/test/static-scan evidence.
+
+Residual risks:
+
+- Pause/resume currently restores `running` and does not preserve a richer pre-pause substatus if future states such as `blocked` or `repairing` become pausable.
+- Candidate manifests are structure- and identity-validated, but artifact descriptors are not yet content-hash bound to the decision record.
+- The `candidate_verification` campaign artifact still summarizes stored `CandidateRun[]`; manifest validation is enforced at arbitration rather than at the earlier artifact-write boundary.
+- Full evidence-weighted arbitration remains Task 4, not a completed property of Task 3.
+
 ## Goal 2 Task 2 / Phase 61 v3 Candidate Manifest And Failure Aggregate Contract
 
 Scope: harden the existing 8-way theorem-family candidate path so candidate artifacts are not merely per-workspace files plus in-memory `CandidateRun` records. This task makes candidate manifests and failed-route aggregation first-class campaign-scoped audit objects before arbitration.
