@@ -429,6 +429,18 @@ type LockedProblem = {
   notation_lines: string[];
 };
 
+type TheoremSpecificLeanTarget = {
+  theorem_name: string;
+  namespace: string;
+  normalized_target_header: string;
+  target_statement_prop: string;
+  replay_command: string;
+  theorem_file_rel: string;
+  formal_spec_rel: string;
+  lakefile_rel: string;
+  toolchain_rel: string;
+};
+
 function classifyLockedProblem(goal: string): LockedProblem {
   if (/n\s*\+\s*1\s*=\s*n/i.test(goal)) {
     return {
@@ -592,6 +604,140 @@ function isSupportedProofObligation(obligation: ProofObligation): boolean {
 }
 
 const broadSynthesisBlockedReason = "broad theorem synthesis requires checked replay target";
+const broadTargetGeneratedBlockedReason =
+  "theorem-specific Lean target generated but proof body and authority reports are missing";
+
+function isNatDoubleTargetRequest(proposition: string): boolean {
+  const normalized = proposition.trim().replace(/\s+/g, " ").replace(/[.。]$/, "");
+  if (/\b(do not|don't|not|negation|refute|disprove|counterexample|false)\b/i.test(normalized)) {
+    return false;
+  }
+  return /^prove(?:\s+in\s+lean)?\s+that\s+n\s*\+\s*n\s*=\s*2\s*\*\s*n\s+for\s+natural\s+numbers$/i.test(normalized);
+}
+
+function theoremSpecificLeanTarget(campaign: ResearchCampaign, obligation: ProofObligation): TheoremSpecificLeanTarget | undefined {
+  const proposition = obligation.locked_statement_nl;
+  if (!isNatDoubleTargetRequest(proposition)) {
+    return undefined;
+  }
+  const root = `.comath/lean/broad/${campaign.campaign_id}`;
+  return {
+    theorem_name: "MathResearch.Target.C0001",
+    namespace: "MathResearch.Target",
+    normalized_target_header: "theorem C0001 (n : Nat) : n + n = 2 * n",
+    target_statement_prop: "forall n : Nat, n + n = 2 * n",
+    replay_command: "lake env lean MathResearch/Target.lean",
+    theorem_file_rel: `${root}/MathResearch/Target.lean`,
+    formal_spec_rel: `${root}/FormalSpec/target.json`,
+    lakefile_rel: `${root}/lakefile.lean`,
+    toolchain_rel: `${root}/lean-toolchain`
+  };
+}
+
+function writeTheoremSpecificLeanProject(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  target: TheoremSpecificLeanTarget;
+}): string {
+  writeRuntimeFile(
+    input.projectRoot,
+    input.target.toolchain_rel,
+    "leanprover/lean4:v4.27.0\n"
+  );
+  writeRuntimeFile(
+    input.projectRoot,
+    input.target.lakefile_rel,
+    [
+      "import Lake",
+      "open Lake DSL",
+      "",
+      "package BroadTarget where",
+      "",
+      "lean_lib MathResearch where",
+      "",
+      ""
+    ].join("\n")
+  );
+  writeRuntimeFile(
+    input.projectRoot,
+    input.target.theorem_file_rel,
+    [
+      "-- CoMath theorem-specific target package; not proof authority.",
+      "-- This file intentionally records the target proposition without a proof body.",
+      `-- expected theorem header: ${input.target.normalized_target_header}`,
+      "",
+      `namespace ${input.target.namespace}`,
+      "",
+      `def targetStatement : Prop := ${input.target.target_statement_prop}`,
+      "",
+      `#check targetStatement`,
+      "",
+      `end ${input.target.namespace}`,
+      ""
+    ].join("\n")
+  );
+  writeRuntimeFile(
+    input.projectRoot,
+    input.target.formal_spec_rel,
+    `${JSON.stringify(
+      {
+        schema_version: "comath.v3.theorem_specific_formal_spec.v1",
+        campaign_id: input.campaign.campaign_id,
+        claim_id: input.campaign.root_claim_id,
+        obligation_id: input.obligation.obligation_id,
+        locked_statement_hash: input.obligation.statement_hash,
+        theorem_name: input.target.theorem_name,
+        normalized_target_header: input.target.normalized_target_header,
+        target_statement_prop: input.target.target_statement_prop,
+        status: "target_generated_unproved",
+        proof_authority: "none",
+        can_promote_claim: false,
+        created_at: now()
+      },
+      null,
+      2
+    )}\n`
+  );
+  return writeSimpleStageArtifact(input.projectRoot, input.campaign, "theorem_specific_lean_project.json", {
+    schema_version: "comath.v3.theorem_specific_lean_project.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.campaign.project_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    locked_statement_hash: input.obligation.statement_hash,
+    target_formal_system: "Lean4",
+    status: "target_generated_unproved",
+    theorem_name: input.target.theorem_name,
+    normalized_target_header: input.target.normalized_target_header,
+    target_statement_prop: input.target.target_statement_prop,
+    replay_command: input.target.replay_command,
+    proof_authority: "none",
+    can_run_clean_replay: false,
+    can_promote_claim: false,
+    blocked_until: "proof body and authority reports exist",
+    bound_artifacts: {
+      problem_lock: ".comath/lock/problem_lock.md",
+      obligation_dag: campaignProofRel(input.campaign, "lemma_dag.json"),
+      line_map: campaignProofRel(input.campaign, "line_map.json"),
+      formal_spec: input.target.formal_spec_rel
+    },
+    lean_files: {
+      target: input.target.theorem_file_rel,
+      formal_spec: input.target.formal_spec_rel,
+      lakefile: input.target.lakefile_rel,
+      toolchain: input.target.toolchain_rel
+    },
+    required_authority_reports: [
+      "static_audit",
+      "statement_equivalence",
+      "dependency_closure",
+      "axiom_profile",
+      "final_clean_replay_manifest"
+    ],
+    created_at: now()
+  });
+}
 
 function blockForBroadSynthesisPlanning(input: {
   projectRoot: string;
@@ -601,6 +747,15 @@ function blockForBroadSynthesisPlanning(input: {
 }): CampaignTickResult {
   const obligationDagRel = campaignProofRel(input.campaign, "lemma_dag.json");
   const lineMapRel = campaignProofRel(input.campaign, "line_map.json");
+  const leanTarget = theoremSpecificLeanTarget(input.campaign, input.obligation);
+  const leanProjectRel = leanTarget
+    ? writeTheoremSpecificLeanProject({
+        projectRoot: input.projectRoot,
+        campaign: input.campaign,
+        obligation: input.obligation,
+        target: leanTarget
+      })
+    : undefined;
   const replayTargetRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "broad_replay_target.json", {
     schema_version: "comath.v3.broad_replay_target.v1",
     campaign_id: input.campaign.campaign_id,
@@ -608,11 +763,14 @@ function blockForBroadSynthesisPlanning(input: {
     obligation_id: input.obligation.obligation_id,
     locked_statement_hash: input.obligation.statement_hash,
     target_formal_system: "Lean4",
-    status: "unresolved",
-    theorem_name: null,
+    status: leanTarget ? "target_generated_unproved" : "unresolved",
+    theorem_name: leanTarget?.theorem_name ?? null,
     lean_target: input.obligation.lean_target ?? null,
+    replay_command: leanTarget?.replay_command ?? null,
+    lean_project_target_path: leanProjectRel ?? null,
+    can_promote_claim: false,
     required_before_replay: [
-      "theorem-specific Lean declaration",
+      leanTarget ? "add kernel-checked proof body" : "theorem-specific Lean declaration",
       "candidate manifest with checked statement binding",
       "dependency closure report",
       "axiom profile report",
@@ -662,7 +820,10 @@ function blockForBroadSynthesisPlanning(input: {
         "final_clean_replay"
       ]
     },
-    blocked_until: "a theorem-specific Lean declaration and checked replay target are generated",
+    theorem_specific_lean_project_path: leanProjectRel ?? null,
+    blocked_until: leanTarget
+      ? "proof body and authority reports exist"
+      : "a theorem-specific Lean declaration and checked replay target are generated",
     created_at: now()
   });
   const failureRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "broad_synthesis_failure.json", {
@@ -670,7 +831,7 @@ function blockForBroadSynthesisPlanning(input: {
     campaign_id: input.campaign.campaign_id,
     claim_id: input.campaign.root_claim_id,
     obligation_id: input.obligation.obligation_id,
-    reason: broadSynthesisBlockedReason,
+    reason: leanTarget ? broadTargetGeneratedBlockedReason : broadSynthesisBlockedReason,
     fail_closed: true,
     promotion_blocked: true,
     proof_authority: "none",
@@ -679,7 +840,8 @@ function blockForBroadSynthesisPlanning(input: {
       obligation_dag: obligationDagRel,
       line_map: lineMapRel,
       planning_artifact: planningRel,
-      replay_target_artifact: replayTargetRel
+      replay_target_artifact: replayTargetRel,
+      lean_project_target: leanProjectRel ?? null
     },
     next_actions: [
       "synthesize a theorem-specific Lean target before candidate generation",
@@ -689,12 +851,16 @@ function blockForBroadSynthesisPlanning(input: {
     created_at: now()
   });
   const blocker = {
-    reason: broadSynthesisBlockedReason,
+    reason: leanTarget ? broadTargetGeneratedBlockedReason : broadSynthesisBlockedReason,
     obligation_id: input.obligation.obligation_id,
     artifact_path: failureRel,
     planning_artifact_path: planningRel,
-    replay_target_path: replayTargetRel
+    replay_target_path: replayTargetRel,
+    lean_project_target_path: leanProjectRel ?? null
   };
+  const stageArtifacts = leanProjectRel
+    ? [planningRel, replayTargetRel, leanProjectRel, failureRel]
+    : [planningRel, replayTargetRel, failureRel];
   const next = writeCampaign(
     input.projectRoot,
     researchCampaignSchema.parse({
@@ -706,10 +872,12 @@ function blockForBroadSynthesisPlanning(input: {
       blockers: [blocker],
       stage_runs: [
         ...input.campaign.stage_runs,
-        stageRun(input.campaign, "candidate_generation", "blocked", [planningRel, replayTargetRel, failureRel])
+        stageRun(input.campaign, "candidate_generation", "blocked", stageArtifacts)
       ],
       next_actions: [
-        "resolve a theorem-specific Lean replay target before rerunning broad synthesis",
+        leanTarget
+          ? "add a kernel-checked proof body and authority reports before rerunning broad synthesis"
+          : "resolve a theorem-specific Lean replay target before rerunning broad synthesis",
         "keep the claim conjectural until final clean replay evidence exists"
       ]
     }),
@@ -718,7 +886,7 @@ function blockForBroadSynthesisPlanning(input: {
   return {
     campaign: next,
     obligation: { ...input.obligation, status: "blocked" },
-    blocker: broadSynthesisBlockedReason
+    blocker: leanTarget ? broadTargetGeneratedBlockedReason : broadSynthesisBlockedReason
   };
 }
 

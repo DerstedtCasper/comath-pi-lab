@@ -1,3 +1,27 @@
+## Goal 2 Task 19 / Phase 72 Theorem-Specific Lean Target Package
+
+Scope: implement a bounded theorem-specific Lean target package for one non-template broad-planning goal, `Prove in Lean that n + n = 2 * n for natural numbers.`, without claiming arbitrary theorem proving or proof authority.
+
+Implementation:
+
+- Added theorem-specific target package generation in the Phase 70 broad-planning candidate-generation block.
+- Generated `.comath/campaign/<CAM>/theorem_specific_lean_project.json`, `.comath/lean/broad/<CAM>/MathResearch/Target.lean`, `FormalSpec/target.json`, `lakefile.lean`, and `lean-toolchain`.
+- Bound the target package to the problem lock, obligation DAG, line map, locked statement hash, replay command, and formal spec.
+- Marked the theorem-specific target package and broad replay target as non-promotional with `proof_authority: "none"`, `can_run_clean_replay: false`, and `can_promote_claim: false`.
+- Added negative statement-binding coverage so negation/refutation/non-proof prompts that contain `n + n = 2 * n` do not receive a positive theorem target package.
+- Added `phase72-theorem-specific-lean-generation.test.mjs`, wired it into the default `@comath/comathd` test chain, exposed `theorem_specific_lean_target_package`, and updated README, TODO, acceptance/readiness docs, and smoke markers.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/integration/phase72-theorem-specific-lean-generation.test.mjs
+Initial RED result: exit 1; `theorem_specific_lean_project.json` was missing for the bounded `n + n = 2 * n` target.
+```
+
+Boundary notes: Phase 72 creates a Lean target package, not a proof. The generated Lean file records only a target proposition and `#check targetStatement`; it contains no `sorry`, `admit`, `axiom`, `unsafe`, `opaque`, or `constant`. The campaign remains terminal `blocked_with_replayable_reason`, the root claim remains `conjectural`, and no final replay or promotion gate is returned.
+
+Residual risks: Phase 72 does not synthesize a proof body, produce Lean Authority v2 reports, run final clean replay, or promote claims. The target recognizer is intentionally narrow and does not parse arbitrary theorem statements. Broad MathProve proof search/proof-authority semantics, production Pi/Codex lifecycle hardening, OS-enforced sandboxing, and arbitrary attachment/paper-driven research closure remain open global-GA blockers.
+
 ## Goal 2 Task 18 / Phase 71 Stage-Gate Repair/Resume
 
 Scope: implement a narrow service-owned repair/resume path for campaigns blocked by missing required stage-gate artifacts. This closes the Phase 63 residual gap without turning repair/resume into proof repair, theorem synthesis, or claim promotion.

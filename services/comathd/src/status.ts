@@ -44,6 +44,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "proof_memory_failed_route_retrieval",
       "v3_negative_ga_slice_runner",
       "stage_gate_repair_resume",
+      "theorem_specific_lean_target_package",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
       "mathprove_final_audit_external_runner",

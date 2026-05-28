@@ -23,6 +23,7 @@ const requiredCapabilities = [
   "snapshot_replay",
   "proof_kernel_ga_vertical_slice",
   "proof_kernel_theorem_template_instantiation",
+  "theorem_specific_lean_target_package",
   "runner_reexecution_replay",
   "mathprove_external_evidence_runner",
   "mathprove_final_audit_external_runner",
