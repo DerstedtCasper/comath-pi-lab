@@ -20,7 +20,7 @@ Completion record:
 - Verification evidence: `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/phase58-mathprove-final-audit-runner.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 after running the package build, phase smoke, Phase 1-58 unit/integration chain, and Phase 57 integration tail. `Test-Path -LiteralPath 'D:\MATH _Studio\comath-pi-lab\.comath'` returned `False`; `Test-Path -LiteralPath 'D:\MATH _Studio\MathProve-Skill\scripts\final_audit.py.phase58-test-backup'` returned `False`.
 - Residual risk: Task 1 only proves the Phase 58 working-tree slice and comathd package regression chain. It does not yet prove full product completion, Pi product-surface completeness, root build/typecheck/test, or requirement-by-requirement readiness; those remain assigned to later tasks.
 - Next step: Task 2 must derive the product-scope requirement matrix and classify deferred items as bounded non-goals, product limitations, or missing functionality.
-- Commit: recorded in git history for Task 1 completion.
+- Commit: `e3e24ce` (`Add Phase 58 MathProve final audit runner`).
 
 ## Task 2: Product-Scope Requirement Matrix
 
