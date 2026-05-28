@@ -35,7 +35,7 @@ Completion record:
 - Verification evidence: Re-read `goal-1/input.md`, `goal-1/plan.md`, `goal-1/tasks.md`, `AGENTS.md`, `COMATH_PI_LAB_DEV_PLAN.md`, `CODEX_GOAL_RUNBOOK.md`, `TODO.md`, `REVIEW.md`, and `docs/architecture/module-boundaries.md`. Ran `rg` checks on `docs/progress/product-readiness-matrix.md` for boundary phrases including `not global GA readiness`, `not an arbitrary theorem prover`, `not a MathProve proof-authority`, `not a production Codex/Pi`, `not an OS-sandboxed`, `accepted non-goal`, `deferred global-GA`, and `must remain false`; all required guardrails were present. `git status -sb` showed only the new matrix file before this task record update.
 - Residual risk: Task 2 is a documentation/audit matrix only. It does not prove the product complete or run root validation; broad validation and implementation-surface audits remain assigned to Tasks 3-11.
 - Next step: Task 3 must run the first comprehensive check-debug loop, including build/typecheck/tests as feasible and static scans for `.comath`/gate-bypass risks.
-- Commit: pending commit for Task 2 completion.
+- Commit: `ff9ec34` (`Add product readiness matrix`).
 
 ## Task 3: Comprehensive Check-Debug Loop 1
 
