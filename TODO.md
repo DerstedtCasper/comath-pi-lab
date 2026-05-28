@@ -584,11 +584,19 @@
 - [x] Preserve MathProve as non-authoritative evidence: a passed final audit still returns `gate_result=failed`, carries `mathprove_final_audit_not_formal_authority`, and cannot promote `formally_checked` without CoMath proof-kernel replay evidence.
 - [x] Add `phase58-mathprove-final-audit-runner.test.mjs` and wire Phase 58 into the default `@comath/comathd` test chain and smoke status capabilities.
 
+## Phase 60: v3 Campaign Pause/Tick Contract
+
+- [x] Add a v3 campaign pause/resume regression proving a paused `ResearchCampaign` rejects `/campaign/:id/tick` with `CAMPAIGN_PAUSED`.
+- [x] Ensure rejected paused ticks do not advance `current_stage`, append `stage_runs`, or write the next stage artifact before resume.
+- [x] Preserve resumability by allowing `/campaign/:id/resume` to restore `running` and continue the bounded tick sequence.
+- [x] Wire `phase60-v3-campaign-pause-resume.test.mjs` into the default `@comath/comathd` test chain and expose `campaign_pause_tick_guard` in service status.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation.
+- [ ] Full v3 external-document terminal vocabulary compatibility remains open: the current public API still uses `completed_formal_proof`, `completed_refutation`, `blocked_with_replayable_reason`, and `cancelled_by_user` rather than exposing aliases for `formal_proof_verified`, `verified_counterexample`, `user_visible_theorem_repair_required`, `replayable_environment_blocker`, and `user_cancelled`.
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.

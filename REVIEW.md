@@ -1,3 +1,37 @@
+## Goal 2 Task 1 / Phase 60 v3 Campaign Pause-Tick Contract
+
+Scope: continue the v3 GA development line without repeating the Goal 1 audit. This task closes a live ResearchCampaign control-plane gap: `/campaign/:id/pause` persisted `status: "paused"`, but `/campaign/:id/tick` still advanced trusted state and wrote the next stage artifact.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase60-v3-campaign-pause-resume.test.mjs
+Initial RED result: exit 1; paused campaign tick returned 200 instead of expected 409.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build completed.
+
+node services/comathd/tests/unit/phase60-v3-campaign-pause-resume.test.mjs
+Result: exit 0; Phase 60 v3 campaign pause/resume tests passed.
+
+node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs
+Result: exit 0; existing v3 campaign state-machine regression still passed.
+
+node services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs
+Result: exit 0; positive formal campaign vertical slice still passed.
+```
+
+Changed surfaces:
+
+- Added a fail-closed `tickCampaign()` guard for paused campaigns with code `CAMPAIGN_PAUSED` and HTTP 409 through the API error wrapper.
+- Added `services/comathd/tests/unit/phase60-v3-campaign-pause-resume.test.mjs` proving paused ticks do not advance stage, append stage runs, or write the next proof-obligation artifact, and that resume permits the bounded tick to continue.
+- Wired the regression into the default `@comath/comathd` test chain and exposed `campaign_pause_tick_guard` in service status.
+- Updated `TODO.md` and `goal-2/tasks.md` to record the implemented v3 development step and remaining GA gaps.
+
+Boundary notes: this task improves bounded/resumable campaign semantics. It does not claim full v3 GA completion, terminal-vocabulary compatibility with every external document, broad theorem synthesis, or native stage-gate coverage beyond the existing implemented slices.
+
+Residual risks: the external v3 documents still name terminal states as `formal_proof_verified`, `verified_counterexample`, `user_visible_theorem_repair_required`, `replayable_environment_blocker`, and `user_cancelled`; the current API exposes the Goal 1 canonicalized names and needs a later compatibility/alignment task.
+
 ## Goal 1 Task 11 Final Product Completion Audit
 
 Scope: final requirement-by-requirement completion audit for Goal 1 on branch `ga-v3-implementation-20260527`. The audited product claim is bounded to the current Research Alpha plus Phase 18-58 vertical-slice implementation. This audit does not claim global GA readiness, arbitrary theorem proving, MathProve proof authority, production Codex/Pi managed-service hardening, OS-enforced runner isolation, default native TriviumDB deployment, or broad statement-equivalence proof search.

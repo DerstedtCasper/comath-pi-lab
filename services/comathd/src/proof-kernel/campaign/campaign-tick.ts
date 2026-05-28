@@ -424,6 +424,12 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   if (campaign.status === "terminal") {
     return { campaign };
   }
+  if (campaign.status === "paused") {
+    throw new ComathError("campaign is paused; resume it before ticking", {
+      statusCode: 409,
+      code: "CAMPAIGN_PAUSED"
+    });
+  }
   const obligation = campaign.open_obligations[0];
   if (!obligation) {
     throw new ComathError("campaign has no open proof obligation", { statusCode: 400, code: "CAMPAIGN_NO_OBLIGATION" });
