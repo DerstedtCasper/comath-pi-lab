@@ -1,3 +1,52 @@
+## Goal 2 Task 11 / Phase 67 v3 End-To-End Formal Campaign Slice
+
+Scope: implement and verify the positive v3 formal campaign slice required by the external GA docs: user goal intake for `n + 0 = n`, workspace/runtime creation, problem lock, v3 planning/stage-gate artifacts, 8-way candidate generation, candidate verification, evidence-weighted arbitration, Lean formalization, final static audit, clean replay, `formally_checked` promotion, memory update, and replayable artifact bundle.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/integration/phase67-v3-formal-campaign-slice.test.mjs
+Initial RED result: exit 1; `.comath/campaign/<CAM>/v3_formal_campaign_slice.json` was missing after the campaign reached terminal state, proving the previous product path did not produce the v3 end-to-end slice summary artifact.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0; no-emit TypeScript check passed after replacing the incorrect `blocked_terms` summary field with the current static-audit `hard_vetoes` and `warnings` fields.
+
+corepack pnpm --filter @comath/comathd build
+Result: exit 0; TypeScript build and agent-adapter copy step completed after the Phase 67 implementation.
+
+node services/comathd/tests/integration/phase67-v3-formal-campaign-slice.test.mjs
+Result: exit 0; Phase 67 proves `/campaign/start` plus bounded service-owned ticks for `Prove in Lean that n + 0 = n for natural numbers.` reaches `completed_formal_proof`, writes `v3_formal_campaign_slice.json`, records the required v3 stage sequence, records 8 candidates with `CAND-0001` selected by `evidence_weighted` arbitration, passes static audit and clean replay, promotes the claim to `formally_checked`, and replays successfully from the campaign replay route.
+
+node services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs
+node services/comathd/tests/integration/phase35-final-replay-artifact-paths.test.mjs
+node services/comathd/tests/integration/phase57-ga-theorem-template-instantiation.test.mjs
+node services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs
+node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs
+Result: exit 0; existing positive campaign, claim-scoped final replay paths, theorem-template instantiation, native stage-gate coverage, and Lean Authority v2 final-gate hash binding still pass.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; full comathd default test chain passed with Phase 67 included.
+```
+
+Changed surfaces:
+
+- Added `services/comathd/tests/integration/phase67-v3-formal-campaign-slice.test.mjs` and wired it into `@comath/comathd`'s default `test` script.
+- Added terminal success emission of `.comath/campaign/<CAM>/v3_formal_campaign_slice.json` from the service-owned campaign tick path.
+- Added the v3 slice summary to terminal `memory_update` artifact paths while preserving proof-memory events, final handoff, and final replay snapshot artifacts.
+- Updated Phase 35 final replay artifact-path regression so it requires the new v3 summary artifact without treating additional memory artifacts as a regression.
+
+Boundary notes:
+
+- This is the required positive formal campaign slice for a registered theorem family, not a claim of arbitrary theorem proving or full v3 GA completion.
+- The clean replay command is recorded from the theorem-family configured final replay command. The external docs permit `lake build` or a configured equivalent, and the test asserts the summary binds to the actual `final_replay.command` while accepting `lake build` or `lake env lean` forms.
+- Pi goal-compatible intake remains covered by Phase 66; Phase 67 exercises the trusted `comathd` campaign API directly so the proof authority and state mutation stay service-owned.
+
+Residual risks:
+
+- Task 12 still needs the fourth comprehensive check-debug loop over this final-slice work and root gates.
+- Task 13 still needs release-level negative GA slices for statement drift, cheating artifacts, false theorem refutation, all-candidate recovery, and clean replay from snapshot.
+- Task 14 and Task 15 still need documentation/evidence synchronization and final v3 GA completion audit before any global GA claim.
+
 ## Goal 2 Task 10 / Phase 66 Pi Goal-Compatible Campaign UX
 
 Scope: align the Pi command/tool UX with the v3 goal-compatible campaign surface required by the external GA docs: `/cm:research --goal`, `/cm:campaign status`, `/cm:campaign tick`, `/cm:campaign next-actions`, `/cm:campaign final-audit`, `/cm:campaign replay`, `/cm:audit final`, and `/cm:replay final`. This task keeps Pi as a thin client and does not move mathematical authority out of `comathd`.
@@ -36,11 +85,11 @@ Changed surfaces:
 Boundary notes:
 
 - Pi still does not write `.comath/`, assign claim status, certify proofs, run Lean authority, or own trusted campaign state. It submits campaign specs and host-confirmed bounded mutation requests to `comathd`.
-- This task improves the goal-compatible command surface, not the full end-to-end formal campaign evidence. The full `n + 0 = n` v3 formal campaign slice remains Task 11.
+- This task improves the goal-compatible command surface; the full `n + 0 = n` v3 formal campaign slice is covered by Task 11 / Phase 67 above.
 
 Residual risks:
 
-- Task 11 still needs an end-to-end v3 campaign from user goal intake through final clean replay and promotion.
+- Task 12 still needs the fourth comprehensive check-debug loop over the final-slice work and root gates.
 - Task 13 still needs release-level negative GA slices for statement drift, cheating artifacts, false theorem refutation, all-candidate recovery, and clean replay from snapshot.
 - Documentation and release evidence still need Task 14 synchronization and Task 15 final audit before any v3 GA completion claim.
 

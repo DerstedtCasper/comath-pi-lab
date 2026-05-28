@@ -637,6 +637,14 @@
 - [x] Preserve Pi as a thin client: host confirmation is still injected by Pi runtime for mutating campaign commands, and trusted campaign state continues to mutate only through `comathd`.
 - [x] Add `phase66-goal-compatible-campaign-ux.test.mjs`, wire Phase 66 into the default `@comath/pi-extension` test chain, and verify the installed Pi/comathd session e2e still passes.
 
+## Phase 67: v3 End-To-End Formal Campaign Slice
+
+- [x] Add an automated service-owned formal campaign slice for `Prove in Lean that n + 0 = n for natural numbers.` from `/campaign/start` through bounded ticks to terminal `completed_formal_proof`.
+- [x] Persist `.comath/campaign/<CAM>/v3_formal_campaign_slice.json` summarizing user goal intake, locked statement hash, v3 stage sequence, 8-candidate evidence-weighted arbitration, final static audit, clean replay, claim promotion, and replayable artifact bundle paths.
+- [x] Bind the slice summary to the actual final replay manifest, static audit, stdout/stderr, axiom profile, dependency closure, statement-equivalence report, proof-memory events, replay snapshot, and final handoff artifacts.
+- [x] Update final replay memory-stage evidence so the v3 formal campaign slice artifact is part of terminal campaign memory artifacts without removing the existing proof-memory, final-handoff, or replay-snapshot artifacts.
+- [x] Add `phase67-v3-formal-campaign-slice.test.mjs`, wire Phase 67 into the default `@comath/comathd` test chain, and keep Phase 35 final replay artifact-path coverage aligned with the new v3 summary artifact.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.

@@ -1203,23 +1203,29 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       actor
     });
     const ok = replay.final_replay.result === "pass" && promotion.gate.ok;
+    const finalReplayManifestRel = join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/");
+    const sliceSummaryRel = campaignRel(campaign, "v3_formal_campaign_slice.json");
     const finalReplayArtifactPaths = [
       replay.final_replay.stdout_path,
       replay.final_replay.static_audit_path,
       replay.final_replay.axiom_profile_path,
       replay.final_replay.dependency_closure_path,
       replay.final_replay.statement_equivalence_path,
-      join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/")
+      finalReplayManifestRel
     ];
     const finalReplayRun = stageRun(campaign, "final_global_replay", ok ? "completed" : "blocked", finalReplayArtifactPaths);
     const memoryArtifactPaths = ok
       ? [
           ".comath/memory/proof_memory_events.jsonl",
           ".comath/context_lake/shards/final-handoff.md",
-          ".comath/snapshots/replay/final_manifest.json"
+          ".comath/snapshots/replay/final_manifest.json",
+          sliceSummaryRel
         ]
       : [];
     if (ok) {
+      const memoryRun = completedStageRun({ ...campaign, stage_runs: [...campaign.stage_runs, finalReplayRun] }, "memory_update", memoryArtifactPaths);
+      const finalStageRuns = [...campaign.stage_runs, finalReplayRun, memoryRun];
+      const storedDecision = readStoredDecision(input.project_root, campaign, obligation.obligation_id);
       writeRuntimeFile(
         input.project_root,
         ".comath/memory/proof_memory_events.jsonl",
@@ -1257,8 +1263,71 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
             campaign_id: campaign.campaign_id,
             claim_id: claim.id,
             replay_id: replay.final_replay.replay_id,
-            final_replay_manifest: join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/"),
+            final_replay_manifest: finalReplayManifestRel,
             proof_memory_events: ".comath/memory/proof_memory_events.jsonl",
+            created_at: now()
+          },
+          null,
+          2
+        )}\n`
+      );
+      writeRuntimeFile(
+        input.project_root,
+        sliceSummaryRel,
+        `${JSON.stringify(
+          {
+            schema_version: "comath.v3.formal_campaign_slice.v1",
+            campaign_id: campaign.campaign_id,
+            project_id: campaign.project_id,
+            claim_id: claim.id,
+            user_goal: campaign.user_goal,
+            obligation_id: obligation.obligation_id,
+            locked_statement_hash: obligation.statement_hash,
+            theorem_family: replay.final_replay.theorem_family,
+            canonical_proposition: replay.final_replay.canonical_proposition,
+            terminal_state: "completed_formal_proof",
+            final_claim_status: promotion.claim.status,
+            proof_authority: "lean_clean_replay",
+            stage_sequence: finalStageRuns.map((run) => run.stage),
+            candidate_summary: {
+              total_candidates: storedDecision?.candidates.length ?? 0,
+              selected_candidate_id: storedDecision?.decision.selected_candidate_id ?? null,
+              selection_mode: storedDecision?.decision.selection_mode ?? "recovery_required",
+              trivial_bypass_logged: (storedDecision?.candidates.length ?? 0) === 0,
+              candidate_artifact_paths: storedDecision?.candidates.map((candidate) => candidate.manifest_path).filter(Boolean) ?? []
+            },
+            final_audit: {
+              result: replay.static_audit.result,
+              artifact_path: replay.final_replay.static_audit_path,
+              hard_vetoes: replay.static_audit.hard_vetoes,
+              warnings: replay.static_audit.warnings
+            },
+            clean_replay: {
+              result: replay.final_replay.result,
+              replay_id: replay.final_replay.replay_id,
+              replay_command: replay.final_replay.command,
+              final_replay_manifest: finalReplayManifestRel,
+              stdout_path: replay.final_replay.stdout_path,
+              stderr_path: replay.final_replay.stderr_path
+            },
+            promotion: {
+              result: promotion.gate.ok ? "pass" : "blocked",
+              gate_id: promotion.gate.id,
+              evidence_ids: [evidence.id],
+              artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id]
+            },
+            replayable_artifact_bundle: {
+              final_replay_manifest: finalReplayManifestRel,
+              final_static_audit: replay.final_replay.static_audit_path,
+              final_replay_log: replay.final_replay.stdout_path,
+              final_replay_stderr: replay.final_replay.stderr_path,
+              axiom_profile: replay.final_replay.axiom_profile_path,
+              dependency_closure: replay.final_replay.dependency_closure_path,
+              statement_equivalence: replay.final_replay.statement_equivalence_path,
+              proof_memory_events: ".comath/memory/proof_memory_events.jsonl",
+              snapshot_final_manifest: ".comath/snapshots/replay/final_manifest.json",
+              final_handoff: ".comath/context_lake/shards/final-handoff.md"
+            },
             created_at: now()
           },
           null,

@@ -62,11 +62,14 @@ try {
   ]);
   const memoryRun = final.campaign.stage_runs.find((run) => run.stage === "memory_update");
   assert.ok(memoryRun, "memory update stage run should be recorded");
-  assert.deepEqual(memoryRun.artifact_paths, [
+  for (const requiredMemoryArtifact of [
     ".comath/memory/proof_memory_events.jsonl",
     ".comath/context_lake/shards/final-handoff.md",
-    ".comath/snapshots/replay/final_manifest.json"
-  ]);
+    ".comath/snapshots/replay/final_manifest.json",
+    `.comath/campaign/${second.campaign.campaign_id}/v3_formal_campaign_slice.json`
+  ]) {
+    assert.equal(memoryRun.artifact_paths.includes(requiredMemoryArtifact), true, `${requiredMemoryArtifact} should be recorded`);
+  }
 } finally {
   await server.close();
   rmSync(projectRoot, { recursive: true, force: true });
