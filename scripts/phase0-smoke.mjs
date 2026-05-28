@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-77")) {
-  invariantFailures.push("README must describe the current Phase 18-77 GA/v3 vertical-slice evidence");
+if (!readme.includes("Phase 18-78")) {
+  invariantFailures.push("README must describe the current Phase 18-78 GA/v3 vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -202,7 +202,8 @@ const goal2AcceptanceMarkers = [
   ["74 bounded Lean Authority report preparation", "phase74-bounded-authority-report-preparation.test.mjs"],
   ["75 bounded final clean replay promotion", "phase75-bounded-final-clean-replay.test.mjs"],
   ["76 registered Nat linear identity targets", "phase76-registered-nat-linear-targets.test.mjs"],
-  ["77 Runner network sandbox policy", "phase77-runner-network-sandbox-policy.test.mjs"]
+  ["77 Runner network sandbox policy", "phase77-runner-network-sandbox-policy.test.mjs"],
+  ["78 registered transitive statement-equivalence witnesses", "phase78-lean-transitive-equivalence.test.mjs"]
 ];
 
 for (const [marker, testName] of goal2AcceptanceMarkers) {
@@ -504,6 +505,14 @@ if (!acceptanceMatrix.includes("runner_cross_machine_replay_environment_gate")) 
 
 if (!acceptanceMatrix.includes("lean_registered_logical_equivalence_witnesses")) {
   invariantFailures.push("acceptance matrix must include Phase 56 lean_registered_logical_equivalence_witnesses capability language");
+}
+
+if (!acceptanceMatrix.includes("lean_registered_transitive_logical_equivalence_witnesses")) {
+  invariantFailures.push("acceptance matrix must include Phase 78 lean_registered_transitive_logical_equivalence_witnesses capability language");
+}
+
+if (!acceptanceMatrix.includes("Registered transitive logical equivalence requires closed kernel-witness chains")) {
+  invariantFailures.push("acceptance matrix must include Phase 78 registered transitive logical-equivalence security acceptance");
 }
 
 if (!acceptanceMatrix.includes("proof_kernel_theorem_template_instantiation")) {

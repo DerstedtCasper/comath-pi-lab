@@ -1,3 +1,39 @@
+## Goal 2 Task 28 / Phase 78 Registered Transitive Statement-Equivalence Witnesses
+
+Scope: add a conservative registered transitive logical-equivalence statement-binding path without claiming arbitrary equivalence proof search.
+
+Changes:
+
+- Added `StatementRegisteredTransitiveLogicalEquivalence` and `allowed_registered_transitive_logical_equivalences` to `checkStatementEquivalence()`.
+- Added `registered_transitive_logical_equivalence` witness reports for accepted chains.
+- Required the chain endpoint to bind the locked formal spec to the extracted target signature exactly.
+- Required every intermediate link to close exactly from the previous signature to the next signature.
+- Required every link to carry `lean_kernel_checked_equivalence`, a non-empty witness artifact id, a valid SHA-256 witness artifact hash, and non-empty lemma names.
+- Added `phase78-lean-transitive-equivalence.test.mjs`, wired it into the default `@comath/comathd` test chain, smoke/status markers, and current-facing docs.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/phase78-lean-transitive-equivalence.test.mjs
+Initial RED result: exit 1; valid registered transitive witness chains returned fail instead of pass.
+```
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/unit/phase78-lean-transitive-equivalence.test.mjs`
+- `node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs`
+- `node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs`
+- `node services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs`
+- `node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs`
+- `node scripts/phase0-smoke.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+
+Boundary notes: Phase 78 is registered statement-binding metadata only. It does not discover equivalence lemmas, prove arbitrary semantic equivalence, certify proof terms, promote claims, or replace final clean Lean replay, static audit, dependency closure, axiom profile, and the ordinary claim promotion path.
+
+Residual risks: automatic equivalence proof search, broader mathematical-domain trust profiles, arbitrary theorem synthesis, broad MathProve proof authority, production Pi/Codex lifecycle validation, OS-level sandboxing, and indefinite operator/cross-process recovery remain open global-GA blockers.
+
 ## Goal 2 Task 27 / Phase 77 Runner Network Sandbox Policy
 
 Scope: add a service-level runner network-denial contract for compute-runner execution and replay, narrowing the runner sandbox GA blocker without claiming OS-enforced isolation.
@@ -36,7 +72,7 @@ Static audit:
 - `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
 - `Test-Path D:\MATH _Studio\comath-pi-lab\.comath` returned `False`.
 - `git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'` returned no tracked runtime/build artifacts.
-- Current-facing docs now describe Phase 18-77 and distinguish the service-level network-denial policy from still-deferred OS/kernel/firewall-enforced network sandboxing.
+- At Task 27 completion, current-facing docs described Phase 18-77 and distinguished the service-level network-denial policy from still-deferred OS/kernel/firewall-enforced network sandboxing.
 
 Boundary notes: Phase 77 is a service process-environment policy and replay preflight gate. It does not prove OS-level network isolation; that remains deferred.
 

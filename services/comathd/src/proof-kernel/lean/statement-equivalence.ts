@@ -24,7 +24,10 @@ export type StatementEquivalenceReport = {
   signature_source: "lean_check_output" | "lean_declaration_parser";
   target_signature?: LeanStatementSignature;
   equivalence_witness?: {
-    kind: "registered_definitional_alias" | "registered_logical_equivalence";
+    kind:
+      | "registered_definitional_alias"
+      | "registered_logical_equivalence"
+      | "registered_transitive_logical_equivalence";
     formal_spec_statement: string;
     equivalent_signature: string;
     justification: string;
@@ -32,6 +35,7 @@ export type StatementEquivalenceReport = {
     witness_artifact_id?: string;
     witness_artifact_sha256?: string;
     lemma_names?: string[];
+    transitive_links?: StatementRegisteredLogicalEquivalence[];
   };
   signature_matches: string[];
   hard_vetoes: string[];
@@ -50,6 +54,13 @@ export type StatementRegisteredLogicalEquivalence = {
   witness_artifact_id: string;
   witness_artifact_sha256: string;
   lemma_names: string[];
+  justification: string;
+};
+
+export type StatementRegisteredTransitiveLogicalEquivalence = {
+  formal_spec_statement: string;
+  equivalent_signature: string;
+  links: StatementRegisteredLogicalEquivalence[];
   justification: string;
 };
 
@@ -82,6 +93,16 @@ function isSha256Digest(value: string): boolean {
   return /^sha256:[0-9a-f]{64}$/i.test(value.trim());
 }
 
+function isValidLogicalEquivalenceLink(equivalence: StatementRegisteredLogicalEquivalence): boolean {
+  return (
+    equivalence.witness_kind === "lean_kernel_checked_equivalence" &&
+    equivalence.witness_artifact_id.trim().length > 0 &&
+    isSha256Digest(equivalence.witness_artifact_sha256) &&
+    equivalence.lemma_names.length > 0 &&
+    equivalence.lemma_names.every((name) => name.trim().length > 0)
+  );
+}
+
 function findLogicalEquivalenceWitness(input: {
   equivalences: StatementRegisteredLogicalEquivalence[];
   normalizedExpected: string;
@@ -91,11 +112,7 @@ function findLogicalEquivalenceWitness(input: {
     (equivalence) =>
       normalizeStatement(equivalence.formal_spec_statement) === input.normalizedExpected &&
       normalizeStatement(equivalence.equivalent_signature) === input.normalizedActual &&
-      equivalence.witness_kind === "lean_kernel_checked_equivalence" &&
-      equivalence.witness_artifact_id.trim().length > 0 &&
-      isSha256Digest(equivalence.witness_artifact_sha256) &&
-      equivalence.lemma_names.length > 0 &&
-      equivalence.lemma_names.every((name) => name.trim().length > 0)
+      isValidLogicalEquivalenceLink(equivalence)
   );
   if (!witness) {
     return undefined;
@@ -112,6 +129,49 @@ function findLogicalEquivalenceWitness(input: {
   };
 }
 
+function findTransitiveLogicalEquivalenceWitness(input: {
+  equivalences: StatementRegisteredTransitiveLogicalEquivalence[];
+  normalizedExpected: string;
+  normalizedActual: string;
+}): StatementEquivalenceReport["equivalence_witness"] | undefined {
+  for (const equivalence of input.equivalences) {
+    if (
+      normalizeStatement(equivalence.formal_spec_statement) !== input.normalizedExpected ||
+      normalizeStatement(equivalence.equivalent_signature) !== input.normalizedActual ||
+      equivalence.links.length < 2
+    ) {
+      continue;
+    }
+
+    let current = input.normalizedExpected;
+    const lemmaNames: string[] = [];
+    let valid = true;
+    for (const link of equivalence.links) {
+      if (normalizeStatement(link.formal_spec_statement) !== current || !isValidLogicalEquivalenceLink(link)) {
+        valid = false;
+        break;
+      }
+      current = normalizeStatement(link.equivalent_signature);
+      lemmaNames.push(...link.lemma_names);
+    }
+
+    if (!valid || current !== input.normalizedActual) {
+      continue;
+    }
+
+    return {
+      kind: "registered_transitive_logical_equivalence",
+      formal_spec_statement: equivalence.formal_spec_statement,
+      equivalent_signature: equivalence.equivalent_signature,
+      justification: equivalence.justification,
+      lemma_names: lemmaNames,
+      transitive_links: equivalence.links
+    };
+  }
+
+  return undefined;
+}
+
 export function checkStatementEquivalence(input: {
   projectRoot: string;
   reportPath: string;
@@ -122,6 +182,7 @@ export function checkStatementEquivalence(input: {
   theorem_name: string;
   allowed_definitional_aliases?: StatementDefinitionalAlias[];
   allowed_registered_logical_equivalences?: StatementRegisteredLogicalEquivalence[];
+  allowed_registered_transitive_logical_equivalences?: StatementRegisteredTransitiveLogicalEquivalence[];
 }): StatementEquivalenceReport {
   const normalizedExpected = normalizeStatement(input.formal_spec_statement);
   const leanCheckTarget = extractLeanStatementSignature(input);
@@ -148,7 +209,16 @@ export function checkStatementEquivalence(input: {
           normalizedActual: target.signature.normalized_signature
         })
       : undefined;
-  const accepted = exact || Boolean(aliasWitness) || Boolean(logicalEquivalenceWitness);
+  const transitiveLogicalEquivalenceWitness =
+    target.result === "ok" && !aliasWitness && !logicalEquivalenceWitness
+      ? findTransitiveLogicalEquivalenceWitness({
+          equivalences: input.allowed_registered_transitive_logical_equivalences ?? [],
+          normalizedExpected,
+          normalizedActual: target.signature.normalized_signature
+        })
+      : undefined;
+  const accepted =
+    exact || Boolean(aliasWitness) || Boolean(logicalEquivalenceWitness) || Boolean(transitiveLogicalEquivalenceWitness);
   const hard_vetoes =
     target.result === "missing"
       ? ["missing_target_check_output"]
@@ -165,7 +235,9 @@ export function checkStatementEquivalence(input: {
         ? "definitionally_equivalent"
         : logicalEquivalenceWitness
           ? "logically_equivalent_with_registered_lemmas"
-          : "different",
+          : transitiveLogicalEquivalenceWitness
+            ? "logically_equivalent_with_registered_lemmas"
+            : "different",
     locked_statement_hash: input.locked_statement_hash,
     formal_spec_statement: input.formal_spec_statement,
     lean_check_output: input.lean_check_output,
@@ -174,6 +246,7 @@ export function checkStatementEquivalence(input: {
     ...(target.result === "ok" ? { target_signature: target.signature } : {}),
     ...(aliasWitness ? { equivalence_witness: aliasWitness } : {}),
     ...(logicalEquivalenceWitness ? { equivalence_witness: logicalEquivalenceWitness } : {}),
+    ...(transitiveLogicalEquivalenceWitness ? { equivalence_witness: transitiveLogicalEquivalenceWitness } : {}),
     signature_matches: target.matches,
     hard_vetoes
   };

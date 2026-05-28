@@ -728,6 +728,14 @@
 - [x] Start Python runner execution and re-execution with the same network-denial environment marker.
 - [x] Add `phase77-runner-network-sandbox-policy.test.mjs`, wire Phase 77 into the default `@comath/comathd` test chain, and expose `runner_network_denial_process_env_policy`.
 
+## Phase 78: Registered Transitive Statement-Equivalence Witnesses
+
+- [x] Add `allowed_registered_transitive_logical_equivalences` for service-owned transitive witness chains.
+- [x] Require exact chain endpoints from locked formal spec to extracted target signature.
+- [x] Require every chain link to carry `lean_kernel_checked_equivalence`, witness artifact id, SHA-256 witness artifact hash, and non-empty lemma names.
+- [x] Fail closed on broken endpoints, missing links, non-kernel witness kinds, missing artifact hashes, and missing lemma names.
+- [x] Add `phase78-lean-transitive-equivalence.test.mjs`, wire Phase 78 into the default `@comath/comathd` test chain, and expose `lean_registered_transitive_logical_equivalence_witnesses`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
@@ -738,7 +746,7 @@ These items block global GA readiness until each one is implemented and validate
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance, Phase 55 environment drift gates, and Phase 77 service-level network-denial environment policy: OS-level isolation and kernel/firewall-enforced network denial.
 - [ ] OS-level process sandboxing beyond the Phase 28 `shell:false` allowlist, timeout, cancellation, scoped-write controls, Phase 39 project-level lock primitive, and Phase 40 AgentRun scheduler lock integration.
-- [ ] Richer statement equivalence beyond Phase 54 declaration parsing, Phase 37 registered aliases, and Phase 56 registered logical-equivalence witnesses: proof search for equivalence lemmas, transitive semantic equivalence, and broader mathematical-domain trust profiles.
+- [ ] Richer statement equivalence beyond Phase 54 declaration parsing, Phase 37 registered aliases, Phase 56 direct registered logical-equivalence witnesses, and Phase 78 registered transitive witness chains: proof search for equivalence lemmas, automatically discovered semantic equivalence, and broader mathematical-domain trust profiles.
 
 ## Design Documentation Goal
 
