@@ -383,6 +383,59 @@ function requireToolExecutionConfirmation(name: string, input: Record<string, un
 export async function executeComathTool(client: ComathClient, name: string, input: Record<string, unknown>): Promise<any> {
   requireToolExecutionConfirmation(name, input);
 
+  if (name === "comath.project.open") {
+    return client.post("/project/open", {
+      root_path: readString(input, "root_path")
+    });
+  }
+
+  if (name === "comath.claim.register") {
+    return client.post("/claim/register", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      statement: readString(input, "statement"),
+      assumptions: Array.isArray(input.assumptions) ? input.assumptions.map(String) : [],
+      domain: readString(input, "domain"),
+      actor: readString(input, "actor", { optional: true })
+    });
+  }
+
+  if (name === "comath.claim.get") {
+    const projectRoot = readString(input, "project_root");
+    const projectId = readString(input, "project_id");
+    const claimId = readString(input, "claim_id");
+    return client.get(
+      `/claim/get?project_root=${encodeQuery(projectRoot)}&project_id=${encodeQuery(projectId)}&claim_id=${encodeQuery(claimId)}`
+    );
+  }
+
+  if (name === "comath.claim.requestPromotion") {
+    return client.post("/claim/promote", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      claim_id: readString(input, "claim_id"),
+      target_status: readString(input, "target_status"),
+      evidence_ids: Array.isArray(input.evidence_ids) ? input.evidence_ids.map(String) : [],
+      artifact_ids: Array.isArray(input.artifact_ids) ? input.artifact_ids.map(String) : [],
+      actor: readString(input, "actor", { optional: true })
+    });
+  }
+
+  if (name === "comath.graph.proposePatch") {
+    return client.post("/graph-patch/propose", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      workstream_id: readString(input, "workstream_id"),
+      source_workstream_id: readString(input, "source_workstream_id", { optional: true }),
+      new_nodes: Array.isArray(input.new_nodes) ? input.new_nodes : [],
+      new_edges: Array.isArray(input.new_edges) ? input.new_edges : [],
+      updated_nodes: Array.isArray(input.updated_nodes) ? input.updated_nodes : undefined,
+      candidate_conflicts: Array.isArray(input.candidate_conflicts) ? input.candidate_conflicts : undefined,
+      warnings: Array.isArray(input.warnings) ? input.warnings.map(String) : undefined,
+      actor: readString(input, "actor", { optional: true })
+    });
+  }
+
   if (name === "comath.research.startCampaign") {
     return client.post("/campaign/start", {
       project_root: readString(input, "project_root"),
@@ -641,6 +694,89 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     });
   }
 
+  if (name === "comath.paper.init") {
+    return client.post("/paper/init", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      title: readString(input, "title", { optional: true }),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.paper.state") {
+    const projectRoot = readString(input, "project_root");
+    const projectId = readString(input, "project_id");
+    return client.get(`/paper/state?project_root=${encodeQuery(projectRoot)}&project_id=${encodeQuery(projectId)}`);
+  }
+
+  if (name === "comath.paper.updateSection") {
+    return client.post("/paper/update-section", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      section_id: readString(input, "section_id"),
+      title: readString(input, "title"),
+      markdown: readString(input, "markdown"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.paper.renderClaim") {
+    return client.post("/paper/render-claim", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      claim_id: readString(input, "claim_id"),
+      wording: readString(input, "wording"),
+      evidence_ids: Array.isArray(input.evidence_ids) ? input.evidence_ids.map(String) : undefined,
+      source_workstreams: Array.isArray(input.source_workstreams) ? input.source_workstreams.map(String) : undefined,
+      warnings: Array.isArray(input.warnings) ? input.warnings.map(String) : undefined,
+      blockers: Array.isArray(input.blockers) ? input.blockers.map(String) : undefined,
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.paper.check") {
+    const projectRoot = readString(input, "project_root");
+    const projectId = readString(input, "project_id");
+    return client.get(`/paper/check?project_root=${encodeQuery(projectRoot)}&project_id=${encodeQuery(projectId)}`);
+  }
+
+  if (name === "comath.paper.export") {
+    return client.post("/paper/export", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      format: readString(input, "format"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.snapshot.export") {
+    return client.post("/snapshot/export", {
+      project_root: readString(input, "project_root"),
+      project_id: readString(input, "project_id"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.snapshot.verify") {
+    return client.post("/snapshot/verify", {
+      manifest_path: readString(input, "manifest_path")
+    });
+  }
+
+  if (name === "comath.snapshot.restore") {
+    return client.post("/snapshot/restore", {
+      manifest_path: readString(input, "manifest_path"),
+      target_root: readString(input, "target_root"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.replay.verifyManifest") {
+    return client.post("/replay/verify-manifest", {
+      manifest_path: readString(input, "manifest_path")
+    });
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -748,11 +884,17 @@ export function createComathTools(): ToolDescriptor[] {
       name: "comath.graph.proposePatch",
       description: "Propose a graph patch for later review.",
       mutates: true,
-      input_schema: objectSchema(["project_id", "new_nodes", "new_edges"], {
+      input_schema: objectSchema(["project_root", "project_id", "workstream_id", "new_nodes", "new_edges"], {
+        project_root: stringProp,
         project_id: stringProp,
+        workstream_id: stringProp,
         source_workstream_id: stringProp,
         new_nodes: { type: "array" },
-        new_edges: { type: "array" }
+        new_edges: { type: "array" },
+        updated_nodes: { type: "array" },
+        candidate_conflicts: { type: "array" },
+        warnings: stringArrayProp,
+        actor: stringProp
       })
     },
     {
