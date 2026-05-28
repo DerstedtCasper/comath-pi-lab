@@ -48,6 +48,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "bounded_theorem_specific_proof_body_synthesis",
       "bounded_lean_authority_report_preparation",
       "bounded_final_clean_replay_promotion",
+      "registered_nat_linear_identity_targets",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
       "mathprove_final_audit_external_runner",

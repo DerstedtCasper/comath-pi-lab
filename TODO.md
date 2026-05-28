@@ -712,11 +712,19 @@
 - [x] Keep negative/non-proof prompts from receiving final clean replay authority.
 - [x] Add `phase75-bounded-final-clean-replay.test.mjs`, wire Phase 75 into the default `@comath/comathd` test chain, and expose `bounded_final_clean_replay_promotion`.
 
+## Phase 76: Registered Nat Linear Identity Targets
+
+- [x] Replace the single hardcoded bounded non-template target path with a service-owned registered Nat linear identity target table.
+- [x] Add `n + 0 + n = 2 * n` as a second bounded non-template target that passes theorem-specific target generation, proof-body synthesis, authority-report preparation, final clean replay, and the existing promotion gate.
+- [x] Bind target family id and canonical proposition through formal spec, target package, proof-body artifact, authority-preparation artifact, replay manifest, and proof-route metadata.
+- [x] Keep unregistered broad goals fail-closed without theorem-specific target packages or final replay authority.
+- [x] Add `phase76-registered-nat-linear-targets.test.mjs`, wire Phase 76 into the default `@comath/comathd` test chain, and expose `registered_nat_linear_identity_targets`.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72-75 bounded final-clean-replay path for `n + n = 2 * n`, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 75 proves one bounded non-template target; it does not implement arbitrary theorem proving.
+- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72-76 registered Nat linear identity target path (`n + n = 2 * n`, `n + 0 + n = 2 * n`), registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 76 proves two bounded non-template targets; it does not implement arbitrary theorem proving.
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.

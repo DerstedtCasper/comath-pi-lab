@@ -431,6 +431,8 @@ type LockedProblem = {
 };
 
 type TheoremSpecificLeanTarget = {
+  target_family_id: string;
+  canonical_proposition: string;
   theorem_name: string;
   namespace: string;
   normalized_target_header: string;
@@ -628,6 +630,42 @@ const broadAuthorityReportsPreparedBlockedReason =
   "bounded Lean Authority v2 reports prepared but final clean replay is missing";
 const proofBodyForbiddenTokens = ["sorry", "admit", "axiom", "unsafe", "opaque", "constant"];
 
+type RegisteredNatLinearIdentityTarget = {
+  target_family_id: string;
+  canonical_proposition: string;
+  requestPattern: RegExp;
+  normalized_target_header: string;
+  target_statement_prop: string;
+  proof_body: string;
+};
+
+const registeredNatLinearIdentityTargets: RegisteredNatLinearIdentityTarget[] = [
+  {
+    target_family_id: "bounded_nat_double",
+    canonical_proposition: "n + n = 2 * n",
+    requestPattern: /^prove(?:\s+in\s+lean)?\s+that\s+n\s*\+\s*n\s*=\s*2\s*\*\s*n\s+for\s+natural\s+numbers$/i,
+    normalized_target_header: "theorem C0001 (n : Nat) : n + n = 2 * n",
+    target_statement_prop: "forall n : Nat, n + n = 2 * n",
+    proof_body: "by omega"
+  },
+  {
+    target_family_id: "bounded_nat_add_zero_add_self",
+    canonical_proposition: "n + 0 + n = 2 * n",
+    requestPattern: /^prove(?:\s+in\s+lean)?\s+that\s+n\s*\+\s*0\s*\+\s*n\s*=\s*2\s*\*\s*n\s+for\s+natural\s+numbers$/i,
+    normalized_target_header: "theorem C0001 (n : Nat) : n + 0 + n = 2 * n",
+    target_statement_prop: "forall n : Nat, n + 0 + n = 2 * n",
+    proof_body: "by omega"
+  }
+];
+
+function registeredNatLinearIdentityTargetForRequest(proposition: string): RegisteredNatLinearIdentityTarget | undefined {
+  const normalized = proposition.trim().replace(/\s+/g, " ");
+  if (/\b(do not|don't|not|negation|refute|disprove|counterexample|false)\b/i.test(normalized)) {
+    return undefined;
+  }
+  return registeredNatLinearIdentityTargets.find((target) => target.requestPattern.test(normalized.replace(/[.]$/, "")));
+}
+
 function isNatDoubleTargetRequest(proposition: string): boolean {
   const normalized = proposition.trim().replace(/\s+/g, " ").replace(/[.。]$/, "");
   if (/\b(do not|don't|not|negation|refute|disprove|counterexample|false)\b/i.test(normalized)) {
@@ -638,16 +676,19 @@ function isNatDoubleTargetRequest(proposition: string): boolean {
 
 function theoremSpecificLeanTarget(campaign: ResearchCampaign, obligation: ProofObligation): TheoremSpecificLeanTarget | undefined {
   const proposition = obligation.locked_statement_nl;
-  if (!isNatDoubleTargetRequest(proposition)) {
+  const registered = registeredNatLinearIdentityTargetForRequest(proposition);
+  if (!registered) {
     return undefined;
   }
   const root = `.comath/lean/broad/${campaign.campaign_id}`;
   return {
+    target_family_id: registered.target_family_id,
+    canonical_proposition: registered.canonical_proposition,
     theorem_name: "MathResearch.Target.C0001",
     namespace: "MathResearch.Target",
-    normalized_target_header: "theorem C0001 (n : Nat) : n + n = 2 * n",
-    target_statement_prop: "forall n : Nat, n + n = 2 * n",
-    proof_body: "by omega",
+    normalized_target_header: registered.normalized_target_header,
+    target_statement_prop: registered.target_statement_prop,
+    proof_body: registered.proof_body,
     replay_command: "lake env lean MathResearch/Target.lean",
     theorem_file_rel: `${root}/MathResearch/Target.lean`,
     audit_file_rel: `${root}/Audit/Target.lean`,
@@ -730,6 +771,8 @@ function writeTheoremSpecificLeanProject(input: {
         obligation_id: input.obligation.obligation_id,
         locked_statement_hash: input.obligation.statement_hash,
         theorem_name: input.target.theorem_name,
+        target_family_id: input.target.target_family_id,
+        canonical_proposition: input.target.canonical_proposition,
         normalized_target_header: input.target.normalized_target_header,
         target_statement_prop: input.target.target_statement_prop,
         proof_body_status: "synthesized_unreplayed",
@@ -752,6 +795,8 @@ function writeTheoremSpecificLeanProject(input: {
     target_formal_system: "Lean4",
     status: "target_generated_unproved",
     theorem_name: input.target.theorem_name,
+    target_family_id: input.target.target_family_id,
+    canonical_proposition: input.target.canonical_proposition,
     normalized_target_header: input.target.normalized_target_header,
     target_statement_prop: input.target.target_statement_prop,
     replay_command: input.target.replay_command,
@@ -805,8 +850,8 @@ function createLeanProjectForTheoremSpecificTarget(input: {
     lakefile: assertPathAllowed(input.projectRoot, input.target.lakefile_rel, { purpose: "runtime-write" }),
     toolchainFile: assertPathAllowed(input.projectRoot, input.target.toolchain_rel, { purpose: "runtime-write" }),
     theoremName: input.target.theorem_name,
-    theoremFamilyId: "bounded_nat_double",
-    canonicalProposition: "n + n = 2 * n",
+    theoremFamilyId: input.target.target_family_id,
+    canonicalProposition: input.target.canonical_proposition,
     buildTargets: ["MathResearch.Target", "Audit.Target"],
     replayCommand: "lake build MathResearch.Target Audit.Target",
     primaryDependency: "Std omega tactic",
@@ -814,7 +859,7 @@ function createLeanProjectForTheoremSpecificTarget(input: {
       claim_id: input.claim_id,
       theorem_name: input.target.theorem_name,
       namespace: input.target.namespace,
-      normalized_statement: `${input.target.theorem_name} (n : Nat) : n + n = 2 * n`,
+      normalized_statement: `${input.target.theorem_name} ${input.target.normalized_target_header.replace(/^theorem\s+C0001\s*/, "")}`,
       locked_statement_hash: input.locked_statement_hash
     }
   };
@@ -876,11 +921,13 @@ function writeBoundedProofBodySynthesis(input: {
     obligation_id: input.obligation.obligation_id,
     locked_statement_hash: input.obligation.statement_hash,
     theorem_name: input.target.theorem_name,
+    target_family_id: input.target.target_family_id,
+    canonical_proposition: input.target.canonical_proposition,
     normalized_target_header: input.target.normalized_target_header,
     target_statement_prop: input.target.target_statement_prop,
     status: "proof_body_synthesized_unreplayed",
     synthesized_body: input.target.proof_body,
-    synthesis_scope: "bounded_registered_non_template_nat_double_target",
+    synthesis_scope: "registered_nat_linear_identity_target",
     proof_authority: "none",
     can_run_clean_replay: false,
     can_promote_claim: false,
@@ -1034,6 +1081,8 @@ function writeBoundedAuthorityReportPreparation(input: {
     obligation_id: input.obligation.obligation_id,
     locked_statement_hash: input.obligation.statement_hash,
     theorem_name: input.target.theorem_name,
+    target_family_id: input.target.target_family_id,
+    canonical_proposition: input.target.canonical_proposition,
     status: "authority_reports_prepared_nonpromotional",
     proof_authority: "none",
     can_run_clean_replay: false,
@@ -2159,7 +2208,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
             locked_statement_hash: obligation.statement_hash,
             target
           }),
-          proofRoute: "bounded_nat_double_final_clean_replay",
+          proofRoute: `${target.target_family_id}_final_clean_replay`,
           patchAuthorityArtifacts: ({ finalReplayManifestRel }) => {
             const finalPatch = {
               status: "final_clean_replay_passed",

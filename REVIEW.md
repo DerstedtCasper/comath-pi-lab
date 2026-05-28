@@ -1,3 +1,28 @@
+## Goal 2 Task 25 / Phase 76 Registered Nat Linear Identity Targets
+
+Scope: replace the single hardcoded bounded non-template target path with a small registered Nat linear identity target table, adding a second final-clean-replay-positive target without claiming arbitrary theorem proving.
+
+Changes:
+
+- Added `registeredNatLinearIdentityTargets` in the campaign tick path with entries for `n + n = 2 * n` and `n + 0 + n = 2 * n`.
+- Bound `target_family_id` and `canonical_proposition` through theorem-specific formal spec, target package, proof-body synthesis, authority preparation, LeanProject replay metadata, final replay manifest, and proof-route metadata.
+- Added `phase76-registered-nat-linear-targets.test.mjs`, wired it into the default `@comath/comathd` test chain, smoke markers, and service status capability `registered_nat_linear_identity_targets`.
+- Preserved fail-closed behavior for unregistered broad goals; `n + 2 = n` receives no theorem-specific target package or final replay manifest.
+
+Initial RED result: exit 1; `n + 0 + n = 2 * n` still terminated at `blocked` instead of `completed_formal_proof`.
+
+Verification:
+
+```text
+node services/comathd/tests/integration/phase76-registered-nat-linear-targets.test.mjs
+```
+
+Result: exit 0; the second registered Nat linear identity reaches `completed_formal_proof`, writes target/proof-body/authority/final replay artifacts with the selected registered target metadata, promotes only through the existing Lean Authority v2 gate, and keeps an unregistered broad goal fail-closed.
+
+Boundary notes: Phase 76 is a registered-target-table generalization, not a generic theorem prover. It does not add direct claim-status mutation, arbitrary theorem parsing, broad proof search, or MathProve proof authority.
+
+Residual risks: arbitrary theorem synthesis, broad MathProve proof authority, production Pi/Codex lifecycle validation, OS/network sandboxing, indefinite operator sessions/cross-process recovery, and broad statement-equivalence proof search remain open global-GA blockers.
+
 ## Goal 2 Task 24 / Phase 75 Bounded Final Clean Replay Promotion
 
 Scope: convert the bounded Phase 72-74 `n + n = 2 * n` target from campaign-scoped preview evidence into claim-scoped final Lean Authority v2 evidence, without generalizing to arbitrary theorem proving.
