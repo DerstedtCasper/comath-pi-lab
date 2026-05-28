@@ -37,6 +37,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "proof_kernel_theorem_template_instantiation",
       "runner_reexecution_replay",
       "mathprove_external_evidence_runner",
+      "mathprove_final_audit_external_runner",
       "pi_runtime_registration_v0755",
       "agent_run_runtime_boundary",
       "agent_run_process_scheduler",

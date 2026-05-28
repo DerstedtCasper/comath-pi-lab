@@ -70,8 +70,9 @@ Current implementation frontier:
 - Phase 55 is complete.
 - Phase 56 is complete.
 - Phase 57 is complete.
+- Phase 58 is complete.
 
-Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, production Codex/Pi adapter hardening, broad MathProve proof search/final-audit semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-57 vertical slices as a claim of broad mathematical discovery capability.
+Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, production Codex/Pi adapter hardening, broad MathProve proof search or MathProve-as-proof-authority semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-58 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
 
@@ -132,6 +133,8 @@ Phase 55 runner cross-machine replay environment gating compares replay-run Node
 Phase 56 registered Lean logical-equivalence witnesses are statement-binding metadata only. They may accept `logically_equivalent_with_registered_lemmas` only when a registered entry exactly binds the locked formal spec to the extracted target signature and supplies `lean_kernel_checked_equivalence`, a witness artifact id, a SHA-256 witness artifact hash, and non-empty lemma names. Free-form justification, missing witness material, or mismatched target signatures must fail closed. This is not proof search for equivalence lemmas, transitive semantic equivalence, or a replacement for final clean Lean replay.
 
 Phase 57 Lean theorem template instantiation extends the service-owned theorem-family registry to `nat_zero_add` only. It may classify `0 + n = n`, lock the normalized problem and Lean target, generate candidates using `Nat.zero_add`, and run the ordinary final replay/gate path. It is not arbitrary theorem synthesis, broad lemma decomposition, dynamic Lean code generation from model text, or proof authority without clean replay.
+
+Phase 58 MathProve final-audit external runner invokes only the sibling `MathProve-Skill` `scripts/final_audit.py` through a service-owned fixed argv template, CoMath-generated steps JSON, controlled workspace, bounded timeout, `shell:false`, `network=false` metadata, and host-path-scrubbed archival. A passed final audit is runner evidence and gate input only; it must keep `gate_result=failed`, emit final-audit authority vetoes, and cannot promote `formally_checked` without CoMath proof-kernel replay evidence.
 
 Phase 37 Lean statement-alias equivalence is a conservative extension of Phase 32. It may accept a target theorem signature that differs from the locked formal spec only when an explicit registered definitional alias maps the formal spec statement to that exact signature and records a witness. It must still fail closed on missing target output, ambiguous output, and non-registered mismatches. It is not full Lean parser integration, transitive semantic equivalence, or arbitrary logical-equivalence proof.
 

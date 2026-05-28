@@ -21,11 +21,11 @@ export type MathProveBridgeMode = "plan" | "route" | "final_audit";
 
 export type MathProveGateResult = "passed" | "failed";
 
-export type MathProveBridgeVersion = "phase9-mock" | "phase25-external-v1";
+export type MathProveBridgeVersion = "phase9-mock" | "phase25-external-v1" | "phase58-final-audit-v1";
 
 export type MathProveExternalMetadata = {
-  runner_id: "mathprove-skill.verify_sympy";
-  runner_version: "phase25-external-v1";
+  runner_id: "mathprove-skill.verify_sympy" | "mathprove-skill.final_audit";
+  runner_version: "phase25-external-v1" | "phase58-final-audit-v1";
   mathprove_root: string;
   script_path: string;
   script_sha256: string | null;
@@ -40,6 +40,8 @@ export type MathProveExternalMetadata = {
   stderr_sha256: string;
   result_sha256: string;
   replay_input_sha256: string;
+  steps_sha256?: string;
+  solution_sha256?: string;
 };
 
 export type MathProveBridgeResult = {
@@ -84,7 +86,7 @@ export type MathProveExternalBridgeOptions = {
 };
 
 export type MathProvePromotionBridgeOptions = MathProveExternalBridgeOptions & {
-  backend?: "mock" | "external";
+  backend?: "mock" | "external" | "external-final-audit";
 };
 
 function repoRoot(): string {
@@ -199,7 +201,7 @@ function validateBridgeShape(value: unknown): MathProveBridgeResult {
     });
   }
   const bridgeVersion = String(record.bridge_version);
-  if (!["phase9-mock", "phase25-external-v1"].includes(bridgeVersion)) {
+  if (!["phase9-mock", "phase25-external-v1", "phase58-final-audit-v1"].includes(bridgeVersion)) {
     throw new ComathError("invalid MathProve bridge result: unknown bridge_version", {
       code: "MATHPROVE_RESULT_INVALID"
     });
@@ -286,7 +288,7 @@ async function archiveMathProveBridgeRun(
   projectRoot: string,
   request: MathProveBridgeRequest,
   result: MathProveBridgeResult,
-  backend: "mock" | "external",
+  backend: "mock" | "external" | "external-final-audit",
   summary: string
 ): Promise<MathProveBridgeRun> {
   const report = bridgeReportPath(projectRoot, request.claim_id, readBridgeReportIds(projectRoot, request.claim_id));
@@ -453,6 +455,95 @@ function buildExternalResult(input: {
     metadata: input.metadata,
     mathprove: input.mathprove
   };
+}
+
+function buildFinalAuditMetadata(input: {
+  workspaceRelativePath: string;
+  scriptSha256: string | null;
+  replayInputSha256: string;
+  stepsSha256: string;
+  solutionSha256: string;
+  timeoutMs: number;
+  invoked: boolean;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  parsedResult: unknown;
+}): MathProveExternalMetadata {
+  return {
+    runner_id: "mathprove-skill.final_audit",
+    runner_version: "phase58-final-audit-v1",
+    mathprove_root: "<external-mathprove-root>",
+    script_path: "<mathprove-root>/scripts/final_audit.py",
+    script_sha256: input.scriptSha256,
+    workspace_path: input.workspaceRelativePath,
+    run_dir: "run",
+    argv_template: [
+      "python",
+      "<mathprove-root>/scripts/final_audit.py",
+      "--workspace-dir <controlled-workspace>",
+      "--run-dir run",
+      "--log logs/tool_calls.log",
+      "--steps <comath-generated-steps-json>",
+      "--solution audit/Solution.md",
+      "--timeout <bounded-timeout-seconds>"
+    ],
+    timeout_ms: input.timeoutMs,
+    network: false,
+    invoked: input.invoked,
+    exit_code: input.exitCode,
+    stdout_sha256: sha256Text(scrubHostPaths(input.stdout)),
+    stderr_sha256: sha256Text(scrubHostPaths(input.stderr)),
+    result_sha256: sha256Json(input.parsedResult),
+    replay_input_sha256: input.replayInputSha256,
+    steps_sha256: input.stepsSha256,
+    solution_sha256: input.solutionSha256
+  };
+}
+
+function buildFinalAuditResult(input: {
+  request: MathProveBridgeRequest;
+  claimStatementHash: string;
+  vetoes: string[];
+  warnings: string[];
+  ok: boolean;
+  metadata: MathProveExternalMetadata;
+  mathprove: Record<string, unknown>;
+}): MathProveBridgeResult {
+  return {
+    ok: input.ok,
+    bridge_version: "phase58-final-audit-v1",
+    mode: input.request.mode,
+    claim_id: input.request.claim_id,
+    claim_statement_hash: input.claimStatementHash,
+    target_status: input.request.target_status,
+    gate_result: "failed",
+    evidence: [],
+    artifacts: [],
+    vetoes: unique([
+      "mathprove_final_audit_not_claim_proof",
+      "mathprove_final_audit_not_formal_authority",
+      ...targetStatusVetoes(input.request.target_status),
+      ...input.vetoes
+    ]),
+    warnings: unique([
+      "MathProve final audit is non-authoritative CoMath runner evidence",
+      "CoMath proof-kernel replay remains the authority for formally_checked claims",
+      ...input.warnings
+    ]),
+    metadata: input.metadata,
+    mathprove: input.mathprove
+  };
+}
+
+export function isMathProveFinalAuditPassed(parsedResult: Record<string, unknown>, exitCode: number | null): boolean {
+  const report = Array.isArray(parsedResult.report) ? parsedResult.report : [];
+  return (
+    exitCode === 0 &&
+    parsedResult.status === "passed" &&
+    report.length > 0 &&
+    report.every((entry) => (entry as Record<string, unknown>).status === "passed")
+  );
 }
 
 export async function runMathProveBridgeExternal(
@@ -675,13 +766,207 @@ export async function runMathProveBridgeExternal(
   );
 }
 
+export async function runMathProveFinalAuditExternal(
+  projectRoot: string,
+  request: MathProveBridgeRequest,
+  options: MathProveExternalBridgeOptions = {}
+): Promise<MathProveBridgeRun> {
+  const claim = getClaim(projectRoot, request.project_id, request.claim_id);
+  if (!claim) {
+    throw new ComathError("claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
+  }
+  if (request.mode !== "final_audit") {
+    throw new ComathError("MathProve final-audit runner requires final_audit mode", { code: "MATHPROVE_MODE_MISMATCH" });
+  }
+
+  const mathproveRoot = resolve(options.mathprove_root ?? defaultMathProveRoot());
+  const trustedMathProveRoot = defaultMathProveRoot();
+  const scriptPath = join(mathproveRoot, "scripts", "final_audit.py");
+  const timeoutMs = Math.min(Math.max(options.timeout_ms ?? 8_000, 1_000), 15_000);
+  const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+  const workspacePath = assertPathAllowed(
+    projectRoot,
+    join(".comath", "evidence", request.claim_id, "mathprove", "final-audit-workspace"),
+    { purpose: "runtime-write" }
+  );
+  const workspaceRelativePath = normalizeRelativePath(
+    join(".comath", "evidence", request.claim_id, "mathprove", "final-audit-workspace")
+  );
+  const expectedStatementHash = options.expected_statement_hash ?? claim.statement_hash;
+  const stepsPayload = {
+    problem: claim.statement,
+    claim_id: request.claim_id,
+    statement_hash: claim.statement_hash,
+    steps: [
+      {
+        id: "S1",
+        goal: "Run a deterministic symbolic audit smoke for CoMath MathProve final-audit integration.",
+        difficulty: "smoke",
+        route: "sympy",
+        evidence_path: "comath-generated-final-audit-smoke",
+        checker: {
+          type: "sympy",
+          timeout: timeoutSeconds,
+          code: "x = symbols('x'); emit({'ok': bool(expand((x + 1)**2) == x**2 + 2*x + 1)})"
+        }
+      }
+    ]
+  };
+  const stepsSha256 = sha256Json(stepsPayload);
+  const replayInput = {
+    bridge_version: "phase58-final-audit-v1",
+    runner_id: "mathprove-skill.final_audit",
+    claim_id: request.claim_id,
+    statement_hash: claim.statement_hash,
+    mode: request.mode,
+    target_status: request.target_status,
+    steps_sha256: stepsSha256
+  };
+  const replayInputSha256 = sha256Json(replayInput);
+
+  const notInvoked = async (reason: string, veto: string, scriptSha256: string | null = null): Promise<MathProveBridgeRun> => {
+    const parsedResult = { status: "not_invoked", reason };
+    const metadata = buildFinalAuditMetadata({
+      workspaceRelativePath,
+      scriptSha256,
+      replayInputSha256,
+      stepsSha256,
+      solutionSha256: sha256Text(""),
+      timeoutMs,
+      invoked: false,
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      parsedResult
+    });
+    const result = buildFinalAuditResult({
+      request,
+      claimStatementHash: claim.statement_hash,
+      ok: false,
+      metadata,
+      mathprove: parsedResult,
+      vetoes: [veto],
+      warnings: []
+    });
+    return archiveMathProveBridgeRun(
+      projectRoot,
+      request,
+      result,
+      "external-final-audit",
+      `MathProve ${request.mode} final-audit runner ${reason} for ${request.target_status}`
+    );
+  };
+
+  if (!equivalentExistingPath(mathproveRoot, trustedMathProveRoot)) {
+    return notInvoked("untrusted_runner_root", "mathprove_final_audit_runner_untrusted_root");
+  }
+  if (expectedStatementHash !== claim.statement_hash) {
+    return notInvoked("statement_hash_mismatch", "mathprove_claim_statement_hash_mismatch", sha256FileOrNull(scriptPath));
+  }
+  if (!existsSync(scriptPath)) {
+    return notInvoked("runner_unavailable", "mathprove_final_audit_runner_unavailable");
+  }
+
+  mkdirSync(join(workspacePath, "logs"), { recursive: true });
+  mkdirSync(join(workspacePath, "audit"), { recursive: true });
+  const stepsPath = join(workspacePath, "steps.json");
+  const solutionPath = join(workspacePath, "audit", "Solution.md");
+  const logPath = join(workspacePath, "logs", "tool_calls.log");
+  writeFileSync(stepsPath, `${JSON.stringify(stepsPayload, null, 2)}\n`, "utf8");
+
+  let stdout = "";
+  let stderr = "";
+  let exitCode: number | null = null;
+  let parsedResult: Record<string, unknown>;
+  try {
+    const completed = await execFileAsync(
+      "python",
+      [
+        scriptPath,
+        "--workspace-dir",
+        workspacePath,
+        "--run-dir",
+        "run",
+        "--log",
+        logPath,
+        "--steps",
+        stepsPath,
+        "--solution",
+        solutionPath,
+        "--timeout",
+        String(timeoutSeconds)
+      ],
+      {
+        cwd: repoRoot(),
+        encoding: "utf8",
+        shell: false,
+        windowsHide: true,
+        timeout: timeoutMs + 5_000,
+        maxBuffer: 1024 * 1024
+      }
+    );
+    stdout = completed.stdout;
+    stderr = completed.stderr;
+    exitCode = 0;
+  } catch (error) {
+    const processError = error as { stdout?: string; stderr?: string; code?: number | string | null };
+    stdout = processError.stdout ?? "";
+    stderr = processError.stderr ?? "";
+    exitCode = typeof processError.code === "number" ? processError.code : null;
+  }
+
+  try {
+    parsedResult = scrubHostPathsDeep(JSON.parse(stdout)) as Record<string, unknown>;
+  } catch {
+    parsedResult = {
+      status: "error",
+      error_type: "invalid_json",
+      stdout: scrubHostPaths(stdout),
+      stderr: scrubHostPaths(stderr)
+    };
+  }
+  const solutionSha256 = existsSync(solutionPath) ? sha256FileOrNull(solutionPath) ?? sha256Text("") : sha256Text("");
+  const ok = isMathProveFinalAuditPassed(parsedResult, exitCode);
+  const metadata = buildFinalAuditMetadata({
+    workspaceRelativePath,
+    scriptSha256: sha256FileOrNull(scriptPath),
+    replayInputSha256,
+    stepsSha256,
+    solutionSha256,
+    timeoutMs,
+    invoked: true,
+    exitCode,
+    stdout,
+    stderr,
+    parsedResult
+  });
+  const result = buildFinalAuditResult({
+    request,
+    claimStatementHash: claim.statement_hash,
+    ok,
+    metadata,
+    mathprove: parsedResult,
+    vetoes: ok ? [] : ["mathprove_final_audit_runner_failed"],
+    warnings: []
+  });
+  return archiveMathProveBridgeRun(
+    projectRoot,
+    request,
+    result,
+    "external-final-audit",
+    `MathProve ${request.mode} final-audit runner archived as non-authoritative evidence for ${request.target_status}`
+  );
+}
+
 export async function promoteClaimWithMathProveBridge(
   projectRoot: string,
   request: MathProveBridgeRequest & { evidence_ids: string[]; artifact_ids: string[] },
   options: MathProvePromotionBridgeOptions = {}
 ): Promise<MathProvePromotionDecision> {
   const bridge =
-    options.backend === "external"
+    options.backend === "external-final-audit"
+      ? await runMathProveFinalAuditExternal(projectRoot, request, options)
+      : options.backend === "external"
       ? await runMathProveBridgeExternal(projectRoot, request, options)
       : await runMathProveBridgeMock(projectRoot, request);
   const promotion = promoteClaim(projectRoot, {

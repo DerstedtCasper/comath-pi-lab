@@ -76,8 +76,8 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-57")) {
-  invariantFailures.push("README must describe the current Phase 18-57 GA vertical-slice evidence");
+if (!readme.includes("Phase 18-58")) {
+  invariantFailures.push("README must describe the current Phase 18-58 GA vertical-slice evidence");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -180,6 +180,10 @@ if (!acceptanceMatrix.includes("57 Lean theorem template instantiation")) {
   invariantFailures.push("acceptance matrix must include Phase 57 Lean theorem template instantiation acceptance");
 }
 
+if (!acceptanceMatrix.includes("58 MathProve final-audit external runner")) {
+  invariantFailures.push("acceptance matrix must include Phase 58 MathProve final-audit external runner acceptance");
+}
+
 if (!acceptanceMatrix.includes("32 Lean statement signature binding")) {
   invariantFailures.push("acceptance matrix must retain Phase 32 Lean statement signature binding acceptance");
 }
@@ -264,6 +268,10 @@ if (!acceptanceMatrix.includes("Theorem template instantiation remains registry-
   invariantFailures.push("acceptance matrix must include Phase 57 theorem template instantiation security acceptance");
 }
 
+if (!acceptanceMatrix.includes("MathProve final audit remains fixed-argv and non-authoritative")) {
+  invariantFailures.push("acceptance matrix must include Phase 58 final-audit runner security acceptance");
+}
+
 if (!acceptanceMatrix.includes("Native memory backend evidence is non-promotional")) {
   invariantFailures.push("acceptance matrix must include Phase 38 native memory mathematical-integrity boundary");
 }
@@ -334,6 +342,10 @@ if (!acceptanceMatrix.includes("Registered logical equivalence is statement bind
 
 if (!acceptanceMatrix.includes("Template-instantiated theorem families still require clean replay")) {
   invariantFailures.push("acceptance matrix must include Phase 57 theorem template mathematical-integrity boundary");
+}
+
+if (!acceptanceMatrix.includes("MathProve final-audit reports are runner evidence only")) {
+  invariantFailures.push("acceptance matrix must include Phase 58 final-audit mathematical-integrity boundary");
 }
 
 if (!acceptanceMatrix.includes("Campaign ensemble state is campaign-scoped")) {
@@ -418,6 +430,14 @@ if (!acceptanceMatrix.includes("lean_registered_logical_equivalence_witnesses"))
 
 if (!acceptanceMatrix.includes("proof_kernel_theorem_template_instantiation")) {
   invariantFailures.push("acceptance matrix must include Phase 57 proof_kernel_theorem_template_instantiation capability language");
+}
+
+if (!acceptanceMatrix.includes("mathprove_final_audit_external_runner")) {
+  invariantFailures.push("acceptance matrix must include Phase 58 mathprove_final_audit_external_runner capability language");
+}
+
+if (!acceptanceMatrix.includes("phase58-mathprove-final-audit-runner.test.mjs")) {
+  invariantFailures.push("acceptance matrix must include Phase 58 final-audit runner test coverage language");
 }
 
 if (!acceptanceMatrix.includes("/cm:agent prepare-package") || !acceptanceMatrix.includes("/cm:agent execute-package")) {

@@ -176,6 +176,7 @@ Remaining security requirements:
 37. **Runner replay environment drift fails closed.** Phase 55 compares recorded replay-run Node/platform/architecture metadata against the current process before re-execution and vetoes mismatches without launching a child runner.
 38. **Registered logical equivalence is metadata-gated.** Phase 56 accepts logical-equivalence statement binding only from exact registered formal-spec/target-signature pairs with kernel-witness metadata, witness artifact id/hash, and non-empty lemma names; free-form text cannot create an equivalence bypass.
 39. **Theorem template instantiation is registry-bound.** Phase 57 instantiates only a service-owned theorem-family entry for `nat_zero_add`; user/model text cannot provide proof terms, replay commands, executable paths, or arbitrary Lean code.
+40. **MathProve final-audit runner is fixed and non-authoritative.** Phase 58 invokes only the trusted sibling `MathProve-Skill` `scripts/final_audit.py` with CoMath-generated steps, controlled workspace/log/solution paths, bounded timeout, `shell:false`, `network=false` metadata, host-path scrubbing, and fail-closed untrusted-root, missing-runner, and statement-hash mismatch handling.
 
 ### Validation Commands
 
@@ -429,3 +430,10 @@ Phase 57 targeted validation:
 
 Result: exit 0; `0 + n = n` is classified into the service-owned `nat_zero_add` template, candidates and Lean files use fixed `Nat.zero_add` metadata, and promotion still requires final clean replay plus the ordinary gate.
 - Phase 57 adds no dynamic command construction, no model-supplied Lean proof terms, and no new execution boundary.
+
+Phase 58 targeted validation:
+
+- `node services/comathd/tests/unit/phase58-mathprove-final-audit-runner.test.mjs`
+
+Result: exit 0; the final-audit bridge invokes the real sibling `MathProve-Skill` `final_audit.py` through fixed argv, archives host-path-scrubbed `external-final-audit` reports, records steps/solution hashes, and keeps `gate_result=failed` with final-audit authority vetoes.
+- Phase 58 adds a controlled external runner boundary but no model-supplied executable path, no shell string, no network authority, and no proof-authority escalation.

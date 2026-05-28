@@ -1,3 +1,32 @@
+## Phase 58 MathProve Final-Audit Runner Review Log
+
+Scope: Phase 58 adds a controlled external runner bridge for `MathProve-Skill` `final_audit.py`. CoMath generates the final-audit steps JSON, owns the workspace, hashes replay input/steps/solution/stdout/stderr/result/script material, archives host-path-scrubbed reports as `external-final-audit`, and feeds final-audit vetoes into the ordinary promotion gate.
+
+TDD evidence:
+
+```powershell
+node services/comathd/tests/unit/phase58-mathprove-final-audit-runner.test.mjs
+```
+
+Initial RED result: exit 1; `runMathProveFinalAuditExternal` was not exported.
+
+Focused GREEN evidence after implementation:
+
+```powershell
+corepack pnpm --filter @comath/comathd build
+node services/comathd/tests/unit/phase58-mathprove-final-audit-runner.test.mjs
+```
+
+Result: both exited 0. Phase 58 invokes the real sibling `MathProve-Skill` `scripts/final_audit.py`, receives a passed MathProve final-audit report for the deterministic SymPy smoke step, archives it without Windows host paths, records `steps_sha256` and `solution_sha256`, and still rejects formal promotion with `mathprove_final_audit_not_formal_authority` plus missing CoMath kernel evidence.
+
+Implementation notes:
+
+- Added `phase58-final-audit-v1`, runner id `mathprove-skill.final_audit`, backend `external-final-audit`, and export `runMathProveFinalAuditExternal()` in `services/comathd/src/verification/mathprove.ts`.
+- Added `services/comathd/tests/unit/phase58-mathprove-final-audit-runner.test.mjs` to the default `@comath/comathd` test chain and status capability `mathprove_final_audit_external_runner`.
+- Updated smoke checks, README, TODO, security review, mathematical-integrity review, acceptance matrix, AGENTS, and design handoff to reflect the new runner boundary.
+
+Boundary: Phase 58 is not broad MathProve proof search and not a MathProve proof-authority path. Final-audit reports are runner evidence only; `formally_checked` still requires CoMath proof-kernel replay evidence and the ordinary gate.
+
 ## Phase 57 Lean Theorem Template Instantiation Review Log
 
 Scope: Phase 57 extends the native theorem-family registry with a third service-owned Nat identity template, `nat_zero_add`. User goals for `0 + n = n` now lock a normalized statement, Lean target, candidate metadata, final replay manifest, and proof dependency using `Nat.zero_add`, then pass only through the existing clean Lean replay and claim promotion gates.

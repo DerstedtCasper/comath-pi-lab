@@ -25,6 +25,7 @@ const requiredCapabilities = [
   "proof_kernel_theorem_template_instantiation",
   "runner_reexecution_replay",
   "mathprove_external_evidence_runner",
+  "mathprove_final_audit_external_runner",
   "pi_runtime_registration_v0755",
   "proof_obligation_dag_planning",
   "campaign_scoped_ensemble_artifacts",

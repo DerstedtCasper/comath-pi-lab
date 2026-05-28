@@ -576,12 +576,20 @@
 - [x] Run the instantiated template through full campaign candidate generation, final clean Lean replay, statement equivalence, dependency closure, axiom profile, and claim promotion gate.
 - [x] Add `phase57-ga-theorem-template-instantiation.test.mjs` and wire Phase 57 into the default `@comath/comathd` test chain and smoke status capabilities.
 
+## Phase 58: MathProve Final-Audit External Runner
+
+- [x] Add `runMathProveFinalAuditExternal()` as a service-owned external MathProve final-audit evidence runner.
+- [x] Invoke the sibling `<MathProve-Skill>/scripts/final_audit.py` through a fixed argv template, controlled workspace, bounded timeout, and `shell:false`.
+- [x] Generate CoMath-owned final-audit steps and solution paths, hash the steps, solution, replay input, script, stdout, stderr, and parsed result, and scrub host paths from archived reports.
+- [x] Preserve MathProve as non-authoritative evidence: a passed final audit still returns `gate_result=failed`, carries `mathprove_final_audit_not_formal_authority`, and cannot promote `formally_checked` without CoMath proof-kernel replay evidence.
+- [x] Add `phase58-mathprove-final-audit-runner.test.mjs` and wire Phase 58 into the default `@comath/comathd` test chain and smoke status capabilities.
+
 ## Known Deferred Items
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
 - [ ] Broad proof planning and theorem synthesis beyond Phase 33 planning artifacts, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation.
-- [ ] Broad MathProve proof search, MathProve final-audit semantics, and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` evidence-runner bridge.
+- [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.
 - [ ] Stronger runner re-execution sandboxing beyond Phase 36 provenance and Phase 55 environment drift gates: OS-level isolation and enforced network denial.
