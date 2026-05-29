@@ -378,21 +378,21 @@ Completion record:
 
 ## Task 23: Execute Positive Matrix Batch PM-013 Through PM-023
 
-- [ ] Re-read all Goal 3 required context files before touching code.
-- [ ] Select PM-013 through PM-023 from the Task 21 manifest and create per-task replay-attempt fixtures or live Lean clean-replay attempts.
-- [ ] Preserve FormalSpecLock, AssumptionLedger, dependency-lock, replay-command, and terminal classification evidence for every selected task.
-- [ ] Replace generic blockers with specific replayable blocker certificates when clean replay cannot yet run.
-- [ ] Ensure no production theorem-family recognizer, Nat-linear synthesis, default assumptions, CAS/literature/search/vote authority, or direct promotion path is introduced.
-- [ ] Run focused tests, package build/typecheck/test gates, static no-reinvent scans, and runtime artifact cleanliness checks.
-- [ ] Record validation evidence, residual blockers, next batch scope, and commit.
+- [x] Re-read all Goal 3 required context files before touching code.
+- [x] Select PM-013 through PM-023 from the Task 21 manifest and create per-task replay-attempt fixtures or live Lean clean-replay attempts.
+- [x] Preserve FormalSpecLock, AssumptionLedger, dependency-lock, replay-command, and terminal classification evidence for every selected task.
+- [x] Replace generic blockers with specific replayable blocker certificates when clean replay cannot yet run.
+- [x] Ensure no production theorem-family recognizer, Nat-linear synthesis, default assumptions, CAS/literature/search/vote authority, or direct promotion path is introduced.
+- [x] Run focused tests, package build/typecheck/test gates, static no-reinvent scans, and runtime artifact cleanliness checks.
+- [x] Record validation evidence, residual blockers, next batch scope, and commit.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: re-read all required Goal 3 context files, the v2 no-reinvent audit/design docs, the v2 agent prompt protocol, root project docs, and module-boundary docs. Added `goal3-task23-positive-matrix-tranche.test.mjs` and wired it into the default `@comath/comathd` test chain. The test executes `runGoal3GaPositiveMatrixTranche()` for PM-013 through PM-023, verifies the exact 11-task tranche, checks PM-013 through PM-020 remain `algebra` and PM-021 through PM-023 remain `order`, confirms each task returns and writes a matching replay-attempt certificate under the caller temp project root, binds FormalSpecLock/AssumptionLedger/dependency-lock/certificate hashes, preserves replay commands and disabled final-replay network policy, blocks PM-024 out-of-scope writes, and keeps every selected task `replayable_blocker` with `proof_authority: "none"` and `can_promote_claim: false`. No production implementation change was required because Task 22's tranche runner already supported arbitrary bounded ranges.
+- Verification evidence: `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task23-positive-matrix-tranche.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task22-positive-matrix-tranche.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task21-positive-matrix-runner.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task17-ga-acceptance-workflow.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task2-no-toy-production-path.test.mjs` exited 0; `node services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 with Task 23 included. `git diff --check` exited 0 with Windows LF-to-CRLF warnings only. `Test-Path -LiteralPath '.comath'` returned `False`; `git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'` returned no tracked runtime/build artifacts. Static no-reinvent scan over `services/comathd/src` found only existing gate/status/schema surfaces, existing `v3-negative-ga-slices.ts` adversarial negative fixture strings, and explicit `uses_controlled_nat_linear_synthesis: false` / non-authority fields in `goal3-ga-acceptance.ts`, not a restored production theorem-family, Nat-linear, default-assumption, CAS/search/vote authority, or direct-promotion path.
+- Residual risk: Goal 3 remains incomplete. PM-013 through PM-023 now have deterministic non-promotional replay-attempt certificate coverage, but none has live Lean/mathlib clean replay evidence. They remain `replayable_blocker` until future tasks attach real Lean sources, pinned dependency material, LeanRunManifest v3, FinalReplayManifest v3, structured audit, and third-party replay pack evidence for each task.
+- Next step: Task 24 should run Comprehensive Check-Debug Loop 7 over Tasks 21-23, rechecking requirement drift, matrix records, no-reinvent boundaries, package gates, runtime artifact cleanliness, and any high-risk regression before PM-024+ tranche work.
+- Commit: 345fdd7
 
 ## Task 24: Comprehensive Check-Debug Loop 7
 
