@@ -437,6 +437,11 @@ function lockedStatement(goal: string): string {
   return classifyLockedProblem(goal).statement;
 }
 
+function needsFormalSpecLock(goal: string): boolean {
+  const trimmed = goal.trim();
+  return !/^(prove|show|formalize|theorem|lemma)\b/i.test(trimmed);
+}
+
 function createProblemLock(projectRoot: string, input: { claim_id: string; goal: string; domain: string }): void {
   const problem = classifyLockedProblem(input.goal);
   writeRuntimeFile(
@@ -448,7 +453,7 @@ function createProblemLock(projectRoot: string, input: { claim_id: string; goal:
   writeRuntimeFile(
     projectRoot,
     join(".comath", "lock", "notation.md"),
-    ["# Notation", "", "- `Nat`: Lean natural numbers.", ...problem.notation_lines, ""].join("\n")
+    ["# Notation", "", "No notation conventions are locked until FormalSpecLock approval.", ...problem.notation_lines, ""].join("\n")
   );
   writeRuntimeFile(
     projectRoot,
@@ -481,19 +486,73 @@ function createObligation(claimId: string, statementHash: string, goal: string):
 export function startCampaign(input: StartCampaignInput): CampaignTickResult {
   const actor = input.actor ?? "campaign";
   const { project } = initProject({ name: input.project_name ?? "CoMath Research Campaign", root_path: input.project_root });
+  const requiresFormalSpecLock = needsFormalSpecLock(input.user_goal);
   const claim = registerClaim(input.project_root, {
     project_id: project.project_id,
     statement: lockedStatement(input.user_goal),
     assumptions: [],
     domain: input.domain ?? "elementary",
     actor,
-    status: "conjectural"
+    status: requiresFormalSpecLock ? "needs_formal_spec_lock" : "conjectural"
   });
   createProblemLock(input.project_root, { claim_id: claim.id, goal: input.user_goal, domain: input.domain ?? "elementary" });
-  const obligation = createObligation(claim.id, claim.statement_hash, input.user_goal);
   const timestamp = now();
+  const campaignId = nextCampaignId(input.project_root);
+  if (requiresFormalSpecLock) {
+    const blockerRel = join(".comath", "campaign", campaignId, "formal_spec_lock_blocker.json").replace(/\\/g, "/");
+    writeRuntimeFile(
+      input.project_root,
+      blockerRel,
+      `${JSON.stringify(
+        {
+          schema_version: "comath.formal_spec_lock_blocker.v1",
+          campaign_id: campaignId,
+          claim_id: claim.id,
+          reason: "needs_formal_spec_lock",
+          raw_goal_requires_lock: true,
+          proof_authority: "none",
+          can_create_proof_obligation: false,
+          required_next_artifacts: ["FormalSpecLock", "AssumptionLedger"],
+          hard_vetoes: ["statement_unlocked"],
+          created_at: timestamp
+        },
+        null,
+        2
+      )}\n`
+    );
+    const blocker = {
+      reason: "needs_formal_spec_lock",
+      artifact_path: blockerRel,
+      hard_vetoes: ["statement_unlocked"]
+    };
+    const campaign = researchCampaignSchema.parse({
+      campaign_id: campaignId,
+      project_id: project.project_id,
+      root_claim_id: claim.id,
+      user_goal: input.user_goal,
+      current_stage: "blocked",
+      status: "blocked",
+      strict_mode: input.strict_mode ?? true,
+      stage_runs: [],
+      open_obligations: [],
+      accepted_artifacts: [],
+      blockers: [blocker],
+      next_actions: ["create approved FormalSpecLock and AssumptionLedger before proof obligation creation"],
+      created_at: timestamp,
+      updated_at: timestamp
+    });
+    appendAuditEvent(input.project_root, {
+      project_id: project.project_id,
+      event_type: "campaign.needs_formal_spec_lock",
+      actor,
+      target_id: campaign.campaign_id,
+      payload: { root_claim_id: claim.id, blocker_artifact_path: blockerRel }
+    });
+    return { campaign: writeCampaign(input.project_root, campaign, actor), blocker: "needs_formal_spec_lock" };
+  }
+  const obligation = createObligation(claim.id, claim.statement_hash, input.user_goal);
   const campaign = researchCampaignSchema.parse({
-    campaign_id: nextCampaignId(input.project_root),
+    campaign_id: campaignId,
     project_id: project.project_id,
     root_claim_id: claim.id,
     user_goal: input.user_goal,

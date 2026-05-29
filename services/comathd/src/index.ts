@@ -37,6 +37,7 @@ export * from "./db/stable-id-map.js";
 export * from "./workstream/index.js";
 export * from "./agents/index.js";
 export * from "./proof-kernel/campaign/research-campaign.js";
+export * from "./proof-kernel/campaign/formal-spec-lock.js";
 export * from "./proof-kernel/campaign/campaign-tick.js";
 export * from "./proof-kernel/campaign/external-terminal-vocabulary.js";
 export * from "./proof-kernel/stages/proof-obligation-dag.js";

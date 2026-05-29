@@ -14,7 +14,15 @@ import {
 import { nextSequentialId } from "../utils/id.js";
 import { normalizeStatement, statementHash } from "../utils/statement.js";
 
-const createAllowedStatuses = new Set<ClaimStatus>(["draft", "conjectural", "blocked", "refuted", "retracted"]);
+const createAllowedStatuses = new Set<ClaimStatus>([
+  "draft",
+  "conjectural",
+  "needs_formal_spec_lock",
+  "formal_spec_locked",
+  "blocked",
+  "refuted",
+  "retracted"
+]);
 const privilegedStatuses = new Set<ClaimStatus>([
   "literature_supported",
   "computationally_supported",

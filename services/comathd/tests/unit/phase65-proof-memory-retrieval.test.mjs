@@ -26,7 +26,7 @@ try {
   const { project } = initProject({ name: "Proof Memory Retrieval", root_path: projectRoot });
   const claim = registerClaim(projectRoot, {
     project_id: project.project_id,
-    statement: "For every natural number n, n + 0 = n.",
+    statement: "Prove in Lean that for every natural number n, n + 0 = n.",
     assumptions: ["n : Nat"],
     domain: "elementary",
     status: "conjectural",

@@ -1,6 +1,8 @@
 import {
   artifactRefSchema,
+  assumptionLedgerSchema,
   claimSchema,
+  formalSpecLockSchema,
   graphPatchSchema,
   memoryEdgeSchema,
   projectSchema
@@ -22,6 +24,8 @@ function objectSchema(title: string): JsonSchema {
 
 projectSchema.parse;
 claimSchema.parse;
+formalSpecLockSchema.parse;
+assumptionLedgerSchema.parse;
 memoryEdgeSchema.parse;
 artifactRefSchema.parse;
 graphPatchSchema.parse;
@@ -29,6 +33,8 @@ graphPatchSchema.parse;
 export const jsonSchemas = {
   project: objectSchema("Project"),
   claim: objectSchema("Claim"),
+  formalSpecLock: objectSchema("FormalSpecLock"),
+  assumptionLedger: objectSchema("AssumptionLedger"),
   memoryEdge: objectSchema("MemoryEdge"),
   artifactRef: objectSchema("ArtifactRef"),
   graphPatch: objectSchema("GraphPatch")

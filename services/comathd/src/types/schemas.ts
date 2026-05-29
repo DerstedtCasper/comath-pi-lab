@@ -7,6 +7,13 @@ const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
 export const claimStatusSchema = z.enum([
   "draft",
   "conjectural",
+  "needs_formal_spec_lock",
+  "formal_spec_locked",
+  "proof_search_running",
+  "candidate_lean_checked",
+  "candidate_refuted",
+  "integration_running",
+  "final_replay_running",
   "literature_supported",
   "computationally_supported",
   "symbolically_checked",
@@ -17,6 +24,112 @@ export const claimStatusSchema = z.enum([
   "retracted",
   "human_accepted"
 ]);
+
+const formalSpecSourceSchema = z.enum(["user", "paper", "agent_proposed", "human_approved"]);
+
+const formalSpecLedgerEntryBaseSchema = z
+  .object({
+    id: stableId,
+    kind: z.enum(["variable", "assumption"]),
+    name: z.string().min(1).optional(),
+    type: z.string().min(1),
+    source: formalSpecSourceSchema,
+    evidence_anchor: z.string().min(1),
+    approved: z.boolean()
+  })
+  .strict()
+  .superRefine((entry, ctx) => {
+    if (!entry.approved) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `unapproved ${entry.kind} cannot enter FormalSpecLock or AssumptionLedger`,
+        path: ["approved"]
+      });
+    }
+  });
+
+export const formalSpecVariableSchema = formalSpecLedgerEntryBaseSchema
+  .omit({ id: true, kind: true })
+  .extend({
+    name: z.string().min(1),
+    binder: z.enum(["explicit", "implicit", "instance"])
+  })
+  .strict()
+  .superRefine((variable, ctx) => {
+    if (!variable.approved) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "unapproved variable cannot enter FormalSpecLock",
+        path: ["approved"]
+      });
+    }
+  });
+
+export const formalSpecAssumptionSchema = formalSpecLedgerEntryBaseSchema
+  .omit({ kind: true })
+  .extend({
+    kind: z.literal("assumption").optional()
+  })
+  .strict()
+  .superRefine((assumption, ctx) => {
+    if (!assumption.approved) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "unapproved assumption cannot enter FormalSpecLock",
+        path: ["approved"]
+      });
+    }
+  });
+
+export const formalSpecLockSchema = z
+  .object({
+    schema_version: z.literal("comath.formal_spec_lock.v2"),
+    claim_id: stableId,
+    original_goal_text: z.string().min(1),
+    original_goal_sha256: sha256,
+    normalized_nl_statement: z.string().min(1),
+    theorem_name: z.string().min(1),
+    namespace: z.string().min(1),
+    theorem_header: z.string().min(1),
+    theorem_type_pretty: z.string().min(1),
+    theorem_type_elaborated_hash: sha256.optional(),
+    variables: z.array(formalSpecVariableSchema).default([]),
+    assumptions: z.array(formalSpecAssumptionSchema).default([]),
+    conclusion: z.string().min(1),
+    notation_conventions: z
+      .array(
+        z
+          .object({
+            symbol: z.string().min(1),
+            meaning: z.string().min(1),
+            source: z.string().min(1),
+            evidence_anchor: z.string().min(1).optional()
+          })
+          .strict()
+      )
+      .default([]),
+    imports_allowed: z.array(z.string().min(1)).default([]),
+    external_dependencies_allowed: z.array(z.record(z.string(), z.unknown())).default([]),
+    trust_profile_id: z.string().min(1),
+    statement_hash: sha256,
+    locked_by: z.string().min(1),
+    locked_at: isoTimestamp,
+    user_approval_required: z.boolean(),
+    proof_authority: z.literal("none")
+  })
+  .strict();
+
+export const assumptionLedgerSchema = z
+  .object({
+    schema_version: z.literal("comath.assumption_ledger.v1"),
+    claim_id: stableId,
+    formal_spec_lock_hash: sha256,
+    entries: z.array(formalSpecLedgerEntryBaseSchema).default([]),
+    created_at: isoTimestamp,
+    updated_at: isoTimestamp,
+    proof_authority: z.literal("none")
+  })
+  .strict();
 
 const privilegedClaimStatuses = new Set<string>([
   "literature_supported",
@@ -679,6 +792,10 @@ export const graphPatchSchema = z
   });
 
 export type ClaimStatus = z.infer<typeof claimStatusSchema>;
+export type FormalSpecVariable = z.infer<typeof formalSpecVariableSchema>;
+export type FormalSpecAssumption = z.infer<typeof formalSpecAssumptionSchema>;
+export type FormalSpecLock = z.infer<typeof formalSpecLockSchema>;
+export type AssumptionLedger = z.infer<typeof assumptionLedgerSchema>;
 export type MemoryNodeType = z.infer<typeof memoryNodeTypeSchema>;
 export type MemoryEdgeLabel = z.infer<typeof memoryEdgeLabelSchema>;
 export type Project = z.infer<typeof projectSchema>;

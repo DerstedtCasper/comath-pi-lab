@@ -163,7 +163,9 @@ await expectNoViolation("unknown user goals must not receive default n : Nat ass
       }
     });
     assert.equal(start.status, 200);
-    assert.deepEqual(start.body.obligation.assumptions, [], "campaign obligation injected a default assumption");
+    assert.equal(start.body.obligation, undefined, "unknown goals must not create proof obligations before FormalSpecLock");
+    assert.deepEqual(start.body.campaign.open_obligations, [], "campaign injected a proof obligation before FormalSpecLock");
+    assert.equal(start.body.campaign.blockers[0].reason, "needs_formal_spec_lock");
 
     const assumptionsPath = join(projectRoot, ".comath", "lock", "assumptions.md");
     if (existsSync(assumptionsPath)) {

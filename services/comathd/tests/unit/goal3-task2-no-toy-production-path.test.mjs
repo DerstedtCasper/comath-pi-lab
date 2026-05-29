@@ -90,9 +90,9 @@ for (const forbiddenCapability of [
       }
     });
     assert.equal(start.status, 200);
-    assert.deepEqual(start.body.obligation.assumptions, []);
-    assert.equal(start.body.obligation.lean_target, undefined);
-    assert.deepEqual(start.body.obligation.locked_statement_structured, {});
+    assert.equal(start.body.obligation, undefined, "unknown goals must not create proof obligations before FormalSpecLock");
+    assert.deepEqual(start.body.campaign.open_obligations, []);
+    assert.equal(start.body.campaign.blockers[0].reason, "needs_formal_spec_lock");
   } finally {
     await server.close();
     rmSync(projectRoot, { recursive: true, force: true });
