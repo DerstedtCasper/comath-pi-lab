@@ -194,9 +194,10 @@ try {
     "phase20-state-refute"
   );
   assert.equal(refutation.finalTick.campaign.status, "terminal");
-  assert.equal(refutation.finalTick.campaign.current_stage, "completed_refutation");
-  assert.equal(refutation.finalTick.campaign.terminal_state, "completed_refutation");
-  assert.equal(refutation.finalTick.counterexample?.assignment.n, 0);
+  assert.equal(refutation.finalTick.campaign.current_stage, "blocked");
+  assert.equal(refutation.finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(refutation.finalTick.counterexample, undefined);
+  assert.equal(refutation.finalTick.campaign.blockers[0].hard_vetoes.includes("business_layer_theorem_prover_forbidden"), true);
   assert.deepEqual(refutation.seenStages, [
     "problem_locked",
     "knowledge_pack",
@@ -204,7 +205,7 @@ try {
     "skeleton_gate",
     "line_map_gate",
     "candidate_generation",
-    "completed_refutation"
+    "blocked"
   ]);
   assert.equal(refutation.finalTick.final_replay, undefined);
   assert.equal(
@@ -212,7 +213,7 @@ try {
       (run) => run.stage === "final_global_replay" || run.stage === "final_static_audit"
     ),
     false,
-    "verified exact refutation shortcut should not fabricate final proof replay stages"
+    "Nat-only refutation inputs must not fabricate final proof replay stages"
   );
 
   const unsupported = await runCampaign(

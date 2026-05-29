@@ -94,17 +94,20 @@ try {
   assert.equal(plan.candidate_plan.can_promote_claim, false);
 
   const replayTarget = readJson(join(projectRoot, replayTargetRel));
-  assert.equal(replayTarget.status, "unresolved");
+  assert.equal(replayTarget.status, "blocked_no_production_theorem_prover");
   assert.equal(replayTarget.target_formal_system, "Lean4");
-  assert.equal(replayTarget.required_before_replay.includes("theorem-specific Lean declaration"), true);
+  assert.equal(replayTarget.required_before_replay.includes("FormalSpecLock with approved theorem boundary"), true);
+  assert.equal(replayTarget.required_before_replay.includes("service-owned LeanRunner candidate replay"), true);
   assert.equal(replayTarget.proof_authority, "none");
 
   const failure = readJson(join(projectRoot, failureRel));
   assert.equal(failure.reason, "broad theorem synthesis requires checked replay target");
   assert.equal(failure.fail_closed, true);
   assert.equal(failure.promotion_blocked, true);
+  assert.equal(failure.hard_vetoes.includes("business_layer_theorem_prover_forbidden"), true);
   assert.equal(failure.replayable_evidence.planning_artifact, planningRel);
   assert.equal(failure.replayable_evidence.replay_target_artifact, replayTargetRel);
+  assert.equal(failure.replayable_evidence.lean_project_target, null);
 
   const lastRun = finalTick.campaign.stage_runs.at(-1);
   assert.equal(lastRun.stage, "candidate_generation");

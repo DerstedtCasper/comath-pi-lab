@@ -6,9 +6,9 @@ import {
   decideCandidate,
   initProject,
   recordFailedRoutes,
-  registerClaim,
-  runTrivialNatAddZeroCandidates
+  registerClaim
 } from "../../dist/index.js";
+import { runTrivialNatAddZeroCandidates } from "../fixtures/proof-smoke/nat-add-zero-candidates.mjs";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-ga-ensemble-recovery-"));
 

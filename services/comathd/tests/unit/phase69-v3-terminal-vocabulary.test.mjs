@@ -80,8 +80,8 @@ try {
     "Prove in Lean that n + 1 = n for natural numbers.",
     "phase69-refutation"
   );
-  assert.equal(refutation.campaign.terminal_state, "completed_refutation");
-  assert.equal(refutation.campaign.external_v3_terminal_state, "verified_counterexample");
+  assert.equal(refutation.campaign.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(refutation.campaign.external_v3_terminal_state, "replayable_environment_blocker");
 
   const blocked = await runCampaign(
     server,

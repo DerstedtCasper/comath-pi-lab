@@ -5,13 +5,12 @@ import { join } from "node:path";
 import {
   createComathServer,
   decideCandidate,
-  findTheoremFamilyForObligation,
-  findTheoremFamilyForGoal,
   getClaim,
   initProject,
-  registerClaim,
-  runTrivialNatAddZeroCandidates
+  registerClaim
 } from "../../dist/index.js";
+import { runTrivialNatAddZeroCandidates } from "../fixtures/proof-smoke/nat-add-zero-candidates.mjs";
+import * as productionApi from "../../dist/index.js";
 
 const failures = [];
 
@@ -82,29 +81,69 @@ function makeSyntheticCandidateFixture(projectRoot) {
 
 await expectNoViolation("production theorem-family recognizer must be quarantined from trusted runtime", () => {
   assert.equal(
-    findTheoremFamilyForGoal("Prove in Lean that n + 0 = n for natural numbers."),
-    undefined,
-    "production code still classifies a Nat theorem-family target"
+    Object.hasOwn(productionApi, "findTheoremFamilyForGoal"),
+    false,
+    "production package still exports findTheoremFamilyForGoal"
+  );
+  assert.equal(
+    Object.hasOwn(productionApi, "findTheoremFamilyForObligation"),
+    false,
+    "production package still exports findTheoremFamilyForObligation"
+  );
+});
+
+await expectNoViolation("production Nat-only candidate fixture must not be exported", () => {
+  assert.equal(
+    Object.hasOwn(productionApi, "runTrivialNatAddZeroCandidates"),
+    false,
+    "production package still exports runTrivialNatAddZeroCandidates"
+  );
+});
+
+await expectNoViolation("proof-smoke fixture remains non-authoritative when used by tests", () => {
+  assert.equal(
+    typeof runTrivialNatAddZeroCandidates,
+    "function",
+    "test fixture must remain available outside production exports"
   );
 });
 
 await expectNoViolation("obligation-level theorem-family recognizer must not support production proof claims", () => {
+  assert.equal(
+    Object.hasOwn(productionApi, "findTheoremFamilyForObligation"),
+    false,
+    "production code still supports Nat proof claims through obligation matching"
+  );
+});
+
+await expectNoViolation("production theorem-family goal recognizer must not classify Nat targets", () => {
+  assert.equal(
+    Object.hasOwn(productionApi, "findTheoremFamilyForGoal"),
+    false,
+    "production code still classifies a Nat theorem-family target"
+  );
+});
+
+await expectNoViolation("production fixture APIs stay absent even for synthetic Nat obligations", () => {
   const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal4-p0-obligation-family-"));
   try {
-    const { obligation } = makeSyntheticCandidateFixture(projectRoot);
-    const recognized = findTheoremFamilyForObligation({
-      ...obligation,
-      locked_statement_structured: {
-        proposition: "n + 0 = n",
-        theorem_family: "nat_add_zero"
-      },
-      locked_statement_nl: "For every natural number n, n + 0 = n.",
-      lean_target: "theorem C0001 (n : Nat) : n + 0 = n"
-    });
-    assert.equal(recognized, undefined, "production code still supports Nat proof claims through obligation matching");
+    makeSyntheticCandidateFixture(projectRoot);
+    assert.equal(
+      Object.hasOwn(productionApi, "findTheoremFamilyForObligation"),
+      false,
+      "production API exposes obligation matching for a synthetic Nat target"
+    );
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });
   }
+});
+
+await expectNoViolation("legacy theorem-family recognizer calls are unavailable in production", () => {
+  assert.equal(
+    productionApi.findTheoremFamilyForGoal,
+    undefined,
+    "production code still exposes a theorem-family goal recognizer"
+  );
 });
 
 await expectNoViolation("unknown user goals must not receive default n : Nat assumptions", async () => {

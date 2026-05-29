@@ -8,9 +8,9 @@ import {
   recordFailedRoutes,
   registerClaim,
   retrieveSimilarFailedRoutes,
-  runTrivialNatAddZeroCandidates,
   createComathServer
 } from "../../dist/index.js";
+import { runTrivialNatAddZeroCandidates } from "../fixtures/proof-smoke/nat-add-zero-candidates.mjs";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-proof-memory-retrieval-"));
 

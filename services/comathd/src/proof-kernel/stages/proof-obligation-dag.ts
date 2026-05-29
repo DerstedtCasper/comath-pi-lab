@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import { ComathError } from "../../errors.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import type { ProofObligation, ResearchCampaign } from "../../types/schemas.js";
-import { findTheoremFamilyForObligation } from "../lean/theorem-family.js";
 
 export type ProofPlanningArtifacts = {
   lemma_dag_path: string;
@@ -171,8 +170,7 @@ function obligationYaml(obligation: ProofObligation): string {
 }
 
 function skeletonSection(obligation: ProofObligation): string[] {
-  const theoremFamily = findTheoremFamilyForObligation(obligation);
-  const target = theoremFamily?.leanTarget ?? obligation.lean_target;
+  const target = obligation.lean_target;
   if (!target) {
     return [
       `-- proof_obligation: ${obligation.obligation_id}`,

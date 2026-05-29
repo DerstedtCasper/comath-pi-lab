@@ -22,12 +22,7 @@ const requiredCapabilities = [
   "working_paper",
   "snapshot_replay",
   "proof_kernel_ga_vertical_slice",
-  "proof_kernel_theorem_template_instantiation",
-  "theorem_specific_lean_target_package",
-  "bounded_theorem_specific_proof_body_synthesis",
-  "bounded_lean_authority_report_preparation",
-  "bounded_final_clean_replay_promotion",
-  "registered_nat_linear_identity_targets",
+  "no_reinvent_business_layer_theorem_prover_veto",
   "runner_reexecution_replay",
   "mathprove_external_evidence_runner",
   "mathprove_final_audit_external_runner",
@@ -55,6 +50,23 @@ const requiredCapabilities = [
 for (const capability of requiredCapabilities) {
   if (!status.capabilities?.includes(capability)) {
     throw new Error(`Research Alpha status missing capability: ${capability}`);
+  }
+}
+
+const forbiddenCapabilities = [
+  "proof_kernel_theorem_family_registry",
+  "proof_kernel_theorem_template_instantiation",
+  "theorem_specific_lean_target_package",
+  "bounded_theorem_specific_proof_body_synthesis",
+  "bounded_lean_authority_report_preparation",
+  "bounded_final_clean_replay_promotion",
+  "registered_nat_linear_identity_targets",
+  "controlled_nat_linear_identity_synthesis"
+];
+
+for (const capability of forbiddenCapabilities) {
+  if (status.capabilities?.includes(capability)) {
+    throw new Error(`Research Alpha status still advertises forbidden no-reinvent capability: ${capability}`);
   }
 }
 

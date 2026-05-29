@@ -1,20 +1,13 @@
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { appendAuditEvent } from "../../audit/jsonl-writer.js";
-import { importArtifact } from "../../artifacts/store.js";
-import { applyGatePromotedClaim, getClaim, registerClaim } from "../../claim/claim-store.js";
-import { appendEvidenceRecord } from "../../evidence/store.js";
+import { getClaim, registerClaim } from "../../claim/claim-store.js";
 import { ComathError } from "../../errors.js";
 import { initProject } from "../../project/project-store.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
-import { promoteClaim } from "../../verification/gate.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
-import { runTheoremFamilyCandidates } from "../ensemble/candidate-runner.js";
-import { createLeanProjectForTheorem, type LeanProjectFiles } from "../lean/lean-project.js";
-import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
-import { findTheoremFamilyForObligation } from "../lean/theorem-family.js";
+import type { CleanReplayResult } from "../lean/clean-replay.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
 import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
@@ -430,50 +423,7 @@ type LockedProblem = {
   notation_lines: string[];
 };
 
-type TheoremSpecificLeanTarget = {
-  target_family_id: string;
-  canonical_proposition: string;
-  theorem_name: string;
-  namespace: string;
-  normalized_target_header: string;
-  target_statement_prop: string;
-  proof_body: string;
-  synthesis_scope?: "registered_nat_linear_identity_target" | "controlled_nat_linear_identity_synthesis";
-  linear_normal_form?: {
-    lhs: { n_coefficient: number; constant: number };
-    rhs: { n_coefficient: number; constant: number };
-  };
-  replay_command: string;
-  theorem_file_rel: string;
-  audit_file_rel: string;
-  formal_spec_rel: string;
-  lakefile_rel: string;
-  toolchain_rel: string;
-};
-
-type BoundedProofBodySynthesis = {
-  proofBodyRel: string;
-  auditRel: string;
-};
-
-type BoundedAuthorityReportPreparation = {
-  preparationRel: string;
-  staticRel: string;
-  statementRel: string;
-  dependencyRel: string;
-  axiomRel: string;
-};
-
 function classifyLockedProblem(goal: string): LockedProblem {
-  if (/n\s*\+\s*1\s*=\s*n/i.test(goal)) {
-    return {
-      statement: "For every natural number n, n + 1 = n.",
-      structured: { variable: "n", type: "Nat", proposition: "n + 1 = n" },
-      lean_target: "theorem C0001 (n : Nat) : n + 1 = n",
-      theorem_name: "MathResearch.C0001",
-      notation_lines: ["- `+`: Nat addition."]
-    };
-  }
   return {
     statement: goal.trim(),
     structured: {},
@@ -608,487 +558,8 @@ function writeSimpleStageArtifact(projectRoot: string, campaign: ResearchCampaig
   return rel.replace(/\\/g, "/");
 }
 
-function isNatAddOneFalseObligation(obligation: ProofObligation): boolean {
-  return obligation.locked_statement_structured.proposition === "n + 1 = n";
-}
-
-function isSupportedProofObligation(obligation: ProofObligation): boolean {
-  return Boolean(findTheoremFamilyForObligation(obligation));
-}
-
 const broadSynthesisBlockedReason = "broad theorem synthesis requires checked replay target";
-const broadTargetGeneratedBlockedReason =
-  "theorem-specific Lean target generated but proof body and authority reports are missing";
-const broadProofBodySynthesizedBlockedReason =
-  "bounded theorem-specific proof body synthesized but final Lean Authority v2 reports are missing";
-const broadAuthorityReportsPreparedBlockedReason =
-  "bounded Lean Authority v2 reports prepared but final clean replay is missing";
-const proofBodyForbiddenTokens = ["sorry", "admit", "axiom", "unsafe", "opaque", "constant"];
-
-function theoremSpecificLeanTarget(campaign: ResearchCampaign, obligation: ProofObligation): TheoremSpecificLeanTarget | undefined {
-  void campaign;
-  void obligation;
-  return undefined;
-}
-
-function writeTheoremSpecificLeanProject(input: {
-  projectRoot: string;
-  campaign: ResearchCampaign;
-  obligation: ProofObligation;
-  target: TheoremSpecificLeanTarget;
-}): string {
-  writeRuntimeFile(
-    input.projectRoot,
-    input.target.toolchain_rel,
-    "leanprover/lean4:v4.27.0\n"
-  );
-  writeRuntimeFile(
-    input.projectRoot,
-    input.target.lakefile_rel,
-    [
-      "import Lake",
-      "open Lake DSL",
-      "",
-      "package BroadTarget where",
-      "",
-      "lean_lib MathResearch where",
-      "",
-      "lean_lib Audit where",
-      "",
-      ""
-    ].join("\n")
-  );
-  writeRuntimeFile(
-    input.projectRoot,
-    input.target.theorem_file_rel,
-    [
-      "-- CoMath theorem-specific target package; not proof authority.",
-      "-- This file records a bounded proof-body candidate; it is not proof authority.",
-      `-- expected theorem header: ${input.target.normalized_target_header}`,
-      "",
-      "import Std",
-      "",
-      `namespace ${input.target.namespace}`,
-      "",
-      `def targetStatement : Prop := ${input.target.target_statement_prop}`,
-      "",
-      `${input.target.normalized_target_header} := ${input.target.proof_body}`,
-      "",
-      `#check targetStatement`,
-      `#check C0001`,
-      `#print axioms C0001`,
-      "",
-      `end ${input.target.namespace}`,
-      ""
-    ].join("\n")
-  );
-  writeRuntimeFile(
-    input.projectRoot,
-    input.target.audit_file_rel,
-    [
-      "import MathResearch.Target",
-      "",
-      `#check ${input.target.theorem_name}`,
-      `#print axioms ${input.target.theorem_name}`,
-      ""
-    ].join("\n")
-  );
-  writeRuntimeFile(
-    input.projectRoot,
-    input.target.formal_spec_rel,
-    `${JSON.stringify(
-      {
-        schema_version: "comath.v3.theorem_specific_formal_spec.v1",
-        campaign_id: input.campaign.campaign_id,
-        claim_id: input.campaign.root_claim_id,
-        obligation_id: input.obligation.obligation_id,
-        locked_statement_hash: input.obligation.statement_hash,
-        theorem_name: input.target.theorem_name,
-        target_family_id: input.target.target_family_id,
-        canonical_proposition: input.target.canonical_proposition,
-        normalized_target_header: input.target.normalized_target_header,
-        target_statement_prop: input.target.target_statement_prop,
-        synthesis_scope: input.target.synthesis_scope ?? "registered_nat_linear_identity_target",
-        ...(input.target.linear_normal_form ? { linear_normal_form: input.target.linear_normal_form } : {}),
-        proof_body_status: "synthesized_unreplayed",
-        status: "target_generated_unproved",
-        proof_authority: "none",
-        can_promote_claim: false,
-        created_at: now()
-      },
-      null,
-      2
-    )}\n`
-  );
-  return writeSimpleStageArtifact(input.projectRoot, input.campaign, "theorem_specific_lean_project.json", {
-    schema_version: "comath.v3.theorem_specific_lean_project.v1",
-    campaign_id: input.campaign.campaign_id,
-    project_id: input.campaign.project_id,
-    claim_id: input.campaign.root_claim_id,
-    obligation_id: input.obligation.obligation_id,
-    locked_statement_hash: input.obligation.statement_hash,
-    target_formal_system: "Lean4",
-    status: "target_generated_unproved",
-    theorem_name: input.target.theorem_name,
-    target_family_id: input.target.target_family_id,
-    canonical_proposition: input.target.canonical_proposition,
-    normalized_target_header: input.target.normalized_target_header,
-    target_statement_prop: input.target.target_statement_prop,
-    synthesis_scope: input.target.synthesis_scope ?? "registered_nat_linear_identity_target",
-    ...(input.target.linear_normal_form ? { linear_normal_form: input.target.linear_normal_form } : {}),
-    replay_command: input.target.replay_command,
-    proof_authority: "none",
-    can_run_clean_replay: false,
-    can_promote_claim: false,
-    blocked_until: "proof body and authority reports exist",
-    bound_artifacts: {
-      problem_lock: ".comath/lock/problem_lock.md",
-      obligation_dag: campaignProofRel(input.campaign, "lemma_dag.json"),
-      line_map: campaignProofRel(input.campaign, "line_map.json"),
-      formal_spec: input.target.formal_spec_rel
-    },
-    lean_files: {
-      target: input.target.theorem_file_rel,
-      audit: input.target.audit_file_rel,
-      formal_spec: input.target.formal_spec_rel,
-      lakefile: input.target.lakefile_rel,
-      toolchain: input.target.toolchain_rel
-    },
-    required_authority_reports: [
-      "static_audit",
-      "statement_equivalence",
-      "dependency_closure",
-      "axiom_profile",
-      "final_clean_replay_manifest"
-    ],
-    created_at: now()
-  });
-}
-
-function createLeanProjectForTheoremSpecificTarget(input: {
-  projectRoot: string;
-  campaign: ResearchCampaign;
-  claim_id: string;
-  locked_statement_hash: string;
-  target: TheoremSpecificLeanTarget;
-}): LeanProjectFiles {
-  const leanRootRel = `.comath/lean/broad/${input.campaign.campaign_id}`;
-  const theoremFileRel = "MathResearch/Target.lean";
-  const auditFileRel = "Audit/Target.lean";
-  const leanRoot = assertPathAllowed(input.projectRoot, leanRootRel, { purpose: "runtime-write" });
-  return {
-    projectRoot: input.projectRoot,
-    leanRoot,
-    theoremFile: assertPathAllowed(input.projectRoot, input.target.theorem_file_rel, { purpose: "runtime-write" }),
-    theoremFileRel,
-    formalSpecFile: assertPathAllowed(input.projectRoot, input.target.formal_spec_rel, { purpose: "runtime-write" }),
-    auditFile: assertPathAllowed(input.projectRoot, input.target.audit_file_rel, { purpose: "runtime-write" }),
-    auditFileRel,
-    lakefile: assertPathAllowed(input.projectRoot, input.target.lakefile_rel, { purpose: "runtime-write" }),
-    toolchainFile: assertPathAllowed(input.projectRoot, input.target.toolchain_rel, { purpose: "runtime-write" }),
-    theoremName: input.target.theorem_name,
-    theoremFamilyId: input.target.target_family_id,
-    canonicalProposition: input.target.canonical_proposition,
-    buildTargets: ["MathResearch.Target", "Audit.Target"],
-    replayCommand: "lake build MathResearch.Target Audit.Target",
-    primaryDependency: "Std omega tactic",
-    formalSpec: {
-      claim_id: input.claim_id,
-      theorem_name: input.target.theorem_name,
-      namespace: input.target.namespace,
-      normalized_statement: `${input.target.theorem_name} ${input.target.normalized_target_header.replace(/^theorem\s+C0001\s*/, "")}`,
-      locked_statement_hash: input.locked_statement_hash
-    }
-  };
-}
-
-function patchRuntimeJson(projectRoot: string, rel: string, patch: Record<string, unknown>): void {
-  const path = assertPathAllowed(projectRoot, rel, { purpose: "runtime-write" });
-  const existing = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-  writeRuntimeFile(projectRoot, rel, `${JSON.stringify({ ...existing, ...patch, updated_at: now() }, null, 2)}\n`);
-}
-
-function hashTextSha256(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
-
-function sha256RuntimeFile(projectRoot: string, rel: string): { sha256: string; size_bytes: number } {
-  const path = assertPathAllowed(projectRoot, rel, { purpose: "read", resolveRealpath: true });
-  return {
-    sha256: createHash("sha256").update(readFileSync(path)).digest("hex"),
-    size_bytes: statSync(path).size
-  };
-}
-
-function previewBoundedProofBodyAudit(projectRoot: string, campaign: ResearchCampaign, proofBody: string): string {
-  const findings = proofBodyForbiddenTokens
-    .filter((token) => new RegExp(`\\b${token}\\b`).test(proofBody))
-    .map((token) => ({
-      token,
-      severity: "error",
-      message: `forbidden Lean escape hatch detected in synthesized proof body: ${token}`
-    }));
-  return writeSimpleStageArtifact(projectRoot, campaign, "bounded_proof_body_static_audit.json", {
-    schema_version: "comath.v3.bounded_proof_body_static_audit.v1",
-    campaign_id: campaign.campaign_id,
-    result: findings.length === 0 ? "pass" : "fail",
-    scanned_text_sha256: hashTextSha256(proofBody),
-    forbidden_tokens: proofBodyForbiddenTokens,
-    findings,
-    hard_vetoes: findings.map((finding) => `${finding.token}_detected`),
-    proof_authority: "none",
-    can_promote_claim: false,
-    created_at: now()
-  });
-}
-
-function writeBoundedProofBodySynthesis(input: {
-  projectRoot: string;
-  campaign: ResearchCampaign;
-  obligation: ProofObligation;
-  target: TheoremSpecificLeanTarget;
-  leanProjectRel: string;
-}): BoundedProofBodySynthesis {
-  const auditRel = previewBoundedProofBodyAudit(input.projectRoot, input.campaign, input.target.proof_body);
-  const proofBodyRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "bounded_proof_body_synthesis.json", {
-    schema_version: "comath.v3.bounded_proof_body_synthesis.v1",
-    campaign_id: input.campaign.campaign_id,
-    project_id: input.campaign.project_id,
-    claim_id: input.campaign.root_claim_id,
-    obligation_id: input.obligation.obligation_id,
-    locked_statement_hash: input.obligation.statement_hash,
-    theorem_name: input.target.theorem_name,
-    target_family_id: input.target.target_family_id,
-    canonical_proposition: input.target.canonical_proposition,
-    normalized_target_header: input.target.normalized_target_header,
-    target_statement_prop: input.target.target_statement_prop,
-    status: "proof_body_synthesized_unreplayed",
-    synthesized_body: input.target.proof_body,
-    synthesis_scope: input.target.synthesis_scope ?? "registered_nat_linear_identity_target",
-    ...(input.target.linear_normal_form ? { linear_normal_form: input.target.linear_normal_form } : {}),
-    proof_authority: "none",
-    can_run_clean_replay: false,
-    can_promote_claim: false,
-    audit_preview_path: auditRel,
-    bound_artifacts: {
-      problem_lock: ".comath/lock/problem_lock.md",
-      obligation_dag: campaignProofRel(input.campaign, "lemma_dag.json"),
-      line_map: campaignProofRel(input.campaign, "line_map.json"),
-      theorem_specific_lean_project: input.leanProjectRel,
-      target_lean_file: input.target.theorem_file_rel,
-      formal_spec: input.target.formal_spec_rel
-    },
-    required_before_authority: [
-      "candidate manifest with checked statement binding",
-      "dependency closure report",
-      "axiom profile report",
-      "statement equivalence report",
-      "final clean Lean replay manifest",
-      "fresh promotion gate decision"
-    ],
-    created_at: now()
-  });
-  return { proofBodyRel, auditRel };
-}
-
-function bindProofBodyToTheoremSpecificLeanProject(input: {
-  projectRoot: string;
-  campaign: ResearchCampaign;
-  leanProjectRel: string;
-  proofBody: BoundedProofBodySynthesis;
-}): void {
-  const path = assertPathAllowed(input.projectRoot, input.leanProjectRel, { purpose: "runtime-write" });
-  const existing = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-  writeRuntimeFile(
-    input.projectRoot,
-    input.leanProjectRel,
-    `${JSON.stringify(
-      {
-        ...existing,
-        status: "proof_body_synthesized_unreplayed",
-        proof_body_synthesis_path: input.proofBody.proofBodyRel,
-        proof_body_static_audit_path: input.proofBody.auditRel,
-        blocked_until: "final Lean Authority v2 reports exist",
-        proof_authority: "none",
-        can_run_clean_replay: false,
-        can_promote_claim: false,
-        updated_at: now()
-      },
-      null,
-      2
-    )}\n`
-  );
-}
-
-function parseLeanImports(source: string): string[] {
-  return source
-    .split(/\r?\n/)
-    .map((line) => /^import\s+(.+)$/.exec(line.trim())?.[1])
-    .filter((item): item is string => Boolean(item));
-}
-
-function writeBoundedAuthorityReportPreparation(input: {
-  projectRoot: string;
-  campaign: ResearchCampaign;
-  obligation: ProofObligation;
-  target: TheoremSpecificLeanTarget;
-  leanProjectRel: string;
-  proofBody: BoundedProofBodySynthesis;
-}): BoundedAuthorityReportPreparation {
-  const leanSource = readFileSync(
-    assertPathAllowed(input.projectRoot, input.target.theorem_file_rel, { purpose: "read", resolveRealpath: true }),
-    "utf8"
-  );
-  const forbiddenFindings = proofBodyForbiddenTokens
-    .filter((token) => new RegExp(`\\b${token}\\b`).test(leanSource))
-    .map((token) => ({
-      token,
-      severity: "error",
-      message: `forbidden Lean escape hatch detected in authority-report preview source: ${token}`
-    }));
-  const staticRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "bounded_authority_static_audit_preview.json", {
-    schema_version: "comath.v3.bounded_authority_static_audit_preview.v1",
-    campaign_id: input.campaign.campaign_id,
-    theorem_name: input.target.theorem_name,
-    target_lean_file: input.target.theorem_file_rel,
-    result: forbiddenFindings.length === 0 ? "preview_pass" : "preview_fail",
-    findings: forbiddenFindings,
-    hard_vetoes: forbiddenFindings.map((finding) => `${finding.token}_detected`),
-    scanned_files: [input.target.theorem_file_rel],
-    proof_authority: "none",
-    can_promote_claim: false,
-    created_at: now()
-  });
-  const expectedHeader = input.target.normalized_target_header;
-  const statementMatches = leanSource.includes(`${expectedHeader} := ${input.target.proof_body}`);
-  const statementRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "bounded_authority_statement_equivalence_preview.json", {
-    schema_version: "comath.v3.bounded_authority_statement_equivalence_preview.v1",
-    campaign_id: input.campaign.campaign_id,
-    obligation_id: input.obligation.obligation_id,
-    locked_statement_hash: input.obligation.statement_hash,
-    theorem_name: input.target.theorem_name,
-    normalized_target_header: input.target.normalized_target_header,
-    target_statement_prop: input.target.target_statement_prop,
-    result: statementMatches ? "preview_pass" : "preview_fail",
-    status: statementMatches ? "target_header_matches_locked_statement" : "target_header_mismatch",
-    hard_vetoes: statementMatches ? [] : ["target_header_mismatch"],
-    proof_authority: "none",
-    can_promote_claim: false,
-    created_at: now()
-  });
-  const dependencyRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "bounded_authority_dependency_closure_preview.json", {
-    schema_version: "comath.v3.bounded_authority_dependency_closure_preview.v1",
-    campaign_id: input.campaign.campaign_id,
-    theorem_name: input.target.theorem_name,
-    result: "preview_pass",
-    lean_toolchain: readFileSync(assertPathAllowed(input.projectRoot, input.target.toolchain_rel, { purpose: "read", resolveRealpath: true }), "utf8").trim(),
-    lakefile_hash: sha256RuntimeFile(input.projectRoot, input.target.lakefile_rel).sha256,
-    local_file_hashes: {
-      "MathResearch/Target.lean": sha256RuntimeFile(input.projectRoot, input.target.theorem_file_rel).sha256,
-      "FormalSpec/target.json": sha256RuntimeFile(input.projectRoot, input.target.formal_spec_rel).sha256
-    },
-    imports: {
-      "MathResearch/Target.lean": parseLeanImports(leanSource)
-    },
-    hard_vetoes: [],
-    proof_authority: "none",
-    can_promote_claim: false,
-    created_at: now()
-  });
-  const axiomRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "bounded_authority_axiom_profile_preview.json", {
-    schema_version: "comath.v3.bounded_authority_axiom_profile_preview.v1",
-    campaign_id: input.campaign.campaign_id,
-    theorem_name: input.target.theorem_name,
-    result: "preview_blocked",
-    trust_profile: {
-      profile_id: "ordinary_classical",
-      allowed_axioms: ["propext", "Quot.sound", "Classical.choice"],
-      require_print_axioms: true
-    },
-    detected_axioms: [],
-    hard_vetoes: ["requires_clean_replay_axiom_output"],
-    proof_authority: "none",
-    can_promote_claim: false,
-    created_at: now()
-  });
-  const preparationRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "bounded_authority_report_preparation.json", {
-    schema_version: "comath.v3.bounded_authority_report_preparation.v1",
-    campaign_id: input.campaign.campaign_id,
-    project_id: input.campaign.project_id,
-    claim_id: input.campaign.root_claim_id,
-    obligation_id: input.obligation.obligation_id,
-    locked_statement_hash: input.obligation.statement_hash,
-    theorem_name: input.target.theorem_name,
-    target_family_id: input.target.target_family_id,
-    canonical_proposition: input.target.canonical_proposition,
-    status: "authority_reports_prepared_nonpromotional",
-    proof_authority: "none",
-    can_run_clean_replay: false,
-    can_promote_claim: false,
-    final_replay_manifest_path: null,
-    bound_artifacts: {
-      problem_lock: ".comath/lock/problem_lock.md",
-      obligation_dag: campaignProofRel(input.campaign, "lemma_dag.json"),
-      line_map: campaignProofRel(input.campaign, "line_map.json"),
-      theorem_specific_lean_project: input.leanProjectRel,
-      proof_body_synthesis: input.proofBody.proofBodyRel,
-      proof_body_static_audit: input.proofBody.auditRel,
-      target_lean_file: input.target.theorem_file_rel,
-      formal_spec: input.target.formal_spec_rel
-    },
-    report_paths: {
-      static_audit_preview: staticRel,
-      statement_equivalence_preview: statementRel,
-      dependency_closure_preview: dependencyRel,
-      axiom_profile_preview: axiomRel
-    },
-    required_before_authority: [
-      "candidate manifest with checked statement binding",
-      "clean workspace replay",
-      "fresh final static audit report",
-      "fresh statement equivalence report",
-      "fresh dependency closure report",
-      "fresh axiom profile report",
-      "final clean Lean replay manifest",
-      "fresh promotion gate decision"
-    ],
-    created_at: now()
-  });
-  return { preparationRel, staticRel, statementRel, dependencyRel, axiomRel };
-}
-
-function bindAuthorityPreparationToTheoremSpecificLeanProject(input: {
-  projectRoot: string;
-  leanProjectRel: string;
-  authorityPreparation: BoundedAuthorityReportPreparation;
-}): void {
-  const path = assertPathAllowed(input.projectRoot, input.leanProjectRel, { purpose: "runtime-write" });
-  const existing = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-  writeRuntimeFile(
-    input.projectRoot,
-    input.leanProjectRel,
-    `${JSON.stringify(
-      {
-        ...existing,
-        status: "authority_reports_prepared_nonpromotional",
-        authority_report_preparation_path: input.authorityPreparation.preparationRel,
-        authority_preview_report_paths: {
-          static_audit_preview: input.authorityPreparation.staticRel,
-          statement_equivalence_preview: input.authorityPreparation.statementRel,
-          dependency_closure_preview: input.authorityPreparation.dependencyRel,
-          axiom_profile_preview: input.authorityPreparation.axiomRel
-        },
-        blocked_until: "final clean Lean replay manifest exists",
-        proof_authority: "none",
-        can_run_clean_replay: false,
-        can_promote_claim: false,
-        updated_at: now()
-      },
-      null,
-      2
-    )}\n`
-  );
-}
+const businessLayerTheoremProverForbidden = "business_layer_theorem_prover_forbidden";
 
 function blockForBroadSynthesisPlanning(input: {
   projectRoot: string;
@@ -1098,49 +569,6 @@ function blockForBroadSynthesisPlanning(input: {
 }): CampaignTickResult {
   const obligationDagRel = campaignProofRel(input.campaign, "lemma_dag.json");
   const lineMapRel = campaignProofRel(input.campaign, "line_map.json");
-  const leanTarget = theoremSpecificLeanTarget(input.campaign, input.obligation);
-  const leanProjectRel = leanTarget
-    ? writeTheoremSpecificLeanProject({
-        projectRoot: input.projectRoot,
-        campaign: input.campaign,
-        obligation: input.obligation,
-        target: leanTarget
-      })
-    : undefined;
-  const proofBody = leanTarget && leanProjectRel
-    ? writeBoundedProofBodySynthesis({
-        projectRoot: input.projectRoot,
-        campaign: input.campaign,
-        obligation: input.obligation,
-        target: leanTarget,
-        leanProjectRel
-      })
-    : undefined;
-  if (leanProjectRel && proofBody) {
-    bindProofBodyToTheoremSpecificLeanProject({
-      projectRoot: input.projectRoot,
-      campaign: input.campaign,
-      leanProjectRel,
-      proofBody
-    });
-  }
-  const authorityPreparation = leanTarget && leanProjectRel && proofBody
-    ? writeBoundedAuthorityReportPreparation({
-        projectRoot: input.projectRoot,
-        campaign: input.campaign,
-        obligation: input.obligation,
-        target: leanTarget,
-        leanProjectRel,
-        proofBody
-      })
-    : undefined;
-  if (leanProjectRel && authorityPreparation) {
-    bindAuthorityPreparationToTheoremSpecificLeanProject({
-      projectRoot: input.projectRoot,
-      leanProjectRel,
-      authorityPreparation
-    });
-  }
   const replayTargetRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "broad_replay_target.json", {
     schema_version: "comath.v3.broad_replay_target.v1",
     campaign_id: input.campaign.campaign_id,
@@ -1148,39 +576,26 @@ function blockForBroadSynthesisPlanning(input: {
     obligation_id: input.obligation.obligation_id,
     locked_statement_hash: input.obligation.statement_hash,
     target_formal_system: "Lean4",
-    status: authorityPreparation
-      ? "authority_reports_prepared_nonpromotional"
-      : proofBody
-        ? "proof_body_synthesized_unreplayed"
-        : leanTarget
-          ? "target_generated_unproved"
-          : "unresolved",
-    theorem_name: leanTarget?.theorem_name ?? null,
+    status: "blocked_no_production_theorem_prover",
+    theorem_name: input.obligation.lean_target ? null : null,
     lean_target: input.obligation.lean_target ?? null,
-    replay_command: leanTarget?.replay_command ?? null,
-    lean_project_target_path: leanProjectRel ?? null,
-    proof_body_synthesis_path: proofBody?.proofBodyRel ?? null,
-    proof_body_static_audit_path: proofBody?.auditRel ?? null,
-    authority_report_preparation_path: authorityPreparation?.preparationRel ?? null,
+    replay_command: null,
+    lean_project_target_path: null,
+    proof_body_synthesis_path: null,
+    proof_body_static_audit_path: null,
+    authority_report_preparation_path: null,
     can_promote_claim: false,
-    required_before_replay: proofBody
-      ? [
-          "candidate manifest with checked statement binding",
-          "dependency closure report",
-          "axiom profile report",
-          "statement equivalence report",
-          "final clean Lean replay manifest"
-        ]
-      : [
-          leanTarget ? "add kernel-checked proof body" : "theorem-specific Lean declaration",
-          "candidate manifest with checked statement binding",
-          "dependency closure report",
-          "axiom profile report",
-          "statement equivalence report",
-          "final clean Lean replay manifest"
-        ],
+    required_before_replay: [
+      "FormalSpecLock with approved theorem boundary",
+      "service-owned LeanRunner candidate replay",
+      "statement-equivalence gate",
+      "dependency closure report",
+      "axiom profile report",
+      "final clean Lean replay manifest"
+    ],
     proof_authority: "none",
     can_run_clean_replay: false,
+    hard_vetoes: [businessLayerTheoremProverForbidden],
     created_at: now()
   });
   const planningRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "broad_synthesis_plan.json", {
@@ -1222,17 +637,11 @@ function blockForBroadSynthesisPlanning(input: {
         "final_clean_replay"
       ]
     },
-    theorem_specific_lean_project_path: leanProjectRel ?? null,
-    proof_body_synthesis_path: proofBody?.proofBodyRel ?? null,
-    proof_body_static_audit_path: proofBody?.auditRel ?? null,
-    authority_report_preparation_path: authorityPreparation?.preparationRel ?? null,
-    blocked_until: leanTarget
-      ? proofBody
-        ? authorityPreparation
-          ? "final clean Lean replay manifest exists"
-          : "final Lean Authority v2 reports exist"
-        : "proof body and authority reports exist"
-      : "a theorem-specific Lean declaration and checked replay target are generated",
+    theorem_specific_lean_project_path: null,
+    proof_body_synthesis_path: null,
+    proof_body_static_audit_path: null,
+    authority_report_preparation_path: null,
+    blocked_until: "FormalSpecLock and service-owned LeanRunner candidate replay are implemented",
     created_at: now()
   });
   const failureRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "broad_synthesis_failure.json", {
@@ -1240,73 +649,42 @@ function blockForBroadSynthesisPlanning(input: {
     campaign_id: input.campaign.campaign_id,
     claim_id: input.campaign.root_claim_id,
     obligation_id: input.obligation.obligation_id,
-    reason: authorityPreparation
-      ? broadAuthorityReportsPreparedBlockedReason
-      : proofBody
-        ? broadProofBodySynthesizedBlockedReason
-      : leanTarget
-        ? broadTargetGeneratedBlockedReason
-        : broadSynthesisBlockedReason,
+    reason: broadSynthesisBlockedReason,
     fail_closed: true,
     promotion_blocked: true,
     proof_authority: "none",
+    can_promote_claim: false,
+    hard_vetoes: [businessLayerTheoremProverForbidden],
     replayable_evidence: {
       problem_lock: ".comath/lock/problem_lock.md",
       obligation_dag: obligationDagRel,
       line_map: lineMapRel,
       planning_artifact: planningRel,
       replay_target_artifact: replayTargetRel,
-      lean_project_target: leanProjectRel ?? null,
-      proof_body_synthesis: proofBody?.proofBodyRel ?? null,
-      proof_body_static_audit: proofBody?.auditRel ?? null,
-      authority_report_preparation: authorityPreparation?.preparationRel ?? null
+      lean_project_target: null,
+      proof_body_synthesis: null,
+      proof_body_static_audit: null,
+      authority_report_preparation: null
     },
     next_actions: [
-      authorityPreparation
-        ? "run final clean replay in a clean workspace before any promotion"
-        : proofBody
-          ? "run candidate manifest binding, dependency closure, axiom profile, statement equivalence, and final clean replay"
-        : "synthesize a theorem-specific Lean target before candidate generation",
-      "rerun 8-way candidate generation only after replay target resolution",
-      "promote no claim until final clean replay and promotion gate pass"
+      "create a FormalSpecLock before proof search",
+      "use external theorem search/proof-search adapters as hints only",
+      "promote no claim until service-owned Lean clean replay and promotion gates pass"
     ],
     created_at: now()
   });
   const blocker = {
-    reason: authorityPreparation
-      ? broadAuthorityReportsPreparedBlockedReason
-      : proofBody
-        ? broadProofBodySynthesizedBlockedReason
-      : leanTarget
-        ? broadTargetGeneratedBlockedReason
-        : broadSynthesisBlockedReason,
+    reason: broadSynthesisBlockedReason,
     obligation_id: input.obligation.obligation_id,
     artifact_path: failureRel,
     planning_artifact_path: planningRel,
     replay_target_path: replayTargetRel,
-    lean_project_target_path: leanProjectRel ?? null,
-    proof_body_synthesis_path: proofBody?.proofBodyRel ?? null,
-    authority_report_preparation_path: authorityPreparation?.preparationRel ?? null
+    lean_project_target_path: null,
+    proof_body_synthesis_path: null,
+    authority_report_preparation_path: null,
+    hard_vetoes: [businessLayerTheoremProverForbidden]
   };
-  const stageArtifacts = leanProjectRel && proofBody && authorityPreparation
-    ? [
-        planningRel,
-        replayTargetRel,
-        leanProjectRel,
-        proofBody.proofBodyRel,
-        proofBody.auditRel,
-        authorityPreparation.preparationRel,
-        authorityPreparation.staticRel,
-        authorityPreparation.statementRel,
-        authorityPreparation.dependencyRel,
-        authorityPreparation.axiomRel,
-        failureRel
-      ]
-    : leanProjectRel && proofBody
-      ? [planningRel, replayTargetRel, leanProjectRel, proofBody.proofBodyRel, proofBody.auditRel, failureRel]
-    : leanProjectRel
-      ? [planningRel, replayTargetRel, leanProjectRel, failureRel]
-    : [planningRel, replayTargetRel, failureRel];
+  const stageArtifacts = [planningRel, replayTargetRel, failureRel];
   const next = writeCampaign(
     input.projectRoot,
     researchCampaignSchema.parse({
@@ -1321,13 +699,7 @@ function blockForBroadSynthesisPlanning(input: {
         stageRun(input.campaign, "candidate_generation", "blocked", stageArtifacts)
       ],
       next_actions: [
-        leanTarget
-          ? proofBody
-            ? authorityPreparation
-              ? "run final clean Lean replay before any claim promotion"
-              : "run final Lean Authority v2 reports before any claim promotion"
-            : "add a kernel-checked proof body and authority reports before rerunning broad synthesis"
-          : "resolve a theorem-specific Lean replay target before rerunning broad synthesis",
+        "create a FormalSpecLock before proof search",
         "keep the claim conjectural until final clean replay evidence exists"
       ]
     }),
@@ -1336,13 +708,7 @@ function blockForBroadSynthesisPlanning(input: {
   return {
     campaign: next,
     obligation: { ...input.obligation, status: "blocked" },
-    blocker: authorityPreparation
-      ? broadAuthorityReportsPreparedBlockedReason
-      : proofBody
-        ? broadProofBodySynthesizedBlockedReason
-      : leanTarget
-        ? broadTargetGeneratedBlockedReason
-        : broadSynthesisBlockedReason
+    blocker: broadSynthesisBlockedReason
   };
 }
 
@@ -1361,7 +727,7 @@ function blockCampaignAtFinalReplay(input: {
     obligation_id: input.obligation.obligation_id,
     reason: input.reason,
     locked_statement_structured: input.obligation.locked_statement_structured,
-    required_replay_target: "registered theorem-family clean Lean replay",
+    required_replay_target: "service-owned Lean Authority v3 clean replay",
     created_at: now()
   });
   const blocker = {
@@ -1387,363 +753,6 @@ function blockCampaignAtFinalReplay(input: {
     campaign: next,
     obligation: { ...input.obligation, status: "blocked" },
     blocker: input.reason
-  };
-}
-
-async function runFinalReplayAndPromotion(input: {
-  projectRoot: string;
-  campaign: ResearchCampaign;
-  obligation: ProofObligation;
-  actor: string;
-  leanProject: LeanProjectFiles;
-  proofRoute: string;
-  patchAuthorityArtifacts?: (details: { finalReplayManifestRel: string; replay: CleanReplayResult }) => void;
-}): Promise<CampaignTickResult> {
-  const claim = getClaim(input.projectRoot, input.campaign.project_id, input.campaign.root_claim_id);
-  if (!claim) {
-    throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
-  }
-  const replay = runCleanLeanReplay({
-    projectRoot: input.projectRoot,
-    campaign_id: input.campaign.campaign_id,
-    claim_id: claim.id,
-    leanProject: input.leanProject
-  });
-
-  const proofArtifact = await importArtifact({
-    projectRoot: input.projectRoot,
-    project_id: input.campaign.project_id,
-    source_path: input.leanProject.theoremFile,
-    kind: "code",
-    actor: input.actor
-  });
-  const finalReplayManifestRel = join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/");
-  const replayArtifact = await importArtifact({
-    projectRoot: input.projectRoot,
-    project_id: input.campaign.project_id,
-    source_path: assertPathAllowed(input.projectRoot, finalReplayManifestRel, {
-      purpose: "read",
-      resolveRealpath: true
-    }),
-    kind: "runner_output",
-    actor: input.actor
-  });
-  const auditArtifact = await importArtifact({
-    projectRoot: input.projectRoot,
-    project_id: input.campaign.project_id,
-    source_path: assertPathAllowed(input.projectRoot, replay.final_replay.static_audit_path, {
-      purpose: "read",
-      resolveRealpath: true
-    }),
-    kind: "runner_output",
-    actor: input.actor
-  });
-  const evidence = appendEvidenceRecord(input.projectRoot, {
-    project_id: input.campaign.project_id,
-    claim_id: claim.id,
-    kind: "lean",
-    summary: `Clean Lean/Lake replay passed for ${input.leanProject.theoremName} via ${input.leanProject.primaryDependency} with static audit, dependency closure, axiom profile, and statement-equivalence reports.`,
-    artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id]
-  });
-  const metadataReadyClaim = applyGatePromotedClaim(input.projectRoot, {
-    ...claim,
-    formalization_status: "kernel_checked",
-    dependency_closure_status: "all_dependencies_present",
-    audit_state: "audit_passed",
-    updated_at: now()
-  });
-  appendAuditEvent(input.projectRoot, {
-    project_id: input.campaign.project_id,
-    event_type: "proof_kernel.metadata_ready",
-    actor: input.actor,
-    target_id: metadataReadyClaim.id,
-    payload: {
-      replay_id: replay.final_replay.replay_id,
-      evidence_id: evidence.id
-    }
-  });
-  const promotion = promoteClaim(input.projectRoot, {
-    project_id: input.campaign.project_id,
-    claim_id: claim.id,
-    target_status: "formally_checked",
-    evidence_ids: [evidence.id],
-    artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id],
-    actor: input.actor
-  });
-  const ok = replay.final_replay.result === "pass" && promotion.gate.ok;
-  const sliceSummaryRel = campaignRel(input.campaign, "v3_formal_campaign_slice.json");
-  const finalReplayArtifactPaths = [
-    replay.final_replay.stdout_path,
-    replay.final_replay.static_audit_path,
-    replay.final_replay.axiom_profile_path,
-    replay.final_replay.dependency_closure_path,
-    replay.final_replay.statement_equivalence_path,
-    finalReplayManifestRel
-  ];
-  const finalReplayRun = stageRun(input.campaign, "final_global_replay", ok ? "completed" : "blocked", finalReplayArtifactPaths);
-  const memoryArtifactPaths = ok
-    ? [
-        ".comath/memory/proof_memory_events.jsonl",
-        ".comath/context_lake/shards/final-handoff.md",
-        ".comath/snapshots/replay/final_manifest.json",
-        sliceSummaryRel
-      ]
-    : [];
-  if (ok) {
-    input.patchAuthorityArtifacts?.({ finalReplayManifestRel, replay });
-    const memoryRun = completedStageRun({ ...input.campaign, stage_runs: [...input.campaign.stage_runs, finalReplayRun] }, "memory_update", memoryArtifactPaths);
-    const finalStageRuns = [...input.campaign.stage_runs, finalReplayRun, memoryRun];
-    const storedDecision = readStoredDecision(input.projectRoot, input.campaign, input.obligation.obligation_id);
-    writeRuntimeFile(
-      input.projectRoot,
-      ".comath/memory/proof_memory_events.jsonl",
-      `${JSON.stringify({
-        type: "FormalProofVerified",
-        campaign_id: input.campaign.campaign_id,
-        claim_id: claim.id,
-        theorem_name: replay.final_replay.theorem_name,
-        final_theorem_hash: proofArtifact.sha256,
-        proof_route: input.proofRoute,
-        failed_routes_preserved_at: ".comath/proof_memory/events.jsonl",
-        created_at: now()
-      })}\n`
-    );
-    writeRuntimeFile(
-      input.projectRoot,
-      ".comath/context_lake/shards/final-handoff.md",
-      [
-        "# Final Handoff",
-        "",
-        `campaign_id: ${input.campaign.campaign_id}`,
-        `claim_id: ${claim.id}`,
-        `theorem_name: ${replay.final_replay.theorem_name}`,
-        `final_replay_manifest: .comath/evidence/${claim.id}/lean/final_replay_manifest.json`,
-        "",
-        "The claim was promoted only after final static audit, dependency closure, axiom profile, statement equivalence, and clean replay passed.",
-        ""
-      ].join("\n")
-    );
-    writeRuntimeFile(
-      input.projectRoot,
-      ".comath/snapshots/replay/final_manifest.json",
-      `${JSON.stringify(
-        {
-          campaign_id: input.campaign.campaign_id,
-          claim_id: claim.id,
-          replay_id: replay.final_replay.replay_id,
-          final_replay_manifest: finalReplayManifestRel,
-          proof_memory_events: ".comath/memory/proof_memory_events.jsonl",
-          created_at: now()
-        },
-        null,
-        2
-      )}\n`
-    );
-    writeRuntimeFile(
-      input.projectRoot,
-      sliceSummaryRel,
-      `${JSON.stringify(
-        {
-          schema_version: "comath.v3.formal_campaign_slice.v1",
-          campaign_id: input.campaign.campaign_id,
-          project_id: input.campaign.project_id,
-          claim_id: claim.id,
-          user_goal: input.campaign.user_goal,
-          obligation_id: input.obligation.obligation_id,
-          locked_statement_hash: input.obligation.statement_hash,
-          theorem_family: replay.final_replay.theorem_family,
-          canonical_proposition: replay.final_replay.canonical_proposition,
-          terminal_state: "completed_formal_proof",
-          final_claim_status: promotion.claim.status,
-          proof_authority: "lean_clean_replay",
-          stage_sequence: finalStageRuns.map((run) => run.stage),
-          candidate_summary: {
-            total_candidates: storedDecision?.candidates.length ?? 0,
-            selected_candidate_id: storedDecision?.decision.selected_candidate_id ?? null,
-            selection_mode: storedDecision?.decision.selection_mode ?? "recovery_required",
-            trivial_bypass_logged: (storedDecision?.candidates.length ?? 0) === 0,
-            candidate_artifact_paths: storedDecision?.candidates.map((candidate) => candidate.manifest_path).filter(Boolean) ?? []
-          },
-          final_audit: {
-            result: replay.static_audit.result,
-            artifact_path: replay.final_replay.static_audit_path,
-            hard_vetoes: replay.static_audit.hard_vetoes,
-            warnings: replay.static_audit.warnings
-          },
-          clean_replay: {
-            result: replay.final_replay.result,
-            replay_id: replay.final_replay.replay_id,
-            replay_command: replay.final_replay.command,
-            final_replay_manifest: finalReplayManifestRel,
-            stdout_path: replay.final_replay.stdout_path,
-            stderr_path: replay.final_replay.stderr_path
-          },
-          promotion: {
-            result: promotion.gate.ok ? "pass" : "blocked",
-            gate_id: promotion.gate.id,
-            evidence_ids: [evidence.id],
-            artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id]
-          },
-          replayable_artifact_bundle: {
-            final_replay_manifest: finalReplayManifestRel,
-            final_static_audit: replay.final_replay.static_audit_path,
-            final_replay_log: replay.final_replay.stdout_path,
-            final_replay_stderr: replay.final_replay.stderr_path,
-            axiom_profile: replay.final_replay.axiom_profile_path,
-            dependency_closure: replay.final_replay.dependency_closure_path,
-            statement_equivalence: replay.final_replay.statement_equivalence_path,
-            proof_memory_events: ".comath/memory/proof_memory_events.jsonl",
-            snapshot_final_manifest: ".comath/snapshots/replay/final_manifest.json",
-            final_handoff: ".comath/context_lake/shards/final-handoff.md"
-          },
-          created_at: now()
-        },
-        null,
-        2
-      )}\n`
-    );
-  }
-  const memoryRun = ok
-    ? completedStageRun({ ...input.campaign, stage_runs: [...input.campaign.stage_runs, finalReplayRun] }, "memory_update", memoryArtifactPaths)
-    : undefined;
-  const next = writeCampaign(
-    input.projectRoot,
-    researchCampaignSchema.parse({
-      ...input.campaign,
-      current_stage: ok ? "completed_formal_proof" : "blocked",
-      status: "terminal",
-      terminal_state: ok ? "completed_formal_proof" : "blocked_with_replayable_reason",
-      open_obligations: [{ ...input.obligation, status: ok ? "integrated" : "blocked" }],
-      accepted_artifacts: [proofArtifact, replayArtifact, auditArtifact],
-      blockers: ok ? [] : [{ reason: "final replay or promotion gate failed", gate: promotion.gate }],
-      stage_runs: [...input.campaign.stage_runs, finalReplayRun, ...(memoryRun ? [memoryRun] : [])],
-      next_actions: ok ? [] : ["inspect final replay logs and promotion gate vetoes"]
-    }),
-    input.actor
-  );
-  return {
-    campaign: next,
-    obligation: input.obligation,
-    ensemble: readStoredDecision(input.projectRoot, input.campaign, input.obligation.obligation_id),
-    gate: {
-      gate_id: "GD-0002",
-      campaign_id: input.campaign.campaign_id,
-      stage: "final_global_lean_replay",
-      subject_id: claim.id,
-      result: ok ? "pass" : "blocked",
-      evidence: [proofArtifact, replayArtifact, auditArtifact],
-      hard_vetoes: promotion.gate.vetoes,
-      warnings: promotion.gate.warnings,
-      decision_rationale_summary: ok
-        ? "Claim promoted only after static audit, clean Lean replay, statement equivalence, dependency closure, and axiom profile passed."
-        : "Final replay or claim promotion gate failed.",
-      created_at: now()
-    },
-    final_replay: replay.final_replay,
-    static_audit: replay.static_audit
-  };
-}
-
-async function completeVerifiedCounterexample(input: {
-  projectRoot: string;
-  campaign: ResearchCampaign;
-  obligation: ProofObligation;
-  actor: string;
-}): Promise<CampaignTickResult> {
-  const claim = getClaim(input.projectRoot, input.campaign.project_id, input.campaign.root_claim_id);
-  if (!claim) {
-    throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
-  }
-  const counterexample_id = "CE-0001";
-  const artifactRel = join(".comath", "evidence", claim.id, "counterexample", `${counterexample_id}.json`);
-  const payload = {
-    counterexample_id,
-    campaign_id: input.campaign.campaign_id,
-    claim_id: claim.id,
-    statement_hash: claim.statement_hash,
-    statement: claim.statement,
-    assignment: { n: 0 },
-    lhs: 1,
-    rhs: 0,
-    result: "refutes" as const,
-    verification: "exact Nat arithmetic evaluation: 0 + 1 = 1 and 0 = 0",
-    created_at: now()
-  };
-  const artifactPath = writeRuntimeFile(input.projectRoot, artifactRel, `${JSON.stringify(payload, null, 2)}\n`);
-  const artifact = await importArtifact({
-    projectRoot: input.projectRoot,
-    project_id: input.campaign.project_id,
-    source_path: artifactPath,
-    kind: "runner_output",
-    actor: input.actor
-  });
-  const evidence = appendEvidenceRecord(input.projectRoot, {
-    project_id: input.campaign.project_id,
-    claim_id: claim.id,
-    kind: "counterexample",
-    summary: "Exact Nat counterexample refutes the locked statement at n = 0.",
-    artifact_ids: [artifact.id]
-  });
-  const refuted = applyGatePromotedClaim(input.projectRoot, {
-    ...claim,
-    status: "refuted",
-    evidence_level: 2,
-    audit_state: "audit_passed",
-    updated_at: now()
-  });
-  appendAuditEvent(input.projectRoot, {
-    project_id: input.campaign.project_id,
-    event_type: "proof_kernel.counterexample_verified",
-    actor: input.actor,
-    target_id: refuted.id,
-    payload: {
-      evidence_id: evidence.id,
-      artifact_id: artifact.id,
-      counterexample_id,
-      statement_hash: claim.statement_hash
-    }
-  });
-  const next = writeCampaign(
-    input.projectRoot,
-    researchCampaignSchema.parse({
-      ...input.campaign,
-      current_stage: "completed_refutation",
-      status: "terminal",
-      terminal_state: "completed_refutation",
-      open_obligations: [{ ...input.obligation, status: "refuted" }],
-      accepted_artifacts: [artifact],
-      blockers: [],
-      stage_runs: [
-        ...input.campaign.stage_runs,
-        completedStageRun(input.campaign, "candidate_generation", [artifactRel.replace(/\\/g, "/")])
-      ],
-      next_actions: []
-    }),
-    input.actor
-  );
-  return {
-    campaign: next,
-    obligation: { ...input.obligation, status: "refuted" },
-    counterexample: {
-      counterexample_id,
-      assignment: payload.assignment,
-      lhs: payload.lhs,
-      rhs: payload.rhs,
-      result: payload.result,
-      artifact_path: artifactRel.replace(/\\/g, "/")
-    },
-    gate: {
-      gate_id: "GD-0001",
-      campaign_id: input.campaign.campaign_id,
-      stage: "lemma_sprint",
-      subject_id: claim.id,
-      result: "pass",
-      evidence: [artifact],
-      hard_vetoes: [],
-      warnings: [],
-      decision_rationale_summary: "Verified exact counterexample; campaign terminates as refutation instead of proof promotion.",
-      created_at: now()
-    }
   };
 }
 
@@ -1824,7 +833,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         `Locked statement: ${obligation.locked_statement_nl}`,
         "",
         "Library facts:",
-        "- Nat.add_zero / Nat.mul_zero theorem-family registry entries when applicable.",
+        "- External Lean theorem-search and mathlib facts, recorded as non-authoritative hints.",
         "",
         "Prior failed routes:",
         ...(
@@ -1854,7 +863,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         type: "LibrarySearch",
         campaign_id: campaign.campaign_id,
         query: obligation.locked_statement_nl,
-        results: ["registered_theorem_family_or_deferred"],
+        results: ["external_theorem_search_or_deferred"],
         created_at: now()
       })}\n`
     );
@@ -2046,155 +1055,12 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "candidate_generation") {
-    if (isNatAddOneFalseObligation(obligation)) {
-      return completeVerifiedCounterexample({
-        projectRoot: input.project_root,
-        campaign,
-        obligation,
-        actor
-      });
-    }
-    const theoremFamily = findTheoremFamilyForObligation(obligation);
-    if (!theoremFamily) {
-      const target = theoremSpecificLeanTarget(campaign, obligation);
-      if (target) {
-        const leanProjectRel = writeTheoremSpecificLeanProject({
-          projectRoot: input.project_root,
-          campaign,
-          obligation,
-          target
-        });
-        const proofBody = writeBoundedProofBodySynthesis({
-          projectRoot: input.project_root,
-          campaign,
-          obligation,
-          target,
-          leanProjectRel
-        });
-        bindProofBodyToTheoremSpecificLeanProject({
-          projectRoot: input.project_root,
-          campaign,
-          leanProjectRel,
-          proofBody
-        });
-        const authorityPreparation = writeBoundedAuthorityReportPreparation({
-          projectRoot: input.project_root,
-          campaign,
-          obligation,
-          target,
-          leanProjectRel,
-          proofBody
-        });
-        bindAuthorityPreparationToTheoremSpecificLeanProject({
-          projectRoot: input.project_root,
-          leanProjectRel,
-          authorityPreparation
-        });
-        const replayTargetRel = writeSimpleStageArtifact(input.project_root, campaign, "broad_replay_target.json", {
-          schema_version: "comath.v3.broad_replay_target.v1",
-          campaign_id: campaign.campaign_id,
-          claim_id: campaign.root_claim_id,
-          obligation_id: obligation.obligation_id,
-          locked_statement_hash: obligation.statement_hash,
-          target_formal_system: "Lean4",
-          status: "authority_reports_prepared_clean_replay_ready",
-          theorem_name: target.theorem_name,
-          lean_target: obligation.lean_target ?? null,
-          replay_command: target.replay_command,
-          lean_project_target_path: leanProjectRel,
-          proof_body_synthesis_path: proofBody.proofBodyRel,
-          proof_body_static_audit_path: proofBody.auditRel,
-          authority_report_preparation_path: authorityPreparation.preparationRel,
-          can_promote_claim: false,
-          required_before_replay: [
-            "fresh final static audit report",
-            "fresh statement equivalence report",
-            "fresh dependency closure report",
-            "fresh axiom profile report",
-            "final clean Lean replay manifest",
-            "fresh promotion gate decision"
-          ],
-          proof_authority: "none",
-          can_run_clean_replay: true,
-          created_at: now()
-        });
-        const replay = await runFinalReplayAndPromotion({
-          projectRoot: input.project_root,
-          campaign: {
-            ...campaign,
-            stage_runs: [
-              ...campaign.stage_runs,
-              completedStageRun(campaign, "candidate_generation", [
-                replayTargetRel,
-                leanProjectRel,
-                proofBody.proofBodyRel,
-                proofBody.auditRel,
-                authorityPreparation.preparationRel,
-                authorityPreparation.staticRel,
-                authorityPreparation.statementRel,
-                authorityPreparation.dependencyRel,
-                authorityPreparation.axiomRel
-              ])
-            ]
-          },
-          obligation,
-          actor,
-          leanProject: createLeanProjectForTheoremSpecificTarget({
-            projectRoot: input.project_root,
-            campaign,
-            claim_id: campaign.root_claim_id,
-            locked_statement_hash: obligation.statement_hash,
-            target
-          }),
-          proofRoute: `${target.target_family_id}_final_clean_replay`,
-          patchAuthorityArtifacts: ({ finalReplayManifestRel }) => {
-            const finalPatch = {
-              status: "final_clean_replay_passed",
-              proof_authority: "lean_clean_replay",
-              can_run_clean_replay: true,
-              can_promote_claim: true,
-              final_replay_manifest_path: finalReplayManifestRel,
-              final_report_paths: {
-                static_audit: `.comath/evidence/${campaign.root_claim_id}/lean/final_static_audit.json`,
-                statement_equivalence: `.comath/evidence/${campaign.root_claim_id}/lean/statement_equivalence.json`,
-                dependency_closure: `.comath/evidence/${campaign.root_claim_id}/lean/dependency_closure.json`,
-                axiom_profile: `.comath/evidence/${campaign.root_claim_id}/lean/axiom_profile.json`
-              }
-            };
-            patchRuntimeJson(input.project_root, leanProjectRel, finalPatch);
-            patchRuntimeJson(input.project_root, authorityPreparation.preparationRel, finalPatch);
-            patchRuntimeJson(input.project_root, replayTargetRel, finalPatch);
-          }
-        });
-        return replay;
-      }
-      return blockForBroadSynthesisPlanning({
-        projectRoot: input.project_root,
-        campaign,
-        obligation,
-        actor
-      });
-    }
-    const batch = runTheoremFamilyCandidates({ projectRoot: input.project_root, campaign, obligation, theoremFamily });
-    const candidatesRel = ensembleCandidatesRel(campaign, obligation.obligation_id);
-    writeRuntimeFile(
-      input.project_root,
-      candidatesRel,
-      `${JSON.stringify(batch.candidates, null, 2)}\n`
-    );
-    recordFailedRoutes({ projectRoot: input.project_root, campaign, candidates: batch.candidates });
-    const next = writeCampaign(
-      input.project_root,
-      researchCampaignSchema.parse({
-        ...campaign,
-        current_stage: "candidate_verification",
-        open_obligations: [{ ...obligation, status: "candidate_search" }],
-        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "candidate_generation", [candidatesRel])],
-        next_actions: ["verify candidate manifests, statement hashes, and failure preservation"]
-      }),
+    return blockForBroadSynthesisPlanning({
+      projectRoot: input.project_root,
+      campaign,
+      obligation,
       actor
-    );
-    return { campaign: next, obligation };
+    });
   }
 
   if (campaign.current_stage === "candidate_verification") {
@@ -2293,7 +1159,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         "",
         "namespace MathResearch",
         "",
-        "-- Selected candidate is integrated by the theorem-family clean replay stage.",
+        "-- Selected candidate is integrated only after service-owned Lean replay evidence exists.",
         "",
         "end MathResearch",
         ""
@@ -2390,273 +1256,13 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "final_global_replay") {
-    const claim = getClaim(input.project_root, campaign.project_id, campaign.root_claim_id);
-    if (!claim) {
-      throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
-    }
-    if (!isSupportedProofObligation(obligation)) {
-      return blockCampaignAtFinalReplay({
-        projectRoot: input.project_root,
-        campaign,
-        obligation,
-        actor,
-        reason: "unsupported final replay target"
-      });
-    }
-    const theoremFamily = findTheoremFamilyForObligation(obligation);
-    if (!theoremFamily) {
-      return blockCampaignAtFinalReplay({
-        projectRoot: input.project_root,
-        campaign,
-        obligation,
-        actor,
-        reason: "unsupported final replay target"
-      });
-    }
-    const leanProject = createLeanProjectForTheorem({
+    return blockCampaignAtFinalReplay({
       projectRoot: input.project_root,
-      claim_id: claim.id,
-      locked_statement_hash: claim.statement_hash,
-      theoremFamily
-    });
-    const replay = runCleanLeanReplay({
-      projectRoot: input.project_root,
-      campaign_id: campaign.campaign_id,
-      claim_id: claim.id,
-      leanProject
-    });
-
-    const proofArtifact = await importArtifact({
-      projectRoot: input.project_root,
-      project_id: campaign.project_id,
-      source_path: leanProject.theoremFile,
-      kind: "code",
-      actor
-    });
-    const replayArtifact = await importArtifact({
-      projectRoot: input.project_root,
-      project_id: campaign.project_id,
-      source_path: assertPathAllowed(input.project_root, join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json"), {
-        purpose: "read",
-        resolveRealpath: true
-      }),
-      kind: "runner_output",
-      actor
-    });
-    const auditArtifact = await importArtifact({
-      projectRoot: input.project_root,
-      project_id: campaign.project_id,
-      source_path: assertPathAllowed(input.project_root, join(".comath", "evidence", claim.id, "lean", "final_static_audit.json"), {
-        purpose: "read",
-        resolveRealpath: true
-      }),
-      kind: "runner_output",
-      actor
-    });
-    const evidence = appendEvidenceRecord(input.project_root, {
-      project_id: campaign.project_id,
-      claim_id: claim.id,
-      kind: "lean",
-      summary: `Clean Lean/Lake replay passed for ${leanProject.theoremName} via ${leanProject.primaryDependency} with static audit, dependency closure, axiom profile, and statement-equivalence reports.`,
-      artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id]
-    });
-    const metadataReadyClaim = applyGatePromotedClaim(input.project_root, {
-      ...claim,
-      formalization_status: "kernel_checked",
-      dependency_closure_status: "all_dependencies_present",
-      audit_state: "audit_passed",
-      updated_at: now()
-    });
-    appendAuditEvent(input.project_root, {
-      project_id: campaign.project_id,
-      event_type: "proof_kernel.metadata_ready",
-      actor,
-      target_id: metadataReadyClaim.id,
-      payload: {
-        replay_id: replay.final_replay.replay_id,
-        evidence_id: evidence.id
-      }
-    });
-    const promotion = promoteClaim(input.project_root, {
-      project_id: campaign.project_id,
-      claim_id: claim.id,
-      target_status: "formally_checked",
-      evidence_ids: [evidence.id],
-      artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id],
-      actor
-    });
-    const ok = replay.final_replay.result === "pass" && promotion.gate.ok;
-    const finalReplayManifestRel = join(".comath", "evidence", claim.id, "lean", "final_replay_manifest.json").replace(/\\/g, "/");
-    const sliceSummaryRel = campaignRel(campaign, "v3_formal_campaign_slice.json");
-    const finalReplayArtifactPaths = [
-      replay.final_replay.stdout_path,
-      replay.final_replay.static_audit_path,
-      replay.final_replay.axiom_profile_path,
-      replay.final_replay.dependency_closure_path,
-      replay.final_replay.statement_equivalence_path,
-      finalReplayManifestRel
-    ];
-    const finalReplayRun = stageRun(campaign, "final_global_replay", ok ? "completed" : "blocked", finalReplayArtifactPaths);
-    const memoryArtifactPaths = ok
-      ? [
-          ".comath/memory/proof_memory_events.jsonl",
-          ".comath/context_lake/shards/final-handoff.md",
-          ".comath/snapshots/replay/final_manifest.json",
-          sliceSummaryRel
-        ]
-      : [];
-    if (ok) {
-      const memoryRun = completedStageRun({ ...campaign, stage_runs: [...campaign.stage_runs, finalReplayRun] }, "memory_update", memoryArtifactPaths);
-      const finalStageRuns = [...campaign.stage_runs, finalReplayRun, memoryRun];
-      const storedDecision = readStoredDecision(input.project_root, campaign, obligation.obligation_id);
-      writeRuntimeFile(
-        input.project_root,
-        ".comath/memory/proof_memory_events.jsonl",
-        `${JSON.stringify({
-          type: "FormalProofVerified",
-          campaign_id: campaign.campaign_id,
-          claim_id: claim.id,
-          theorem_name: replay.final_replay.theorem_name,
-          final_theorem_hash: proofArtifact.sha256,
-          proof_route: "native_campaign_stage_gates",
-          failed_routes_preserved_at: ".comath/proof_memory/events.jsonl",
-          created_at: now()
-        })}\n`
-      );
-      writeRuntimeFile(
-        input.project_root,
-        ".comath/context_lake/shards/final-handoff.md",
-        [
-          "# Final Handoff",
-          "",
-          `campaign_id: ${campaign.campaign_id}`,
-          `claim_id: ${claim.id}`,
-          `theorem_name: ${replay.final_replay.theorem_name}`,
-          `final_replay_manifest: .comath/evidence/${claim.id}/lean/final_replay_manifest.json`,
-          "",
-          "The claim was promoted only after final static audit, dependency closure, axiom profile, statement equivalence, and clean replay passed.",
-          ""
-        ].join("\n")
-      );
-      writeRuntimeFile(
-        input.project_root,
-        ".comath/snapshots/replay/final_manifest.json",
-        `${JSON.stringify(
-          {
-            campaign_id: campaign.campaign_id,
-            claim_id: claim.id,
-            replay_id: replay.final_replay.replay_id,
-            final_replay_manifest: finalReplayManifestRel,
-            proof_memory_events: ".comath/memory/proof_memory_events.jsonl",
-            created_at: now()
-          },
-          null,
-          2
-        )}\n`
-      );
-      writeRuntimeFile(
-        input.project_root,
-        sliceSummaryRel,
-        `${JSON.stringify(
-          {
-            schema_version: "comath.v3.formal_campaign_slice.v1",
-            campaign_id: campaign.campaign_id,
-            project_id: campaign.project_id,
-            claim_id: claim.id,
-            user_goal: campaign.user_goal,
-            obligation_id: obligation.obligation_id,
-            locked_statement_hash: obligation.statement_hash,
-            theorem_family: replay.final_replay.theorem_family,
-            canonical_proposition: replay.final_replay.canonical_proposition,
-            terminal_state: "completed_formal_proof",
-            final_claim_status: promotion.claim.status,
-            proof_authority: "lean_clean_replay",
-            stage_sequence: finalStageRuns.map((run) => run.stage),
-            candidate_summary: {
-              total_candidates: storedDecision?.candidates.length ?? 0,
-              selected_candidate_id: storedDecision?.decision.selected_candidate_id ?? null,
-              selection_mode: storedDecision?.decision.selection_mode ?? "recovery_required",
-              trivial_bypass_logged: (storedDecision?.candidates.length ?? 0) === 0,
-              candidate_artifact_paths: storedDecision?.candidates.map((candidate) => candidate.manifest_path).filter(Boolean) ?? []
-            },
-            final_audit: {
-              result: replay.static_audit.result,
-              artifact_path: replay.final_replay.static_audit_path,
-              hard_vetoes: replay.static_audit.hard_vetoes,
-              warnings: replay.static_audit.warnings
-            },
-            clean_replay: {
-              result: replay.final_replay.result,
-              replay_id: replay.final_replay.replay_id,
-              replay_command: replay.final_replay.command,
-              final_replay_manifest: finalReplayManifestRel,
-              stdout_path: replay.final_replay.stdout_path,
-              stderr_path: replay.final_replay.stderr_path
-            },
-            promotion: {
-              result: promotion.gate.ok ? "pass" : "blocked",
-              gate_id: promotion.gate.id,
-              evidence_ids: [evidence.id],
-              artifact_ids: [proofArtifact.id, replayArtifact.id, auditArtifact.id]
-            },
-            replayable_artifact_bundle: {
-              final_replay_manifest: finalReplayManifestRel,
-              final_static_audit: replay.final_replay.static_audit_path,
-              final_replay_log: replay.final_replay.stdout_path,
-              final_replay_stderr: replay.final_replay.stderr_path,
-              axiom_profile: replay.final_replay.axiom_profile_path,
-              dependency_closure: replay.final_replay.dependency_closure_path,
-              statement_equivalence: replay.final_replay.statement_equivalence_path,
-              proof_memory_events: ".comath/memory/proof_memory_events.jsonl",
-              snapshot_final_manifest: ".comath/snapshots/replay/final_manifest.json",
-              final_handoff: ".comath/context_lake/shards/final-handoff.md"
-            },
-            created_at: now()
-          },
-          null,
-          2
-        )}\n`
-      );
-    }
-    const memoryRun = ok
-      ? completedStageRun({ ...campaign, stage_runs: [...campaign.stage_runs, finalReplayRun] }, "memory_update", memoryArtifactPaths)
-      : undefined;
-    const next = writeCampaign(
-      input.project_root,
-      researchCampaignSchema.parse({
-        ...campaign,
-        current_stage: ok ? "completed_formal_proof" : "blocked",
-        status: "terminal",
-        terminal_state: ok ? "completed_formal_proof" : "blocked_with_replayable_reason",
-        open_obligations: [{ ...obligation, status: ok ? "integrated" : "blocked" }],
-        accepted_artifacts: [proofArtifact, replayArtifact, auditArtifact],
-        blockers: ok ? [] : [{ reason: "final replay or promotion gate failed", gate: promotion.gate }],
-        stage_runs: [...campaign.stage_runs, finalReplayRun, ...(memoryRun ? [memoryRun] : [])],
-        next_actions: ok ? [] : ["inspect final replay logs and promotion gate vetoes"]
-      }),
-      actor
-    );
-    return {
-      campaign: next,
+      campaign,
       obligation,
-      ensemble: readStoredDecision(input.project_root, campaign, obligation.obligation_id),
-      gate: {
-        gate_id: "GD-0002",
-        campaign_id: campaign.campaign_id,
-        stage: "final_global_lean_replay",
-        subject_id: claim.id,
-        result: ok ? "pass" : "blocked",
-        evidence: [proofArtifact, replayArtifact, auditArtifact],
-        hard_vetoes: promotion.gate.vetoes,
-        warnings: promotion.gate.warnings,
-        decision_rationale_summary: ok
-          ? "Claim promoted only after static audit, clean Lean replay, statement equivalence, dependency closure, and axiom profile passed."
-          : "Final replay or claim promotion gate failed.",
-        created_at: now()
-      },
-      final_replay: replay.final_replay,
-      static_audit: replay.static_audit
-    };
+      actor,
+      reason: "service-owned Lean Authority v3 replay target is not available"
+    });
   }
 
   throw new ComathError(`unsupported campaign stage: ${campaign.current_stage}`, {
@@ -2695,31 +1301,12 @@ export async function replayCampaign(input: CampaignTickInput): Promise<Campaign
       blocker: terminalBlockerReason ?? "terminal campaign does not have a proof replay"
     };
   }
-  const theoremFamily = findTheoremFamilyForObligation(obligation);
-  if (!theoremFamily) {
-    return blockCampaignAtFinalReplay({
-      projectRoot: input.project_root,
-      campaign,
-      obligation,
-      actor: input.actor ?? "campaign",
-      reason: "unsupported final replay target"
-    });
-  }
-  const leanProject = createLeanProjectForTheorem({
+  void claim;
+  return blockCampaignAtFinalReplay({
     projectRoot: input.project_root,
-    claim_id: claim.id,
-    locked_statement_hash: claim.statement_hash,
-    theoremFamily
-  });
-  const replay = runCleanLeanReplay({
-    projectRoot: input.project_root,
-    campaign_id: campaign.campaign_id,
-    claim_id: claim.id,
-    leanProject
-  });
-  return {
     campaign,
-    final_replay: replay.final_replay,
-    static_audit: replay.static_audit
-  };
+    obligation,
+    actor: input.actor ?? "campaign",
+    reason: "service-owned Lean Authority v3 replay target is not available"
+  });
 }

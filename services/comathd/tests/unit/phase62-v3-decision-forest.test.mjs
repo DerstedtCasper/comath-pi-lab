@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { decideCandidate, initProject, registerClaim, runTrivialNatAddZeroCandidates } from "../../dist/index.js";
+import { decideCandidate, initProject, registerClaim } from "../../dist/index.js";
+import { runTrivialNatAddZeroCandidates } from "../fixtures/proof-smoke/nat-add-zero-candidates.mjs";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-v3-decision-forest-"));
 
