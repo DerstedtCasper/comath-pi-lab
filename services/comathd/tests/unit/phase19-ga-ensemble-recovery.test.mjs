@@ -58,7 +58,7 @@ try {
   const { decision, gate } = decideCandidate({ projectRoot, campaign, candidates: batch.candidates });
   recordFailedRoutes({ projectRoot, campaign, candidates: batch.candidates });
 
-  const failedCandidates = batch.candidates.filter((candidate) => candidate.state === "candidate_failed");
+  const blockedCandidates = batch.candidates.filter((candidate) => candidate.state === "candidate_blocked");
   assert.equal(
     batch.candidates.every((candidate) =>
       candidate.workspace_path.startsWith(`.comath/campaign/${campaign.campaign_id}/ensembles/lemma_sprint/PO-0001/`)
@@ -66,10 +66,10 @@ try {
     true
   );
   assert.equal(batch.candidates.length, 8);
-  assert.equal(failedCandidates.length, 7);
-  assert.equal(decision.selected_candidate_id, "CAND-0001");
-  assert.equal(gate.result, "pass");
-  assert.equal(decision.rejected_candidates.length, 7);
+  assert.equal(blockedCandidates.length, 8);
+  assert.equal(decision.selected_candidate_id, null);
+  assert.equal(gate.result, "blocked");
+  assert.equal(decision.rejected_candidates.length, 8);
   assert.equal(
     existsSync(join(projectRoot, ".comath", "campaign", campaign.campaign_id, "ensembles", "lemma_sprint", "PO-0001", "decision.json")),
     true
@@ -81,10 +81,10 @@ try {
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line));
-  assert.equal(failureMemory.length, 7);
+  assert.equal(failureMemory.length, 8);
   assert.deepEqual(
     failureMemory.map((event) => event.candidate_id).sort(),
-    failedCandidates.map((candidate) => candidate.candidate_id).sort()
+    blockedCandidates.map((candidate) => candidate.candidate_id).sort()
   );
 
   const v8Candidate = batch.candidates.find((candidate) => candidate.variant_id === "V8");

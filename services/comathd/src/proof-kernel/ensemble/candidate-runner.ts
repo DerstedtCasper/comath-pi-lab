@@ -30,14 +30,13 @@ function writeCandidateAuditArtifacts(input: {
   projectRoot: string;
   workspaceRel: string;
   manifest: CandidateManifest;
-  isDirectWinner: boolean;
   theoremFamily: TheoremFamily;
 }): void {
   writeJson(input.projectRoot, join(input.workspaceRel, "dependency_delta.json"), {
     candidate_id: input.manifest.candidate_id,
     introduced_dependencies: input.manifest.introduced_dependencies,
     removed_dependencies: [],
-    dependency_closure_required: input.isDirectWinner
+    dependency_closure_required: false
   });
   writeJson(input.projectRoot, join(input.workspaceRel, "assumption_delta.json"), {
     candidate_id: input.manifest.candidate_id,
@@ -46,22 +45,14 @@ function writeCandidateAuditArtifacts(input: {
   });
   writeJson(input.projectRoot, join(input.workspaceRel, "replay_commands.json"), {
     candidate_id: input.manifest.candidate_id,
-    commands: input.isDirectWinner
-      ? [
-          {
-            command: input.theoremFamily.replayCommand,
-            cwd: ".comath/lean",
-            expected_exit_code: 0
-          }
-        ]
-      : [],
-    replayable: input.isDirectWinner
+    commands: [],
+    replayable: false
   });
   writeJson(input.projectRoot, join(input.workspaceRel, "failure_routes.json"), {
     candidate_id: input.manifest.candidate_id,
     failures: input.manifest.failures,
     hard_vetoes: input.manifest.hard_vetoes,
-    recovery_hints: input.isDirectWinner ? [] : ["preserve as failed-route memory", "rerun only after new context or theorem repair"]
+    recovery_hints: ["preserve as failed-route memory", "rerun only after real LeanRunner replay evidence exists"]
   });
   writeJson(input.projectRoot, join(input.workspaceRel, "graph_patch.json"), {
     patch_id: null,
@@ -126,8 +117,7 @@ export function runTheoremFamilyCandidates(input: {
     const workspacePath = assertPathAllowed(input.projectRoot, workspaceRel, { purpose: "runtime-write" });
     mkdirSync(workspacePath, { recursive: true });
 
-    const isDirectWinner = variant.variant_id === "V1";
-    const candidateState = isDirectWinner ? "candidate_kernel_checked" : "candidate_failed";
+    const candidateState = "candidate_blocked";
     const auditArtifacts = [
       { path: "dependency_delta.json", kind: "dependency_delta", required_for: ["candidate_verification"] },
       { path: "assumption_delta.json", kind: "assumption_delta", required_for: ["candidate_verification"] },
@@ -150,26 +140,28 @@ export function runTheoremFamilyCandidates(input: {
       theorem_family: input.theoremFamily.id,
       canonical_proposition: input.theoremFamily.proposition,
       primary_dependency: input.theoremFamily.dependency,
-      dependencies: isDirectWinner ? [input.theoremFamily.dependency] : [],
+      dependencies: [],
       assumptions: [],
       introduced_assumptions: [],
-      introduced_dependencies: isDirectWinner ? [input.theoremFamily.dependency] : [],
+      introduced_dependencies: [],
       artifacts: auditArtifacts,
-      lean_files: isDirectWinner ? [`.comath/lean/${input.theoremFamily.theoremFileRel}`] : [],
+      lean_files: [],
       logs: [],
       evidence: [],
-      hard_vetoes: [],
-      failures: isDirectWinner ? [] : [`${variant.name} did not produce a kernel-checked candidate in the trivial slice.`],
-      replay_command: isDirectWinner ? input.theoremFamily.replayCommand : "",
-      summary: isDirectWinner ? input.theoremFamily.directCandidateSummary : `${variant.name} supplied stress, search, or failure-route context only.`,
-      maintainability_notes: isDirectWinner ? input.theoremFamily.directCandidateMaintainabilityNotes : "Preserved as failed-route memory."
+      hard_vetoes: ["business_layer_theorem_prover_forbidden"],
+      failures: [
+        `${variant.name} is a theorem-family smoke fixture and cannot produce production proof-grade evidence.`,
+        "A real candidate must be checked by service-owned LeanRunner replay before arbitration can select it."
+      ],
+      replay_command: "",
+      summary: `${variant.name} retained as non-promotional theorem-family fixture output.`,
+      maintainability_notes: "Preserved as blocked fixture/failure memory until real per-candidate replay is implemented."
     });
     const manifestAbs = writeJson(input.projectRoot, join(workspaceRel, "candidate_manifest.json"), manifest);
     writeCandidateAuditArtifacts({
       projectRoot: input.projectRoot,
       workspaceRel,
       manifest,
-      isDirectWinner,
       theoremFamily: input.theoremFamily
     });
     if (variant.variant_id === "V8") {
@@ -187,9 +179,7 @@ export function runTheoremFamilyCandidates(input: {
         "",
         `Purpose: ${variant.purpose}`,
         "",
-        isDirectWinner
-          ? "Outcome: exact kernel-checkable candidate selected for final replay."
-          : "Outcome: no proof-grade evidence; route is retained as failure/search memory.",
+        "Outcome: blocked fixture output; no proof-grade evidence without service-owned LeanRunner replay.",
         ""
       ].join("\n"),
       "utf8"
@@ -208,10 +198,10 @@ export function runTheoremFamilyCandidates(input: {
         candidate_statement_hash: input.obligation.statement_hash,
         state: candidateState,
         manifest_path: relative(input.projectRoot, manifestAbs).replace(/\\/g, "/"),
-        score: isDirectWinner ? 15_500 : -100,
-        hard_vetoes: [],
+        score: -100,
+        hard_vetoes: ["business_layer_theorem_prover_forbidden"],
         artifacts: [],
-        replay_command: isDirectWinner ? input.theoremFamily.replayCommand : undefined
+        replay_command: undefined
       })
     );
   });

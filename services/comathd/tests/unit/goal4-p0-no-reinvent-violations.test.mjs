@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   createComathServer,
   decideCandidate,
+  findTheoremFamilyForObligation,
   findTheoremFamilyForGoal,
   getClaim,
   initProject,
@@ -85,6 +86,25 @@ await expectNoViolation("production theorem-family recognizer must be quarantine
     undefined,
     "production code still classifies a Nat theorem-family target"
   );
+});
+
+await expectNoViolation("obligation-level theorem-family recognizer must not support production proof claims", () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal4-p0-obligation-family-"));
+  try {
+    const { obligation } = makeSyntheticCandidateFixture(projectRoot);
+    const recognized = findTheoremFamilyForObligation({
+      ...obligation,
+      locked_statement_structured: {
+        proposition: "n + 0 = n",
+        theorem_family: "nat_add_zero"
+      },
+      locked_statement_nl: "For every natural number n, n + 0 = n.",
+      lean_target: "theorem C0001 (n : Nat) : n + 0 = n"
+    });
+    assert.equal(recognized, undefined, "production code still supports Nat proof claims through obligation matching");
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
 });
 
 await expectNoViolation("unknown user goals must not receive default n : Nat assumptions", async () => {

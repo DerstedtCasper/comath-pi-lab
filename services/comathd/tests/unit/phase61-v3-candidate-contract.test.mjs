@@ -55,37 +55,40 @@ try {
   };
 
   const batch = runTrivialNatAddZeroCandidates({ projectRoot, campaign, obligation });
-  const winner = batch.candidates.find((candidate) => candidate.state === "candidate_kernel_checked");
-  assert.ok(winner);
-  const winnerManifestPath = join(projectRoot, winner.manifest_path);
-  const winnerManifest = readJson(winnerManifestPath);
-  assert.equal(winnerManifest.state, winner.state);
-  assert.deepEqual(winnerManifest.dependencies, [winnerManifest.primary_dependency]);
-  assert.deepEqual(winnerManifest.assumptions, []);
+  const blockedCandidate = batch.candidates.find((candidate) => candidate.variant_id === "V1");
+  assert.ok(blockedCandidate);
+  assert.equal(blockedCandidate.state, "candidate_blocked");
+  assert.deepEqual(blockedCandidate.hard_vetoes, ["business_layer_theorem_prover_forbidden"]);
+  const blockedManifestPath = join(projectRoot, blockedCandidate.manifest_path);
+  const blockedManifest = readJson(blockedManifestPath);
+  assert.equal(blockedManifest.state, blockedCandidate.state);
+  assert.deepEqual(blockedManifest.dependencies, []);
+  assert.deepEqual(blockedManifest.assumptions, []);
+  assert.equal(blockedManifest.hard_vetoes.includes("business_layer_theorem_prover_forbidden"), true);
   for (const requiredArtifact of ["assumption_delta.json", "dependency_delta.json", "replay_commands.json"]) {
     assert.equal(
-      winnerManifest.artifacts.some((artifact) => artifact.path === requiredArtifact),
+      blockedManifest.artifacts.some((artifact) => artifact.path === requiredArtifact),
       true,
-      `winner manifest should list ${requiredArtifact}`
+      `blocked manifest should list ${requiredArtifact}`
     );
   }
-  assert.equal(winnerManifest.replay_command, winner.replay_command);
-  assert.equal(winnerManifest.maintainability_notes.length > 0, true);
+  assert.equal(blockedManifest.replay_command, "");
+  assert.equal(blockedManifest.maintainability_notes.length > 0, true);
 
-  const tamperedManifest = { ...winnerManifest, candidate_statement_hash: "tampered-statement-hash" };
-  writeFileSync(winnerManifestPath, `${JSON.stringify(tamperedManifest, null, 2)}\n`, "utf8");
+  const tamperedManifest = { ...blockedManifest, candidate_statement_hash: "tampered-statement-hash" };
+  writeFileSync(blockedManifestPath, `${JSON.stringify(tamperedManifest, null, 2)}\n`, "utf8");
   assert.throws(
     () => decideCandidate({ projectRoot, campaign, candidates: batch.candidates }),
     /candidate manifest statement hash mismatch|CANDIDATE_MANIFEST_INVALID/
   );
 
-  writeFileSync(winnerManifestPath, `${JSON.stringify(winnerManifest, null, 2)}\n`, "utf8");
+  writeFileSync(blockedManifestPath, `${JSON.stringify(blockedManifest, null, 2)}\n`, "utf8");
   const { decision, gate } = decideCandidate({ projectRoot, campaign, candidates: batch.candidates });
-  assert.equal(gate.result, "pass");
-  assert.equal(decision.selected_candidate_id, winner.candidate_id);
+  assert.equal(gate.result, "blocked");
+  assert.equal(decision.selected_candidate_id, null);
 
   const aggregate = recordFailedRoutes({ projectRoot, campaign, candidates: batch.candidates });
-  assert.equal(aggregate.total_failed_routes, 7);
+  assert.equal(aggregate.total_failed_routes, 8);
   assert.equal(aggregate.failure_clusters.length >= 1, true);
   assert.equal(
     aggregate.recommendations.some((recommendation) => /repair|refutation|split/i.test(recommendation)),

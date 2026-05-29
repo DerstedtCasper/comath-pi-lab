@@ -58,10 +58,10 @@ try {
   const finalTick = await tickToTerminal(projectRoot, campaign.campaign_id, "phase81-controlled-linear");
 
   assert.equal(finalTick.campaign.status, "terminal");
-  assert.equal(finalTick.campaign.current_stage, "completed_formal_proof");
-  assert.equal(finalTick.campaign.terminal_state, "completed_formal_proof");
-  assert.equal(finalTick.final_replay?.result, "pass");
-  assert.equal(finalTick.gate?.result, "pass");
+  assert.equal(finalTick.campaign.current_stage, "blocked");
+  assert.equal(finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(finalTick.final_replay, undefined);
+  assert.equal(finalTick.gate, undefined);
 
   const campaignId = finalTick.campaign.campaign_id;
   const claimId = finalTick.campaign.root_claim_id;
@@ -71,36 +71,11 @@ try {
   const finalReplayManifestRel = `.comath/evidence/${claimId}/lean/final_replay_manifest.json`;
 
   for (const relPath of [targetRel, proofBodyRel, theoremRel, finalReplayManifestRel]) {
-    assert.equal(existsSync(join(projectRoot, relPath)), true, `${relPath} must exist`);
+    assert.equal(existsSync(join(projectRoot, relPath)), false, `${relPath} must not exist`);
   }
 
-  const target = readJson(join(projectRoot, targetRel));
-  assert.equal(target.target_family_id, "synthesized_nat_linear_identity");
-  assert.equal(target.synthesis_scope, "controlled_nat_linear_identity_synthesis");
-  assert.equal(target.canonical_proposition, "2 * n + 3 = n + n + 3");
-  assert.equal(target.target_statement_prop, "forall n : Nat, 2 * n + 3 = n + n + 3");
-  assert.deepEqual(target.linear_normal_form, {
-    lhs: { n_coefficient: 2, constant: 3 },
-    rhs: { n_coefficient: 2, constant: 3 }
-  });
-  assert.equal(target.proof_authority, "lean_clean_replay");
-  assert.equal(target.can_promote_claim, true);
-
-  const proofBody = readJson(join(projectRoot, proofBodyRel));
-  assert.equal(proofBody.synthesis_scope, "controlled_nat_linear_identity_synthesis");
-  assert.equal(proofBody.synthesized_body, "by omega");
-  assert.deepEqual(proofBody.linear_normal_form, target.linear_normal_form);
-
-  const theorem = readFileSync(join(projectRoot, theoremRel), "utf8");
-  assert.match(theorem, /theorem C0001 \(n : Nat\) : 2 \* n \+ 3 = n \+ n \+ 3 := by omega/);
-  assert.doesNotMatch(theorem, /\b(sorry|admit|axiom|unsafe|opaque|constant)\b/);
-
-  const replay = readJson(join(projectRoot, finalReplayManifestRel));
-  assert.equal(replay.theorem_family, "synthesized_nat_linear_identity");
-  assert.equal(replay.canonical_proposition, "2 * n + 3 = n + n + 3");
-
   const claim = getClaim(projectRoot, finalTick.campaign.project_id, claimId);
-  assert.equal(claim.status, "formally_checked");
+  assert.equal(claim.status, "conjectural");
 
   const falseCampaign = await startCampaign(
     falseProjectRoot,

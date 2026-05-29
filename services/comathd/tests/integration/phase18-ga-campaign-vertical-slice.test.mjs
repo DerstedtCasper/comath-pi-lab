@@ -67,69 +67,33 @@ try {
 
   assert.ok(finalTick, "campaign ticks should return a final body");
   assert.equal(finalTick.campaign.status, "terminal");
-  assert.equal(finalTick.campaign.current_stage, "completed_formal_proof");
-  assert.equal(finalTick.campaign.terminal_state, "completed_formal_proof");
-  assert.equal(finalTick.gate?.result, "pass");
-  assert.equal(finalTick.final_replay?.result, "pass");
-  assert.equal(finalTick.static_audit?.result, "pass");
-  assert.equal(finalTick.ensemble?.candidates.length, 8);
-  assert.equal(finalTick.ensemble?.decision.selected_candidate_id, "CAND-0001");
-  const requiredCandidateArtifacts = [
-    "candidate_manifest.json",
-    "report.md",
-    "dependency_delta.json",
-    "assumption_delta.json",
-    "replay_commands.json",
-    "failure_routes.json",
-    "graph_patch.json"
-  ];
-  for (const candidate of finalTick.ensemble.candidates) {
-    for (const artifactName of requiredCandidateArtifacts) {
-      assert.equal(
-        existsSync(join(projectRoot, candidate.workspace_path, artifactName)),
-        true,
-        `${candidate.candidate_id} must persist ${artifactName}`
-      );
-    }
-  }
+  assert.equal(finalTick.campaign.current_stage, "blocked");
+  assert.equal(finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(finalTick.gate, undefined);
+  assert.equal(finalTick.final_replay, undefined);
+  assert.equal(finalTick.static_audit, undefined);
+  assert.equal(finalTick.ensemble, undefined);
   assert.equal(seenStages.has("candidate_generation"), true);
-  assert.equal(seenStages.has("candidate_verification"), true);
-  assert.equal(seenStages.has("candidate_arbitration"), true);
-  assert.equal(seenStages.has("final_global_replay"), true);
+  assert.equal(seenStages.has("candidate_verification"), false);
+  assert.equal(seenStages.has("candidate_arbitration"), false);
+  assert.equal(seenStages.has("final_global_replay"), false);
 
   const claim = getClaim(projectRoot, finalTick.campaign.project_id, claimId);
   assert.ok(claim);
-  assert.equal(claim.status, "formally_checked");
-  assert.equal(claim.evidence_level, 5);
-  assert.equal(claim.formalization_status, "kernel_checked");
-  assert.equal(claim.dependency_closure_status, "all_dependencies_present");
-  assert.equal(claim.audit_state, "audit_passed");
+  assert.equal(claim.status, "conjectural");
+  assert.equal(claim.evidence_level, 0);
+  assert.equal(claim.formalization_status, "none");
+  assert.equal(claim.dependency_closure_status, "unchecked");
+  assert.equal(claim.audit_state, "not_audited");
 
   const persisted = readJson(statusPath);
-  assert.equal(persisted.current_stage, "completed_formal_proof");
-  assert.equal(persisted.terminal_state, "completed_formal_proof");
-  assert.equal(existsSync(join(projectRoot, ".comath", "lean", "MathResearch", "C0001.lean")), true);
-  assert.equal(existsSync(join(projectRoot, ".comath", "lean", "FormalSpec", "C0001.json")), true);
-  assert.equal(existsSync(join(projectRoot, ".comath", "lean", "Audit", "C0001.lean")), true);
-  assert.equal(existsSync(join(projectRoot, ".comath", "evidence", claimId, "lean", "final_replay_manifest.json")), true);
-  assert.equal(
-    existsSync(
-      join(
-        projectRoot,
-        ".comath",
-        "campaign",
-        campaignId,
-        "ensembles",
-        "lemma_sprint",
-        "PO-0001",
-        "candidates",
-        "V1_direct_formalist",
-        "candidate_manifest.json"
-      )
-    ),
-    true
-  );
-  assert.equal(existsSync(join(projectRoot, ".comath", "proof_memory", "events.jsonl")), true);
+  assert.equal(persisted.current_stage, "blocked");
+  assert.equal(persisted.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(existsSync(join(projectRoot, ".comath", "lean", "MathResearch", "C0001.lean")), false);
+  assert.equal(existsSync(join(projectRoot, ".comath", "lean", "FormalSpec", "C0001.json")), false);
+  assert.equal(existsSync(join(projectRoot, ".comath", "lean", "Audit", "C0001.lean")), false);
+  assert.equal(existsSync(join(projectRoot, ".comath", "evidence", claimId, "lean", "final_replay_manifest.json")), false);
+  assert.equal(existsSync(join(projectRoot, ".comath", "proof_memory", "events.jsonl")), false);
 
   const replay = await server.inject({
     method: "POST",
@@ -140,7 +104,8 @@ try {
     }
   });
   assert.equal(replay.status, 200);
-  assert.equal(replay.body.final_replay.result, "pass");
+  assert.equal(replay.body.final_replay, undefined);
+  assert.equal(replay.body.blocker, "broad theorem synthesis requires checked replay target");
 } finally {
   await server.close();
   rmSync(projectRoot, { recursive: true, force: true });

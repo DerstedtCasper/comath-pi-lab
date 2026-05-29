@@ -62,10 +62,10 @@ try {
 
   const batch = runTrivialNatAddZeroCandidates({ projectRoot, campaign, obligation });
   const aggregate = recordFailedRoutes({ projectRoot, campaign, candidates: batch.candidates });
-  assert.equal(aggregate.total_failed_routes, 7);
+  assert.equal(aggregate.total_failed_routes, 8);
 
   const events = readProofMemoryEvents(projectRoot);
-  assert.equal(events.length, 7);
+  assert.equal(events.length, 8);
   const v8 = events.find((event) => event.variant_id === "V8");
   assert.ok(v8, "V8 failure route should be preserved");
   assert.equal(v8.locked_statement_hash, claim.statement_hash);
@@ -80,8 +80,9 @@ try {
   assert.equal(v8.final_handoff_capsule_path, null);
 
   const exactRetrieval = retrieveSimilarFailedRoutes({ projectRoot, obligation });
-  assert.equal(exactRetrieval.matches.length, 7);
-  assert.equal(exactRetrieval.warnings.length, 0);
+  assert.equal(exactRetrieval.matches.length, 8);
+  assert.equal(exactRetrieval.warnings.length, 8);
+  assert.equal(exactRetrieval.warnings.every((warning) => warning.code === "unresolved_blocker"), true);
 
   const memoryPath = join(projectRoot, ".comath", "proof_memory", "events.jsonl");
   const rewritten = readJsonl(memoryPath);
@@ -90,7 +91,7 @@ try {
   writeFileSync(memoryPath, `${rewritten.map((event) => JSON.stringify(event)).join("\n")}\n`, "utf8");
 
   const retrievalWithWarning = retrieveSimilarFailedRoutes({ projectRoot, obligation });
-  assert.equal(retrievalWithWarning.matches.length, 7);
+  assert.equal(retrievalWithWarning.matches.length, 8);
   assert.equal(retrievalWithWarning.warnings.some((warning) => warning.code === "superseded_fact"), true);
   assert.equal(existsSync(join(projectRoot, retrievalWithWarning.warning_log_path)), true);
 
@@ -101,7 +102,7 @@ try {
     locked_statement_nl: "For every natural number n, n + 0 = n, after a repaired problem lock."
   };
   const staleRetrieval = retrieveSimilarFailedRoutes({ projectRoot, obligation: repairedObligation });
-  assert.equal(staleRetrieval.matches.length, 7);
+  assert.equal(staleRetrieval.matches.length, 8);
   assert.equal(staleRetrieval.warnings.some((warning) => warning.code === "stale_fact"), true);
 
   const server = createComathServer();
@@ -134,7 +135,7 @@ try {
     assert.equal(knowledgeTick.status, 200);
     const knowledgePath = join(projectRoot, ".comath", "campaign", campaignId, "knowledge_pack.json");
     const knowledgePack = JSON.parse(readFileSync(knowledgePath, "utf8"));
-    assert.equal(knowledgePack.failed_route_retrieval.match_count >= 7, true);
+    assert.equal(knowledgePack.failed_route_retrieval.match_count >= 8, true);
     assert.equal(knowledgePack.failed_route_retrieval.warning_log_path, ".comath/proof_memory/stale_or_superseded_warnings.jsonl");
     const knowledgeShard = readFileSync(join(projectRoot, ".comath", "context_lake", "shards", `knowledge-${campaignId}.md`), "utf8");
     assert.equal(knowledgeShard.includes("Prior failed routes:"), true);

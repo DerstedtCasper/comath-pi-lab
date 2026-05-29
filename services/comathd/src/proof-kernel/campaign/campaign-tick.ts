@@ -14,7 +14,7 @@ import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/fai
 import { runTheoremFamilyCandidates } from "../ensemble/candidate-runner.js";
 import { createLeanProjectForTheorem, type LeanProjectFiles } from "../lean/lean-project.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
-import { findTheoremFamilyForGoal, findTheoremFamilyForObligation } from "../lean/theorem-family.js";
+import { findTheoremFamilyForObligation } from "../lean/theorem-family.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
 import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
@@ -474,16 +474,6 @@ function classifyLockedProblem(goal: string): LockedProblem {
       notation_lines: ["- `+`: Nat addition."]
     };
   }
-  const theoremFamily = findTheoremFamilyForGoal(goal);
-  if (theoremFamily) {
-    return {
-      statement: theoremFamily.lockedStatementNl,
-      structured: theoremFamily.structured,
-      lean_target: theoremFamily.leanTarget,
-      theorem_name: theoremFamily.theoremName,
-      notation_lines: theoremFamily.notationLines
-    };
-  }
   return {
     statement: goal.trim(),
     structured: {},
@@ -504,7 +494,7 @@ function createProblemLock(projectRoot: string, input: { claim_id: string; goal:
     join(".comath", "lock", "problem_lock.md"),
     [`# Problem Lock`, "", `claim_id: ${input.claim_id}`, "", problem.statement, ""].join("\n")
   );
-  writeRuntimeFile(projectRoot, join(".comath", "lock", "assumptions.md"), "# Assumptions\n\n- n : Nat\n");
+  writeRuntimeFile(projectRoot, join(".comath", "lock", "assumptions.md"), "# Assumptions\n\n");
   writeRuntimeFile(
     projectRoot,
     join(".comath", "lock", "notation.md"),
@@ -533,7 +523,7 @@ function createObligation(claimId: string, statementHash: string, goal: string):
     lean_target: problem.lean_target,
     statement_hash: statementHash,
     dependencies: [],
-    assumptions: ["n : Nat"],
+    assumptions: [],
     status: "queued"
   });
 }
@@ -544,7 +534,7 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
   const claim = registerClaim(input.project_root, {
     project_id: project.project_id,
     statement: lockedStatement(input.user_goal),
-    assumptions: ["n : Nat"],
+    assumptions: [],
     domain: input.domain ?? "elementary",
     actor,
     status: "conjectural"
@@ -635,185 +625,10 @@ const broadAuthorityReportsPreparedBlockedReason =
   "bounded Lean Authority v2 reports prepared but final clean replay is missing";
 const proofBodyForbiddenTokens = ["sorry", "admit", "axiom", "unsafe", "opaque", "constant"];
 
-type RegisteredNatLinearIdentityTarget = {
-  target_family_id: string;
-  canonical_proposition: string;
-  requestPattern: RegExp;
-  normalized_target_header: string;
-  target_statement_prop: string;
-  proof_body: string;
-};
-
-const registeredNatLinearIdentityTargets: RegisteredNatLinearIdentityTarget[] = [
-  {
-    target_family_id: "bounded_nat_double",
-    canonical_proposition: "n + n = 2 * n",
-    requestPattern: /^prove(?:\s+in\s+lean)?\s+that\s+n\s*\+\s*n\s*=\s*2\s*\*\s*n\s+for\s+natural\s+numbers$/i,
-    normalized_target_header: "theorem C0001 (n : Nat) : n + n = 2 * n",
-    target_statement_prop: "forall n : Nat, n + n = 2 * n",
-    proof_body: "by omega"
-  },
-  {
-    target_family_id: "bounded_nat_add_zero_add_self",
-    canonical_proposition: "n + 0 + n = 2 * n",
-    requestPattern: /^prove(?:\s+in\s+lean)?\s+that\s+n\s*\+\s*0\s*\+\s*n\s*=\s*2\s*\*\s*n\s+for\s+natural\s+numbers$/i,
-    normalized_target_header: "theorem C0001 (n : Nat) : n + 0 + n = 2 * n",
-    target_statement_prop: "forall n : Nat, n + 0 + n = 2 * n",
-    proof_body: "by omega"
-  }
-];
-
-function registeredNatLinearIdentityTargetForRequest(proposition: string): RegisteredNatLinearIdentityTarget | undefined {
-  const normalized = proposition.trim().replace(/\s+/g, " ");
-  if (/\b(do not|don't|not|negation|refute|disprove|counterexample|false)\b/i.test(normalized)) {
-    return undefined;
-  }
-  return registeredNatLinearIdentityTargets.find((target) => target.requestPattern.test(normalized.replace(/[.]$/, "")));
-}
-
-function normalizeProofRequest(proposition: string): string {
-  return proposition.trim().replace(/\s+/g, " ").replace(/[.。]$/, "");
-}
-
-function isNegativeOrRefutationRequest(proposition: string): boolean {
-  return /\b(do not|don't|not|negation|refute|disprove|counterexample|false)\b/i.test(proposition);
-}
-
-function extractNatLinearIdentityRequest(proposition: string): string | undefined {
-  const normalized = normalizeProofRequest(proposition);
-  if (isNegativeOrRefutationRequest(normalized)) {
-    return undefined;
-  }
-  const match = normalized.match(/^prove(?:\s+in\s+lean)?\s+that\s+(.+)\s+for\s+natural\s+numbers$/i);
-  return match?.[1]?.trim();
-}
-
-function parseNatLinearExpression(expression: string): { n_coefficient: number; constant: number } | undefined {
-  const compact = expression.replace(/\s+/g, "");
-  if (!compact || /[^0-9n+*]/.test(compact) || compact.includes("++") || compact.includes("**")) {
-    return undefined;
-  }
-  let nCoefficient = 0;
-  let constant = 0;
-  for (const term of compact.split("+")) {
-    if (!term) {
-      return undefined;
-    }
-    if (term === "n") {
-      nCoefficient += 1;
-      continue;
-    }
-    if (/^\d+$/.test(term)) {
-      constant += Number(term);
-      continue;
-    }
-    const leftMul = term.match(/^(\d+)\*n$/);
-    if (leftMul) {
-      nCoefficient += Number(leftMul[1]);
-      continue;
-    }
-    const rightMul = term.match(/^n\*(\d+)$/);
-    if (rightMul) {
-      nCoefficient += Number(rightMul[1]);
-      continue;
-    }
-    return undefined;
-  }
-  if (!Number.isSafeInteger(nCoefficient) || !Number.isSafeInteger(constant)) {
-    return undefined;
-  }
-  return { n_coefficient: nCoefficient, constant };
-}
-
-function normalizeNatLinearExpression(expression: string): string | undefined {
-  const compact = expression.replace(/\s+/g, "");
-  if (!compact || /[^0-9n+*]/.test(compact) || compact.includes("++") || compact.includes("**")) {
-    return undefined;
-  }
-  const normalizedTerms: string[] = [];
-  for (const term of compact.split("+")) {
-    if (!term) {
-      return undefined;
-    }
-    if (term === "n" || /^\d+$/.test(term) || /^\d+\*n$/.test(term) || /^n\*\d+$/.test(term)) {
-      normalizedTerms.push(term.replace("*", " * "));
-      continue;
-    }
-    return undefined;
-  }
-  return normalizedTerms.join(" + ");
-}
-
-function synthesizeNatLinearIdentityTarget(proposition: string): {
-  canonical_proposition: string;
-  target_statement_prop: string;
-  linear_normal_form: {
-    lhs: { n_coefficient: number; constant: number };
-    rhs: { n_coefficient: number; constant: number };
-  };
-} | undefined {
-  const identity = extractNatLinearIdentityRequest(proposition);
-  if (!identity) {
-    return undefined;
-  }
-  const parts = identity.split("=");
-  if (parts.length !== 2) {
-    return undefined;
-  }
-  const lhsExpression = normalizeNatLinearExpression(parts[0]);
-  const rhsExpression = normalizeNatLinearExpression(parts[1]);
-  if (!lhsExpression || !rhsExpression) {
-    return undefined;
-  }
-  const lhs = parseNatLinearExpression(lhsExpression);
-  const rhs = parseNatLinearExpression(rhsExpression);
-  if (!lhs || !rhs || lhs.n_coefficient !== rhs.n_coefficient || lhs.constant !== rhs.constant) {
-    return undefined;
-  }
-  const canonical = `${lhsExpression} = ${rhsExpression}`;
-  return {
-    canonical_proposition: canonical,
-    target_statement_prop: `forall n : Nat, ${canonical}`,
-    linear_normal_form: { lhs, rhs }
-  };
-}
-
-function isNatDoubleTargetRequest(proposition: string): boolean {
-  const normalized = proposition.trim().replace(/\s+/g, " ").replace(/[.。]$/, "");
-  if (/\b(do not|don't|not|negation|refute|disprove|counterexample|false)\b/i.test(normalized)) {
-    return false;
-  }
-  return /^prove(?:\s+in\s+lean)?\s+that\s+n\s*\+\s*n\s*=\s*2\s*\*\s*n\s+for\s+natural\s+numbers$/i.test(normalized);
-}
-
 function theoremSpecificLeanTarget(campaign: ResearchCampaign, obligation: ProofObligation): TheoremSpecificLeanTarget | undefined {
-  const proposition = obligation.locked_statement_nl;
-  const registered = registeredNatLinearIdentityTargetForRequest(proposition);
-  const synthesized = registered || isNegativeOrRefutationRequest(proposition) ? undefined : synthesizeNatLinearIdentityTarget(proposition);
-  const canonicalProposition = registered?.canonical_proposition ?? synthesized?.canonical_proposition;
-  const targetStatementProp = registered?.target_statement_prop ?? synthesized?.target_statement_prop;
-  if (!canonicalProposition || !targetStatementProp) {
-    return undefined;
-  }
-  const root = `.comath/lean/broad/${campaign.campaign_id}`;
-  return {
-    target_family_id: registered?.target_family_id ?? "synthesized_nat_linear_identity",
-    canonical_proposition: canonicalProposition,
-    theorem_name: "MathResearch.Target.C0001",
-    namespace: "MathResearch.Target",
-    normalized_target_header:
-      registered?.normalized_target_header ?? `theorem C0001 (n : Nat) : ${synthesized?.canonical_proposition}`,
-    target_statement_prop: targetStatementProp,
-    proof_body: registered?.proof_body ?? "by omega",
-    synthesis_scope: registered ? "registered_nat_linear_identity_target" : "controlled_nat_linear_identity_synthesis",
-    ...(synthesized ? { linear_normal_form: synthesized.linear_normal_form } : {}),
-    replay_command: "lake env lean MathResearch/Target.lean",
-    theorem_file_rel: `${root}/MathResearch/Target.lean`,
-    audit_file_rel: `${root}/Audit/Target.lean`,
-    formal_spec_rel: `${root}/FormalSpec/target.json`,
-    lakefile_rel: `${root}/lakefile.lean`,
-    toolchain_rel: `${root}/lean-toolchain`
-  };
+  void campaign;
+  void obligation;
+  return undefined;
 }
 
 function writeTheoremSpecificLeanProject(input: {

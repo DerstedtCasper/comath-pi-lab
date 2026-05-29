@@ -104,38 +104,11 @@ export function getTheoremFamilyById(id: TheoremFamilyId): TheoremFamily {
 }
 
 export function findTheoremFamilyForGoal(goal: string): TheoremFamily | undefined {
-  if (/\bn\s*\+\s*0\s*=\s*n\b/i.test(goal)) {
-    return getTheoremFamilyById("nat_add_zero");
-  }
-  if (/\bn\s*\*\s*0\s*=\s*0\b/i.test(goal)) {
-    return getTheoremFamilyById("nat_mul_zero");
-  }
-  if (/\b0\s*\+\s*n\s*=\s*n\b/i.test(goal)) {
-    return getTheoremFamilyById("nat_zero_add");
-  }
+  void goal;
   return undefined;
 }
 
 export function findTheoremFamilyForObligation(obligation: ProofObligation): TheoremFamily | undefined {
-  const matchesObligation = (family: TheoremFamily): boolean => {
-    const proposition = obligation.locked_statement_structured.proposition;
-    const familyId = obligation.locked_statement_structured.theorem_family;
-    return (
-      proposition === family.proposition &&
-      (!familyId || familyId === family.id) &&
-      obligation.locked_statement_nl === family.lockedStatementNl &&
-      (!obligation.lean_target || obligation.lean_target === family.leanTarget)
-    );
-  };
-
-  const familyId = obligation.locked_statement_structured.theorem_family;
-  if (familyId === "nat_add_zero" || familyId === "nat_mul_zero" || familyId === "nat_zero_add") {
-    const family = getTheoremFamilyById(familyId);
-    return matchesObligation(family) ? family : undefined;
-  }
-  const proposition = obligation.locked_statement_structured.proposition;
-  if (typeof proposition === "string") {
-    return theoremFamilies.find((family) => family.proposition === proposition && matchesObligation(family));
-  }
+  void obligation;
   return undefined;
 }

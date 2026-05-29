@@ -40,7 +40,7 @@ function writeCandidateManifest(candidate, extra = {}) {
         artifacts: [],
         lean_files: [],
         logs: [],
-        evidence: [],
+        evidence: candidate.state === "candidate_kernel_checked" ? [".comath/evidence/candidate/lean_run_manifest.json"] : [],
         hard_vetoes: candidate.hard_vetoes,
         failures: candidate.state === "candidate_kernel_checked" ? [] : ["no proof-grade evidence"],
         replay_command: candidate.replay_command ?? "",
@@ -100,23 +100,26 @@ try {
   };
 
   const batch = runTrivialNatAddZeroCandidates({ projectRoot, campaign, obligation });
-  const winner = batch.candidates.find((candidate) => candidate.state === "candidate_kernel_checked");
-  assert.ok(winner);
-  const failed = batch.candidates.filter((candidate) => candidate.state !== "candidate_kernel_checked");
-  assert.equal(failed.length, 7);
+  assert.equal(batch.candidates.every((candidate) => candidate.state === "candidate_blocked"), true);
+  const blocked = batch.candidates;
+  assert.equal(blocked.length, 8);
 
-  const highVotePlausible = cloneCandidate(failed[0], {
+  const highVotePlausible = cloneCandidate(blocked[0], {
     candidate_id: "CAND-1001",
     variant_id: "V2",
     workspace_path: ".comath/ensembles/phase62/high-vote-plausible",
     state: "candidate_plausible_only",
+    hard_vetoes: [],
     score: 99_999,
     replay_command: undefined
   });
-  const kernelCandidate = cloneCandidate(winner, {
+  const kernelCandidate = cloneCandidate(blocked[1], {
     candidate_id: "CAND-1002",
     variant_id: "V1",
     workspace_path: ".comath/ensembles/phase62/kernel",
+    state: "candidate_kernel_checked",
+    hard_vetoes: [],
+    replay_command: "lake build MathResearch.C0001 Audit.C0001",
     score: 1
   });
   const proofDecision = decideCandidate({ projectRoot, campaign, candidates: [highVotePlausible, kernelCandidate] });
@@ -131,11 +134,12 @@ try {
     true
   );
 
-  const refutation = cloneCandidate(failed[1], {
+  const refutation = cloneCandidate(blocked[2], {
     candidate_id: "CAND-1003",
     variant_id: "V3",
     workspace_path: ".comath/ensembles/phase62/refutation",
     state: "candidate_refutes_step",
+    hard_vetoes: [],
     score: 50,
     replay_command: "node exact-counterexample.js"
   });
@@ -148,18 +152,20 @@ try {
     true
   );
 
-  const skeletonOnly = cloneCandidate(failed[2], {
+  const skeletonOnly = cloneCandidate(blocked[3], {
     candidate_id: "CAND-1004",
     variant_id: "V4",
     workspace_path: ".comath/ensembles/phase62/skeleton",
     state: "candidate_skeleton_checked",
+    hard_vetoes: [],
     score: 10_000
   });
-  const blockedOnly = cloneCandidate(failed[3], {
+  const blockedOnly = cloneCandidate(blocked[4], {
     candidate_id: "CAND-1005",
     variant_id: "V5",
     workspace_path: ".comath/ensembles/phase62/blocked",
     state: "candidate_blocked",
+    hard_vetoes: [],
     score: 1
   });
   const recoveryDecision = decideCandidate({ projectRoot, campaign, candidates: [highVotePlausible, skeletonOnly, blockedOnly] });
@@ -176,7 +182,7 @@ try {
   );
 
   const manifestDifferentKernel = cloneCandidate(
-    winner,
+    kernelCandidate,
     {
       candidate_id: "CAND-1006",
       variant_id: "V6",
@@ -186,7 +192,7 @@ try {
     { statement_equivalence_claim: "different" }
   );
   const manifestHardVetoKernel = cloneCandidate(
-    winner,
+    kernelCandidate,
     {
       candidate_id: "CAND-1007",
       variant_id: "V7",
@@ -196,7 +202,7 @@ try {
     { hard_vetoes: ["manifest_axiom_profile_rejected"] }
   );
   const missingStatementHashKernel = cloneCandidate(
-    winner,
+    kernelCandidate,
     {
       candidate_id: "CAND-1008",
       variant_id: "V8",
@@ -207,7 +213,7 @@ try {
     { candidate_statement_hash: undefined }
   );
   const newAssumptionKernel = cloneCandidate(
-    winner,
+    kernelCandidate,
     {
       candidate_id: "CAND-1009",
       variant_id: "V2",
