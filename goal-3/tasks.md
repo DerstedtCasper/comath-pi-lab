@@ -150,20 +150,20 @@ Completion record:
 
 ## Task 9: Comprehensive Check-Debug Loop 3
 
-- [ ] Run root `corepack pnpm build`.
-- [ ] Run root `corepack pnpm typecheck`.
-- [ ] Run root `corepack pnpm test` or `corepack pnpm run ci` if appropriate.
-- [ ] Verify no repository-root `.comath/` runtime state remains.
-- [ ] Scan for fake replay artifacts, overwritten replay ids, host-path leaks in evidence packs, and untracked generated files.
-- [ ] Repair any high-risk regression found.
+- [x] Run root `corepack pnpm build`.
+- [x] Run root `corepack pnpm typecheck`.
+- [x] Run root `corepack pnpm test` or `corepack pnpm run ci` if appropriate.
+- [x] Verify no repository-root `.comath/` runtime state remains.
+- [x] Scan for fake replay artifacts, overwritten replay ids, host-path leaks in evidence packs, and untracked generated files.
+- [x] Repair any high-risk regression found.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: re-read the Goal 3 input/plan/tasks files, the v2 no-reinvent audit, the v2 open formal workbench design, the v2 agent prompt protocol, root AGENTS/README/TODO/REVIEW/runbook/module-boundary docs, and the Goal 3 gap matrix. Ran the third comprehensive check-debug loop after LeanRunManifest v3 and Lean Authority v3 final replay work. Classified replay/proof-authority scans, replay id allocation/append-only registry behavior, host-path leak surfaces, generated runtime cleanliness, and working tree state. No high-risk product-code regression was found, so no product repair was needed.
+- Verification evidence: pre-check `git status --short --branch` showed clean `## main`; `Test-Path -LiteralPath '.comath'` returned `False`. Root `corepack pnpm build` exited 0 for `extensions/comath-pi` and `services/comathd`. Root `corepack pnpm typecheck` exited 0 for both workspace packages. Root `corepack pnpm test` exited 0, including Phase 0 smoke, Pi extension tests, Goal 4 P0 no-reinvent tests, Goal 3 Task 2/4/5/7/8 tests, comathd proof-kernel/campaign/Lean/agent tests, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation. Static scans over `services/comathd/src` and tests found Lean Authority v3 proof authority only in service-owned `FinalReplayManifest v3` creation/tests, agent/adapter/report surfaces marked `proof_authority: none`, fake/pass-log rejection tests in Task 7, and append-only replay vetoes in `clean-replay.ts` plus `final-replay-manifest-v3.ts`. Replay code review confirmed replay ids are allocated from existing `RPLY-*` directories, existing replay roots throw `final_replay_registry_append_only_violation`, registry append rejects duplicate replay ids, static/dependency checks run against `cleanRoot`, v3 manifests store project-relative paths, and third-party replay packs copy only clean workspace files. Host-path scan hits were code variables, tests, and historical review documentation; Task 8 tests explicitly assert `README_REPLAY.md` and `expected_hashes.json` do not contain the project root. Post-check `git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'` returned no tracked runtime/build artifacts; `git ls-files -o --exclude-standard` returned no untracked generated files; `Test-Path -LiteralPath '.comath'` again returned `False`; `git diff --check` exited 0.
+- Residual risk: Task 9 was a verification loop only. It intentionally did not implement Task 10's full DependencyClosureV2, LeanIntegrityScannerV2, AxiomProfileV2, or v3 manifest consumption by the final promotion gate. Historical README/TODO/REVIEW material still mentions older Phase 72-81 Nat-linear slices and `lean_clean_replay` fixture-era artifacts; current root tests and Goal 3 no-reinvent tests keep the production path fail-closed, and Task 19 must later resync public wording after the remaining GA implementation tasks land.
+- Next step: Task 10 should implement DependencyClosureV2, LeanIntegrityScannerV2, AxiomProfileV2, and No-Cheat Gate hardening with tests for dependency closure, Lean-aware forbidden constructs, target-bound axiom profiles, import/shadowing pollution, and raw-stdout spoofing.
+- Commit: this Task 9 record commit
 
 ## Task 10: DependencyClosureV2, LeanIntegrityScannerV2, And AxiomProfileV2
 
