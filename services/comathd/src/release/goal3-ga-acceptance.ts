@@ -147,6 +147,52 @@ export type Goal3GaPositiveMatrixBatchResult = {
   blockers: string[];
 };
 
+export type Goal3GaPositiveReplayAttemptCertificate = {
+  schema_version: "comath.goal3_positive_replay_attempt_certificate.v1";
+  task_id: string;
+  category: Goal3GaPositiveMatrixCategory;
+  attempt_status: "blocked_before_clean_replay";
+  terminal_classification: "replayable_blocker";
+  formal_spec_lock_hash: string;
+  assumption_ledger_hash: string;
+  dependency_lock_hash: string;
+  replay_command: string[];
+  network_policy_final_replay: "disabled";
+  blocker_codes: string[];
+  certificate_path: string;
+  proof_authority: "none";
+  can_promote_claim: false;
+  uses_production_theorem_family_recognizer: false;
+  uses_controlled_nat_linear_synthesis: false;
+  uses_default_assumptions: false;
+  cas_literature_search_or_vote_proof_authority: false;
+  direct_promotion_path: false;
+};
+
+export type Goal3GaPositiveMatrixTrancheResult = Goal3GaPositiveMatrixBatchResult & {
+  replay_attempt: Goal3GaPositiveReplayAttemptCertificate;
+};
+
+export type Goal3GaPositiveMatrixTrancheReport = {
+  schema_version: "comath.goal3_positive_matrix_tranche.v1";
+  total_required_tasks: 100;
+  tranche_scope: {
+    start_task_id: string;
+    end_task_id: string;
+    expected_count: number;
+  };
+  results: Goal3GaPositiveMatrixTrancheResult[];
+  summary: {
+    clean_replay_passed: 0;
+    replayable_blocker: number;
+    promoted_count: 0;
+  };
+  next_batch_scope: {
+    start_after_task_id: string | null;
+    remaining_tasks: number;
+  };
+};
+
 export type Goal3GaPositiveMatrixBatchReport = {
   schema_version: "comath.goal3_positive_matrix_batch.v1";
   total_required_tasks: 100;
@@ -857,6 +903,61 @@ function emptyMatrixEvidenceBinding(): Goal3GaPositiveMatrixBatchResult["evidenc
   };
 }
 
+function blockerCodesForPositiveMatrixTask(task: Goal3GaPositiveMatrixTask): string[] {
+  const codes = ["lean_clean_replay_not_attempted_for_task"];
+  switch (task.category) {
+    case "external Lean repo":
+      codes.push("external_dependency_not_trusted_replay_dependency");
+      break;
+    case "paper-to-formal-spec":
+      codes.push("paper_anchor_not_attached");
+      break;
+    case "theorem-search-assisted":
+      codes.push("theorem_search_adapter_not_executed");
+      break;
+    case "tactic repair":
+      codes.push("tactic_repair_attempt_not_executed");
+      break;
+    default:
+      codes.push("requires_live_mathlib_or_domain_formalization");
+      break;
+  }
+  return codes;
+}
+
+function createReplayAttemptCertificate(
+  projectRoot: string,
+  task: Goal3GaPositiveMatrixTask
+): Goal3GaPositiveReplayAttemptCertificate {
+  const formalSpecLockHash = sha256Text(canonicalJson(task.formal_spec_lock_input));
+  const assumptionLedgerHash = sha256Text(canonicalJson(task.assumption_ledger_input));
+  const dependencyLockHash = sha256Text(canonicalJson(task.dependency_lock_expectation));
+  const certificatePath = `.comath/release/positive_matrix/${task.task_id}/replay_attempt_certificate.json`;
+  const certificate: Goal3GaPositiveReplayAttemptCertificate = {
+    schema_version: "comath.goal3_positive_replay_attempt_certificate.v1",
+    task_id: task.task_id,
+    category: task.category,
+    attempt_status: "blocked_before_clean_replay",
+    terminal_classification: "replayable_blocker",
+    formal_spec_lock_hash: formalSpecLockHash,
+    assumption_ledger_hash: assumptionLedgerHash,
+    dependency_lock_hash: dependencyLockHash,
+    replay_command: task.replay_command,
+    network_policy_final_replay: task.dependency_lock_expectation.network_policy_final_replay,
+    blocker_codes: blockerCodesForPositiveMatrixTask(task),
+    certificate_path: certificatePath,
+    proof_authority: "none",
+    can_promote_claim: false,
+    uses_production_theorem_family_recognizer: false,
+    uses_controlled_nat_linear_synthesis: false,
+    uses_default_assumptions: false,
+    cas_literature_search_or_vote_proof_authority: false,
+    direct_promotion_path: false
+  };
+  writeProjectFile(projectRoot, certificatePath, `${JSON.stringify(certificate, null, 2)}\n`);
+  return certificate;
+}
+
 export function runGoal3GaPositiveMatrixBatch(input: {
   projectRoot: string;
   batchSize?: number;
@@ -913,6 +1014,60 @@ export function runGoal3GaPositiveMatrixBatch(input: {
     next_batch_scope: {
       start_after_task_id: startAfterTaskId,
       remaining_tasks: Math.max(0, manifest.tasks.length - requestedBatchSize)
+    }
+  };
+}
+
+export function runGoal3GaPositiveMatrixTranche(input: {
+  projectRoot: string;
+  startTaskId: string;
+  endTaskId: string;
+}): Goal3GaPositiveMatrixTrancheReport {
+  const manifest = createGoal3GaPositiveTaskManifest();
+  const startIndex = manifest.tasks.findIndex((task) => task.task_id === input.startTaskId);
+  const endIndex = manifest.tasks.findIndex((task) => task.task_id === input.endTaskId);
+  if (startIndex < 0 || endIndex < 0 || endIndex < startIndex) {
+    throw new Error("invalid positive matrix tranche scope");
+  }
+  const tasks = manifest.tasks.slice(startIndex, endIndex + 1);
+  const results: Goal3GaPositiveMatrixTrancheResult[] = tasks.map((task) => {
+    const replayAttempt = createReplayAttemptCertificate(input.projectRoot, task);
+    const certificateHash = sha256Text(canonicalJson(replayAttempt));
+    return {
+      task_id: task.task_id,
+      category: task.category,
+      terminal_classification: "replayable_blocker",
+      proof_authority: "none",
+      can_promote_claim: false,
+      evidence_binding: {
+        formal_spec_lock_hash: replayAttempt.formal_spec_lock_hash,
+        assumption_ledger_hash: replayAttempt.assumption_ledger_hash,
+        dependency_lock_hash: replayAttempt.dependency_lock_hash,
+        artifact_hashes_sha256: certificateHash,
+        lean_run_manifest_id: "",
+        final_replay_manifest_id: ""
+      },
+      blockers: replayAttempt.blocker_codes,
+      replay_attempt: replayAttempt
+    };
+  });
+  return {
+    schema_version: "comath.goal3_positive_matrix_tranche.v1",
+    total_required_tasks: 100,
+    tranche_scope: {
+      start_task_id: input.startTaskId,
+      end_task_id: input.endTaskId,
+      expected_count: tasks.length
+    },
+    results,
+    summary: {
+      clean_replay_passed: 0,
+      replayable_blocker: results.length,
+      promoted_count: 0
+    },
+    next_batch_scope: {
+      start_after_task_id: input.endTaskId,
+      remaining_tasks: Math.max(0, manifest.tasks.length - endIndex - 1)
     }
   };
 }
