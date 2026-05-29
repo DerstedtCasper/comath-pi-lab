@@ -99,19 +99,19 @@ Completion record:
 
 ## Task 6: Comprehensive Check-Debug Loop 2
 
-- [ ] Re-run build/typecheck/test gates appropriate after Tasks 4-5.
-- [ ] Re-scan for default assumptions, statement drift bypasses, metadata-only equivalence promotion, and direct claim status mutation.
-- [ ] Verify Task 4-5 schemas round-trip and fail closed.
-- [ ] Check documentation and prompts do not contradict statement-lock requirements.
-- [ ] Repair any high-risk regression found.
+- [x] Re-run build/typecheck/test gates appropriate after Tasks 4-5.
+- [x] Re-scan for default assumptions, statement drift bypasses, metadata-only equivalence promotion, and direct claim status mutation.
+- [x] Verify Task 4-5 schemas round-trip and fail closed.
+- [x] Check documentation and prompts do not contradict statement-lock requirements.
+- [x] Repair any high-risk regression found.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: re-read the Goal 3 input/plan/tasks files, the v2 no-reinvent audit, the v2 open formal workbench design, the v2 agent prompt protocol, root AGENTS/README/TODO/REVIEW/runbook/module-boundary docs, and the Goal 3 gap matrix. Re-ran the Task 4-5 gate matrix and classified static-scan hits for default assumptions, statement drift hard vetoes, metadata-only equivalence, direct promotion surfaces, and documentation/prompt wording. No high-risk regression requiring product-code repair was found in this check-debug loop.
+- Verification evidence: `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task4-formal-spec-lock.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task5-statement-diff-gate.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task2-no-toy-production-path.test.mjs` exited 0; `node services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs` exited 0; `node services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs` exited 0; `node services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs` exited 0; `node services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs` exited 0; `node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs` exited 0; `node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs` exited 0; `node services/comathd/tests/unit/phase78-lean-transitive-equivalence.test.mjs` exited 0; `node services/comathd/tests/unit/phase79-lean-equivalence-search-plan.test.mjs` exited 0; `node services/comathd/tests/unit/phase80-bounded-equivalence-witness-materialization.test.mjs` exited 0; `node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 through Phase 70. Static scans confirmed `needs_formal_spec_lock` is present in schemas/campaign fail-closed paths/tests; `n : Nat` hits remain in historical tests, fixture/smoke material, and `release/v3-negative-ga-slices.ts` adversarial negative cases rather than the Task 4 unknown-goal intake path; drift/hard-veto strings are implemented in `statement-diff-gate.ts` and `decision-forest.ts`; non-exact `equivalent` candidate arbitration requires Lean equivalence replay evidence; direct promotion surfaces remain `promoteClaim()` and `applyGatePromotedClaim()` gate/storage plumbing plus negative tests. Documentation/prompt scan found current-facing wording preserving proof-authority and statement-lock boundaries, with old Goal 2 readiness docs still explicitly scoped as vertical-slice evidence rather than Goal 3 GA completion. `Test-Path -LiteralPath '.comath'` returned `False`; `git diff --check` exited 0; pre-record `git status --short --branch` was clean on `main`.
+- Residual risk: Task 6 was a verification loop only and intentionally did not implement LeanRunManifest v3, dependency closure v2, structured Lean audit, or final hermetic replay. Some historical Goal 2 documentation and tests still mention bounded Nat slices as vertical-slice evidence; this is not a Task 6 regression, but Task 19 must resync public release wording after the later GA implementation tasks replace the old slices.
+- Next step: Task 7 should implement or harden service-owned LeanRunner execution and `LeanRunManifest v3`, including rejecting agent-written Lean logs and failing closed on unknown toolchain/version metadata.
+- Commit: this Task 6 record commit
 
 ## Task 7: LeanRunner And LeanRunManifest v3 Service Ownership
 
