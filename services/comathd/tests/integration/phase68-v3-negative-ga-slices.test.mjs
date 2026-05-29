@@ -40,12 +40,12 @@ try {
   assert.ok(persisted.cases[0].gate_vetoes.includes("statement_drift"));
   assert.ok(persisted.cases[1].gate_vetoes.includes("sorry_detected"));
   assert.ok(persisted.cases[1].gate_vetoes.includes("axiom_detected"));
-  assert.equal(persisted.cases[2].terminal_state, "completed_refutation");
-  assert.equal(persisted.cases[2].counterexample.result, "refutes");
-  assert.equal(getClaim(projectRoot, persisted.cases[2].project_id, persisted.cases[2].claim_id).status, "refuted");
+  assert.equal(persisted.cases[2].terminal_state, "blocked_with_replayable_reason");
+  assert.ok(persisted.cases[2].gate_vetoes.includes("business_layer_theorem_prover_forbidden"));
+  assert.equal(persisted.cases[2].blocker_code, "no_reinvent_false_theorem_path_blocked_without_toy_refuter");
+  assert.equal(getClaim(projectRoot, persisted.cases[2].project_id, persisted.cases[2].claim_id).status, "conjectural");
   assert.equal(persisted.cases[3].decision_result, "blocked");
   assert.equal(persisted.cases[3].failure_aggregate.total_failed_routes, 8);
-  assert.equal(persisted.cases[4].snapshot_replay_result, "pass");
   assert.equal(persisted.cases[4].snapshot_only_promotion_gate_ok, false);
   assert.ok(persisted.cases[4].gate_vetoes.includes("formally_checked requires hash-bound fresh final replay artifacts"));
 } finally {

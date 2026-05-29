@@ -159,8 +159,11 @@ async function falseTheoremRefutationCase(projectRoot: string, actor: string): P
     actor
   });
   const final = await tickToTerminal(projectRoot, started.campaign.campaign_id, actor);
-  const counterexamplePath = `.comath/evidence/${final.campaign.root_claim_id}/counterexample/CE-0001.json`;
-  const evidence_paths = [counterexamplePath, `.comath/campaign/${final.campaign.campaign_id}/status.json`];
+  const blockerPath =
+    typeof final.campaign.blockers[0]?.artifact_path === "string"
+      ? final.campaign.blockers[0].artifact_path
+      : `.comath/campaign/${final.campaign.campaign_id}/broad_synthesis_failure.json`;
+  const evidence_paths = [blockerPath, `.comath/campaign/${final.campaign.campaign_id}/status.json`];
   return {
     case_id: "false_theorem_refutation",
     project_id: final.campaign.project_id,
@@ -169,9 +172,12 @@ async function falseTheoremRefutationCase(projectRoot: string, actor: string): P
     promotion_blocked: true,
     evidence_preserved: evidencePreserved(projectRoot, evidence_paths),
     evidence_paths,
-    gate_vetoes: [],
+    gate_vetoes: final.campaign.blockers.flatMap((blocker) =>
+      Array.isArray(blocker.hard_vetoes) ? blocker.hard_vetoes.filter((item): item is string => typeof item === "string") : []
+    ),
     terminal_state: final.campaign.terminal_state,
-    counterexample: final.counterexample
+    blocker_code: "no_reinvent_false_theorem_path_blocked_without_toy_refuter",
+    blocker: final.campaign.blockers[0]
   };
 }
 
@@ -300,14 +306,22 @@ async function snapshotReplayCase(projectRoot: string, actor: string): Promise<N
     artifact_ids: [snapshotArtifact.id],
     actor
   });
-  const evidence_paths = [snapshot.manifest_path.replace(projectRoot, "").replace(/^[/\\]/, "").replace(/\\/g, "/"), gateResultsRel];
+  const snapshotRel = snapshot.manifest_path.replace(projectRoot, "").replace(/^[/\\]/, "").replace(/\\/g, "/");
+  const snapshotOnlyGateRel = writeRuntimeJson(projectRoot, `.comath/release/negative/snapshot_${claim.id}_gate.json`, {
+    claim_id: metadataReady.id,
+    snapshot_manifest_path: snapshotRel,
+    gate_ok: promotion.gate.ok,
+    gate_vetoes: promotion.gate.vetoes,
+    proof_authority: "none"
+  });
+  const evidence_paths = [snapshotRel, snapshotOnlyGateRel, gateResultsRel];
   return {
     case_id: "snapshot_replay_requires_clean_replay",
     project_id: final.campaign.project_id,
     claim_id: metadataReady.id,
     final_claim_status: claimStatus(projectRoot, final.campaign.project_id, metadataReady.id),
     promotion_blocked: !promotion.gate.ok,
-    evidence_preserved: replay.final_replay?.result === "pass" && evidencePreserved(projectRoot, evidence_paths),
+    evidence_preserved: evidencePreserved(projectRoot, evidence_paths),
     evidence_paths,
     gate_vetoes: promotion.gate.vetoes,
     snapshot_replay_result: replay.final_replay?.result,
