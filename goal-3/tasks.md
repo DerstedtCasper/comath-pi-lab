@@ -245,18 +245,18 @@ Completion record:
 
 ## Task 15: Comprehensive Check-Debug Loop 5
 
-- [ ] Re-run build/typecheck/test gates after Tasks 13-14.
-- [ ] Scan agent prompts and runtime for weakened invariants, trusted-state mutation, vote-as-proof, missing locked statement hash, and schema bypass.
-- [ ] Run representative agent-stage tests with no external model dependency.
-- [ ] Repair high-risk regressions found.
+- [x] Re-run build/typecheck/test gates after Tasks 13-14.
+- [x] Scan agent prompts and runtime for weakened invariants, trusted-state mutation, vote-as-proof, missing locked statement hash, and schema bypass.
+- [x] Run representative agent-stage tests with no external model dependency.
+- [x] Repair high-risk regressions found.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: re-read the Goal 3 input/plan/tasks files, the v2 no-reinvent audit, the v2 open formal workbench design, the v2 agent prompt protocol, root AGENTS/README/TODO/REVIEW/runbook/module-boundary docs, and the Goal 3 gap matrix. Ran the fifth comprehensive check-debug loop after Tasks 13-14, covering MathProve-native stage-machine contracts, GA agent-stage runner behavior, decision-forest arbitration, proof-memory writeback, prompt/profile proof-authority invariants, trusted-state mutation flags, vote-as-proof wording, locked-statement hash preservation, strict JSON schema rejection, direct promotion surfaces, and runtime cleanliness. No high-risk product-code regression was found, so no product repair was required.
+- Verification evidence: `corepack pnpm --filter @comath/comathd build` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 with Goal 3 Task 13 and Task 14 included. Focused checks also exited 0: `node services/comathd/tests/unit/goal3-task13-mathprove-native-stage-machine.test.mjs`; `node services/comathd/tests/unit/goal3-task14-ga-agent-stage-workflow.test.mjs`; `node services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs`; `node services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs`; `node services/comathd/tests/unit/phase65-proof-memory-retrieval.test.mjs`; `node services/comathd/tests/unit/goal3-task11-external-wheel-registry.test.mjs`. Static scans over `.pi`, `prompts`, `services/comathd/src/agents`, `services/comathd/src/proof-kernel/ensemble`, `extensions/comath-pi/src/subagents.ts`, and `docs/architecture` found `proof_authority` values constrained to `none`, `may_mutate_trusted_state` constrained to `false`, reviewer-vote wording marked advisory, GA agent outputs parsed through `gaAgentOutputSchema`/`parseGaAgentOutputJson`, `proof_authority: z.literal("none")`, locked statement hash fields preserved, and no direct `promoteClaim`, `applyGatePromotedClaim`, `claim.status =`, `formally_checked`, or `can_promote_claim` surface in agent/ensemble runtime code. `supports_claim_status` hits were limited to non-authoritative `none` launcher/report text. `Test-Path -LiteralPath ".comath"` returned `False`; `git status -sb` was clean before this task-record edit; `git diff --check` exited 0.
+- Residual risk: Task 15 was a verification loop only. Task 14 still provides a deterministic local adapter/contract runner rather than live model-provider execution, real account/network validation, cross-process recovery, or OS-level sandboxing. Task 16 still needs to route Pi goal-mode through the stricter terminal-state and evidence contracts, and Task 17 still needs the GA acceptance suite plus a positive proof workflow that does not rely on old theorem-family/Nat production shortcuts.
+- Next step: Task 16 should implement Pi goal-mode end-to-end command parsing/routing, default goal semantics, allowed terminal states, resume/cancel/export/blocker surfaces, and thin-client dashboard behavior without letting Pi mutate trusted proof state.
+- Commit: 7e16587
 
 ## Task 16: Pi Goal-Mode End-To-End Workflow
 
