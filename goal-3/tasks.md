@@ -67,19 +67,19 @@ Completion record:
 
 ## Task 4: FormalSpecLock, AssumptionLedger, And Unknown-Goal Fail-Closed Path
 
-- [ ] Add/update schemas for `FormalSpecLock` and `AssumptionLedger`.
-- [ ] Ensure every variable and assumption has source, approval state, and evidence anchor or fails closed.
-- [ ] Replace any `classifyLockedProblem`-style path with formalization/intake state that returns `needs_formal_spec_lock` for unknown/ambiguous goals.
-- [ ] Add tests for no default variable injection and no default assumption injection.
-- [ ] Add tests for unapproved assumptions blocking proof obligation creation.
+- [x] Add/update schemas for `FormalSpecLock` and `AssumptionLedger`.
+- [x] Ensure every variable and assumption has source, approval state, and evidence anchor or fails closed.
+- [x] Replace any `classifyLockedProblem`-style path with formalization/intake state that returns `needs_formal_spec_lock` for unknown/ambiguous goals.
+- [x] Add tests for no default variable injection and no default assumption injection.
+- [x] Add tests for unapproved assumptions blocking proof obligation creation.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: added first-class `formalSpecLockSchema`, `assumptionLedgerSchema`, JSON-schema registry entries, and exported types; added `createProofObligationFromFormalSpecLock()` with runtime schema parsing so raw unapproved assumptions cannot bypass TypeScript typing; changed campaign start so unknown/non-proof-form natural-language goals register the root claim as `needs_formal_spec_lock`, write a service-owned `formal_spec_lock_blocker.json`, create no proof obligation, and keep assumptions empty; removed the old default Nat notation sentence from the problem-lock notation artifact; updated no-reinvent/proof-memory tests to match the new fail-closed intake boundary without restoring Nat proof support.
+- Verification evidence: TDD RED was observed before implementation: `node services/comathd/tests/unit/goal3-task4-formal-spec-lock.test.mjs` failed with `does not provide an export named 'assumptionLedgerSchema'`. After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task4-formal-spec-lock.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task2-no-toy-production-path.test.mjs` exited 0; `node services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs` exited 0; `node services/comathd/tests/unit/phase65-proof-memory-retrieval.test.mjs` exited 0; `node tests/unit/phase1-contracts.test.mjs` from `services/comathd` exited 0; `node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs` exited 0; `node services/comathd/tests/integration/phase70-broad-theorem-planning-slice.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 through Phase 70. Static scans showed `needs_formal_spec_lock` only in the new schema/campaign/tests and `n : Nat` hits remain in historical/fixture/negative tests and release negative slices, not the Task 4 campaign intake path. `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- Residual risk: Task 4 intentionally does not implement full StatementDiffGate, user approval UI, persisted positive FormalSpecLock creation flow, or Lean-proved non-exact equivalence; proof-like goals still proceed into the existing fail-closed broad-planning path until later tasks replace that with the full formalization/intake pipeline. The heuristic for unknown intake is conservative and scoped to this task; Task 5 and Task 13 should replace it with the full native stage machine and statement gate.
+- Next step: Task 5 should implement `StatementDiffGate` and Statement Drift Red Team, rejecting drift/hidden assumptions/weakening/wrong-domain cases and requiring Lean-proved equivalence for non-exact matches.
+- Commit: 165ccf9
 
 ## Task 5: StatementDiffGate And Statement Drift Red Team
 
