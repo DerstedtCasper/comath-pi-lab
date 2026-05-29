@@ -29,14 +29,19 @@
 | Overlarge phases cause partial unreviewed implementation | Medium | all | Use phase goals, allowed edit scopes, validation, and stop conditions. |
 | High concurrency creates write conflicts | High | all | Current global budget is `rpm=4`; keep subagents bounded and use strict disjoint write scopes plus parent-coordinator merge review. |
 | Parallelism before mutation gateway pollutes core state | High | 1-7 | Keep early/middle parallelism read-only or disjoint; wait until Phase 8 for broad subagent workstream fan-out. |
+| Documentation overclaims Goal 3 readiness | High | 19+ | README, GA release criteria, examples, and smoke checks must state that Task 17 positive breadth is representative unless every task is clean-replayed; Task 20 is the final GA audit. |
+| Literature/RAG prompt injection changes proof boundary | High | 19+ | Treat document text as quoted data, require prompt-injection scans, source anchors, content hashes, and `proof_authority=none` adapter records. |
+| Evidence packs leak copyright, terms-restricted content, secrets, or host paths | High | 19+ | Evidence-pack policy requires terms notes, excerpt policy, hashes, local-reference handling, secret scans, and host-path scrubbing before public export. |
+| External Lean supply chain drifts after proof claim | High | 19+ | External repos must move through `planning_reference -> candidate_dependency -> approved_dependency -> trusted_replay_dependency` with pinned commits, manifests, source hashes, licenses, and network-disabled final replay. |
+| Agent prompt edits weaken proof-authority invariants | High | 19+ | `.pi/agents` and `.pi/prompts` must retain `proof_authority=none`, `may_mutate_trusted_state=false`, locked statement hash preservation, strict JSON/schema output, blocker reporting, and no vote/literature/CAS proof authority. |
 
 ## Current Risk Posture
 
-After Phase 28:
+After Goal 3 Task 19:
 
 - Runtime safety risks are active code-path risks, so validation must run against `comathd` routes, Pi descriptors, and proof-kernel replay artifacts rather than docs alone.
 - TriviumDB production-default rollout, production Codex API account/network validation, broad MathProve proof search/final-audit authority, richer real-host Pi UX/service lifecycle management, and stronger OS/network runner sandboxing remain intentionally deferred behind adapter/gate boundaries.
-- The largest immediate risk is proof-scope overclaiming: Phase 18-68 cover bounded GA/v3 vertical slices, three registered elementary Nat theorem families, an exact refutation path, an ensemble recovery benchmark, canonical campaign-state flow, product read models, a Pi loop, deterministic compute-runner replay, controlled external MathProve evidence production, Pi runtime registration, local install-session e2e, AgentRun boundary contracts, allowlisted AgentRun process scheduling, writer locks, bounded agent/Codex adapter surfaces, optional TriviumDB evaluation, conservative Lean statement-binding extensions, the positive v3 formal campaign slice, and the required negative GA release slices, not arbitrary theorem proving.
+- The largest immediate risk is proof-scope overclaiming: old Phase 18-81 Nat/theorem-family material is historical vertical-slice or negative-fixture material under Goal 3. Current release wording must describe FormalSpecLock, AssumptionLedger, StatementDiffGate, Lean Authority v3, dependency locks, no-cheat gates, external adapter contracts, and evidence-pack replay without claiming arbitrary theorem proving or global GA completion before Task 20.
 - Phase 20 validates public campaign state semantics, not autonomous GA research completion.
 - Phase 21 improves product inspection through read-only claim/evidence/gate routes; it does not alter proof authority or promotion rules.
 - Phase 22 improves the user-facing Pi entry path; Phase 26 validates package/runtime registration against installed Pi 0.75.5 loader behavior; Phase 45 validates an automated local Pi/comathd install-session e2e. These do not replace richer real-host Pi UX, manual installation/lifecycle documentation, or durable service management.

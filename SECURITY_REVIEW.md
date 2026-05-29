@@ -4,6 +4,8 @@ Current-state note: sections below are chronological. The Phase 0 statement desc
 
 Phase 69 security note: external v3 terminal vocabulary is exposed only as a derived response field, `campaign.external_v3_terminal_state`. It is not persisted into `.comath/campaign/*/status.json`, is not accepted from Pi/model input, and cannot mutate campaign, proof, refutation, blocker, cancellation, or claim-promotion authority.
 
+Goal 3 Task 19 release-hardening note: public docs, config samples, and agent prompts now treat release wording as a security boundary. Prompt files under `.pi/agents` and `.pi/prompts` must preserve `proof_authority=none`, `may_mutate_trusted_state=false`, locked statement hash preservation, strict JSON/schema output, and no vote/literature/CAS/reviewer proof authority. Literature/RAG content is quoted data, not instruction; evidence packs must avoid secrets, host-path leaks, and unlicensed copyrighted redistribution; external Lean repos must reach `trusted_replay_dependency` before final replay import.
+
 ## Phase 0
 
 No runtime code capable of path writes, shell execution, network calls, claim promotion, or database mutation has been implemented.

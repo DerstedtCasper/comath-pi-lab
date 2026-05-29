@@ -36,6 +36,8 @@ Integrity warning for all future phases: MathProve is an evidence producer and g
 
 Phase 69 integrity warning: `external_v3_terminal_state` is vocabulary compatibility only. It mirrors trusted internal campaign terminal state for API/Pi consumers and cannot prove a theorem, verify a counterexample, satisfy a replay gate, promote `formally_checked`, or override blocker/cancellation semantics.
 
+Goal 3 Task 19 integrity warning: old Phase 18-81 Nat/theorem-family material is historical vertical-slice or negative-fixture evidence unless regenerated through FormalSpecLock, AssumptionLedger, StatementDiffGate, DependencyLock, service-owned LeanRunManifest, FinalReplayManifest, and no-cheat gates. Public docs, `.pi` prompts, config samples, and examples must not imply arbitrary theorem proving, vote-as-proof, literature-as-proof, CAS-as-proof, or MathProve-as-proof-authority semantics. Evidence packs may label a result `proven` only after final clean Lean replay and promotion gates pass.
+
 ## Phase 4
 
 Implemented the service-level promotion boundary.

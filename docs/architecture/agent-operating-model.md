@@ -47,11 +47,29 @@ Every child result must include:
 
 - assigned role;
 - exact write scope;
+- `proof_authority=none`;
+- `may_mutate_trusted_state=false`;
+- locked statement hash, or an explicit blocker if no FormalSpecLock exists;
+- strict JSON/schema output for machine-ingested artifacts;
+- introduced assumptions and introduced dependencies;
 - files changed or read-only confirmation;
 - tests/checks run;
 - blockers;
+- hard vetoes, including statement drift, hidden assumptions, dependency pollution, fake Lean logs, and no-replay proof claims;
 - boundary deviations;
 - recommended TODO/REVIEW updates.
+
+## Goal 3 Agent Invariants
+
+The Goal 3 agent team is one coordinator plus eight specialists. Stage-local variants are search and review mechanisms only. No agent or variant has proof authority.
+
+Required prompt invariants:
+
+- preserve the locked statement hash;
+- do not mutate trusted `.comath/` proof state;
+- do not mark claims proven from votes, reviewer approval, literature, theorem search, CAS/SAT/SMT, or MathProve-style audit output;
+- request service-owned LeanRunner checks and final clean replay for proof status;
+- report blockers, introduced assumptions, introduced dependencies, statement changes, and hard vetoes explicitly.
 
 ## Parallel Execution Rules
 

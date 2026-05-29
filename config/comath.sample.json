@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "allowShell": false,
+  "proofAuthority": {
+    "finalAuthority": "lean4_mathlib_clean_replay",
+    "allowAgentVoteAsProof": false,
+    "allowCasAsProof": false,
+    "allowLiteratureAsProof": false
+  },
+  "lean": {
+    "requireLeanToolchainFile": true,
+    "requireLakeManifest": true,
+    "finalReplayNetworkPolicy": "disabled",
+    "allowedImportPrefixes": ["Mathlib", "Std"]
+  },
+  "externalLeanDependencies": [
+    {
+      "name": "mathlib",
+      "source": "git",
+      "url": "https://github.com/leanprover-community/mathlib4",
+      "commit": "PIN_COMMIT_SHA_HERE",
+      "license": "Apache-2.0",
+      "state": "trusted_replay_dependency"
+    }
+  ],
+  "adapters": {
+    "theoremSearch": [
+      { "id": "loogle", "provider": "loogle", "enabled": false },
+      { "id": "leansearch", "provider": "leansearch", "enabled": false }
+    ],
+    "literature": [
+      { "id": "arxiv", "provider": "arxiv", "enabled": false },
+      { "id": "openalex", "provider": "openalex", "enabled": false },
+      { "id": "local_pdf", "provider": "local_pdf", "enabled": true }
+    ],
+    "computation": [
+      { "id": "sympy", "provider": "sympy", "enabled": true },
+      { "id": "z3", "provider": "z3", "enabled": false }
+    ]
+  },
+  "evidencePack": {
+    "includeFullPdfs": false,
+    "includeCopyrightedText": false,
+    "includeLocalHostPaths": false,
+    "requireCitationAnchors": true,
+    "requirePromptInjectionScan": true
+  }
+}

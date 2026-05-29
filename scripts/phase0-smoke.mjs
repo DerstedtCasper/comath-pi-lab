@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const required = [
@@ -18,10 +18,18 @@ const required = [
   "docs/architecture/acceptance-matrix.md",
   "docs/architecture/risk-register.md",
   "docs/architecture/agent-operating-model.md",
+  "docs/architecture/ga-release-criteria.md",
+  "docs/architecture/threat-model.md",
+  "docs/architecture/adapter-contracts.md",
+  "docs/architecture/external-lean-supply-chain.md",
+  "docs/architecture/evidence-pack-policy.md",
   "docs/adr/0001-single-mutation-gateway.md",
   "docs/integrations/pi-runtime-assumptions.md",
+  "docs/examples/README.md",
   "docs/progress/design-handoff.md",
   "docs/superpowers/plans/2026-05-25-full-design-documentation.md",
+  "config/README.md",
+  "config/comath.sample.json",
   "extensions/README.md",
   "schemas/README.md",
   "services/comathd/package.json",
@@ -49,6 +57,17 @@ const readme = readFileSync(join(root, "README.md"), "utf8");
 const acceptanceMatrix = readFileSync(join(root, "docs/architecture/acceptance-matrix.md"), "utf8");
 const riskRegister = readFileSync(join(root, "docs/architecture/risk-register.md"), "utf8");
 const agentModel = readFileSync(join(root, "docs/architecture/agent-operating-model.md"), "utf8");
+const gaReleaseCriteria = readFileSync(join(root, "docs/architecture/ga-release-criteria.md"), "utf8");
+const threatModel = readFileSync(join(root, "docs/architecture/threat-model.md"), "utf8");
+const adapterContracts = readFileSync(join(root, "docs/architecture/adapter-contracts.md"), "utf8");
+const leanSupplyChain = readFileSync(join(root, "docs/architecture/external-lean-supply-chain.md"), "utf8");
+const evidencePackPolicy = readFileSync(join(root, "docs/architecture/evidence-pack-policy.md"), "utf8");
+const sampleConfig = readFileSync(join(root, "config/comath.sample.json"), "utf8");
+const moduleBoundaries = readFileSync(join(root, "docs/architecture/module-boundaries.md"), "utf8");
+const securityReview = readFileSync(join(root, "SECURITY_REVIEW.md"), "utf8");
+const mathIntegrityReview = readFileSync(join(root, "MATH_INTEGRITY_REVIEW.md"), "utf8");
+const contributing = readFileSync(join(root, "CONTRIBUTING.md"), "utf8");
+const examplesReadme = readFileSync(join(root, "docs/examples/README.md"), "utf8");
 
 const invariantFailures = [];
 
@@ -76,8 +95,12 @@ if (!readme.includes("Research Alpha")) {
   invariantFailures.push("README must describe the current Research Alpha state");
 }
 
-if (!readme.includes("Phase 18-80")) {
-  invariantFailures.push("README must describe the current Phase 18-80 GA/v3 vertical-slice evidence");
+if (!readme.includes("Goal 3")) {
+  invariantFailures.push("README must describe the current Goal 3 GA-refactor state");
+}
+
+if (!readme.includes("Lean4/mathlib")) {
+  invariantFailures.push("README must name Lean4/mathlib as the final proof authority boundary");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -644,12 +667,110 @@ const requiredSections = [
   [acceptanceMatrix, "## Phase Acceptance", "acceptance matrix must define phase acceptance"],
   [acceptanceMatrix, "## Mathematical Integrity Acceptance", "acceptance matrix must define math integrity acceptance"],
   [riskRegister, "## Current Risk Posture", "risk register must define current risk posture"],
-  [agentModel, "## Merge Protocol", "agent model must define merge protocol"]
+  [agentModel, "## Merge Protocol", "agent model must define merge protocol"],
+  [gaReleaseCriteria, "## Hard GA Blockers", "GA release criteria must define hard blockers"],
+  [threatModel, "## Primary Threats", "threat model must define primary threats"],
+  [adapterContracts, "## Common Adapter Envelope", "adapter contracts must define common adapter envelope"],
+  [leanSupplyChain, "trusted_replay_dependency", "external Lean supply chain must define trusted replay dependency"],
+  [evidencePackPolicy, "## Required For Promoted Proofs", "evidence pack policy must define promoted-proof contents"]
 ];
 
 for (const [content, marker, message] of requiredSections) {
   if (!content.includes(marker)) {
     invariantFailures.push(`${message}: missing ${marker}`);
+  }
+}
+
+if (!gaReleaseCriteria.includes("CoMath is an open-source agentic formal mathematics workbench built around Lean4/mathlib")) {
+  invariantFailures.push("GA release criteria must include required public positioning wording");
+}
+
+if (!threatModel.includes("document text as quoted data")) {
+  invariantFailures.push("threat model must document literature/RAG prompt-injection boundary");
+}
+
+if (!adapterContracts.includes('proof_authority: "none"')) {
+  invariantFailures.push("adapter contracts must keep adapter outputs proof_authority=none");
+}
+
+if (!leanSupplyChain.includes("planning_reference") || !leanSupplyChain.includes("candidate_dependency") || !leanSupplyChain.includes("approved_dependency")) {
+  invariantFailures.push("external Lean supply-chain doc must include dependency state machine");
+}
+
+if (!evidencePackPolicy.includes("FinalReplayManifest")) {
+  invariantFailures.push("evidence pack policy must require FinalReplayManifest");
+}
+
+if (!sampleConfig.includes("lean4_mathlib_clean_replay") || !sampleConfig.includes("trusted_replay_dependency")) {
+  invariantFailures.push("sample config must preserve Lean authority and trusted replay dependency policy");
+}
+
+if (!moduleBoundaries.includes("docs/architecture/ga-release-criteria.md") || !moduleBoundaries.includes(".pi/agents")) {
+  invariantFailures.push("module boundaries must include Goal 3 release-hardening docs and prompt ownership");
+}
+
+if (!riskRegister.includes("Documentation overclaims Goal 3 readiness") || !riskRegister.includes("Agent prompt edits weaken proof-authority invariants")) {
+  invariantFailures.push("risk register must include Goal 3 release-hardening and prompt-invariant risks");
+}
+
+if (!agentModel.includes("## Goal 3 Agent Invariants") || !agentModel.includes("one coordinator plus eight specialists")) {
+  invariantFailures.push("agent operating model must document Goal 3 1+8 agent invariants");
+}
+
+if (!securityReview.includes("Goal 3 Task 19 release-hardening note")) {
+  invariantFailures.push("security review must include Goal 3 Task 19 release-hardening note");
+}
+
+if (!mathIntegrityReview.includes("Goal 3 Task 19 integrity warning")) {
+  invariantFailures.push("math integrity review must include Goal 3 Task 19 integrity warning");
+}
+
+if (!contributing.includes("Lean4/mathlib clean replay is the only final proof authority")) {
+  invariantFailures.push("CONTRIBUTING must preserve Lean-authority contribution invariant");
+}
+
+if (!examplesReadme.includes("These examples describe expected public campaign shapes") || !examplesReadme.includes("proof_authority=none")) {
+  invariantFailures.push("example campaigns must remain non-proof artifacts and mark adapter hints as proof_authority=none");
+}
+
+const agentDir = join(root, ".pi/agents");
+const promptDir = join(root, ".pi/prompts");
+const agentFiles = readdirSync(agentDir).filter((entry) => entry.endsWith(".md"));
+const promptFiles = readdirSync(promptDir).filter((entry) => entry.endsWith(".md"));
+
+for (const file of agentFiles) {
+  const content = readFileSync(join(agentDir, file), "utf8");
+  const checks = [
+    ["proof_authority: none", "frontmatter proof_authority must be none"],
+    ["proof_authority=none", "body must state proof_authority=none"],
+    ["may_mutate_trusted_state=false", "body must state may_mutate_trusted_state=false"],
+    ["locked statement hash", "body must require locked statement hash preservation"],
+    ["strict JSON", "body must require strict JSON or schema output"],
+    ["blocker", "body must require blocker reporting"]
+  ];
+  for (const [needle, message] of checks) {
+    if (!content.includes(needle)) {
+      invariantFailures.push(`.pi/agents/${file}: ${message}`);
+    }
+  }
+  if (!/vote|literature|CAS|SAT|SMT|reviewer|MathProve/.test(content)) {
+    invariantFailures.push(`.pi/agents/${file}: must reject non-Lean proof authorities`);
+  }
+}
+
+for (const file of promptFiles) {
+  const content = readFileSync(join(promptDir, file), "utf8");
+  const checks = [
+    ["proof_authority=none", "prompt must state proof_authority=none"],
+    ["may_mutate_trusted_state=false", "prompt must state may_mutate_trusted_state=false"],
+    ["locked statement hash", "prompt must require locked statement hash preservation"],
+    ["strict JSON", "prompt must require strict JSON or schema output"],
+    ["not proof authority", "prompt must reject non-Lean proof authorities"]
+  ];
+  for (const [needle, message] of checks) {
+    if (!content.includes(needle)) {
+      invariantFailures.push(`.pi/prompts/${file}: ${message}`);
+    }
   }
 }
 

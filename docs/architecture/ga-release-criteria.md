@@ -1,0 +1,91 @@
+# GA Release Criteria
+
+This document is the Goal 3 public-release gate. It is stricter than historical Phase 18-81 vertical-slice readiness and must be read together with `docs/progress/goal-3-ga-gap-matrix.md` and `goal-3/tasks.md`.
+
+## Release Positioning
+
+Allowed wording:
+
+```text
+CoMath is an open-source agentic formal mathematics workbench built around Lean4/mathlib. It does not implement its own theorem prover or mathematical kernel. It orchestrates external proof, search, retrieval, computation, and agent tools, and promotes a mathematical claim only after a clean Lean replay and integrity audit pass.
+```
+
+Forbidden wording:
+
+```text
+CoMath proves arbitrary mathematics by itself.
+CoMath verifies theorem truth independently of Lean.
+CoMath replaces mathlib.
+CoMath has a proprietary internal theorem library.
+CoMath agents can certify proofs by vote.
+CoMath uses CAS or papers as formal proof authority.
+```
+
+## Hard GA Blockers
+
+Any one of these blocks a GA release:
+
+- A production path imports a theorem-family recognizer, Nat-linear synthesizer, default `n : Nat` injection, synthetic V1 winner, or business-layer theorem verifier.
+- A claim can reach `formally_checked` without a service-owned FinalReplayManifest whose result is `pass`.
+- A proof claim lacks FormalSpecLock, AssumptionLedger, dependency lock, toolchain hash, artifact hash, LeanRunManifest, and final replay material.
+- Candidate, literature, computation, agent vote, reviewer approval, or MathProve-style audit output can override Lean replay failure.
+- Pi or an agent can write trusted `.comath/` proof state directly.
+- External Lean repositories can enter final replay without license, toolchain, commit, manifest, import, hash, and symlink checks.
+- Literature or RAG evidence lacks provider, retrieval timestamp, content hash, terms note, prompt-injection scan, and citation anchors.
+- Evidence packs cannot be replayed by a third party or do not distinguish omitted copyrighted material from included redistributable material.
+
+## Required Verification Before GA Tagging
+
+Run at minimum:
+
+```text
+corepack pnpm build
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm --filter @comath/comathd build
+corepack pnpm --filter @comath/comathd typecheck
+corepack pnpm --filter @comath/comathd test
+corepack pnpm --filter @comath/pi-extension build
+corepack pnpm --filter @comath/pi-extension typecheck
+corepack pnpm --filter @comath/pi-extension test
+node scripts/phase0-smoke.mjs
+```
+
+Also run focused Goal 3 acceptance suites:
+
+```text
+node services/comathd/tests/unit/goal3-task2-no-toy-production-path.test.mjs
+node services/comathd/tests/unit/goal3-task4-formal-spec-lock.test.mjs
+node services/comathd/tests/unit/goal3-task5-statement-diff-gate.test.mjs
+node services/comathd/tests/unit/goal3-task7-lean-run-manifest-v3.test.mjs
+node services/comathd/tests/unit/goal3-task8-lean-authority-v3-final-replay.test.mjs
+node services/comathd/tests/unit/goal3-task10-integrity-dependency-axiom-v2.test.mjs
+node services/comathd/tests/unit/goal3-task11-external-wheel-registry.test.mjs
+node services/comathd/tests/unit/goal3-task13-mathprove-native-stage-machine.test.mjs
+node services/comathd/tests/unit/goal3-task14-ga-agent-stage-workflow.test.mjs
+node services/comathd/tests/unit/goal3-task16-pi-goal-mode-routes.test.mjs
+node services/comathd/tests/unit/goal3-task17-ga-acceptance-workflow.test.mjs
+node extensions/comath-pi/tests/goal3-task16-pi-goal-mode.test.mjs
+```
+
+## Release Evidence Checklist
+
+Before a public GA announcement, attach evidence for:
+
+- Requirement-by-requirement status against the 2026-05-29 no-reinvent audit and open formal workbench design.
+- Static scans proving old toy/Nat production paths are absent from production source.
+- Clean runtime state: no tracked `.comath`, `.tmp`, `dist`, `node_modules`, or host-path leakage.
+- At least one replayable promoted proof artifact whose clean Lean replay can be reproduced from the evidence pack.
+- Negative trust-core cases: fake stdout, agent pass logs, forbidden Lean constructs, statement drift, hidden assumptions, unpinned dependencies, network replay, symlink escape, CAS-only proof, literature-only proof, vote-only proof, and human-review-only proof.
+- Explicit blocker list for any unexecuted breadth, including the 100-task positive matrix if not fully clean-replayed.
+
+## Non-GA Labels
+
+Use these labels when evidence is incomplete:
+
+- `research-alpha`: workflow foundation with fail-closed gates.
+- `vertical-slice`: executable path over bounded examples only.
+- `ga-candidate`: all gates implemented, final review pending.
+- `replayable-blocker`: a blocker certificate and resume path exist.
+- `draft` or `candidate`: no final clean Lean replay.
+

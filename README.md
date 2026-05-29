@@ -1,125 +1,112 @@
 # CoMath Pi Lab
 
-CoMath Pi Lab is a Pi-based, auditable, memory-native research workbench for mathematical projects. Pi is the interaction shell; `comathd` is the local single-write service; the native proof-kernel owns GA proof replay evidence; MathProve remains an evidence producer and gate runner rather than a proof authority; TriviumDB remains an optional embedded memory backend behind an adapter.
+CoMath is an open-source agentic formal mathematics workbench built around Lean4/mathlib. It does not implement its own theorem prover or mathematical kernel. It orchestrates external proof, search, retrieval, computation, and agent tools, and promotes a mathematical claim only after a clean Lean replay and integrity audit pass.
 
-This repository is at Research Alpha plus Phase 18-81 GA/v3 vertical-slice implementation. It provides a working local prototype for project initialization, claim registration, fail-closed promotion gates, artifacts/audit logs, in-memory research memory, workstreams, GraphPatch review, MathProve bridge mock plus real external MathProve evidence-runner bridges for `verify_sympy.py` and controlled `final_audit.py`, exact/numeric compute runners, literature condition checks, working paper provenance, braid-statistics domain scaffolding, read-only Pi extension renderers backed by service read models, snapshot/replay verification with runner re-execution, service-owned ResearchCampaign proof-kernel routes, a Pi-side one-command research campaign loop, a registered-theorem-family Lean replay path with template instantiation for three Nat identity families, a Pi 0.75.5-compatible runtime registration package, a local Pi/comathd install-session e2e over a real HTTP server and built Pi package entrypoint, an auditable AgentRun runtime boundary, a service-side AgentRun process scheduler for absolute-realpath allowlisted child-agent commands, scheduler integration with project writer/session locks, live profile-backed adapter execution, capped AgentRun log readback, cursor-based AgentRun log-stream polling, SSE-style AgentRun log subscription snapshots, bounded multi-event AgentRun log sessions, AgentRun operator panels, scheduler-backed same-process operator cancellation, and bounded adapter health probes, a service-owned `codex-cli` adapter package registry with bundled launcher lifecycle, service-configured external CLI backend, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and Codex API retry/rate-limit telemetry, service-owned GA agent profiles exposed through `comathd` profile/run/launch APIs, Pi runtime `/cm:agent` tools/commands for profile inspection, profile-bound AgentRun preparation, execution, logs, log streaming, log subscription snapshots, bounded log sessions, operator panels, host-confirmed cancellation, health checks, packaged adapter launch/execute, and packaged backend selection, configurable Lean trust-profile/static-audit boundaries, target-theorem signature binding, explicitly registered Lean statement-alias equivalence, direct and transitive registered Lean logical-equivalence witness metadata, non-authoritative statement-equivalence proof-search plan artifacts for unresolved mismatches, bounded materialization of registered equivalence-search hints into non-promotional kernel-witness metadata, Lean declaration-parser statement-signature fallback, native TriviumDB target-platform evaluation, native planning-stage proof-obligation DAG/line-map/skeleton artifacts, campaign-scoped ensemble candidate/decision artifacts, claim-scoped final replay audit pointers, runner replay sandbox/dependency provenance, runner cross-machine replay environment drift gates, a release-level negative GA slice runner for the registered theorem-family, memory, and compute-runner slices, read-only external v3 terminal vocabulary projections for campaign API/Pi loop surfaces, fail-closed broad theorem planning artifacts for non-template targets, a service-owned stage-gate repair/resume API for missing required stage artifacts, a registered Nat linear identity target table for bounded non-template goals, a controlled one-variable Nat linear identity synthesizer for safe linear expressions, theorem-specific Lean target packages for two registered non-template Nat linear identities plus synthesized safe linear identities, bounded proof-body synthesis artifacts, bounded Lean Authority v2 preview reports, and bounded final clean replay/promotion paths through the same Lean Authority v2 gate used by registered theorem-family slices.
+The current repository is a Goal 3 GA-refactor worktree with Research Alpha foundations, a Goal 3 trust-core implementation, and a representative GA acceptance harness. It is not final global GA until the final Task 20 audit closes the remaining release blockers. In public wording, describe it as an auditable formal mathematics research workbench with strict Lean-authority gates, not as an arbitrary theorem prover.
 
-The Phase 18-81 slices can lock and replay the elementary Lean theorems `n + 0 = n`, `n * 0 = 0`, `0 + n = n`, the bounded non-template targets `n + n = 2 * n` and `n + 0 + n = 2 * n`, and controlled one-variable Nat linear identities such as `2 * n + 3 = n + n + 3`, reject statement drift and cheat constructs, preserve 8 candidate audit artifacts, verify the seven-failures-plus-one-Lean-pass ensemble recovery benchmark, keep interleaved supported campaigns from reading or overwriting one another's ensemble candidates/decisions, write final replay stage-run artifact pointers with the current claim id rather than a hardcoded claim, write structured V8 dialectical stress artifacts, expose v3 canonical ResearchCampaign states plus external v3 terminal vocabulary projections, refute `n + 1 = n` by exact counterexample, expose Pi campaign tools as thin `comathd` clients, replay after snapshot restore, read claim/evidence/gate boards through service-owned list routes, drive start/tick/dashboard campaign flow behind a scoped Pi capability, validate a local installed-session path where the built Pi package talks to a real `comathd` HTTP server, re-execute replayable compute runner reports from service-owned canonical input, preserve runner sandbox policy and dependency-lock provenance in reports and replay manifests, fail closed when replay-run environment metadata no longer matches the current Node/platform/arch, invoke `MathProve-Skill`'s `verify_sympy.py` and `final_audit.py` as controlled non-authoritative evidence runners with statement-hash binding, fixed argv, archived hashes, and fail-closed promotion vetoes, load the built Pi extension through the installed Pi 0.75.5 package-extension loader, persist AgentRuns with scoped write access plus producer/reviewer GraphPatch separation, launch real allowlisted child processes with concurrency/rpm/timeout/cancel controls behind project writer locks, execute profile-backed adapter processes from both comathd and Pi, read capped AgentRun stdout/stderr logs, poll cursor-based AgentRun log streams, subscribe to SSE-compatible AgentRun log snapshots, open bounded multi-event AgentRun log sessions, read service-owned AgentRun operator panels with action availability, request host-confirmed scheduler-backed cancellation for same-process active runs, and run bounded adapter health probes from both comathd and Pi, resolve the built-in `codex-cli` adapter package to a service-owned launcher, optionally invoke a service-configured external Codex-compatible CLI through the packaged launcher with fixed argv and untrusted output wrapping, validate a service-configured installed Codex CLI with bounded version/health probes without exposing executable paths, optionally execute a service-configured Responses-compatible Codex API backend without exposing API keys to Pi/model payloads, retry retryable Codex API failures with capped telemetry and fail closed after exhausted attempts, prepare profile-bound child-agent launch envelopes that preserve `rpm=4`, scoped writes, no direct trusted-state mutation, and no proof authority, operate those profile surfaces from Pi without direct `.comath/` access, enforce project-level Lean axiom trust profiles, allow `sorry` only in explicitly allowlisted skeleton files rather than final proof artifacts, bind statement equivalence to a unique target theorem signature instead of arbitrary stdout substrings, accept only explicitly registered definitional-alias signatures such as Lean notation expansion, accept explicitly registered direct logical-equivalence witnesses and explicitly registered transitive witness chains only when all links carry kernel-checked witness metadata, write non-authoritative `equivalence_search_plan.json` obligation artifacts for unresolved mismatches when safe lemma hints are supplied, materialize bounded registered hint sets into non-promotional `equivalence_witness_materialized.json` metadata that can feed the existing registered-witness gate, parse theorem/lemma declarations as a conservative fallback when target `#check` output is absent, evaluate `triviumdb@0.7.1` as an optional native backend on the Windows x64 target platform, protect project writers with a service-owned session lock, persist native lemma-DAG/line-map/proof-obligation artifacts during planning, write `.comath/campaign/<CAM>/v3_formal_campaign_slice.json` for the positive v3 formal campaign, write `.comath/release/v3_negative_ga_slices.json` for the required negative GA release cases, write `.comath/campaign/<CAM>/broad_synthesis_plan.json` / `broad_replay_target.json` / `broad_synthesis_failure.json` when an unsupported non-template theorem target cannot yet be replayed, require `POST /campaign/:id/repair-resume` with `stage_gate_blocker.json` plus exact repaired artifact evidence before a missing-artifact stage-gate block can resume, use registered and controlled Nat linear identity synthesis to write theorem-specific Lean packages, bounded `by omega` proof-body artifacts, authority-preview reports, and claim-scoped final Lean Authority v2 replay manifests for supported non-template Nat linear identities, and bind compute-runner execution/replay to a service-level `COMATH_RUNNER_NETWORK=disabled` policy. It is still not a production arbitrary theorem prover; broad MathProve proof search or MathProve-as-proof-authority semantics, production Codex API account/network validation, indefinite WebSocket/SSE operator sessions beyond bounded SSE log-session responses, full DLP-grade secret scanning, OS-enforced network sandboxing beyond the service-level runner policy, automatic execution of equivalence proof-search beyond registered bounded materialization, automatically discovered semantic equivalence beyond registered witness chains and unresolved plan artifacts, and richer real-host Pi UX/service lifecycle management remain deferred.
+## What CoMath Owns
+
+- Pi interaction surfaces for `/cm:research`, `/cm:campaign`, and `/cm:agent` commands.
+- `comathd`, the trusted local mutation boundary for runtime state, artifacts, audit logs, campaign state, and promotion decisions.
+- FormalSpecLock, AssumptionLedger, StatementDiffGate, statement-drift red-team reports, and no-cheat gates that preserve theorem boundaries.
+- External wheel registry contracts for theorem search, proof-search backends, literature retrieval, ingestion, and computation adapters.
+- Lean Authority v3 evidence shapes: service-owned Lean run manifests, dependency locks, final replay manifests, structured audit material, and third-party replay pack contracts.
+- A native MathProve-style stage machine and 1 coordinator plus 8 specialist agent workflow where agent outputs remain untrusted proposals.
+- Pi goal-mode routing that can end only in formal replay passed, confirmed counterexample, user-visible statement disambiguation, replayable blocker, or resumable budget exhaustion.
+
+## What CoMath Does Not Own
+
+- CoMath does not verify theorem truth independently of Lean.
+- CoMath does not replace Lean, mathlib, Lake, or maintained external Lean projects.
+- CoMath does not maintain a proprietary theorem library or business-layer theorem prover.
+- CoMath does not use theorem-family recognizers, Nat-linear synthesis, or default `n : Nat` injection as a production proof path.
+- CoMath does not let agent votes, reviewer approval, papers, CAS/SAT/SMT reports, search results, or MathProve-style audits certify proofs.
+- CoMath does not redistribute full third-party papers or external repositories in evidence packs unless license and user consent permit it.
+
+## Current Product State
+
+Goal 3 removed the old toy/Nat-only production path and replaced the trusted path with fail-closed formal-spec, statement-boundary, Lean-run, dependency, integrity, agent-workflow, adapter, Pi goal-mode, and acceptance-harness surfaces. Older Phase 18-81 material remains useful as historical vertical-slice evidence or negative fixtures, but it must not be described as the current production proof path.
+
+Implemented Goal 3 trust-core evidence includes:
+
+- `goal3-task2-no-toy-production-path.test.mjs` and `goal4-p0-no-reinvent-violations.test.mjs` for no-reinvent quarantine.
+- FormalSpecLock and AssumptionLedger schema and intake tests.
+- StatementDiffGate and statement-drift red-team tests.
+- LeanRunManifest v3, final replay, dependency closure, integrity scanner, axiom profile, and no-cheat tests.
+- External wheel registry tests for proof-authority-none adapter outputs.
+- Native MathProve-style stage-machine and GA agent-stage workflow tests.
+- Pi goal-mode route and extension tests.
+- Goal 3 GA negative and representative positive proof-workflow harnesses.
+
+Task 17's positive matrix is a harness with representative seeds and a replayable blocker for the unexecuted 100-task breadth. Do not claim that all 100 positive proof tasks have been clean-replayed.
 
 ## Runtime Baseline
 
 - Node.js: `>=22.19.0`
 - Package manager: `pnpm@11.3.0` via Corepack
-- Root validation:
-  - `corepack pnpm install`
-  - `corepack pnpm build`
-  - `corepack pnpm typecheck`
-  - `corepack pnpm test`
+- Runtime state: `.comath/`, ignored by Git and owned by `comathd`
 
-## Usable Product Entrypoints
+Local validation:
 
-For local product work, use `comathd` as the trusted runtime owner and the Pi package as the interaction layer:
+```text
+corepack pnpm install
+corepack pnpm build
+corepack pnpm typecheck
+corepack pnpm test
+```
 
-- Build and validate the whole workspace with `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test` from the repository root.
-- Run focused service validation with `corepack pnpm --filter @comath/comathd test`; this covers the claim gate, proof-kernel, memory, snapshot/replay, AgentRun, MathProve evidence-runner, Lean, and Codex/Pi service surfaces listed below.
-- Run focused Pi validation with `corepack pnpm --filter @comath/pi-extension test`; this covers `/cm:*` command dispatch, tool descriptors, host-confirmed mutations, dashboard renderers, campaign controls, agent controls, snapshot/replay tools, and runtime registration.
-- Use `tests/e2e/phase45-pi-comathd-install-session.test.mjs` as the current local installed-session executable path: it imports the built Pi package entrypoint, starts a real local `comathd` HTTP server, registers a fake Pi host, and exercises campaign plus agent flows through `createComathClient({ baseUrl })`.
-- Treat `.comath/` as runtime-only service state. It is intentionally ignored by Git and must be created or mutated through `comathd`, not by Pi, workstreams, or documentation scripts.
+Focused package validation:
 
-The bounded product entrypoint is therefore: initialize/open a project through `comathd`, operate it through the Pi client/tool layer, and validate with the root or package test gates. It is not a standalone broad theorem-proving CLI, not a MathProve proof authority, and not a production service lifecycle manager.
+```text
+corepack pnpm --filter @comath/comathd build
+corepack pnpm --filter @comath/comathd typecheck
+corepack pnpm --filter @comath/comathd test
+corepack pnpm --filter @comath/pi-extension build
+corepack pnpm --filter @comath/pi-extension typecheck
+corepack pnpm --filter @comath/pi-extension test
+```
 
-## Goal 2 v3 Additions
+## Product Entrypoints
 
-Goal 2 extends the bounded product toward the stricter external v3 GA documents. The current default acceptance path adds paused-campaign tick guards, v3 candidate manifests and failure aggregates, evidence-weighted decision-forest arbitration, native v3 stage-gate artifacts, Lean Authority v2 hash-bound replay checks, failed-route proof-memory retrieval, Pi goal-compatible campaign commands, external v3 terminal vocabulary compatibility, a fail-closed broad theorem planning slice, a service-owned repair/resume path for missing required stage-gate artifacts, registered transitive statement-equivalence witness chains, non-authoritative statement-equivalence proof-search plan artifacts, and bounded equivalence-search witness materialization metadata. Earlier registered theorem-family and Nat-linear proof-promotion slices are retained as historical fixture material but are quarantined from the default production test matrix until FormalSpecLock, AssumptionLedger, StatementDiffGate, and Lean Authority v3 can bind every proof claim.
+Use `comathd` as the trusted runtime owner and the Pi package as the interaction layer:
 
-The Phase 67 slice writes `.comath/campaign/<CAM>/v3_formal_campaign_slice.json` from the trusted `comathd` tick path. That summary binds the user goal, locked statement hash, v3 stage sequence, 8-candidate arbitration, final static audit, clean replay, promotion result, proof-memory events, final handoff, replay snapshot, and final replay artifact bundle. This is positive registered-theorem-family evidence, not a claim of arbitrary theorem proving or full v3 GA completion.
+- Start or open projects through service-owned routes.
+- Submit research goals through Pi `/cm:research` goal mode or equivalent service APIs.
+- Inspect claims, evidence, gates, campaigns, agent runs, blockers, and exports through read-model routes and Pi tools.
+- Export evidence packs only after all promotion gates and replay manifests agree.
 
-The Phase 68 release runner writes `.comath/release/v3_negative_ga_slices.json` through `comathd` and covers statement drift rejection, cheating Lean artifact rejection, false-theorem refutation, all-candidate failure recovery, and snapshot replay that still cannot promote without fresh hash-bound final replay evidence. These negative cases preserve evidence and gate vetoes; they are release-slice evidence, not broad theorem-prover evidence.
+Pi remains a thin client. It must not write `.comath/`, mutate trusted proof state, promote claims, or treat UI state as mathematical evidence.
 
-The Phase 69 compatibility layer adds `campaign.external_v3_terminal_state` as a read-only API projection for the external v3 names `formal_proof_verified`, `verified_counterexample`, `user_visible_theorem_repair_required`, `replayable_environment_blocker`, and `user_cancelled`. Internal canonical campaign state and persisted `.comath/campaign/*/status.json` state remain unchanged.
+## Proof Authority
 
-The Phase 70 broad-planning slice upgrades non-template theorem targets from a one-line unsupported blocker into replayable service-owned planning evidence. It writes `broad_synthesis_plan.json`, `broad_replay_target.json`, and `broad_synthesis_failure.json` against the existing problem lock, obligation DAG, and line map, with `proof_authority: none` and `can_promote_claim: false` until a theorem-specific Lean declaration and clean replay path exist.
+The only final mathematical proof authority is clean Lean4/mathlib kernel replay. A promoted proof artifact must bind all of the following:
 
-The Phase 71 repair/resume slice keeps ordinary `/campaign/:id/resume` scoped to paused campaigns and requires `POST /campaign/:id/repair-resume` for missing-artifact stage-gate blocks. That repair request must cite the persisted `stage_gate_blocker.json` and exact repaired artifacts; accepted repairs write `stage_gate_repair.json` with `proof_authority: none` and resume only to the recorded rewind target.
+- FormalSpecLock and AssumptionLedger hashes.
+- Locked theorem statement and theorem-header hash.
+- DependencyLock with pinned Lean/Lake/mathlib/external repository material.
+- Toolchain and artifact hashes.
+- Service-owned LeanRunManifest records.
+- Structured no-cheat, dependency, axiom, and statement checks.
+- FinalReplayManifest and third-party replay command.
 
-The Phase 72 theorem-specific Lean target package slice recognizes the bounded non-template target `n + n = 2 * n`, writes `.comath/campaign/<CAM>/theorem_specific_lean_project.json`, `.comath/lean/broad/<CAM>/MathResearch/Target.lean`, a formal target spec, Lake file, and toolchain file, and binds the later clean replay to the same locked statement hash.
+Artifacts without clean replay remain `draft`, `hypothesis`, `candidate`, `blocked_with_replayable_certificate`, or equivalent non-promotional states.
 
-The Phase 73 bounded proof-body synthesis slice adds a service-owned `by omega` proof-body candidate for that same target, writes `bounded_proof_body_synthesis.json` and `bounded_proof_body_static_audit.json`, and binds them to the target package/problem lock/DAG/line map/locked statement hash.
+## Release Hardening Docs
 
-The Phase 74 bounded authority-report preparation slice writes `bounded_authority_report_preparation.json` plus static-audit, statement-equivalence, dependency-closure, and axiom-profile preview reports for the same target. These campaign-scoped preview reports remain non-authoritative; final proof authority still requires claim-scoped final reports and clean replay.
+- [GA Release Criteria](docs/architecture/ga-release-criteria.md)
+- [Threat Model](docs/architecture/threat-model.md)
+- [Adapter Contracts](docs/architecture/adapter-contracts.md)
+- [External Lean Supply Chain](docs/architecture/external-lean-supply-chain.md)
+- [Evidence Pack Policy](docs/architecture/evidence-pack-policy.md)
+- [Example Campaigns](docs/examples/README.md)
+- [Config Samples](config/README.md)
 
-The Phase 75 bounded final clean replay slice converts that bounded target into claim-scoped Lean Authority v2 evidence only after static audit, statement equivalence, dependency closure, axiom profile, and clean replay all pass. It writes `.comath/evidence/<CLAIM>/lean/final_replay_manifest.json`, reuses the existing promotion gate, and promotes the bounded `n + n = 2 * n` claim to `formally_checked` without generalizing to arbitrary theorem proving. Phase 76 lifts the Phase 72-75 hardcoded target into a registered Nat linear identity table and adds `n + 0 + n = 2 * n` as a second supported non-template target through the same proof-authority path.
+Canonical project documents:
 
-The Phase 77 runner network sandbox policy slice adds a service-owned process-environment contract for compute-runner execution and replay. Runner reports and replay manifests now bind `COMATH_RUNNER_NETWORK=disabled`, replay integrity fails closed when that network-denial contract is missing, and re-execution starts Python runners with the same environment marker. This is a replayable service-level policy, not an OS-enforced network sandbox.
-
-The Phase 78 registered transitive statement-equivalence slice accepts only service-owned witness chains whose endpoints close exactly from the locked formal spec to the extracted Lean target signature. Every link must carry `lean_kernel_checked_equivalence`, a witness artifact id, a SHA-256 witness artifact hash, and non-empty lemma names; broken endpoints or missing witness material fail closed. This is registered statement-binding metadata, not arbitrary equivalence proof search.
-
-The Phase 79 statement-equivalence proof-search plan slice writes `.comath/evidence/<CLAIM>/lean/equivalence_search_plan.json` only for a unique mismatched target signature with safe lemma-name hints and no accepted exact, alias, direct registered, or transitive registered witness. The artifact is `blocked_unproved`, carries `proof_authority: none` and `can_promote_claim: false`, and records required next artifacts for a future kernel-checked equivalence witness. It is a planning obligation, not automatic proof discovery.
-
-The Phase 80 bounded equivalence-search witness materialization slice reads a Phase 79 blocked plan, requires exact formal-spec/target binding, safe registered lemma hints, a non-empty witness artifact id, and a bounded allowlisted materialization, then writes `.comath/evidence/<CLAIM>/lean/equivalence_witness_materialized.json` with `proof_authority: none`, `can_promote_claim: false`, a SHA-256 artifact binding, and required final Lean Authority v2 gates. The returned witness can enter `checkStatementEquivalence()` through the existing registered logical-equivalence path, but it still does not promote claims or discover arbitrary semantic equivalence.
-
-The Phase 81 controlled Nat linear identity synthesis slice parses a safe grammar of `n`, natural-number constants, `+`, and constant multiplication with `n`; normalizes both sides into coefficient/constant form; and only then writes the existing theorem-specific Lean package, `by omega` proof-body artifact, Lean Authority v2 report package, and final clean replay/promotion artifacts. False identities, unsafe syntax, and nonlinear expressions stay fail-closed. This broadens the Phase 76 registered table but is still not arbitrary theorem proving.
-
-Remaining v3 release work is tracked in `goal-2/tasks.md`. Until a final completion audit passes, this repository should be described as Phase 18-81 v3 vertical-slice evidence rather than full global v3 GA.
-
-## Phase 18-80 GA/v3 Vertical-Slice Evidence
-
-- `corepack pnpm --filter @comath/comathd test` includes proof-kernel gate, ensemble recovery, v3 campaign state-machine, campaign, refutation, snapshot replay, runner re-execution replay, runner replay sandbox/dependency provenance, runner network-denial policy binding, runner cross-machine replay environment gates, real MathProve external evidence-runner bridges for `verify_sympy.py` and `final_audit.py`, AgentRun runtime-boundary, AgentRun process-scheduler, AgentRun scheduler writer-lock integration, live profile-backed adapter execution, AgentRun observability, cursor-based AgentRun log streams, SSE-style AgentRun log subscription snapshots, bounded multi-event AgentRun log sessions, AgentRun operator panels, scheduler-backed operator cancellation, adapter-health probes, Agent adapter package registry, packaged launcher tests, external Codex-compatible CLI invocation tests, installed Codex CLI validation tests, Codex API backend contract and retry-telemetry tests, Agent Profile service integration, Lean trust-profile hardening, Lean statement-signature binding, registered Lean statement-alias equivalence, direct and transitive registered Lean logical-equivalence witnesses, statement-equivalence proof-search plan artifacts, bounded equivalence-search witness materialization, Lean declaration-parser fallback tests, TriviumDB target-platform evaluation harness, project writer/session lock tests, proof-obligation DAG planning, campaign-scoped ensemble isolation, claim-scoped final replay artifact paths, read-model route, and theorem-family generalization tests.
-- `node services/comathd/tests/integration/phase67-v3-formal-campaign-slice.test.mjs` covers the v3 `n + 0 = n` formal campaign from `/campaign/start` through terminal clean replay, `formally_checked` promotion, v3 slice summary emission, and replayable artifact bundle existence.
-- `node services/comathd/tests/integration/phase68-v3-negative-ga-slices.test.mjs` covers the release-level negative GA slice runner, including statement drift rejection, cheating Lean artifact rejection, false-theorem refutation, all-candidate failure recovery, snapshot replay requiring fresh hash-bound final replay before promotion, and persisted `.comath/release/v3_negative_ga_slices.json` evidence.
-- `node services/comathd/tests/unit/phase69-v3-terminal-vocabulary.test.mjs` covers the read-only external v3 terminal vocabulary projection on campaign status/tick/replay/final-audit surfaces without changing internal terminal-state authority.
-- `node services/comathd/tests/integration/phase70-broad-theorem-planning-slice.test.mjs` covers the fail-closed broad theorem planning slice for a non-template number-theory target, including problem lock, obligation DAG, candidate plan, unresolved replay target, failure evidence, and no claim promotion.
-- `node services/comathd/tests/unit/phase71-stage-gate-repair-resume.test.mjs` covers the missing-artifact stage-gate repair/resume path, including blocked `/resume`, exact blocker/artifact matching, incomplete repair rejection, `stage_gate_repair.json`, unchanged claim promotion state, and continuation from the recorded rewind target.
-- `node services/comathd/tests/integration/phase72-theorem-specific-lean-generation.test.mjs` covers the bounded theorem-specific Lean target package for `n + n = 2 * n`, including `theorem_specific_lean_project.json`, formal spec, Lake/toolchain files, no proof-escape tokens in the target file, replay-target binding, and final clean replay binding.
-- `node services/comathd/tests/integration/phase73-bounded-lean-proof-body-synthesis.test.mjs` covers the bounded proof-body synthesis artifact for `n + n = 2 * n`, including `bounded_proof_body_synthesis.json`, static proof-body audit preview, target-package/replay-target bindings, negative prompt guard, and final clean replay binding.
-- `node services/comathd/tests/integration/phase74-bounded-authority-report-preparation.test.mjs` covers the bounded authority-report preparation package for `n + n = 2 * n`, including `bounded_authority_report_preparation.json`, static/statement/dependency/axiom preview reports, negative prompt guard, and final clean replay binding.
-- `node services/comathd/tests/integration/phase75-bounded-final-clean-replay.test.mjs` covers bounded final clean replay and promotion for `n + n = 2 * n`, including claim-scoped final static audit, statement-equivalence, dependency-closure, axiom-profile reports, hash-bound final replay manifest, `formally_checked` promotion through the existing gate, and a negative prompt guard.
-- `node services/comathd/tests/integration/phase76-registered-nat-linear-targets.test.mjs` covers the registered Nat linear identity target table by proving a second non-template target, `n + 0 + n = 2 * n`, through theorem-specific target generation, proof-body synthesis, authority reports, final clean replay, and existing promotion gate, while keeping unregistered broad goals fail-closed.
-- `node services/comathd/tests/integration/phase81-controlled-nat-linear-synthesis.test.mjs` covers controlled Nat linear identity synthesis for `2 * n + 3 = n + n + 3`, including coefficient/constant normal-form evidence, theorem-specific Lean package generation, `by omega` proof-body synthesis, final clean replay/promotion, and fail-closed false/nonlinear identities.
-- `corepack pnpm --filter @comath/comathd eval:trivium` runs the real optional `triviumdb@0.7.1` native package on the target platform and emits a fail-closed evaluation report for capability, upsert/search/context timing, search top-hit ratio, and persistence reopen behavior.
-- `corepack pnpm --filter @comath/pi-extension test` includes research/campaign command, tool descriptor tests, the Phase 22 research loop, read-only dashboard aggregation over claim/evidence/gate list routes, Phase 26 runtime-registration contract checks, Phase 30 agent profile tools, Phase 41 profile execution tools, Phase 42 agent logs/health tools, Phase 43 packaged adapter tools, Phase 44 external backend selection tools, Phase 46 log-stream tools, Phase 47 log-subscription tools, Phase 48 operator-panel tools, Phase 49 cancel-run tools, Phase 50 log-session tools, Phase 51 Codex API backend selection tools, manifest-driven dynamic import, fake Pi API registration, command dispatch, and Pi host-side mutating-tool confirmation gates.
-- `corepack pnpm test` also includes `tests/e2e/phase45-pi-comathd-install-session.test.mjs`, which starts a real local `comathd` HTTP server, imports the built Pi package entrypoint from its manifest, registers into a fake Pi host, and exercises campaign/agent commands through `createComathClient({ baseUrl })` plus host confirmation.
-- `node services/comathd/tests/unit/phase46-agent-log-stream.test.mjs` and `node extensions/comath-pi/tests/phase46-agent-log-stream-tools.test.mjs` cover cursor-based stdout/stderr polling, `GET /agent/run/:id/log-stream`, audit events, `proof_authority=none`, Pi `comath.agent.streamLogs`, and `/cm:agent stream`.
-- `node services/comathd/tests/unit/phase47-agent-log-subscription.test.mjs` and `node extensions/comath-pi/tests/phase47-agent-log-subscription-tools.test.mjs` cover SSE-compatible log subscription snapshots, `GET /agent/run/:id/log-subscription`, `text/event-stream` responses, audit events, Pi `comath.agent.subscribeLogs`, and `/cm:agent subscribe-logs`.
-- `node services/comathd/tests/unit/phase48-agent-operator-panel.test.mjs` and `node extensions/comath-pi/tests/phase48-agent-operator-panel-tools.test.mjs` cover service-owned operator panels, `GET /agent/run/:id/operator-panel`, action availability metadata, audit events, Pi `comath.agent.operatorPanel`, and `/cm:agent panel`.
-- `node services/comathd/tests/unit/phase49-agent-operator-cancel.test.mjs` and `node extensions/comath-pi/tests/phase49-agent-operator-cancel-tools.test.mjs` cover active scheduler registry cancellation, `POST /agent/run/:id/cancel`, operator panel cancellability, audit events, Pi `comath.agent.cancelRun`, host confirmation, and `/cm:agent cancel`.
-- `node services/comathd/tests/unit/phase50-agent-log-session.test.mjs` and `node extensions/comath-pi/tests/phase50-agent-log-session-tools.test.mjs` cover bounded multi-event SSE log sessions, `GET /agent/run/:id/log-session`, `max_events` limits, completion/no-progress termination, audit events, Pi `comath.agent.logSession`, and `/cm:agent log-session`.
-- `node services/comathd/tests/unit/phase51-codex-api-backend.test.mjs` and `node extensions/comath-pi/tests/phase51-codex-api-backend-tools.test.mjs` cover service-configured Codex API backend execution, API-key non-disclosure in launch/Pi payloads, injected Responses-compatible client calls, fail-closed missing API key behavior, Pi `--backend codex-api`, and `proof_authority=none` report wrapping.
-- `node services/comathd/tests/unit/phase52-codex-api-retry-telemetry.test.mjs` covers retryable 429/5xx Codex API backend attempts, capped `Retry-After` handling, rate-limit telemetry in reports/audit events, exhausted-attempt fail-closed behavior, and API-key non-disclosure in logs.
-- `node services/comathd/tests/unit/phase53-installed-codex-cli-validation.test.mjs` covers service-configured installed Codex CLI version/health probes, fail-closed missing `COMATH_CODEX_CLI_PROGRAM`, route exposure, audit telemetry, executable-path non-disclosure, and `proof_authority=none`.
-- `node services/comathd/tests/unit/phase54-lean-declaration-parser.test.mjs` covers conservative Lean theorem/lemma declaration parsing, multi-line binder extraction, namespace-qualified theorem binding, ambiguous declaration rejection, comment-only substring rejection, statement-equivalence fallback, and `signature_source: lean_declaration_parser`.
-- `node services/comathd/tests/unit/phase55-runner-cross-machine-replay.test.mjs` covers fail-closed replay verification when a snapshot replay run's recorded Node/platform/arch environment does not match the current runner environment, before re-execution is launched.
-- `node services/comathd/tests/unit/phase77-runner-network-sandbox-policy.test.mjs` covers runner report and replay-manifest binding for `COMATH_RUNNER_NETWORK=disabled`, replay-integrity fail-closed behavior when the contract is absent, and re-execution preflight vetoes before launching a runner without the policy.
-- `node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs` covers registered logical-equivalence witnesses with exact formal-spec/target binding, `lean_kernel_checked_equivalence`, witness artifact id/hash, lemma-name requirements, fail-closed missing witness material, and `logically_equivalent_with_registered_lemmas` reporting.
-- `node services/comathd/tests/unit/phase78-lean-transitive-equivalence.test.mjs` covers registered transitive logical-equivalence witness chains with exact endpoint binding, closed intermediate links, per-link kernel witness metadata, SHA-256 artifact hashes, non-empty lemma names, and fail-closed broken/missing/non-kernel witness cases.
-- `node services/comathd/tests/unit/phase79-lean-equivalence-search-plan.test.mjs` covers non-authoritative `equivalence_search_plan.json` emission for unresolved statement-signature mismatches, and proves exact, direct registered, transitive registered, missing-output, empty-hint, and unsafe-hint paths do not create proof-search authority.
-- `node services/comathd/tests/unit/phase80-bounded-equivalence-witness-materialization.test.mjs` covers bounded materialization of a Phase 79 blocked plan into `equivalence_witness_materialized.json`, fail-closed unregistered hints, tampered promotional plans, wrong targets, missing witness artifact ids, and acceptance through the existing registered logical-equivalence path.
-- `node services/comathd/tests/integration/phase57-ga-theorem-template-instantiation.test.mjs` covers the `nat_zero_add` template from user-goal classification through candidate generation, `Nat.zero_add` Lean source, final replay manifest, candidate manifest, and formal claim promotion.
-- `node services/comathd/tests/unit/phase58-mathprove-final-audit-runner.test.mjs` covers controlled `MathProve-Skill` `final_audit.py` invocation from a CoMath-owned workspace, generated steps and solution hashes, host-path-scrubbed archived reports, fixed non-network runner metadata, and fail-closed promotion even when final audit reports `passed`.
-- The installed `@earendil-works/pi-coding-agent@0.75.5` loader has been smoke-tested against `extensions/comath-pi/dist/index.js`; the package `pi.extensions` contract is a path array, and CoMath runtime policy metadata lives under `pi.runtime_policy` plus the named `runtime_registration` export.
-- The proof authority is the service-owned replay artifact path under `services/comathd/src/proof-kernel`; Pi and MathProve do not promote claims by themselves.
-- These checks are vertical-slice evidence, not global GA readiness; unresolved blockers are tracked in `TODO.md`.
-
-## Non-Negotiable Invariants
-
-- No mathematical claim is promoted without evidence.
-- No unreviewed workstream patch mutates the trusted graph.
-- No agent writes project-runtime files outside the path policy.
-- No TriviumDB write bypasses `comathd`.
-- No reviewer approval is a proof.
-
-## Canonical Documents
-
-- [COMATH_PI_LAB_DEV_PLAN.md](COMATH_PI_LAB_DEV_PLAN.md)
-- [CODEX_GOAL_RUNBOOK.md](CODEX_GOAL_RUNBOOK.md)
-- [AGENTS.md](AGENTS.md)
-- [TODO.md](TODO.md)
-- [REVIEW.md](REVIEW.md)
-
-## Design Companion Documents
-
-- [End-State Blueprint](docs/architecture/end-state-blueprint.md)
-- [Acceptance Matrix](docs/architecture/acceptance-matrix.md)
-- [Risk Register](docs/architecture/risk-register.md)
-- [Agent Operating Model](docs/architecture/agent-operating-model.md)
-- [Design Handoff](docs/progress/design-handoff.md)
+- [Development Plan](COMATH_PI_LAB_DEV_PLAN.md)
+- [Goal Runbook](CODEX_GOAL_RUNBOOK.md)
+- [Agent Instructions](AGENTS.md)
+- [TODO](TODO.md)
+- [Review Log](REVIEW.md)
+- [Security Review](SECURITY_REVIEW.md)
+- [Mathematical Integrity Review](MATH_INTEGRITY_REVIEW.md)
