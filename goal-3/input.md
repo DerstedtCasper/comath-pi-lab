@@ -1,4 +1,4 @@
-# Original User Input
+# Goal 3 Input
 
 /goal 接手comath-pi-lab项目,阅读并严格执行以下两份文档： 
 
