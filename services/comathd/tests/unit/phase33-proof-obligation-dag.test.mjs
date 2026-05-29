@@ -235,25 +235,25 @@ try {
   assert.equal(dag.root_obligation_id, "PO-0001");
   assert.equal(dag.acyclic, true);
   assert.equal(dag.nodes[0].obligation_id, "PO-0001");
-  assert.equal(dag.nodes[0].theorem_family, "nat_add_zero");
+  assert.equal(dag.nodes[0].theorem_family, "unregistered");
   assert.deepEqual(dag.edges, []);
   assert.deepEqual(dag.leaf_obligation_ids, ["PO-0001"]);
 
   const lineMap = JSON.parse(readFileSync(lineMapPath, "utf8"));
   assert.equal(lineMap.root_obligation_id, "PO-0001");
   assert.equal(lineMap.lines[0].obligation_id, "PO-0001");
-  assert.equal(lineMap.lines[0].formal_target, "theorem C0001 (n : Nat) : n + 0 = n");
+  assert.equal(lineMap.lines[0].formal_target, "unresolved");
   assert.equal(lineMap.lines[0].expected_evidence.includes("Lean"), true);
 
   const obligationYaml = readFileSync(obligationPath, "utf8");
   assert.match(obligationYaml, /obligation_id: PO-0001/);
   assert.match(obligationYaml, /status: queued/);
-  assert.match(obligationYaml, /theorem_family: nat_add_zero/);
+  assert.match(obligationYaml, /theorem_family: unregistered/);
 
   const skeletonLean = readFileSync(skeletonLeanPath, "utf8");
   assert.match(skeletonLean, /proof_obligation: PO-0001/);
-  assert.match(skeletonLean, /theorem C0001 \(n : Nat\) : n \+ 0 = n := by/);
-  assert.match(skeletonLean, /sorry/);
+  assert.match(skeletonLean, /No Lean target is locked for this obligation yet/);
+  assert.doesNotMatch(skeletonLean, /theorem C0001 \(n : Nat\) : n \+ 0 = n := by/);
 
   const skeletonReport = readFileSync(skeletonReportPath, "utf8");
   assert.match(skeletonReport, /No final proof authority/);
@@ -271,8 +271,8 @@ try {
   const secondCampaignId = secondPlanned.campaign.campaign_id;
   const secondDagPath = campaignProofPath(secondCampaignId, "lemma_dag.json");
   assert.notEqual(secondDagPath, dagPath);
-  assert.equal(JSON.parse(readFileSync(dagPath, "utf8")).nodes[0].theorem_family, "nat_add_zero");
-  assert.equal(JSON.parse(readFileSync(secondDagPath, "utf8")).nodes[0].theorem_family, "nat_mul_zero");
+  assert.equal(JSON.parse(readFileSync(dagPath, "utf8")).nodes[0].theorem_family, "unregistered");
+  assert.equal(JSON.parse(readFileSync(secondDagPath, "utf8")).nodes[0].theorem_family, "unregistered");
 } finally {
   await server.close();
   rmSync(projectRoot, { recursive: true, force: true });

@@ -149,36 +149,43 @@ async function runCampaign(server, projectRoot, userGoal, actor) {
   return { start: start.body, finalTick, seenStages };
 }
 
-const proofRoot = mkdtempSync(join(tmpdir(), "comath-ga-state-proof-"));
+const quarantinedProofRoot = mkdtempSync(join(tmpdir(), "comath-ga-state-proof-quarantined-"));
 const refutationRoot = mkdtempSync(join(tmpdir(), "comath-ga-state-refute-"));
 const unsupportedRoot = mkdtempSync(join(tmpdir(), "comath-ga-state-unsupported-"));
 const server = createComathServer();
 
 try {
-  const proof = await runCampaign(
+  const quarantinedProof = await runCampaign(
     server,
-    proofRoot,
+    quarantinedProofRoot,
     "Prove in Lean that n + 0 = n for natural numbers.",
-    "phase20-state-proof"
+    "phase20-state-proof-quarantined"
   );
-  assert.equal(proof.finalTick.campaign.status, "terminal");
-  assert.equal(proof.finalTick.campaign.current_stage, "completed_formal_proof");
-  assert.equal(proof.finalTick.campaign.terminal_state, "completed_formal_proof");
-  assert.deepEqual(proof.seenStages, [
+  assert.equal(quarantinedProof.finalTick.campaign.status, "terminal");
+  assert.equal(quarantinedProof.finalTick.campaign.current_stage, "blocked");
+  assert.equal(quarantinedProof.finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(quarantinedProof.finalTick.blocker, "broad theorem synthesis requires checked replay target");
+  assert.equal(
+    quarantinedProof.finalTick.campaign.blockers[0].reason,
+    "broad theorem synthesis requires checked replay target"
+  );
+  assert.deepEqual(quarantinedProof.seenStages, [
     "problem_locked",
     "knowledge_pack",
     "notation_gate",
     "skeleton_gate",
     "line_map_gate",
     "candidate_generation",
-    "candidate_verification",
-    "candidate_arbitration",
-    "refutation_red_team",
-    "integration_refactor",
-    "final_static_audit",
-    "final_global_replay",
-    "completed_formal_proof"
+    "blocked"
   ]);
+  assert.equal(quarantinedProof.finalTick.final_replay, undefined);
+  assert.equal(
+    quarantinedProof.finalTick.campaign.stage_runs.some(
+      (run) => run.stage === "candidate_verification" || run.stage === "final_global_replay"
+    ),
+    false,
+    "quarantined theorem-family goals must not fabricate candidate verification or final replay stages"
+  );
 
   const refutation = await runCampaign(
     server,
@@ -236,7 +243,7 @@ try {
   );
 } finally {
   await server.close();
-  rmSync(proofRoot, { recursive: true, force: true });
+  rmSync(quarantinedProofRoot, { recursive: true, force: true });
   rmSync(refutationRoot, { recursive: true, force: true });
   rmSync(unsupportedRoot, { recursive: true, force: true });
 }

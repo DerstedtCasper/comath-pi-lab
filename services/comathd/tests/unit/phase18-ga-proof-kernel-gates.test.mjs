@@ -161,24 +161,42 @@ try {
   };
   exactCandidate.manifest_path = writeCandidateManifest(exactCandidate);
   driftCandidate.manifest_path = writeCandidateManifest(driftCandidate);
+  const campaign = {
+    campaign_id: "CAM-0001",
+    project_id: project.project_id,
+    root_claim_id: claim.id,
+    user_goal: claim.statement,
+    current_stage: "candidate_arbitration",
+    status: "running",
+    strict_mode: true,
+    stage_runs: [],
+    open_obligations: [],
+    accepted_artifacts: [],
+    blockers: [],
+    next_actions: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  const missingReplay = decideCandidate({
+    projectRoot,
+    campaign,
+    candidates: [driftCandidate, exactCandidate]
+  });
+  assert.equal(missingReplay.decision.selected_candidate_id, null);
+  assert.equal(missingReplay.gate.result, "blocked");
+  assert.equal(
+    missingReplay.decision.rejected_candidates.some(
+      (item) => item.candidate_id === "CAND-0002" && item.reason === "missing service-owned Lean replay evidence"
+    ),
+    true
+  );
+
+  exactCandidate.manifest_path = writeCandidateManifest(exactCandidate, {
+    evidence: [".comath/evidence/C-0001/lean/lean_run_manifest.json"]
+  });
   const { decision, gate } = decideCandidate({
     projectRoot,
-    campaign: {
-      campaign_id: "CAM-0001",
-      project_id: project.project_id,
-      root_claim_id: claim.id,
-      user_goal: claim.statement,
-      current_stage: "candidate_arbitration",
-      status: "running",
-      strict_mode: true,
-      stage_runs: [],
-      open_obligations: [],
-      accepted_artifacts: [],
-      blockers: [],
-      next_actions: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
+    campaign,
     candidates: [driftCandidate, exactCandidate]
   });
   assert.equal(decision.selected_candidate_id, "CAND-0002");

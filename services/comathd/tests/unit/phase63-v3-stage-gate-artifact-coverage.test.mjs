@@ -47,35 +47,34 @@ function assertArtifact(projectRoot, rel) {
 }
 
 const server = createComathServer();
-const happyRoot = mkdtempSync(join(tmpdir(), "comath-phase63-stage-gates-"));
+const quarantinedRoot = mkdtempSync(join(tmpdir(), "comath-phase63-stage-gates-quarantined-"));
 const blockedRoot = mkdtempSync(join(tmpdir(), "comath-phase63-stage-blocked-"));
 
 try {
-  const happyStart = await startCampaign(server, happyRoot, "phase63-happy");
-  const happyFinal = await runUntil(
+  const quarantinedStart = await startCampaign(server, quarantinedRoot, "phase63-quarantined");
+  const quarantinedFinal = await runUntil(
     server,
-    happyRoot,
-    happyStart.campaign_id,
-    "phase63-happy",
+    quarantinedRoot,
+    quarantinedStart.campaign_id,
+    "phase63-quarantined",
     (campaign) => campaign.status === "terminal"
   );
 
-  assert.equal(happyFinal.campaign.current_stage, "completed_formal_proof");
-  const stageRuns = happyFinal.campaign.stage_runs;
+  assert.equal(quarantinedFinal.campaign.current_stage, "blocked");
+  assert.equal(quarantinedFinal.campaign.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(quarantinedFinal.blocker, "broad theorem synthesis requires checked replay target");
+  assert.equal(
+    quarantinedFinal.campaign.blockers[0].reason,
+    "broad theorem synthesis requires checked replay target"
+  );
+  const stageRuns = quarantinedFinal.campaign.stage_runs;
   const requiredStages = [
     "problem_locked",
     "knowledge_pack",
     "notation_gate",
     "skeleton_gate",
     "line_map_gate",
-    "candidate_generation",
-    "candidate_verification",
-    "candidate_arbitration",
-    "refutation_red_team",
-    "integration_refactor",
-    "final_static_audit",
-    "final_global_replay",
-    "memory_update"
+    "candidate_generation"
   ];
 
   for (const stage of requiredStages) {
@@ -83,38 +82,33 @@ try {
     assert.ok(run, `${stage} stage run should be recorded`);
     assert.ok(run.artifact_paths.length > 0, `${stage} stage run should record artifacts`);
     for (const artifactPath of run.artifact_paths) {
-      assertArtifact(happyRoot, artifactPath);
+      assertArtifact(quarantinedRoot, artifactPath);
     }
   }
 
-  const claimId = happyFinal.campaign.root_claim_id;
   for (const rel of [
-    `.comath/context_lake/shards/knowledge-${happyStart.campaign_id}.md`,
+    `.comath/context_lake/shards/knowledge-${quarantinedStart.campaign_id}.md`,
     ".comath/literature/references.bib",
     ".comath/memory/library_search.jsonl",
     ".comath/memory/premise_candidates.jsonl",
     ".comath/lean/MathResearch/Definitions.lean",
-    `.comath/context_lake/shards/notation-${happyStart.campaign_id}.md`,
-    `.comath/campaign/${happyStart.campaign_id}/proof/lemma_dag.json`,
-    `.comath/campaign/${happyStart.campaign_id}/proof/line_map.json`,
-    `.comath/campaign/${happyStart.campaign_id}/proof/Skeleton.lean`,
-    `.comath/campaign/${happyStart.campaign_id}/proof/skeleton_report.md`,
-    `.comath/campaign/${happyStart.campaign_id}/refutation_red_team.json`,
-    ".comath/lean/MathResearch/Integrated.lean",
-    ".comath/proof/import_profile.json",
-    ".comath/proof/integration_report.md",
-    `.comath/evidence/${claimId}/lean/final_static_audit.json`,
-    `.comath/evidence/${claimId}/lean/final_replay.log`,
-    `.comath/evidence/${claimId}/lean/final_replay_manifest.json`,
-    `.comath/evidence/${claimId}/lean/axiom_profile.json`,
-    `.comath/evidence/${claimId}/lean/dependency_closure.json`,
-    `.comath/evidence/${claimId}/lean/statement_equivalence.json`,
-    ".comath/memory/proof_memory_events.jsonl",
-    ".comath/context_lake/shards/final-handoff.md",
-    ".comath/snapshots/replay/final_manifest.json"
+    `.comath/context_lake/shards/notation-${quarantinedStart.campaign_id}.md`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/proof/lemma_dag.json`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/proof/line_map.json`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/proof/Skeleton.lean`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/proof/skeleton_report.md`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/broad_synthesis_plan.json`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/broad_replay_target.json`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/broad_synthesis_failure.json`
   ]) {
-    assertArtifact(happyRoot, rel);
+    assertArtifact(quarantinedRoot, rel);
   }
+
+  assert.equal(
+    existsSync(join(quarantinedRoot, ".comath", "memory", "proof_memory_events.jsonl")),
+    false,
+    "quarantined theorem-family goals must not write proof-memory success events"
+  );
 
   const blockedStart = await startCampaign(server, blockedRoot, "phase63-blocked");
   const generated = await runUntil(
@@ -147,7 +141,7 @@ try {
   assert.deepEqual(blockerPayload.missing_artifacts, [lineMapRel]);
 } finally {
   await server.close();
-  rmSync(happyRoot, { recursive: true, force: true });
+  rmSync(quarantinedRoot, { recursive: true, force: true });
   rmSync(blockedRoot, { recursive: true, force: true });
 }
 

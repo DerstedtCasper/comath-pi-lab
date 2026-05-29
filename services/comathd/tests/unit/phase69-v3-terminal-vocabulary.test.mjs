@@ -40,39 +40,39 @@ async function runCampaign(server, projectRoot, userGoal, actor) {
 }
 
 const server = createComathServer();
-const proofRoot = mkdtempSync(join(tmpdir(), "comath-phase69-proof-"));
+const quarantinedProofRoot = mkdtempSync(join(tmpdir(), "comath-phase69-proof-quarantined-"));
 const refutationRoot = mkdtempSync(join(tmpdir(), "comath-phase69-refute-"));
 const blockedRoot = mkdtempSync(join(tmpdir(), "comath-phase69-blocked-"));
 
 try {
-  const proof = await runCampaign(
+  const quarantinedProof = await runCampaign(
     server,
-    proofRoot,
+    quarantinedProofRoot,
     "Prove in Lean that n + 0 = n for natural numbers.",
-    "phase69-proof"
+    "phase69-proof-quarantined"
   );
-  assert.equal(proof.campaign.terminal_state, "completed_formal_proof");
-  assert.equal(proof.campaign.external_v3_terminal_state, "formal_proof_verified");
+  assert.equal(quarantinedProof.campaign.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(quarantinedProof.campaign.external_v3_terminal_state, "replayable_environment_blocker");
 
   const proofStatus = await server.inject({
     method: "GET",
-    path: `/campaign/${encodeURIComponent(proof.campaign.campaign_id)}/status?project_root=${encodeURIComponent(
-      proofRoot
+    path: `/campaign/${encodeURIComponent(quarantinedProof.campaign.campaign_id)}/status?project_root=${encodeURIComponent(
+      quarantinedProofRoot
     )}`
   });
   assert.equal(proofStatus.status, 200);
-  assert.equal(proofStatus.body.campaign.external_v3_terminal_state, "formal_proof_verified");
+  assert.equal(proofStatus.body.campaign.external_v3_terminal_state, "replayable_environment_blocker");
 
   const proofReplay = await server.inject({
     method: "POST",
-    path: `/campaign/${encodeURIComponent(proof.campaign.campaign_id)}/replay`,
+    path: `/campaign/${encodeURIComponent(quarantinedProof.campaign.campaign_id)}/replay`,
     body: {
-      project_root: proofRoot,
-      actor: "phase69-proof-replay"
+      project_root: quarantinedProofRoot,
+      actor: "phase69-proof-quarantined-replay"
     }
   });
   assert.equal(proofReplay.status, 200);
-  assert.equal(proofReplay.body.campaign.external_v3_terminal_state, "formal_proof_verified");
+  assert.equal(proofReplay.body.campaign.external_v3_terminal_state, "replayable_environment_blocker");
 
   const refutation = await runCampaign(
     server,
@@ -112,7 +112,7 @@ try {
   );
 } finally {
   await server.close();
-  rmSync(proofRoot, { recursive: true, force: true });
+  rmSync(quarantinedProofRoot, { recursive: true, force: true });
   rmSync(refutationRoot, { recursive: true, force: true });
   rmSync(blockedRoot, { recursive: true, force: true });
 }

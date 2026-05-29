@@ -296,7 +296,7 @@ Next:
 
 ## Comprehensive Check A: After Tasks 1-3
 
-Status: [ ]
+Status: [x]
 
 Goal: catch regressions after removing P0 trust-path hazards.
 
@@ -310,11 +310,57 @@ Checklist:
 
 Work done:
 
+- Re-read the goal control files and kept this session scoped to the first incomplete item, Comprehensive Check A.
+- Attempted to spawn a fresh sidecar subagent for requirement drift audit, but the local agent thread limit was reached. Sent a read-only audit request to existing agent `019e71d4-3ef3-7810-9712-7c9b18dffc50` instead; main-thread verification remained authoritative and non-blocking.
+- Reproduced default `@comath/comathd test` failures after P0 removal:
+  - `phase20-ga-campaign-state-machine.test.mjs` still expected old theorem-family proof completion for `n + 0 = n`; actual result was terminal `blocked_with_replayable_reason`.
+  - `phase63-v3-stage-gate-artifact-coverage.test.mjs` still expected final proof/replay artifacts for the same quarantined path.
+  - `phase69-v3-terminal-vocabulary.test.mjs` still expected external `formal_proof_verified`; actual P0-compatible projection is `replayable_environment_blocker`.
+  - `phase33-proof-obligation-dag.test.mjs` still expected `nat_add_zero`/`nat_mul_zero` theorem-family DAG labels and fixed Lean headers; actual P0-compatible planning output is `unregistered` and `unresolved`.
+  - Later default-chain failures came from old positive snapshot/release slices that depended on the quarantined theorem-family/Nat-linear promotion path.
+- Updated focused tests to align with the P0 no-reinvent trust boundary:
+  - `services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs` now asserts former theorem-family proof goals terminate as replayable blockers and do not fabricate candidate-verification or final-replay stages.
+  - `services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs` now asserts pre-proof planning artifacts are preserved while final proof-memory/final replay artifacts are not written for quarantined theorem-family goals.
+  - `services/comathd/tests/unit/phase69-v3-terminal-vocabulary.test.mjs` now asserts the quarantined former proof goal projects to external `replayable_environment_blocker`, while refutation, repair-required, and cancelled mappings remain covered.
+  - `services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs` now asserts theorem-family labels are `unregistered`, line-map targets are `unresolved`, and the skeleton does not restore a fixed Nat theorem header.
+  - Existing dirty `services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs` already contained the new missing service-owned Lean replay evidence guard; it remained part of the verified default matrix.
+- Updated `services/comathd/package.json` default test matrix so it no longer runs historical positive theorem-family/Nat-linear promotion slices that contradict P0 quarantine. The historical test files remain in the repository for later rewrite/migration, but default acceptance now emphasizes P0 no-reinvent negatives, replay-evidence gates, refutation, broad-planning fail-closed behavior, and non-proof runtime/agent surfaces.
+- Updated current-facing docs:
+  - `README.md` now says earlier registered theorem-family and Nat-linear proof-promotion slices are historical fixture material quarantined from the default production test matrix until FormalSpecLock, AssumptionLedger, StatementDiffGate, and Lean Authority v3 bind proof claims.
+  - `docs/architecture/acceptance-matrix.md` now describes v3 formal campaign quarantine, external terminal vocabulary blocker projection, and Nat-linear historical fixture quarantine instead of current production proof acceptance.
+
 Verification:
+
+- Root-cause evidence:
+  - `corepack pnpm --filter @comath/comathd test` initially failed at `phase20-ga-campaign-state-machine.test.mjs` with actual `blocked` versus expected `completed_formal_proof`, then exposed the same old-positive-path mismatch in Phase 63, Phase 69, Phase 33, and Phase 68/snapshot release material.
+  - A direct reproduction of `Prove in Lean that n + 0 = n for natural numbers.` produced terminal `blocked_with_replayable_reason`, blocker `broad theorem synthesis requires checked replay target`, and stages `problem_locked -> knowledge_pack -> notation_gate -> skeleton_gate -> line_map_gate -> candidate_generation -> blocked`.
+- Fresh verification after fixes:
+  - `corepack pnpm --filter @comath/comathd typecheck` -> exit 0.
+  - `corepack pnpm --filter @comath/comathd test` -> exit 0; final tests included Phase 18 vertical slice, Phase 18 refutation path, Phase 21 read-model routes, and Phase 70 broad theorem planning slice.
+  - `node services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs` -> exit 0.
+  - `node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs` -> exit 0.
+  - `node services/comathd/tests/unit/phase33-proof-obligation-dag.test.mjs` -> exit 0.
+  - `node services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs` -> exit 0.
+  - `node services/comathd/tests/unit/phase69-v3-terminal-vocabulary.test.mjs` -> exit 0.
+- Static scans:
+  - `rg -n -F -- 'registeredNatLinearIdentityTarget' services/comathd/src/proof-kernel services/comathd/src/claim services/comathd/src/verification services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs` -> exit 1, no matches.
+  - `rg -n -F -- '15_500' services/comathd/src/proof-kernel services/comathd/src/claim services/comathd/src/verification services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs` -> exit 1, no matches.
+  - `rg -n -F -- '- n : Nat' services/comathd/src/proof-kernel services/comathd/src/claim services/comathd/src/verification` -> exit 1, no matches.
+  - `rg -n "GA complete|global GA readiness is complete|full global GA|production-ready arbitrary|arbitrary theorem proving.*complete|agent vote.*proof authority|proof authority.*agent vote|registered positive theorem-family slice|positive v3 end-to-end formal campaign slice|final clean replay/promotion for supported registered/synthesized Nat linear" README.md docs TODO.md REVIEW.md` -> exit 1, no matches after README/acceptance-matrix update.
+  - `rg -n -- 'vote.*proof|proof.*vote|agent vote|vote-as-proof|majority vote' services/comathd/src README.md docs TODO.md REVIEW.md` only found guardrail/historical notes, not production proof authority claims.
+- Diff hygiene:
+  - `git -c "safe.directory=D:/MATH _Studio/comath-pi-lab" -C "D:\MATH _Studio\comath-pi-lab" diff --check` -> exit 0, with CRLF conversion warnings only.
 
 Remaining risk:
 
+- This check intentionally quarantines old positive theorem-family and Nat-linear production proof slices from the default matrix; it does not rewrite every historical test/document note. Later tasks must either migrate those fixtures under explicit smoke/historical namespaces or replace them with Lean Authority v3 positive evidence.
+- `Phase 68` negative release-slice material still exists but is not in the default matrix because its snapshot replay case depends on the quarantined theorem-family positive proof path. It should be rewritten during Lean Authority v3 / append-only replay registry work.
+- The repository still needs Task 4-6 implementation of FormalSpecLock, AssumptionLedger, and StatementDiffGate before proof-search/promotion can regain any positive proof path.
+- Untracked pre-existing files remain intentionally untouched: `goal-3/` and `services/comathd/tests/unit/phase82-controlled-equivalence-proof-execution.test.mjs`.
+
 Next:
+
+- Task 4: implement FormalSpecLock schema and lock lifecycle, with missing-lock and immutable-lock tests, using the P0 quarantine/default matrix established here as the baseline.
 
 ## Task 4: Implement FormalSpecLock Schema and Lock Lifecycle
 
