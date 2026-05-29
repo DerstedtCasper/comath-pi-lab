@@ -396,18 +396,18 @@ Completion record:
 
 ## Task 24: Comprehensive Check-Debug Loop 7
 
-- [ ] Re-read all Goal 3 required context files before touching code.
-- [ ] Check requirement drift against Goal 3 input, plan, v2 audit/design docs, and Task 21-23 matrix records.
-- [ ] Re-run Task 21, Task 22, and Task 23 focused suites.
-- [ ] Run package build/typecheck/test gates and any applicable root smoke checks.
-- [ ] Re-scan no-reinvent boundaries, direct promotion paths, non-Lean proof-authority leaks, runtime artifacts, and host-path leaks.
-- [ ] Repair any concrete high-risk regression found.
-- [ ] Record the check-debug result, residual blockers, and next batch scope.
+- [x] Re-read all Goal 3 required context files before touching code.
+- [x] Check requirement drift against Goal 3 input, plan, v2 audit/design docs, and Task 21-23 matrix records.
+- [x] Re-run Task 21, Task 22, and Task 23 focused suites.
+- [x] Run package build/typecheck/test gates and any applicable root smoke checks.
+- [x] Re-scan no-reinvent boundaries, direct promotion paths, non-Lean proof-authority leaks, runtime artifacts, and host-path leaks.
+- [x] Repair any concrete high-risk regression found.
+- [x] Record the check-debug result, residual blockers, and next batch scope.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: re-read the full Goal 3 required context set: `goal-3/input.md`, `goal-3/plan.md`, `goal-3/tasks.md`, the v2 no-reinvent audit, the v2 open formal workbench design, the v2 agent prompt protocol, `AGENTS.md`, `README.md`, `TODO.md`, `REVIEW.md`, `COMATH_PI_LAB_DEV_PLAN.md`, `CODEX_GOAL_RUNBOOK.md`, and `docs/architecture/module-boundaries.md`. Checked Task 21-23 matrix records against the Goal 3 no-reinvent and Lean-authority doctrine. No product-code repair was required: the positive matrix remains fail-closed for un-replayed tasks, and the observed promotion/`formally_checked` surfaces are still gate/schema/negative-test plumbing rather than a direct proof-authority bypass.
+- Verification evidence: `git status -sb` was clean on `main` before Task 24; `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task21-positive-matrix-runner.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task22-positive-matrix-tranche.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task23-positive-matrix-tranche.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task17-ga-acceptance-workflow.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task2-no-toy-production-path.test.mjs` exited 0; `node services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; full `corepack pnpm --filter @comath/comathd test` exited 0 with Task 21/22/23 included. Static no-reinvent scan over `services/comathd/src` found only gate/status/schema surfaces, `release/v3-negative-ga-slices.ts` adversarial negative fixtures, and explicit `false` no-reinvent/non-authority fields in `release/goal3-ga-acceptance.ts`. `Test-Path -LiteralPath '.comath'` returned `False`; `git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'` returned no tracked runtime/build artifacts; source host-path scan over `services/comathd/src` and `extensions/comath-pi/src` returned no product-source host absolute paths; `git diff --check` exited 0.
+- Residual risk: Goal 3 remains incomplete. PM-002 through PM-023 have deterministic non-promotional replay-attempt certificate coverage only; they do not have live Lean4/mathlib clean replay evidence and must remain `replayable_blocker`/`proof_authority: "none"`/`can_promote_claim: false`. PM-024 through PM-100 remain unexecuted or generic replayable blockers, and the full 100-task positive clean-replay matrix is not complete.
+- Next step: add or execute the next Goal 3 task for the PM-024+ positive-matrix tranche, preserving FormalSpecLock, AssumptionLedger, dependency-lock, replay-command, no-reinvent flags, and non-promotional classification until real Lean clean replay evidence exists.
+- Commit: 9f82e2e
