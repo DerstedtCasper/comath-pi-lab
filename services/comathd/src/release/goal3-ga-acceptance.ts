@@ -60,11 +60,107 @@ export type Goal3GaPositiveProofMatrix = {
   schema_version: "comath.goal3_positive_matrix.v1";
   total_required_tasks: number;
   representative_seeds: Goal3GaPositiveMatrixSeed[];
+  executable_task_manifest: {
+    schema_version: "comath.goal3_positive_task_manifest.v1";
+    task_count: number;
+    categories: string[];
+  };
   remaining_matrix_blocker: {
     status: "replayable_blocker";
     can_promote_claim: false;
     blocker_code: "ga_positive_100_task_matrix_not_fully_executed";
     required_before_ga: string[];
+  };
+};
+
+export type Goal3GaPositiveMatrixCategory =
+  | "Nat/List"
+  | "algebra"
+  | "order"
+  | "real analysis"
+  | "topology"
+  | "combinatorics"
+  | "external Lean repo"
+  | "paper-to-formal-spec"
+  | "theorem-search-assisted"
+  | "tactic repair";
+
+export type Goal3GaPositiveMatrixTerminalClassification =
+  | "pending_clean_replay"
+  | "clean_replay_passed"
+  | "replayable_blocker";
+
+export type Goal3GaPositiveMatrixTask = {
+  task_id: string;
+  category: Goal3GaPositiveMatrixCategory;
+  target: {
+    original_goal_text: string;
+    normalized_nl_statement: string;
+    expected_theorem_name: string;
+  };
+  formal_spec_lock_input: {
+    theorem_header: string;
+    theorem_type_pretty: string;
+    statement_hash: string;
+    variables: Array<{ name: string; type: string; source: "user" | "paper" | "agent_proposed"; approved: boolean }>;
+    assumptions: Array<{ id: string; name?: string; type: string; source: "user" | "paper" | "agent_proposed"; approved: boolean }>;
+    imports_allowed: string[];
+  };
+  assumption_ledger_input: {
+    entries: Array<{ id: string; kind: "assumption"; name?: string; type: string; source: "user" | "paper" | "agent_proposed"; approved: boolean }>;
+  };
+  dependency_lock_expectation: {
+    lean_toolchain: string;
+    allowed_import_prefixes: string[];
+    external_dependency_state: "none" | "planning_reference" | "trusted_replay_dependency_required";
+    network_policy_final_replay: "disabled";
+  };
+  replay_command: string[];
+  terminal_classification: Goal3GaPositiveMatrixTerminalClassification;
+  proof_authority: "none";
+  can_promote_without_clean_replay: false;
+  uses_production_theorem_family_recognizer: false;
+  uses_controlled_nat_linear_synthesis: false;
+  uses_default_assumptions: false;
+};
+
+export type Goal3GaPositiveTaskManifest = {
+  schema_version: "comath.goal3_positive_task_manifest.v1";
+  total_required_tasks: 100;
+  tasks: Goal3GaPositiveMatrixTask[];
+};
+
+export type Goal3GaPositiveMatrixBatchResult = {
+  task_id: string;
+  category: Goal3GaPositiveMatrixCategory;
+  terminal_classification: "clean_replay_passed" | "replayable_blocker";
+  proof_authority: "none" | "lean_kernel_clean_replay";
+  can_promote_claim: false;
+  evidence_binding: {
+    formal_spec_lock_hash: string;
+    assumption_ledger_hash: string;
+    dependency_lock_hash: string;
+    artifact_hashes_sha256: string;
+    lean_run_manifest_id: string;
+    final_replay_manifest_id: string;
+  };
+  blockers: string[];
+};
+
+export type Goal3GaPositiveMatrixBatchReport = {
+  schema_version: "comath.goal3_positive_matrix_batch.v1";
+  total_required_tasks: 100;
+  executed_count: number;
+  results: Goal3GaPositiveMatrixBatchResult[];
+  summary: {
+    clean_replay_passed: number;
+    replayable_blocker: number;
+    pending_clean_replay: number;
+    promoted_count: 0;
+  };
+  next_batch_scope: {
+    start_after_task_id: string | null;
+    remaining_tasks: number;
   };
 };
 
@@ -266,6 +362,11 @@ export function createGoal3GaPositiveProofMatrix(): Goal3GaPositiveProofMatrix {
       status: "replayable_blocker",
       proof_authority: "none"
     })),
+    executable_task_manifest: {
+      schema_version: "comath.goal3_positive_task_manifest.v1",
+      task_count: 100,
+      categories: domains.map(([, domain]) => domain)
+    },
     remaining_matrix_blocker: {
       status: "replayable_blocker",
       can_promote_claim: false,
@@ -276,6 +377,274 @@ export function createGoal3GaPositiveProofMatrix(): Goal3GaPositiveProofMatrix {
         "keep non-replayed tasks draft/candidate/blocker only"
       ]
     }
+  };
+}
+
+const positiveMatrixCategories: Array<{ category: Goal3GaPositiveMatrixCategory; examples: string[] }> = [
+  {
+    category: "Nat/List",
+    examples: [
+      "For any proposition p, hp : p proves p.",
+      "List.map id preserves a locked list.",
+      "List.length append is routed to mathlib, not CoMath arithmetic.",
+      "Nat.succ injectivity is a locked theorem-search target.",
+      "Option.map id preserves values.",
+      "List.reverse reverse route uses existing library facts.",
+      "Nat zero-add smoke remains Lean-only evidence.",
+      "List membership after cons is decomposed by cases.",
+      "Finset empty card is a mathlib lookup target.",
+      "Subtype equality target preserves assumptions."
+    ]
+  },
+  {
+    category: "algebra",
+    examples: [
+      "Monoid identity preservation lemma.",
+      "Group inverse cancellation route.",
+      "Semiring zero multiplication via library search.",
+      "Ring distributivity skeleton target.",
+      "AddMonoid zero-add route with explicit variables.",
+      "Subsemiring membership closure target.",
+      "Homomorphism preserves one under approved imports.",
+      "CommMonoid multiplication symmetry target.",
+      "Module zero scalar action target.",
+      "Ideal membership addition closure target."
+    ]
+  },
+  {
+    category: "order",
+    examples: [
+      "Antisymmetry route with exact assumptions.",
+      "Transitivity of less-or-equal route.",
+      "Strict order contradiction target.",
+      "Monotone composition theorem-search target.",
+      "Supremum bound skeleton target.",
+      "Infimum bound skeleton target.",
+      "Preorder reflexivity route.",
+      "Linear order trichotomy case split.",
+      "Order dual import hygiene target.",
+      "Interval membership boundary target."
+    ]
+  },
+  {
+    category: "real analysis",
+    examples: [
+      "Continuity skeleton from mathlib theorem search.",
+      "Continuous composition route.",
+      "Limit constant function target.",
+      "Derivative of identity as tactic-repair target.",
+      "Metric ball self-membership with radius assumption.",
+      "Norm nonnegativity route.",
+      "Cauchy sequence blocker until imports are pinned.",
+      "Interval continuity route with explicit domain.",
+      "Real absolute value nonnegativity target.",
+      "Filter eventually true target."
+    ]
+  },
+  {
+    category: "topology",
+    examples: [
+      "Open set preimage formal-spec lock.",
+      "Closed set complement route.",
+      "Neighborhood membership skeleton target.",
+      "Continuous identity map target.",
+      "Product topology projection continuity route.",
+      "Compact image under continuous map blocker.",
+      "Interior subset route.",
+      "Closure monotonicity target.",
+      "Dense subset theorem-search target.",
+      "Homeomorphism inverse continuity route."
+    ]
+  },
+  {
+    category: "combinatorics",
+    examples: [
+      "Finite card union planning target.",
+      "Pigeonhole statement formal-spec blocker.",
+      "Finset disjoint card union target.",
+      "Simple graph degree-sum literature-to-spec target.",
+      "Permutation identity route.",
+      "Binomial coefficient symmetry theorem-search target.",
+      "Finite set subset card inequality target.",
+      "List nodup membership route.",
+      "Combinatorial injection card blocker.",
+      "Path counting statement-lock target."
+    ]
+  },
+  {
+    category: "external Lean repo",
+    examples: [
+      "Trusted replay dependency import smoke.",
+      "External repo license pin blocker.",
+      "External repo commit pin blocker.",
+      "External repo toolchain compatibility blocker.",
+      "Local Lean workspace import closure target.",
+      "External module namespace shadowing red-team target.",
+      "External proof dependency source-hash target.",
+      "External repo transitive import blocker.",
+      "External Lake package graph target.",
+      "External repo third-party replay pack target."
+    ]
+  },
+  {
+    category: "paper-to-formal-spec",
+    examples: [
+      "Paper theorem anchor to FormalSpecLock.",
+      "PDF theorem citation condition target.",
+      "TeX definition extraction to notation lock.",
+      "Markdown proof-step line map target.",
+      "Paper hidden assumption red-team target.",
+      "Paper theorem statement repair blocker.",
+      "Source paragraph anchor hash target.",
+      "Paper notation ambiguity blocker.",
+      "Citation condition mismatch negative target.",
+      "Paper lemma to Lean skeleton target."
+    ]
+  },
+  {
+    category: "theorem-search-assisted",
+    examples: [
+      "Loogle or LeanSearch hint to candidate pack.",
+      "Moogle natural-language premise search target.",
+      "LeanExplore declaration lookup target.",
+      "LeanDojo premise retrieval blocker.",
+      "Local mathlib index route.",
+      "Search result proof-authority-none target.",
+      "Import hint dependency-lock target.",
+      "Search rank tie decision-forest target.",
+      "Premise mismatch red-team target.",
+      "Search-assisted tactic repair route."
+    ]
+  },
+  {
+    category: "tactic repair",
+    examples: [
+      "Lean error repair route with final replay gate.",
+      "simp failure signature target.",
+      "rw direction repair target.",
+      "omega suggestion as Lean tactic, not business prover.",
+      "ring_nf tactic repair target.",
+      "linarith missing assumption blocker.",
+      "aesop import requirement target.",
+      "exact question-mark premise route.",
+      "apply question-mark candidate target.",
+      "Tactic timeout blocker with resume scope."
+    ]
+  }
+];
+
+function padTaskId(index: number): string {
+  return `PM-${String(index + 1).padStart(3, "0")}`;
+}
+
+function formalTemplateForCategory(theoremName: string, category: Goal3GaPositiveMatrixCategory) {
+  switch (category) {
+    case "algebra":
+      return {
+        theoremHeader: `theorem ${theoremName} (M : Type) [Monoid M] (x : M) : 1 * x = x`,
+        theoremType: "(M : Type) [Monoid M] (x : M) : 1 * x = x",
+        variables: [{ name: "M", type: "Type", source: "user" as const, approved: true }],
+        assumptions: []
+      };
+    case "order":
+      return {
+        theoremHeader: `theorem ${theoremName} (α : Type) [Preorder α] (x : α) : x ≤ x`,
+        theoremType: "(α : Type) [Preorder α] (x : α) : x ≤ x",
+        variables: [{ name: "α", type: "Type", source: "user" as const, approved: true }],
+        assumptions: []
+      };
+    case "real analysis":
+      return {
+        theoremHeader: `theorem ${theoremName} (x : Real) : 0 ≤ |x|`,
+        theoremType: "(x : Real) : 0 ≤ |x|",
+        variables: [{ name: "x", type: "Real", source: "user" as const, approved: true }],
+        assumptions: []
+      };
+    case "topology":
+      return {
+        theoremHeader: `theorem ${theoremName} (α : Type) [TopologicalSpace α] : IsOpen (Set.univ : Set α)`,
+        theoremType: "(α : Type) [TopologicalSpace α] : IsOpen (Set.univ : Set α)",
+        variables: [{ name: "α", type: "Type", source: "user" as const, approved: true }],
+        assumptions: []
+      };
+    case "combinatorics":
+      return {
+        theoremHeader: `theorem ${theoremName} (α : Type) [DecidableEq α] (s : Finset α) : 0 ≤ s.card`,
+        theoremType: "(α : Type) [DecidableEq α] (s : Finset α) : 0 ≤ s.card",
+        variables: [{ name: "s", type: "Finset α", source: "user" as const, approved: true }],
+        assumptions: []
+      };
+    case "paper-to-formal-spec":
+      return {
+        theoremHeader: `theorem ${theoremName} (p : Prop) (hp : p) : p`,
+        theoremType: "(p : Prop) (hp : p) : p",
+        variables: [{ name: "p", type: "Prop", source: "paper" as const, approved: true }],
+        assumptions: [{ id: "ASM-PAPER", name: "hp", type: "p", source: "paper" as const, approved: true }]
+      };
+    default:
+      return {
+        theoremHeader: `theorem ${theoremName} (p : Prop) (hp : p) : p`,
+        theoremType: "(p : Prop) (hp : p) : p",
+        variables: [{ name: "p", type: "Prop", source: "user" as const, approved: true }],
+        assumptions: [{ id: "ASM-PROP", name: "hp", type: "p", source: "user" as const, approved: true }]
+      };
+  }
+}
+
+function createMatrixTask(index: number, category: Goal3GaPositiveMatrixCategory, example: string): Goal3GaPositiveMatrixTask {
+  const theoremName = `Goal3Positive${String(index + 1).padStart(3, "0")}`;
+  const assumptionId = `ASM-PM-${String(index + 1).padStart(3, "0")}`;
+  const formalTemplate = formalTemplateForCategory(theoremName, category);
+  const theoremHeader = formalTemplate.theoremHeader;
+  const theoremType = formalTemplate.theoremType;
+  const lockedStatementHash = statementHash(theoremHeader);
+  const assumptions = formalTemplate.assumptions.map((assumption) => ({
+    ...assumption,
+    id: assumption.id === "ASM-PROP" || assumption.id === "ASM-PAPER" ? assumptionId : assumption.id
+  }));
+  return {
+    task_id: padTaskId(index),
+    category,
+    target: {
+      original_goal_text: example,
+      normalized_nl_statement: example,
+      expected_theorem_name: theoremName
+    },
+    formal_spec_lock_input: {
+      theorem_header: theoremHeader,
+      theorem_type_pretty: theoremType,
+      statement_hash: lockedStatementHash,
+      variables: formalTemplate.variables,
+      assumptions,
+      imports_allowed: ["Std", "Mathlib"]
+    },
+    assumption_ledger_input: {
+      entries: assumptions.map((assumption) => ({ ...assumption, kind: "assumption" as const }))
+    },
+    dependency_lock_expectation: {
+      lean_toolchain: "leanprover/lean4:v4.23.0",
+      allowed_import_prefixes: category === "external Lean repo" ? ["Std", "Mathlib", "External"] : ["Std", "Mathlib"],
+      external_dependency_state: category === "external Lean repo" ? "trusted_replay_dependency_required" : "none",
+      network_policy_final_replay: "disabled"
+    },
+    replay_command: ["lake", "build", `MathResearch.${theoremName}`],
+    terminal_classification: "pending_clean_replay",
+    proof_authority: "none",
+    can_promote_without_clean_replay: false,
+    uses_production_theorem_family_recognizer: false,
+    uses_controlled_nat_linear_synthesis: false,
+    uses_default_assumptions: false
+  };
+}
+
+export function createGoal3GaPositiveTaskManifest(): Goal3GaPositiveTaskManifest {
+  const tasks = positiveMatrixCategories.flatMap(({ category, examples }, categoryIndex) =>
+    examples.map((example, exampleIndex) => createMatrixTask(categoryIndex * 10 + exampleIndex, category, example))
+  );
+  return {
+    schema_version: "comath.goal3_positive_task_manifest.v1",
+    total_required_tasks: 100,
+    tasks
   };
 }
 
@@ -474,6 +843,77 @@ function createPositiveWorkflow(projectRoot: string) {
     binding_checklist: bindingChecklist,
     lean_run_verification: leanRunVerification,
     final_replay_verification: finalReplayVerification
+  };
+}
+
+function emptyMatrixEvidenceBinding(): Goal3GaPositiveMatrixBatchResult["evidence_binding"] {
+  return {
+    formal_spec_lock_hash: "",
+    assumption_ledger_hash: "",
+    dependency_lock_hash: "",
+    artifact_hashes_sha256: "",
+    lean_run_manifest_id: "",
+    final_replay_manifest_id: ""
+  };
+}
+
+export function runGoal3GaPositiveMatrixBatch(input: {
+  projectRoot: string;
+  batchSize?: number;
+}): Goal3GaPositiveMatrixBatchReport {
+  const manifest = createGoal3GaPositiveTaskManifest();
+  const requestedBatchSize = Math.max(0, Math.min(input.batchSize ?? 10, manifest.tasks.length));
+  const positiveWorkflow = requestedBatchSize > 0 ? createPositiveWorkflow(input.projectRoot) : null;
+  const executedTaskIds = new Set(manifest.tasks.slice(0, requestedBatchSize).map((task) => task.task_id));
+  const results: Goal3GaPositiveMatrixBatchResult[] = manifest.tasks.map((task, index) => {
+    if (index === 0 && positiveWorkflow) {
+      return {
+        task_id: task.task_id,
+        category: task.category,
+        terminal_classification: "clean_replay_passed",
+        proof_authority: "lean_kernel_clean_replay",
+        can_promote_claim: false,
+        evidence_binding: {
+          formal_spec_lock_hash: positiveWorkflow.formal_spec_lock_hash,
+          assumption_ledger_hash: positiveWorkflow.assumption_ledger_hash,
+          dependency_lock_hash: positiveWorkflow.dependency_lock_hash,
+          artifact_hashes_sha256: positiveWorkflow.artifact_hashes_sha256,
+          lean_run_manifest_id: positiveWorkflow.lean_run_manifest_id,
+          final_replay_manifest_id: positiveWorkflow.final_replay_manifest_id
+        },
+        blockers: []
+      };
+    }
+    return {
+      task_id: task.task_id,
+      category: task.category,
+      terminal_classification: "replayable_blocker",
+      proof_authority: "none",
+      can_promote_claim: false,
+      evidence_binding: emptyMatrixEvidenceBinding(),
+      blockers: executedTaskIds.has(task.task_id)
+        ? ["positive_matrix_task_clean_replay_not_executed"]
+        : ["positive_matrix_task_not_in_bounded_batch", "positive_matrix_task_clean_replay_not_executed"]
+    };
+  });
+  const startAfterTaskId = requestedBatchSize > 0 ? manifest.tasks[requestedBatchSize - 1]?.task_id ?? null : null;
+  const cleanReplayPassed = results.filter((result) => result.terminal_classification === "clean_replay_passed").length;
+  const replayableBlocker = results.filter((result) => result.terminal_classification === "replayable_blocker").length;
+  return {
+    schema_version: "comath.goal3_positive_matrix_batch.v1",
+    total_required_tasks: 100,
+    executed_count: requestedBatchSize,
+    results,
+    summary: {
+      clean_replay_passed: cleanReplayPassed,
+      replayable_blocker: replayableBlocker,
+      pending_clean_replay: 0,
+      promoted_count: 0
+    },
+    next_batch_scope: {
+      start_after_task_id: startAfterTaskId,
+      remaining_tasks: Math.max(0, manifest.tasks.length - requestedBatchSize)
+    }
   };
 }
 

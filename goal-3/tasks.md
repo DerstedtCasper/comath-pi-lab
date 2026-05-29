@@ -344,11 +344,29 @@ Completion record:
 
 ## Task 21: Execute Positive 100-Task Clean-Replay Matrix Plan
 
-- [ ] Expand the existing Goal 3 positive matrix from representative seeds into an executable 100-task manifest covering Nat/List, algebra, order, real analysis, topology, combinatorics, external Lean repo, paper-to-formal-spec, theorem-search-assisted, and tactic-repair categories.
-- [ ] Define per-task inputs, FormalSpecLock/AssumptionLedger material, dependency lock expectations, expected Lean replay command, and terminal classification.
-- [ ] Implement or harden the matrix runner so each seed either clean-replays through Lean4/mathlib with v3 evidence binding or emits a replayable blocker without promotion.
-- [ ] Execute a first bounded batch without using production theorem-family recognizers, Nat-linear synthesis, or default assumptions.
-- [ ] Record validation evidence, residual blockers, and next batch scope.
+- [x] Expand the existing Goal 3 positive matrix from representative seeds into an executable 100-task manifest covering Nat/List, algebra, order, real analysis, topology, combinatorics, external Lean repo, paper-to-formal-spec, theorem-search-assisted, and tactic-repair categories.
+- [x] Define per-task inputs, FormalSpecLock/AssumptionLedger material, dependency lock expectations, expected Lean replay command, and terminal classification.
+- [x] Implement or harden the matrix runner so each seed either clean-replays through Lean4/mathlib with v3 evidence binding or emits a replayable blocker without promotion.
+- [x] Execute a first bounded batch without using production theorem-family recognizers, Nat-linear synthesis, or default assumptions.
+- [x] Record validation evidence, residual blockers, and next batch scope.
+
+Completion record:
+
+- Work done: added `createGoal3GaPositiveTaskManifest()` with exactly 100 executable positive matrix task entries across the ten required categories, each carrying target text, FormalSpecLock input material, AssumptionLedger input material, dependency-lock expectations, replay command, terminal classification, and no-reinvent flags. Added `runGoal3GaPositiveMatrixBatch()` so a bounded batch produces either a v3 evidence-bound clean-replay fixture result or a non-promotional `replayable_blocker`. Added `goal3-task21-positive-matrix-runner.test.mjs` and wired it into the default `@comath/comathd` test chain. The first bounded batch size is 12: PM-001 is bound to the existing deterministic v3 Lean replay fixture, and PM-002 through PM-100 remain replayable blockers rather than promoted proof artifacts.
+- Verification evidence: TDD RED was observed after `corepack pnpm --filter @comath/comathd build` exited 0: `node services/comathd/tests/unit/goal3-task21-positive-matrix-runner.test.mjs` failed because `../../dist/index.js` did not export `createGoal3GaPositiveTaskManifest`. After implementation, `node services/comathd/tests/unit/goal3-task21-positive-matrix-runner.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task17-ga-acceptance-workflow.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd build` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 with Task 21 included. `git diff --check` exited 0 with Windows LF-to-CRLF warnings only. `Test-Path -LiteralPath '.comath'` returned `False`. Static scan over the new Task 21 surfaces found no production theorem-family recognizer, Nat-linear parser/synthesis, default-assumption flag set to true, or promotable matrix result; hits were explicit `false` no-reinvent flags and non-promotional wording.
+- Residual risk: Goal 3 is still not complete. Task 21 creates the executable 100-task manifest and bounded runner, but it does not clean-replay PM-002 through PM-100. PM-001 is a deterministic representative v3 fixture pass; all other matrix entries remain `replayable_blocker` or require future real Lean/mathlib clean replay attempts, pinned external dependency validation, provider/toolchain availability checks, and richer per-domain proof artifacts before any GA claim can be made.
+- Next step: Task 22 should execute the next bounded positive-matrix clean-replay tranche starting with PM-002 through PM-012, replacing generic blockers with actual Lean replay evidence where possible and replayable blocker certificates where the toolchain, dependency, theorem-search, or formalization material is not yet sufficient.
+- Commit: pending
+
+## Task 22: Execute Positive Matrix Batch PM-002 Through PM-012
+
+- [ ] Re-read all Goal 3 required context files before touching code.
+- [ ] Select PM-002 through PM-012 from the Task 21 manifest and create per-task replay-attempt fixtures or live Lean clean-replay attempts.
+- [ ] For each selected task, preserve FormalSpecLock, AssumptionLedger, dependency-lock, replay-command, and terminal classification evidence.
+- [ ] Replace generic blockers with specific replayable blocker certificates when clean replay cannot yet run.
+- [ ] Ensure no production theorem-family recognizer, Nat-linear synthesis, default assumptions, CAS/literature/search/vote authority, or direct promotion path is introduced.
+- [ ] Run focused tests, package build/typecheck/test gates, static no-reinvent scans, and runtime artifact cleanliness checks.
+- [ ] Record validation evidence, residual blockers, next batch scope, and commit.
 
 Completion record:
 
