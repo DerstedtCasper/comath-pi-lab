@@ -167,18 +167,18 @@ Completion record:
 
 ## Task 10: DependencyClosureV2, LeanIntegrityScannerV2, And AxiomProfileV2
 
-- [ ] Implement or harden `DependencyClosureV2` with Lake package graph, mathlib/external revisions, licenses, import closure, allowed import prefixes, untracked imports, symlink escape, and build status.
-- [ ] Implement or harden `LeanIntegrityScannerV2` beyond regex with comment/string handling, forbidden declaration kinds, local module shadowing, import pollution, namespace shadowing, target binding, and environment fingerprint.
-- [ ] Implement or harden `AxiomProfileV2` bound to fully qualified theorem name, type hash, source hash, environment fingerprint, and LeanRunManifest id.
-- [ ] Add tests for sorry/admit/axiom/constant/unsafe/opaque, target axiom in dependency, import shadowing, namespace shadowing, untracked import, raw stdout spoofing, and missing structured audit.
+- [x] Implement or harden `DependencyClosureV2` with Lake package graph, mathlib/external revisions, licenses, import closure, allowed import prefixes, untracked imports, symlink escape, and build status.
+- [x] Implement or harden `LeanIntegrityScannerV2` beyond regex with comment/string handling, forbidden declaration kinds, local module shadowing, import pollution, namespace shadowing, target binding, and environment fingerprint.
+- [x] Implement or harden `AxiomProfileV2` bound to fully qualified theorem name, type hash, source hash, environment fingerprint, and LeanRunManifest id.
+- [x] Add tests for sorry/admit/axiom/constant/unsafe/opaque, target axiom in dependency, import shadowing, namespace shadowing, untracked import, raw stdout spoofing, and missing structured audit.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: added `DependencyClosureV2`, `LeanIntegrityScannerV2`, and `AxiomProfileV2` public APIs while preserving the older v1 compatibility APIs. `DependencyClosureV2` now records `comath.dependency_closure.v2`, Lake manifest package metadata, trusted mathlib/external revisions, licenses, import closure, allowed prefixes, untracked imports, local module shadowing, symlink escapes, build status, and a dependency graph hash. `LeanIntegrityScannerV2` adds comment/string-aware Lean source scanning, forbidden declaration/escape detection, import pollution and namespace shadowing vetoes, dependency-closure veto propagation, target theorem binding, missing structured audit vetoes, and an environment fingerprint. `AxiomProfileV2` binds the profile to a fully qualified theorem name, theorem type hash, source file hash, environment fingerprint, LeanRunManifest id, structured Lean audit data, and rejects raw stdout spoofing. Added `goal3-task10-integrity-dependency-axiom-v2.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Verification evidence: TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, `node services/comathd/tests/unit/goal3-task10-integrity-dependency-axiom-v2.test.mjs` failed because `../../dist/index.js` did not export `checkAxiomProfileV2`. After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task10-integrity-dependency-axiom-v2.test.mjs` exited 0; `node services/comathd/tests/unit/phase31-lean-trust-profile.test.mjs` exited 0; `node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs` exited 0; `node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task7-lean-run-manifest-v3.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task8-lean-authority-v3-final-replay.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 with the new Task 10 test included. `git diff --check` exited 0 with Windows LF-to-CRLF warnings only. `Test-Path -LiteralPath '.comath'` returned `False`.
+- Residual risk: Task 10 implements deterministic TypeScript-side v2 gate contracts and structured-audit binding, but it does not yet implement a custom Lean-side JSON-emitting audit command or wire v2 reports into the final promotion gate as the only accepted final reports. Existing `runCleanLeanReplay()` still writes v1 report paths for legacy promotion compatibility and v3 replay packaging; later GA tasks must consume v2/structured audit reports directly in final promotion/evidence packs. Dependency graph extraction is conservative and manifest-based rather than a full Lake elaborated import graph.
+- Next step: Task 11 should implement the external wheel registry and adapter contracts with proof-authority-none semantics for theorem search, retrieval, proof-search backends, computation tools, and external Lean repo candidates.
+- Commit: this Task 10 completion commit
 
 ## Task 11: External Wheel Registry And Adapter Contracts
 
