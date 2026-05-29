@@ -81,7 +81,7 @@ Completion record:
   - `goal-4/input.md` remains mojibake under current PowerShell reading, but `plan.md` records the resolved source-document assumption and current task scope.
   - Pre-existing untracked `goal-3/` and `services/comathd/tests/unit/phase82-controlled-equivalence-proof-execution.test.mjs` remain untouched.
 - Next task: Task 3, remove or fail-close theorem-family recognizer, Nat-linear synthesis, default `n : Nat`, and synthetic winner paths from production promotion, then make this RED test pass.
-- Commit: pending.
+- Commit: `b120465` (`Add Goal 4 P0 no-reinvent RED tests`).
 
 ### Task 3: Remove or Quarantine Toy/Nat-Only Trusted Paths
 
