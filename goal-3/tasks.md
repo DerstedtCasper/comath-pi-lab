@@ -292,20 +292,20 @@ Completion record:
 
 ## Task 18: Comprehensive Check-Debug Loop 6
 
-- [ ] Run root build/typecheck/test/ci gates appropriate after Tasks 16-17.
-- [ ] Run GA negative test suite.
-- [ ] Run positive proof workflow suite.
-- [ ] Verify Pi dashboard/export evidence consistency.
-- [ ] Verify no generated/runtime artifacts or host path leaks are committed.
-- [ ] Repair high-risk regressions found.
+- [x] Run root build/typecheck/test/ci gates appropriate after Tasks 16-17.
+- [x] Run GA negative test suite.
+- [x] Run positive proof workflow suite.
+- [x] Verify Pi dashboard/export evidence consistency.
+- [x] Verify no generated/runtime artifacts or host path leaks are committed.
+- [x] Repair high-risk regressions found.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: re-read the Goal 3 input, plan, task tracker, v2 no-reinvent audit, v2 open formal workbench design, v2 agent prompt protocol, AGENTS, README, TODO, REVIEW, development plan, runbook, and module-boundary docs. Ran the sixth comprehensive check-debug loop after Tasks 16-17 across package/root build, typecheck, test, GA negative slices, positive GA acceptance workflow, Pi goal-mode/dashboard/export surfaces, runtime artifact cleanliness, host-path leak scans, and no-reinvent boundary scans. No high-risk product-code regression was found, so no product repair was required.
+- Verification evidence: `git status -sb` was clean on `main` before verification. Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, `corepack pnpm --filter @comath/pi-extension build`, `corepack pnpm --filter @comath/pi-extension typecheck`, and `corepack pnpm --filter @comath/pi-extension test`. Root gates exited 0: `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test`, including the Phase 45 Pi/comathd install-session e2e and Phase 17 integrity evaluation. Root `package.json` has no `ci` script, so no separate `corepack pnpm run ci` command exists to run. Focused Goal 3/GA suites exited 0: `node services/comathd/tests/unit/goal3-task17-ga-acceptance-workflow.test.mjs`, `node services/comathd/tests/integration/phase68-v3-negative-ga-slices.test.mjs`, `node services/comathd/tests/unit/goal3-task16-pi-goal-mode-routes.test.mjs`, and `node extensions/comath-pi/tests/goal3-task16-pi-goal-mode.test.mjs`. Pi dashboard/export consistency checks exited 0: `node extensions/comath-pi/tests/phase15-dashboard.test.mjs`, `node extensions/comath-pi/tests/phase18-research-campaign-tools.test.mjs`, `node extensions/comath-pi/tests/phase22-research-loop.test.mjs`, `node extensions/comath-pi/tests/phase66-goal-compatible-campaign-ux.test.mjs`, `node extensions/comath-pi/tests/phase59-product-surface-tools.test.mjs`, and `node services/comathd/tests/integration/phase21-read-model-routes.test.mjs`; an `rg` export scan confirmed Task 16 tests cover `campaign/export`, blocker certificates, resume state, and export descriptors. Runtime/static checks: `Test-Path -LiteralPath '.comath'` returned `False`; `git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'` returned no tracked runtime/build artifacts; source-only absolute host-path scan over `services/comathd/src` and `extensions/comath-pi/src` returned no hits; broad host-path scan hits were historical documentation evidence and test temp/project-root variables. No-reinvent source scan found only `services/comathd/src/release/v3-negative-ga-slices.ts` adversarial negative fixture strings and explicit `uses_controlled_nat_linear_synthesis: false` fields in `goal3-ga-acceptance.ts`, not a restored production proof path. Pi filesystem mutation scan found no direct write APIs in `extensions/comath-pi/src`; `.comath` hits are write-scope metadata strings. `git diff --check` exited 0.
+- Residual risk: Task 18 is a verification loop, not a GA-completion task. Task 17's positive matrix remains a harness plus representative seeds with a replayable blocker for unexecuted 100-task breadth; live provider/network validation, broad proof automation, full documentation hardening, threat-model release wording, and final global GA audit remain open for Tasks 19-20. Historical docs/tests still contain absolute workspace paths as audit evidence and temp test variables; source-only product code did not contain committed host absolute paths.
+- Next step: Task 19 should synchronize README, architecture docs, configuration samples, prompts, threat model, release criteria, and public wording with the implemented no-reinvent/Lean-authority Goal 3 boundaries without claiming global GA completion.
+- Commit: pending
 
 ## Task 19: Documentation, Config Samples, Prompts, Threat Model, And Release Hardening
 
