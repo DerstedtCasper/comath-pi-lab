@@ -182,19 +182,19 @@ Completion record:
 
 ## Task 11: External Wheel Registry And Adapter Contracts
 
-- [ ] Add adapter registries for theorem search, retrieval, proof-search backends, computation, and external Lean repos.
-- [ ] Ensure every adapter result has provider, query/ref hash, timestamp, capability metadata, terms/license notes where applicable, and `proof_authority: "none"`.
-- [ ] Add health/capability discovery and credential/rate-limit handling.
-- [ ] Add default local/stub adapters for Loogle, LeanSearch, Moogle, LeanExplore, arXiv, Semantic Scholar, OpenAlex, Crossref, Unpaywall, Jina, AnySearch, local PDF/TeX/Markdown, SymPy/Sage/Z3/cvc5 where feasible without requiring network for tests.
-- [ ] Add tests showing external search/literature/CAS results cannot promote proof claims.
+- [x] Add adapter registries for theorem search, retrieval, proof-search backends, computation, and external Lean repos.
+- [x] Ensure every adapter result has provider, query/ref hash, timestamp, capability metadata, terms/license notes where applicable, and `proof_authority: "none"`.
+- [x] Add health/capability discovery and credential/rate-limit handling.
+- [x] Add default local/stub adapters for Loogle, LeanSearch, Moogle, LeanExplore, arXiv, Semantic Scholar, OpenAlex, Crossref, Unpaywall, Jina, AnySearch, local PDF/TeX/Markdown, SymPy/Sage/Z3/cvc5 where feasible without requiring network for tests.
+- [x] Add tests showing external search/literature/CAS results cannot promote proof claims.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: added `services/comathd/src/adapters/external-wheel-registry.ts` with a typed external wheel registry for theorem search, retrieval, proof-search backends, computation, and external Lean repo inspection. The registry includes network-free default stub adapters for Loogle, LeanSearch, LeanStateSearch, LeanSearchClient, Moogle, LeanExplore, LeanDojo theorem search, arXiv, Semantic Scholar, OpenAlex, Crossref, Unpaywall, Jina Reader/Search, AnySearch, local PDF/TeX/Markdown/BibTeX ingestion, LeanDojo/LeanCopilot/Aesop/Codex proof-search backends, SymPy/Sage/Z3/cvc5 computation, and local/mathlib/external Lean repo planning. Every adapter descriptor and result carries provider identity, hash binding, timestamp where result-bearing, capability metadata, terms/license notes, credential/rate-limit policy, `proof_authority: "none"`, `can_promote_claim: false`, and the hard veto `external_adapter_result_has_no_proof_authority`. Exported the registry from `services/comathd/src/index.ts` and wired the Task 11 unit test into the default comathd package test chain.
+- Verification evidence: TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, `node services/comathd/tests/unit/goal3-task11-external-wheel-registry.test.mjs` failed because `../../dist/index.js` did not export `createDefaultExternalWheelRegistry`. After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task11-external-wheel-registry.test.mjs` exited 0; `node services/comathd/tests/unit/phase11-literature.test.mjs` exited 0; `node services/comathd/tests/unit/phase10-compute-runners.test.mjs` exited 0; `node services/comathd/tests/unit/phase44-codex-cli-external-invocation.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 with the new Task 11 test included. Static scan over `services/comathd/src/adapters` and the Task 11 test found no `can_promote_claim: true` or non-none proof-authority escalation; secret scan terms only matched the intentional `exposes_secret_values: false` field. `git diff --check` exited 0 with Windows LF-to-CRLF warnings only. `Test-Path -LiteralPath '.comath'` returned `False`.
+- Residual risk: Task 11 deliberately implements contracts and deterministic local stubs, not live network/provider clients, credential vaulting, provider-specific throttling, prompt-injection scanning engines, or external Lean repo build/import execution. Those live integrations must preserve this registry contract and still require later stage-machine, agent-workflow, final replay, and release-hardening tasks before any external result can influence a promoted proof artifact.
+- Next step: Task 12 should run the fourth comprehensive check-debug loop over adapter proof-authority escalation, secrets leakage, network-dependent tests, provider terms coverage, and fail-open paths in the integrity/dependency/axiom gates.
+- Commit: 5b163f9
 
 ## Task 12: Comprehensive Check-Debug Loop 4
 

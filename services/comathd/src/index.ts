@@ -30,6 +30,7 @@ export * from "./verification/runner-contracts.js";
 export * from "./verification/sympy.js";
 export * from "./verification/sage.js";
 export * from "./verification/sat.js";
+export * from "./adapters/external-wheel-registry.js";
 export * from "./literature/index.js";
 export * from "./domain/braid-statistics/index.js";
 export * from "./memory/index.js";
