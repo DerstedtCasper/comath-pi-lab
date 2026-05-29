@@ -326,13 +326,29 @@ Completion record:
 
 ## Task 20: Final GA Review, Repair, And Completion
 
-- [ ] Perform the largest final review from user experience, code, security, data consistency, permissions, error handling, tests, build, docs, replay reproducibility, rollback, and open-source release perspectives.
-- [ ] Derive every completion requirement from `input.md`, both 2026-05-29 docs, agent prompt protocol, and current authoritative project docs.
-- [ ] Attach evidence for every requirement: file references, tests, command output, runtime behavior, or explicit replayable blocker.
-- [ ] Run final full validation: root build, typecheck, test, ci/release checks, GA negative tests, positive proof workflow, and evidence-pack replay where feasible.
-- [ ] Verify no known high-risk issue remains.
-- [ ] Mark any unavoidable external dependency blocker as replayable and non-promoted, not as GA success.
-- [ ] Update this task record and mark the goal complete only if the implementation meets the completion gate in `plan.md`.
+- [x] Perform the largest final review from user experience, code, security, data consistency, permissions, error handling, tests, build, docs, replay reproducibility, rollback, and open-source release perspectives.
+- [x] Derive every completion requirement from `input.md`, both 2026-05-29 docs, agent prompt protocol, and current authoritative project docs.
+- [x] Attach evidence for every requirement: file references, tests, command output, runtime behavior, or explicit replayable blocker.
+- [x] Run final full validation: root build, typecheck, test, ci/release checks, GA negative tests, positive proof workflow, and evidence-pack replay where feasible.
+- [x] Verify no current trust-core/product-code regression remains in the checked surfaces; record remaining GA blockers as non-promotional.
+- [x] Mark any unavoidable external dependency blocker as replayable and non-promoted, not as GA success.
+- [x] Update this task record and do not mark the goal complete because the implementation does not yet meet the completion gate in `plan.md`.
+
+Completion record:
+
+- Work done: performed the final Goal 3 requirement-by-requirement audit and added `docs/progress/goal-3-final-ga-audit.md`. The audit derives requirements from the Goal 3 input, plan, v2 no-reinvent audit, v2 open formal workbench design, v2 agent prompt protocol, and current project docs. It records the current state as validated trust-core with replayable GA blockers, not GA completion. No high-risk code/doc/test regression requiring immediate repair was found in the checked trust-core surfaces, but the audit confirms the Goal 3 completion gate is not satisfied because the full 100-task positive clean-replay matrix has not been executed.
+- Verification evidence: Fresh commands exited 0: `git status -sb` was clean before Task 20 edits; `node scripts/phase0-smoke.mjs` passed with 33 required entries and 33 invariants; `corepack pnpm build`; `corepack pnpm typecheck`; `corepack pnpm test`; `corepack pnpm --filter @comath/comathd build`; `corepack pnpm --filter @comath/comathd typecheck`; `corepack pnpm --filter @comath/comathd test`; `corepack pnpm --filter @comath/pi-extension build`; `corepack pnpm --filter @comath/pi-extension typecheck`; `corepack pnpm --filter @comath/pi-extension test`; `node services/comathd/tests/unit/goal3-task17-ga-acceptance-workflow.test.mjs`; `node services/comathd/tests/integration/phase68-v3-negative-ga-slices.test.mjs`; `node services/comathd/tests/unit/goal3-task16-pi-goal-mode-routes.test.mjs`; `node extensions/comath-pi/tests/goal3-task16-pi-goal-mode.test.mjs`. Static scans found no restored theorem-family/Nat-linear/default-`n : Nat` production path, no Pi direct filesystem write APIs, no tracked `.comath`, `.tmp`, `dist`, `node_modules`, `services/comathd/dist`, or `extensions/comath-pi/dist`, no repo-root `.comath`, and no current-facing overclaim beyond forbidden-wording lists, explicit negations, historical records, or quarantine notes.
+- Residual risk: Goal 3 is not complete. The full 100-task positive clean-replay matrix remains unexecuted and is already represented in `goal3-ga-acceptance.ts` as `ga_positive_100_task_matrix_not_fully_executed`; live external provider validation, OS-enforced sandboxing, richer real-host Pi/service lifecycle validation, and broad mathematical automation evidence remain non-promotional blockers. These are not external proof authority and cannot be used to mark any proof claim as `proven` or `formally_checked` without Lean clean replay.
+- Next step: Task 21 should convert the 100-task positive matrix blocker into an executable clean-replay matrix plan/harness and begin replacing representative seeds with actual Lean/mathlib replay evidence, while keeping incomplete seeds as replayable blockers.
+- Commit: 9b6db33
+
+## Task 21: Execute Positive 100-Task Clean-Replay Matrix Plan
+
+- [ ] Expand the existing Goal 3 positive matrix from representative seeds into an executable 100-task manifest covering Nat/List, algebra, order, real analysis, topology, combinatorics, external Lean repo, paper-to-formal-spec, theorem-search-assisted, and tactic-repair categories.
+- [ ] Define per-task inputs, FormalSpecLock/AssumptionLedger material, dependency lock expectations, expected Lean replay command, and terminal classification.
+- [ ] Implement or harden the matrix runner so each seed either clean-replays through Lean4/mathlib with v3 evidence binding or emits a replayable blocker without promotion.
+- [ ] Execute a first bounded batch without using production theorem-family recognizers, Nat-linear synthesis, or default assumptions.
+- [ ] Record validation evidence, residual blockers, and next batch scope.
 
 Completion record:
 
