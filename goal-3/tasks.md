@@ -49,21 +49,21 @@ Completion record:
 
 ## Task 3: Comprehensive Check-Debug Loop 1
 
-- [ ] Check requirement drift against `input.md`, both GA docs, and Task 1 matrix.
-- [ ] Run focused tests from Task 2.
-- [ ] Run `corepack pnpm --filter @comath/comathd build`.
-- [ ] Run applicable typecheck/test gates.
-- [ ] Scan for `theorem-family`, Nat linear synthesis, synthetic V1 winner, default `n : Nat`, direct `formally_checked` bypass, agent-written proof evidence.
-- [ ] Repair any concrete high-risk defect found.
-- [ ] Record the check-debug result here.
+- [x] Check requirement drift against `input.md`, both GA docs, and Task 1 matrix.
+- [x] Run focused tests from Task 2.
+- [x] Run `corepack pnpm --filter @comath/comathd build`.
+- [x] Run applicable typecheck/test gates.
+- [x] Scan for `theorem-family`, Nat linear synthesis, synthetic V1 winner, default `n : Nat`, direct `formally_checked` bypass, agent-written proof evidence.
+- [x] Repair any concrete high-risk defect found.
+- [x] Record the check-debug result here.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: re-read the Goal 3 input/plan/tasks files, the v2 no-reinvent audit, the v2 open formal workbench design, the v2 agent prompt protocol, root AGENTS/README/TODO/REVIEW/runbook/module-boundary docs, and the Task 1 gap matrix. Compared the current post-Task-2 source state against M0 no-reinvent requirements and confirmed no implementation repair was required in this check-debug loop. The only source-side direct `applyGatePromotedClaim` outside the gate remains `release/v3-negative-ga-slices.ts`, where it deliberately creates an adversarial metadata-ready negative case that must still fail `promoteClaim`; it is not a normal promotion path.
+- Verification evidence: `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task2-no-toy-production-path.test.mjs` exited 0; `node services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs` exited 0; `node services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs` exited 0; `node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs` exited 0; `node services/comathd/tests/unit/phase69-v3-terminal-vocabulary.test.mjs` exited 0; `node services/comathd/tests/integration/phase70-broad-theorem-planning-slice.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 through Phase 70. Static scans over `services/comathd/src` found no production theorem-family recognizer, Nat-linear synthesis/parser, theorem-specific target package, default `n : Nat`, synthetic V1 winner string, or agent-written pass-log proof path; remaining `candidate_kernel_checked` hits are schema/decision/failure-aggregation state handling, not a fixed V1 winner. `Test-Path -LiteralPath '.comath'` returned `False`, `git status --short --branch` was clean before this task-record edit, and `git diff --check` exited 0.
+- Residual risk: Task 4 remains necessary before unknown or ambiguous user goals can enter a real FormalSpecLock/AssumptionLedger path; current unknown-goal behavior is intentionally fail-closed/no-reinvent rather than a complete GA formal-spec intake. Historical Nat/theorem-family assertions still exist in older tests and documentation as fixture/history material, and Task 19 must later clean public wording after the GA implementation catches up.
+- Next step: Task 4 should implement first-class `FormalSpecLock`, `AssumptionLedger`, and the `needs_formal_spec_lock` unknown-goal path with no default assumption injection.
+- Commit: fcc5c66
 
 ## Task 4: FormalSpecLock, AssumptionLedger, And Unknown-Goal Fail-Closed Path
 
