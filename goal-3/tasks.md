@@ -213,17 +213,17 @@ Completion record:
 
 ## Task 13: MathProve-Native Stage Machine S0-S10
 
-- [ ] Internalize MathProve workflow as native CoMath stages: input_intake, problem_lock, knowledge_pack, formal_spec_and_notation_gate, blueprint_and_skeleton_gate, line_map_gate, lemma_sprint, refutation_gate, integration_refactor_gate, final_lean_authority_replay, proof_memory_update.
-- [ ] Ensure each stage has input/output schema, hard vetoes, blocker certificates, and resume state.
-- [ ] Ensure MathProve-Skill or external MathProve runner output is evidence only and cannot promote claims.
-- [ ] Add tests for stage transition legality, missing artifact blocker, resume state, and no MathProve proof authority.
+- [x] Internalize MathProve workflow as native CoMath stages: input_intake, problem_lock, knowledge_pack, formal_spec_and_notation_gate, blueprint_and_skeleton_gate, line_map_gate, lemma_sprint, refutation_gate, integration_refactor_gate, final_lean_authority_replay, proof_memory_update.
+- [x] Ensure each stage has input/output schema, hard vetoes, blocker certificates, and resume state.
+- [x] Ensure MathProve-Skill or external MathProve runner output is evidence only and cannot promote claims.
+- [x] Add tests for stage transition legality, missing artifact blocker, resume state, and no MathProve proof authority.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
+- Work done: added `services/comathd/src/proof-kernel/campaign/mathprove-native-stage-machine.ts` as the native CoMath MathProve-workflow contract for S0-S10. The module defines the ordered stage definitions, per-stage input/output schema ids, required artifacts, hard vetoes, stage runs, blocker certificates, resume states, workflow-state advancement, resume validation, and external MathProve evidence classification. Exported the API from `services/comathd/src/index.ts` and wired `goal3-task13-mathprove-native-stage-machine.test.mjs` into the default `@comath/comathd` test chain. MathProve-Skill/final-audit output is explicitly normalized to `proof_authority: "none"`, `can_promote_claim: false`, and hard vetoes including `mathprove_output_has_no_proof_authority`; a passed MathProve final audit still requires Lean clean replay authority before any proof claim can promote.
+- Verification evidence: TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, `node services/comathd/tests/unit/goal3-task13-mathprove-native-stage-machine.test.mjs` failed because `../../dist/index.js` did not export `advanceMathProveNativeStage`. After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task13-mathprove-native-stage-machine.test.mjs` exited 0; `node services/comathd/tests/unit/phase58-mathprove-final-audit-runner.test.mjs` exited 0; `node services/comathd/tests/unit/phase63-v3-stage-gate-artifact-coverage.test.mjs` exited 0; `node services/comathd/tests/unit/phase71-stage-gate-repair-resume.test.mjs` exited 0; `node services/comathd/tests/unit/phase65-proof-memory-retrieval.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 with the new Task 13 test included. `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath '.comath'` returned `False`.
+- Residual risk: Task 13 implements the deterministic native stage-machine contract and non-authority classifier, not live 1+8 agent execution, stage-local candidate spawning, Pi goal-mode routing, or final GA evidence-pack integration. Existing campaign tick code still has historical public-stage compatibility surfaces; later tasks must wire the real agent workflow and Pi goal mode through these stricter S0-S10 contracts without reintroducing MathProve-as-authority semantics.
+- Next step: Task 14 should implement the real A0 coordinator plus A1-A8 specialist workflow and stage-local V1-V8 variants, preserving this Task 13 stage-machine contract and advisory-only vote/non-authority boundaries.
 - Commit:
 
 ## Task 14: Real 1+8 Agent Workflow And Stage-Local Eight Variants
