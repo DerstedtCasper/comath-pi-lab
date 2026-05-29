@@ -198,18 +198,18 @@ Completion record:
 
 ## Task 12: Comprehensive Check-Debug Loop 4
 
-- [ ] Re-run build/typecheck/test gates after Tasks 10-11.
-- [ ] Scan adapter code for proof-authority escalation, secrets leakage, network-dependent tests, and license/terms omissions.
-- [ ] Scan integrity/dependency/axiom gates for fail-open paths.
-- [ ] Repair high-risk regressions found.
+- [x] Re-run build/typecheck/test gates after Tasks 10-11.
+- [x] Scan adapter code for proof-authority escalation, secrets leakage, network-dependent tests, and license/terms omissions.
+- [x] Scan integrity/dependency/axiom gates for fail-open paths.
+- [x] Repair high-risk regressions found.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: re-read the Goal 3 input/plan/tasks files, the v2 no-reinvent audit, the v2 open formal workbench design, the v2 agent prompt protocol, root AGENTS/README/TODO/REVIEW/runbook/module-boundary docs, and then ran the fourth comprehensive check-debug loop after Tasks 10-11. Classified adapter proof-authority, credential, network, and terms scans; classified integrity/dependency/axiom v2 gate scans for fail-open paths; reviewed promotion-surface hits as normal gate plumbing or release negative-slice adversarial coverage. No high-risk product-code regression was found, so no product repair was needed.
+- Verification evidence: `corepack pnpm --filter @comath/comathd build` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0. Focused checks also exited 0: `node services/comathd/tests/unit/goal3-task10-integrity-dependency-axiom-v2.test.mjs`; `node services/comathd/tests/unit/goal3-task11-external-wheel-registry.test.mjs`; `node services/comathd/tests/unit/phase10-compute-runners.test.mjs`; `node services/comathd/tests/unit/phase11-literature.test.mjs`; `node services/comathd/tests/unit/phase31-lean-trust-profile.test.mjs`; `node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs`; `node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs`. Static adapter scans found only `proof_authority: "none"`, `can_promote_claim: false`, and `external_adapter_result_has_no_proof_authority` assertions/implementations; a direct escalation scan for `can_promote_claim: true` or non-none proof authority in adapters returned no hits. Secret scan hits were credential-policy field names such as `required_credentials`, `missing_credentials`, and `exposes_secret_values: false`, not secret values. Network scan found no `fetch`, `execFile`, `spawn`, or `spawnSync` calls in adapter code; URL hits were provider terms/source metadata and the registry remains network-free/stubbed. Terms scan confirmed `license_note`, `terms_url`, and `redistribution_policy` coverage in `external-wheel-registry.ts`. Integrity scans confirmed DependencyClosureV2, LeanIntegrityScannerV2, and AxiomProfileV2 derive pass only from empty hard-veto sets and fail closed on untracked imports, local module/namespace shadowing, symlink escapes, missing structured audit, raw stdout axiom spoof mismatch, target/type/source/environment/manifest mismatches, and dependency pin/license/trust failures. Promotion-surface scan found `promoteClaim()`/`applyGatePromotedClaim()` only in gate plumbing, API routing, tests, MathProve bridge wrapper, and the negative GA slice adversarial path.
+- Residual risk: Task 12 was a verification loop only. Task 11 adapters remain deterministic contracts/stubs rather than live provider clients, credential vaulting, provider throttling, or prompt-injection scanners. Task 10 v2 reports are deterministic TypeScript-side gate contracts and structured-audit bindings; later tasks still need to wire the full MathProve-native stage machine, real 1+8 agent workflow, final GA evidence packs, and public documentation hardening. The legacy release negative-slice helper still uses metadata-ready adversarial claim state to prove the promotion gate fails closed; it should remain classified as test/release negative coverage, not a production promotion path.
+- Next step: Task 13 should implement the MathProve-native stage machine S0-S10 with schemas, hard vetoes, blocker certificates, resume state, and no MathProve proof authority.
+- Commit: pending
 
 ## Task 13: MathProve-Native Stage Machine S0-S10
 
