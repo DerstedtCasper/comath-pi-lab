@@ -32,20 +32,20 @@ Completion record:
 
 ## Task 2: Remove Toy Theorem Recognizer And Nat-Only Production Path
 
-- [ ] Write failing tests proving production code cannot import or execute theorem-family smoke fixtures.
-- [ ] Move/rename any production theorem-family recognizer to test fixtures if it still exists.
-- [ ] Remove production Nat linear expression parser/synthesis and default theorem-family routing.
-- [ ] Add lint/runtime veto `business_layer_theorem_prover_forbidden`.
-- [ ] Keep Nat examples only as LeanRunner/final replay smoke tests.
-- [ ] Verify unknown goals do not become Nat proof obligations.
+- [x] Write failing tests proving production code cannot import or execute theorem-family smoke fixtures.
+- [x] Move/rename any production theorem-family recognizer to test fixtures if it still exists.
+- [x] Remove production Nat linear expression parser/synthesis and default theorem-family routing.
+- [x] Add lint/runtime veto `business_layer_theorem_prover_forbidden`.
+- [x] Keep Nat examples only as LeanRunner/final replay smoke tests.
+- [x] Verify unknown goals do not become Nat proof obligations.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: removed the production theorem-family recognizer, synthetic candidate runner, theorem-specific/Nat-linear target generation, bounded proof-body synthesis, final replay promotion path, and hardcoded Nat refutation shortcut from `services/comathd/src`; moved the remaining Nat candidate demo into `services/comathd/tests/fixtures/proof-smoke/`; added `goal3-task2-no-toy-production-path.test.mjs`; updated status capabilities and older tests so Nat examples remain non-authoritative fixtures and production campaigns fail closed with `business_layer_theorem_prover_forbidden`.
+- Verification evidence: `corepack pnpm --filter @comath/comathd build` passed; `node services/comathd/tests/unit/goal3-task2-no-toy-production-path.test.mjs` passed; `node services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs` passed; `node services/comathd/tests/integration/phase18-ga-refutation-path.test.mjs` passed with no-reinvent blocker semantics; `node services/comathd/tests/unit/phase20-ga-campaign-state-machine.test.mjs` passed; `node services/comathd/tests/unit/phase69-v3-terminal-vocabulary.test.mjs` passed; `node services/comathd/tests/integration/phase70-broad-theorem-planning-slice.test.mjs` passed; full `corepack pnpm --filter @comath/comathd test` passed. Static scan `rg -n "theorem-family|findTheoremFamily|runTheoremFamilyCandidates|runTrivialNatAddZeroCandidates|registeredNatLinear|controlled_nat_linear|parseNatLinear|normalizeNatLinear|bounded_theorem_specific|proof_kernel_theorem_template|theorem_specific_lean_target_package|default.*n : Nat|n : Nat|n \+ 1 = n|completeVerifiedCounterexample|isNatAddOneFalseObligation" services/comathd/src -g '!dist/**'` found only `services/comathd/src/release/v3-negative-ga-slices.ts`, which is negative test fixture material, not production campaign/proof support.
+- Residual risk: Task 2 intentionally removes old positive proof/refutation shortcuts, so the current campaign path now blocks before real FormalSpecLock/LeanRunner v3 work is implemented in later tasks. Repository root still has untracked/dirty Goal 3 planning artifacts outside this product commit, and `production-formal-workbench` worktree still has the untracked Task 1 gap matrix.
+- Next step: Task 3 comprehensive check-debug loop should re-run requirement drift checks, scan for any remaining toy/Nat/synthetic winner/direct promotion strings, and verify build/typecheck/test gates after this removal.
+- Commit: bc2bb74
 
 ## Task 3: Comprehensive Check-Debug Loop 1
 
