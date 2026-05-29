@@ -309,20 +309,20 @@ Completion record:
 
 ## Task 19: Documentation, Config Samples, Prompts, Threat Model, And Release Hardening
 
-- [ ] Update README with required wording and forbidden-claim avoidance.
-- [ ] Update architecture docs, module boundaries, GA release criteria, threat model, SECURITY, CONTRIBUTING, config samples, adapter examples, agent prompt docs, and example campaigns.
-- [ ] Document no-reinvent doctrine as lint/test/runtime gates, not just philosophy.
-- [ ] Document literature/RAG prompt injection, copyright/terms, citation anchors, and evidence-pack policy.
-- [ ] Document external Lean repo supply-chain policy and trusted_replay_dependency state machine.
-- [ ] Ensure all documentation matches actual implementation and tests.
+- [x] Update README with required wording and forbidden-claim avoidance.
+- [x] Update architecture docs, module boundaries, GA release criteria, threat model, SECURITY, CONTRIBUTING, config samples, adapter examples, agent prompt docs, and example campaigns.
+- [x] Document no-reinvent doctrine as lint/test/runtime gates, not just philosophy.
+- [x] Document literature/RAG prompt injection, copyright/terms, citation anchors, and evidence-pack policy.
+- [x] Document external Lean repo supply-chain policy and trusted_replay_dependency state machine.
+- [x] Ensure all documentation matches actual implementation and tests.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: updated README public positioning around Goal 3 Lean-authority boundaries and removed current-facing Goal 2/Nat production framing; added `CONTRIBUTING.md`, `config/README.md`, `config/comath.sample.json`, release criteria, threat model, adapter contracts, external Lean supply-chain policy, evidence-pack policy, and example campaign docs. Hardened `.pi/agents/*.md` and `.pi/prompts/*.md` with `proof_authority=none`, `may_mutate_trusted_state=false`, locked statement hash preservation, strict JSON/schema output, blocker reporting, introduced assumption/dependency reporting, and no vote/literature/CAS/SMT/SAT/reviewer/MathProve proof-authority rules. Updated `AGENTS.md`, module boundaries, acceptance matrix, risk register, agent operating model, security review, and math-integrity review so old Phase 18-81/Nat material is explicitly historical vertical-slice or negative-fixture material unless regenerated through the Goal 3 trusted path. Extended `scripts/phase0-smoke.mjs` so release-hardening docs, config samples, agent prompts, and prompt invariants are executable smoke-test requirements.
+- Verification evidence: `node scripts/phase0-smoke.mjs` exited 0 after first failing on under-specified prompt proof-authority wording and then passing with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd test` exited 0 with Goal 3 Task 2/4/5/7/8/10/11/13/14/16/17 and historical package regression tests included; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Goal 3 Task 16 and Pi package regressions included; `git diff --check` exited 0 after removing a README trailing blank line; `Test-Path -LiteralPath '.comath'` returned `False`. Overclaim scan for `proves arbitrary|verifies theorem truth independently|replaces mathlib|agents can certify|CAS.*formal proof|default.*n : Nat|controlled Nat linear identity synthesizer|Nat linear identity target table` found only forbidden wording lists, explicit negations, historical records, or Goal 3 quarantine notes; no current-facing production proof claim was found.
+- Residual risk: Task 19 is release-hardening documentation and static prompt/config verification. It does not execute the uncompleted 100-task positive matrix, validate live production provider/network accounts, add OS-enforced sandboxing, or make the project globally GA-complete. Task 20 must still perform the final requirement-by-requirement GA review, repair any remaining code/docs/test gaps, and decide whether any blockers remain replayable rather than promotional.
+- Next step: Task 20 final GA review, repair, and completion audit.
+- Commit: b927c03
 
 ## Task 20: Final GA Review, Repair, And Completion
 
