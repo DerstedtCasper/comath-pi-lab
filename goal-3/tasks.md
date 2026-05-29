@@ -115,19 +115,19 @@ Completion record:
 
 ## Task 7: LeanRunner And LeanRunManifest v3 Service Ownership
 
-- [ ] Implement or harden service-owned LeanRunner execution for check/build/audit/final replay.
-- [ ] Record `LeanRunManifest v3` with command, cwd hash, input files, Lean/Lake/toolchain metadata, stdout/stderr paths and hashes, runner id, exit code, and proof_authority.
-- [ ] Reject agent-written stdout/stderr or pass logs as evidence.
-- [ ] Fail closed on unknown Lean version, missing Lake version, missing lean-toolchain, parse failures, and toolchain mismatch.
-- [ ] Add tests for fake Lean stdout, agent-written pass log, unknown version, and path-bound output hashes.
+- [x] Implement or harden service-owned LeanRunner execution for check/build/audit/final replay.
+- [x] Record `LeanRunManifest v3` with command, cwd hash, input files, Lean/Lake/toolchain metadata, stdout/stderr paths and hashes, runner id, exit code, and proof_authority.
+- [x] Reject agent-written stdout/stderr or pass logs as evidence.
+- [x] Fail closed on unknown Lean version, missing Lake version, missing lean-toolchain, parse failures, and toolchain mismatch.
+- [x] Add tests for fake Lean stdout, agent-written pass log, unknown version, and path-bound output hashes.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: added first-class `leanRunManifestV3Schema` / JSON schema registry export and a service-owned Lean runner module that materializes `comath.lean_run_manifest.v3` manifests with `runner: "comathd.LeanRunner"`, command/cwd/input hashes, Lean/Lake/toolchain metadata, stdout/stderr path+hash binding, network/sandbox policy, exit code, and proof authority. Wired `runCleanLeanReplay()` check/build/audit calls through service-owned v3 Lean runs while preserving the existing final replay manifest compatibility boundary for Task 8. Removed the old unknown Lean version fallback in `currentLeanToolchain()` so parse failure now fails closed instead of defaulting to `4.27.0`. Added `goal3-task7-lean-run-manifest-v3.test.mjs` and wired it into the comathd test chain.
+- Verification evidence: TDD RED was observed before implementation: first `node services/comathd/tests/unit/goal3-task7-lean-run-manifest-v3.test.mjs` failed because `../../dist/index.js` did not export `createServiceOwnedLeanRunManifestV3`; after the first implementation slice passed, a second RED failed because `runServiceOwnedLeanCommandV3` was not exported. After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task7-lean-run-manifest-v3.test.mjs` exited 0; `node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs` exited 0; `node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs` exited 0; `node services/comathd/tests/unit/phase36-runner-replay-provenance.test.mjs` exited 0; `node services/comathd/tests/unit/phase77-runner-network-sandbox-policy.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 through Phase 70. Static scan `rg -n '4\.27\.0|leanprover/lean4:v\$\{match\?\.\[1\]|lean_version_unknown|lake_version_missing|lean_toolchain_missing|lean_toolchain_mismatch|lean_toolchain_parse_failure|comath\.lean_run_manifest\.v3|comathd\.LeanRunner|lean_stdout_hash_mismatch|lean_run_manifest_not_service_owned' services/comathd/src services/comathd/tests/unit/goal3-task7-lean-run-manifest-v3.test.mjs -g '!dist/**'` found the new fail-closed/v3 strings and no old `4.27.0` fallback. `git diff --check` exited 0 with Windows LF-to-CRLF warnings only. `Test-Path -LiteralPath '.comath'` returned `False`.
+- Residual risk: Task 7 intentionally stops at per-command service-owned LeanRunManifest v3 and fail-closed version/toolchain/log authenticity boundaries. It does not implement Task 8 append-only final replay registry/evidence pack, Task 10 DependencyClosureV2/LeanIntegrityScannerV2/AxiomProfileV2, or full final hermetic replay hardening. The existing final replay manifest remains compatible v2-style gate material until Task 8 upgrades the replay registry and evidence pack.
+- Next step: Task 8 should implement Lean Authority v3 final replay, append-only replay registry, clean workspace hashing, dependency pinning, replay pack export, and overwrite/symlink/network policy tests.
+- Commit: d468fc3
 
 ## Task 8: Lean Authority v3 Final Replay, Replay Registry, And Evidence Pack
 

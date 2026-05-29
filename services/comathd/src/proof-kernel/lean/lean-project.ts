@@ -44,8 +44,12 @@ export function sha256FileSync(path: string): { sha256: string; size_bytes: numb
 
 export function currentLeanToolchain(): string {
   const result = spawnSync("lean", ["--version"], { encoding: "utf8" });
-  const match = /version\s+([0-9]+\.[0-9]+\.[0-9]+)/i.exec(`${result.stdout}\n${result.stderr}`);
-  return `leanprover/lean4:v${match?.[1] ?? "4.27.0"}`;
+  const leanVersionOutput = `${result.stdout}\n${result.stderr}`;
+  const match = /version\s+([0-9]+\.[0-9]+\.[0-9]+)/i.exec(leanVersionOutput);
+  if (!match) {
+    throw new Error("lean_version_unknown");
+  }
+  return `leanprover/lean4:v${match[1]}`;
 }
 
 export function listLeanProjectFiles(leanRoot: string): string[] {

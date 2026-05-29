@@ -8,6 +8,7 @@ import { nextSequentialId } from "../../utils/id.js";
 import { checkAxiomProfile } from "./axiom-profile.js";
 import { checkDependencyClosure } from "./dependency-closure.js";
 import { hashLeanProjectFiles, sha256FileSync, type LeanProjectFiles } from "./lean-project.js";
+import { runServiceOwnedLeanCommandV3 } from "./lean-run-manifest-v3.js";
 import { checkStatementEquivalence } from "./statement-equivalence.js";
 import { runStaticCheatScan } from "./static-cheat-scan.js";
 
@@ -43,6 +44,15 @@ function runCommand(
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? (result.error ? String(result.error) : "")
   };
+}
+
+function runVersionCommand(command: string, args: string[], cwd: string, leanToolchain: string): string {
+  const result = spawnSync(directElanTool(command, leanToolchain), args, { cwd, encoding: "utf8", timeout: 30_000 });
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? (result.error ? String(result.error) : "")}`;
+  if ((result.status ?? 1) !== 0 && !output.trim()) {
+    throw new Error(`${command}_version_missing`);
+  }
+  return output;
 }
 
 function write(path: string, content: string): void {
@@ -96,9 +106,66 @@ export function runCleanLeanReplay(input: {
     reportPath: dependencyPathRel
   });
 
-  const theoremCheck = runCommand("lake", ["env", "lean", input.leanProject.theoremFileRel], cleanRoot, leanToolchain);
-  const build = runCommand("lake", ["build", ...input.leanProject.buildTargets], cleanRoot, leanToolchain);
-  const audit = runCommand("lake", ["env", "lean", input.leanProject.auditFileRel], cleanRoot, leanToolchain);
+  const leanVersionOutput = runVersionCommand("lean", ["--version"], cleanRoot, leanToolchain);
+  const lakeVersionOutput = runVersionCommand("lake", ["--version"], cleanRoot, leanToolchain);
+  const cleanInputs = [
+    join(cleanRoot, "lean-toolchain"),
+    join(cleanRoot, "lakefile.lean"),
+    join(cleanRoot, input.leanProject.theoremFileRel),
+    join(cleanRoot, input.leanProject.auditFileRel)
+  ];
+
+  const theoremCheck = runServiceOwnedLeanCommandV3({
+    projectRoot: input.projectRoot,
+    run_id: "LRUN-0001",
+    claim_id: input.claim_id,
+    campaign_id: input.campaign_id,
+    purpose: "check",
+    command: ["lake", "env", "lean", input.leanProject.theoremFileRel],
+    cwd: cleanRoot,
+    input_files: cleanInputs,
+    leanVersionOutput,
+    lakeVersionOutput,
+    leanToolchain,
+    network_policy: "disabled",
+    sandbox: "none",
+    proof_authority: "lean_kernel_check",
+    run: (command) => runCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
+  });
+  const build = runServiceOwnedLeanCommandV3({
+    projectRoot: input.projectRoot,
+    run_id: "LRUN-0002",
+    claim_id: input.claim_id,
+    campaign_id: input.campaign_id,
+    purpose: "build",
+    command: ["lake", "build", ...input.leanProject.buildTargets],
+    cwd: cleanRoot,
+    input_files: cleanInputs,
+    leanVersionOutput,
+    lakeVersionOutput,
+    leanToolchain,
+    network_policy: "disabled",
+    sandbox: "none",
+    proof_authority: "lean_kernel_check",
+    run: (command) => runCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
+  });
+  const audit = runServiceOwnedLeanCommandV3({
+    projectRoot: input.projectRoot,
+    run_id: "LRUN-0003",
+    claim_id: input.claim_id,
+    campaign_id: input.campaign_id,
+    purpose: "audit",
+    command: ["lake", "env", "lean", input.leanProject.auditFileRel],
+    cwd: cleanRoot,
+    input_files: cleanInputs,
+    leanVersionOutput,
+    lakeVersionOutput,
+    leanToolchain,
+    network_policy: "disabled",
+    sandbox: "none",
+    proof_authority: "lean_kernel_check",
+    run: (command) => runCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
+  });
   const stdout = [theoremCheck.stdout, build.stdout, audit.stdout].filter(Boolean).join("\n");
   const stderr = [theoremCheck.stderr, build.stderr, audit.stderr].filter(Boolean).join("\n");
 
@@ -129,7 +196,9 @@ export function runCleanLeanReplay(input: {
   };
 
   const exit_code =
-    theoremCheck.exit_code === 0 && build.exit_code === 0 && audit.exit_code === 0 ? 0 : theoremCheck.exit_code || build.exit_code || audit.exit_code;
+    theoremCheck.manifest.exit_code === 0 && build.manifest.exit_code === 0 && audit.manifest.exit_code === 0
+      ? 0
+      : theoremCheck.manifest.exit_code || build.manifest.exit_code || audit.manifest.exit_code;
   const allGatesPassed =
     exit_code === 0 &&
     static_audit.result === "pass" &&

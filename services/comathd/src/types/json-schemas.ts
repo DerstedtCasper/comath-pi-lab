@@ -4,6 +4,7 @@ import {
   claimSchema,
   formalSpecLockSchema,
   graphPatchSchema,
+  leanRunManifestV3Schema,
   memoryEdgeSchema,
   projectSchema
 } from "./schemas.js";
@@ -26,6 +27,7 @@ projectSchema.parse;
 claimSchema.parse;
 formalSpecLockSchema.parse;
 assumptionLedgerSchema.parse;
+leanRunManifestV3Schema.parse;
 memoryEdgeSchema.parse;
 artifactRefSchema.parse;
 graphPatchSchema.parse;
@@ -35,6 +37,7 @@ export const jsonSchemas = {
   claim: objectSchema("Claim"),
   formalSpecLock: objectSchema("FormalSpecLock"),
   assumptionLedger: objectSchema("AssumptionLedger"),
+  leanRunManifestV3: objectSchema("LeanRunManifestV3"),
   memoryEdge: objectSchema("MemoryEdge"),
   artifactRef: objectSchema("ArtifactRef"),
   graphPatch: objectSchema("GraphPatch")

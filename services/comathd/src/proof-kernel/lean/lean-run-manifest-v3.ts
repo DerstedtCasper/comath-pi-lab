@@ -1,0 +1,311 @@
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { assertPathAllowed } from "../../security/path-policy.js";
+import { leanRunManifestV3Schema, type LeanRunManifestV3 } from "../../types/schemas.js";
+import { sha256Buffer, sha256FileSync } from "./lean-project.js";
+
+export type LeanRunPurpose = LeanRunManifestV3["purpose"];
+
+export type LeanToolchainMetadata = {
+  lean_version: string;
+  lake_version: string;
+  elan_toolchain: string;
+};
+
+function normalizeRel(projectRoot: string, path: string): string {
+  const absolute = isAbsolute(path) ? resolve(path) : resolve(projectRoot, path);
+  return relative(resolve(projectRoot), absolute).replace(/\\/g, "/") || ".";
+}
+
+function cwdDigest(cwd: string, inputFiles: string[]): string {
+  const rows = inputFiles
+    .map((path) => {
+      const rel = normalizeRel(cwd, path);
+      const hash = sha256FileSync(path).sha256;
+      return `${rel}:${hash}`;
+    })
+    .sort();
+  return sha256Buffer(rows.join("\n"));
+}
+
+function parseLeanVersion(output: string): string | undefined {
+  return /version\s+([0-9]+\.[0-9]+\.[0-9]+)/i.exec(output)?.[1];
+}
+
+function parseLakeVersion(output: string): string | undefined {
+  return /lake\s+version\s+([^\r\n]+)/i.exec(output)?.[1]?.trim();
+}
+
+function parseToolchainVersion(leanToolchain: string): string | undefined {
+  return /^leanprover\/lean4:v([0-9]+\.[0-9]+\.[0-9]+)$/.exec(leanToolchain.trim())?.[1];
+}
+
+export function parseLeanToolchainMetadata(input: {
+  leanVersionOutput: string;
+  lakeVersionOutput: string;
+  leanToolchain: string;
+}): LeanToolchainMetadata {
+  const leanVersion = parseLeanVersion(input.leanVersionOutput);
+  if (!leanVersion) {
+    throw new Error("lean_version_unknown");
+  }
+
+  const lakeVersion = parseLakeVersion(input.lakeVersionOutput);
+  if (!lakeVersion) {
+    throw new Error("lake_version_missing");
+  }
+
+  const toolchain = input.leanToolchain.trim();
+  if (!toolchain) {
+    throw new Error("lean_toolchain_missing");
+  }
+
+  const toolchainVersion = parseToolchainVersion(toolchain);
+  if (!toolchainVersion) {
+    throw new Error("lean_toolchain_parse_failure");
+  }
+  if (toolchainVersion !== leanVersion) {
+    throw new Error("lean_toolchain_mismatch");
+  }
+
+  return {
+    lean_version: leanVersion,
+    lake_version: lakeVersion,
+    elan_toolchain: toolchain
+  };
+}
+
+export function createServiceOwnedLeanRunManifestV3(input: {
+  projectRoot: string;
+  run_id: string;
+  claim_id: string;
+  campaign_id: string;
+  candidate_id?: string;
+  purpose: LeanRunPurpose;
+  command: string[];
+  cwd: string;
+  input_files: string[];
+  lean_version: string;
+  lake_version: string;
+  elan_toolchain?: string;
+  lean_binary_file?: string;
+  lake_binary_file?: string;
+  lean_toolchain_file: string;
+  lake_manifest_file?: string;
+  dependency_graph_sha256?: string;
+  network_policy: LeanRunManifestV3["network_policy"];
+  sandbox: LeanRunManifestV3["sandbox"];
+  exit_code: number;
+  stdout_path: string;
+  stderr_path: string;
+  started_at: string;
+  ended_at: string;
+  proof_authority: LeanRunManifestV3["proof_authority"];
+}): LeanRunManifestV3 {
+  if (!existsSync(input.lean_toolchain_file)) {
+    throw new Error("lean_toolchain_missing");
+  }
+
+  const inputFiles = Array.from(new Set(input.input_files.map((path) => resolve(path))));
+  const inputFileEntries = inputFiles.map((path) => {
+    const stat = statSync(path);
+    return {
+      path: normalizeRel(input.projectRoot, path),
+      sha256: sha256FileSync(path).sha256,
+      size_bytes: stat.size
+    };
+  });
+
+  const leanToolchainFile = assertPathAllowed(input.projectRoot, input.lean_toolchain_file, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  const stdoutPath = assertPathAllowed(input.projectRoot, input.stdout_path, { purpose: "read", resolveRealpath: true });
+  const stderrPath = assertPathAllowed(input.projectRoot, input.stderr_path, { purpose: "read", resolveRealpath: true });
+
+  return leanRunManifestV3Schema.parse({
+    schema_version: "comath.lean_run_manifest.v3",
+    run_id: input.run_id,
+    claim_id: input.claim_id,
+    campaign_id: input.campaign_id,
+    candidate_id: input.candidate_id,
+    purpose: input.purpose,
+    command: input.command,
+    cwd: normalizeRel(input.projectRoot, input.cwd),
+    cwd_sha256_before: cwdDigest(input.cwd, inputFiles),
+    input_files: inputFileEntries,
+    lean_version: input.lean_version,
+    lake_version: input.lake_version,
+    elan_toolchain: input.elan_toolchain,
+    lean_binary_sha256: input.lean_binary_file ? sha256FileSync(input.lean_binary_file).sha256 : undefined,
+    lake_binary_sha256: input.lake_binary_file ? sha256FileSync(input.lake_binary_file).sha256 : undefined,
+    lean_toolchain_file_sha256: sha256FileSync(leanToolchainFile).sha256,
+    lake_manifest_sha256: input.lake_manifest_file ? sha256FileSync(input.lake_manifest_file).sha256 : undefined,
+    dependency_graph_sha256: input.dependency_graph_sha256,
+    network_policy: input.network_policy,
+    sandbox: input.sandbox,
+    exit_code: input.exit_code,
+    stdout_path: normalizeRel(input.projectRoot, stdoutPath),
+    stderr_path: normalizeRel(input.projectRoot, stderrPath),
+    stdout_sha256: sha256FileSync(stdoutPath).sha256,
+    stderr_sha256: sha256FileSync(stderrPath).sha256,
+    started_at: input.started_at,
+    ended_at: input.ended_at,
+    runner: "comathd.LeanRunner",
+    proof_authority: input.proof_authority
+  });
+}
+
+export function runServiceOwnedLeanCommandV3(input: {
+  projectRoot: string;
+  run_id: string;
+  claim_id: string;
+  campaign_id: string;
+  candidate_id?: string;
+  purpose: LeanRunPurpose;
+  command: string[];
+  cwd: string;
+  input_files: string[];
+  leanVersionOutput: string;
+  lakeVersionOutput: string;
+  leanToolchain: string;
+  network_policy: LeanRunManifestV3["network_policy"];
+  sandbox: LeanRunManifestV3["sandbox"];
+  proof_authority: LeanRunManifestV3["proof_authority"];
+  run?: (command: string[], cwd: string) => { exit_code: number; stdout: string; stderr: string };
+}): { manifest: LeanRunManifestV3; stdout: string; stderr: string } {
+  if (input.command.length === 0) {
+    throw new Error("lean_command_missing");
+  }
+  const metadata = parseLeanToolchainMetadata({
+    leanVersionOutput: input.leanVersionOutput,
+    lakeVersionOutput: input.lakeVersionOutput,
+    leanToolchain: input.leanToolchain
+  });
+
+  const startedAt = new Date().toISOString();
+  const result = input.run
+    ? input.run(input.command, input.cwd)
+    : (() => {
+        const [command, ...args] = input.command;
+        const spawned = spawnSync(command, args, {
+          cwd: input.cwd,
+          encoding: "utf8",
+          timeout: 30_000,
+          env: { ...process.env, COMATH_RUNNER_NETWORK: input.network_policy === "disabled" ? "disabled" : "unknown" }
+        });
+        return {
+          exit_code: spawned.status ?? 1,
+          stdout: spawned.stdout ?? "",
+          stderr: spawned.stderr ?? (spawned.error ? String(spawned.error) : "")
+        };
+      })();
+  const endedAt = new Date().toISOString();
+
+  const stdoutRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.stdout.log`);
+  const stderrRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.stderr.log`);
+  const stdoutPath = assertPathAllowed(input.projectRoot, stdoutRel, { purpose: "runtime-write" });
+  const stderrPath = assertPathAllowed(input.projectRoot, stderrRel, { purpose: "runtime-write" });
+  mkdirSync(dirname(stdoutPath), { recursive: true });
+  writeFileSync(stdoutPath, result.stdout, "utf8");
+  writeFileSync(stderrPath, result.stderr, "utf8");
+
+  const toolchainFile = input.input_files.find((file) => {
+    const rel = normalizeRel(input.projectRoot, file);
+    return rel === "lean-toolchain" || rel.endsWith("/lean-toolchain");
+  });
+  if (!toolchainFile) {
+    throw new Error("lean_toolchain_missing");
+  }
+
+  const manifest = createServiceOwnedLeanRunManifestV3({
+    projectRoot: input.projectRoot,
+    run_id: input.run_id,
+    claim_id: input.claim_id,
+    campaign_id: input.campaign_id,
+    candidate_id: input.candidate_id,
+    purpose: input.purpose,
+    command: input.command,
+    cwd: input.cwd,
+    input_files: input.input_files,
+    lean_version: metadata.lean_version,
+    lake_version: metadata.lake_version,
+    elan_toolchain: metadata.elan_toolchain,
+    lean_toolchain_file: toolchainFile,
+    network_policy: input.network_policy,
+    sandbox: input.sandbox,
+    exit_code: result.exit_code,
+    stdout_path: stdoutPath,
+    stderr_path: stderrPath,
+    started_at: startedAt,
+    ended_at: endedAt,
+    proof_authority: input.proof_authority
+  });
+  const manifestRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.manifest.json`);
+  const manifestPath = assertPathAllowed(input.projectRoot, manifestRel, { purpose: "runtime-write" });
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  return { manifest, stdout: result.stdout, stderr: result.stderr };
+}
+
+export function verifyLeanRunManifestV3Evidence(
+  projectRoot: string,
+  candidate: unknown
+): { ok: boolean; vetoes: string[] } {
+  const parsed = leanRunManifestV3Schema.safeParse(candidate);
+  const vetoes: string[] = [];
+
+  const raw = candidate && typeof candidate === "object" ? (candidate as Record<string, unknown>) : {};
+  if (raw.runner !== "comathd.LeanRunner") {
+    vetoes.push("lean_run_manifest_not_service_owned");
+  }
+  if (!parsed.success) {
+    vetoes.push("lean_run_manifest_parse_failure");
+    return { ok: false, vetoes: Array.from(new Set(vetoes)) };
+  }
+
+  const manifest = parsed.data;
+  if (manifest.lake_version.trim().length === 0) {
+    vetoes.push("lake_version_missing");
+  }
+  if (manifest.lean_version.trim().length === 0) {
+    vetoes.push("lean_version_unknown");
+  }
+
+  const checkFileHash = (relPath: string, expected: string, code: string) => {
+    try {
+      const path = assertPathAllowed(projectRoot, relPath, { purpose: "read", resolveRealpath: true });
+      if (sha256FileSync(path).sha256 !== expected) {
+        vetoes.push(code);
+      }
+    } catch {
+      vetoes.push(code);
+    }
+  };
+
+  checkFileHash(manifest.stdout_path, manifest.stdout_sha256, "lean_stdout_hash_mismatch");
+  checkFileHash(manifest.stderr_path, manifest.stderr_sha256, "lean_stderr_hash_mismatch");
+
+  const toolchainEntry = manifest.input_files.find((entry) => entry.path === "lean-toolchain" || entry.path.endsWith("/lean-toolchain"));
+  if (!toolchainEntry) {
+    vetoes.push("lean_toolchain_missing");
+  } else {
+    checkFileHash(toolchainEntry.path, manifest.lean_toolchain_file_sha256, "lean_toolchain_hash_mismatch");
+    try {
+      const toolchainPath = assertPathAllowed(projectRoot, toolchainEntry.path, { purpose: "read", resolveRealpath: true });
+      const parsedMetadata = parseLeanToolchainMetadata({
+        leanVersionOutput: `Lean (version ${manifest.lean_version})`,
+        lakeVersionOutput: `Lake version ${manifest.lake_version}`,
+        leanToolchain: readFileSync(toolchainPath, "utf8").trim()
+      });
+      if (parsedMetadata.elan_toolchain !== manifest.elan_toolchain) {
+        vetoes.push("lean_toolchain_mismatch");
+      }
+    } catch (error) {
+      vetoes.push(error instanceof Error ? error.message : "lean_toolchain_parse_failure");
+    }
+  }
+
+  return { ok: vetoes.length === 0, vetoes: Array.from(new Set(vetoes)) };
+}

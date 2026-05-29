@@ -627,6 +627,42 @@ export const finalLeanReplaySchema = z
   })
   .strict();
 
+export const leanRunManifestV3Schema = z
+  .object({
+    schema_version: z.literal("comath.lean_run_manifest.v3"),
+    run_id: stableId,
+    claim_id: stableId,
+    campaign_id: stableId,
+    candidate_id: stableId.optional(),
+    purpose: z.enum(["check", "build", "audit", "final_replay"]),
+    command: z.array(z.string().min(1)).min(1),
+    cwd: z.string().min(1),
+    cwd_sha256_before: sha256,
+    input_files: z
+      .array(z.object({ path: z.string().min(1), sha256, size_bytes: z.number().int().nonnegative() }).strict())
+      .min(1),
+    lean_version: z.string().min(1),
+    lake_version: z.string().min(1),
+    elan_toolchain: z.string().min(1).optional(),
+    lean_binary_sha256: sha256.optional(),
+    lake_binary_sha256: sha256.optional(),
+    lean_toolchain_file_sha256: sha256,
+    lake_manifest_sha256: sha256.optional(),
+    dependency_graph_sha256: sha256.optional(),
+    network_policy: z.enum(["disabled", "dependency_fetch_only", "unknown"]),
+    sandbox: z.enum(["none", "oci", "nix", "other"]),
+    exit_code: z.number().int(),
+    stdout_path: z.string().min(1),
+    stderr_path: z.string().min(1),
+    stdout_sha256: sha256,
+    stderr_sha256: sha256,
+    started_at: isoTimestamp,
+    ended_at: isoTimestamp,
+    runner: z.literal("comathd.LeanRunner"),
+    proof_authority: z.enum(["none", "lean_kernel_check"])
+  })
+  .strict();
+
 export const stageRunRefSchema = z
   .object({
     id: stableId,
@@ -824,6 +860,7 @@ export type CandidateManifest = z.infer<typeof candidateManifestSchema>;
 export type DialecticalStress = z.infer<typeof dialecticalStressSchema>;
 export type GateDecision = z.infer<typeof gateDecisionSchema>;
 export type FinalLeanReplay = z.infer<typeof finalLeanReplaySchema>;
+export type LeanRunManifestV3 = z.infer<typeof leanRunManifestV3Schema>;
 export type StageRunRef = z.infer<typeof stageRunRefSchema>;
 export type ResearchCampaign = z.infer<typeof researchCampaignSchema>;
 export type CitationRecord = z.infer<typeof citationRecordSchema>;
