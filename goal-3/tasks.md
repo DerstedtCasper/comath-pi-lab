@@ -83,18 +83,18 @@ Completion record:
 
 ## Task 5: StatementDiffGate And Statement Drift Red Team
 
-- [ ] Implement or harden `StatementDiffGate` for exact theorem header/type hash matching by default.
-- [ ] Reject weakened, strengthened, different, ambiguous, wrong-domain, wrong-quantifier, or hidden-assumption candidate statements.
-- [ ] Require Lean-proved equivalence replay for any non-exact statement equivalence.
-- [ ] Add Statement Drift Red Team reports and hard veto integration.
-- [ ] Add negative tests for statement drift, hidden assumption, theorem weakening, quantifier mismatch, and wrong domain.
+- [x] Implement or harden `StatementDiffGate` for exact theorem header/type hash matching by default.
+- [x] Reject weakened, strengthened, different, ambiguous, wrong-domain, wrong-quantifier, or hidden-assumption candidate statements.
+- [x] Require Lean-proved equivalence replay for any non-exact statement equivalence.
+- [x] Add Statement Drift Red Team reports and hard veto integration.
+- [x] Add negative tests for statement drift, hidden assumption, theorem weakening, quantifier mismatch, and wrong domain.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
+- Work done: added `StatementDiffGate` with exact theorem header/type/hash default matching, explicit hard vetoes for statement drift, weakening, strengthening, ambiguous equivalence, hidden assumptions, wrong domain, wrong quantifier, and non-exact equivalence without Lean replay evidence. Added a Statement Drift Red Team report helper that aggregates gate findings and unresolved counterexample hard vetoes. Hardened `decision-forest` so `statement_equivalence_claim: "equivalent"` is not proof-grade unless candidate evidence carries Lean equivalence replay material, and propagated hard vetoes into both the ensemble decision and gate decision. Added `goal3-task5-statement-diff-gate.test.mjs` and wired it into the default `@comath/comathd` test chain.
+- Verification evidence: TDD RED was observed before implementation: `node services/comathd/tests/unit/goal3-task5-statement-diff-gate.test.mjs` failed because `../../dist/index.js` did not export `createStatementDriftRedTeamReport`. After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task5-statement-diff-gate.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task4-formal-spec-lock.test.mjs` exited 0; `node services/comathd/tests/unit/phase32-lean-statement-signature.test.mjs` exited 0; `node services/comathd/tests/unit/phase37-lean-statement-alias-equivalence.test.mjs` exited 0; `node services/comathd/tests/unit/phase56-lean-registered-logical-equivalence.test.mjs` exited 0; `node services/comathd/tests/unit/phase78-lean-transitive-equivalence.test.mjs` exited 0; `node services/comathd/tests/unit/phase79-lean-equivalence-search-plan.test.mjs` exited 0; `node services/comathd/tests/unit/phase80-bounded-equivalence-witness-materialization.test.mjs` exited 0; `node services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs` exited 0; `node services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs` exited 0; `node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`. Static scans found no `metadata registry` hits, found `logically_equivalent_with_registered_lemmas` only in the legacy statement-equivalence report module and its tests, and found the new hard-veto strings only in the new gate, decision integration, and Task 5 tests.
+- Residual risk: Task 5 intentionally keeps older `checkStatementEquivalence()` alias/registered-witness reports compatible as non-final statement-binding metadata for Phase 56/78/80 tests; the new fail-closed rule is enforced at the StatementDiffGate and candidate arbitration boundary. Full Lean Authority v3 replay manifests, dependency closure v2, structured Lean audit, and final non-exact equivalence replay execution remain for later tasks.
+- Next step: Task 6 should run the second comprehensive check-debug loop, re-scan metadata-only equivalence promotion paths, direct claim mutation, default assumptions, and schema round-trip behavior after Tasks 4-5.
 - Commit:
 
 ## Task 6: Comprehensive Check-Debug Loop 2

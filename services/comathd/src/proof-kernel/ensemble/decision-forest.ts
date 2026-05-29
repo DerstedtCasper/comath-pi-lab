@@ -76,7 +76,21 @@ function hasBoundStatementHash(candidate: CandidateRun, manifest?: CandidateMani
 }
 
 function hasProofGradeStatementEquivalence(manifest: CandidateManifest): boolean {
-  return manifest.statement_equivalence_claim === "exact" || manifest.statement_equivalence_claim === "equivalent";
+  if (manifest.statement_equivalence_claim === "exact") {
+    return true;
+  }
+  if (manifest.statement_equivalence_claim !== "equivalent") {
+    return false;
+  }
+  return manifest.evidence.some((evidence) => /lean_equivalence_replay|equivalence_lean_run_manifest/i.test(evidence));
+}
+
+function requiresLeanEquivalenceReplay(manifest?: CandidateManifest): boolean {
+  return Boolean(
+    manifest &&
+      manifest.statement_equivalence_claim === "equivalent" &&
+      !manifest.evidence.some((evidence) => /lean_equivalence_replay|equivalence_lean_run_manifest/i.test(evidence))
+  );
 }
 
 function hasUnapprovedAssumptionDelta(manifest?: CandidateManifest): boolean {
@@ -143,6 +157,9 @@ function rejectionReason(candidate: CandidateRun, selected: CandidateRun | null,
     return `hard veto: ${[...candidate.hard_vetoes, ...(manifest?.hard_vetoes ?? [])].join(", ")}`;
   }
   if (candidate.state === "candidate_kernel_checked" && manifest && !hasProofGradeStatementEquivalence(manifest)) {
+    if (requiresLeanEquivalenceReplay(manifest)) {
+      return "non-exact statement equivalence requires Lean-proved equivalence replay evidence";
+    }
     return `statement equivalence ${manifest.statement_equivalence_claim} is not proof-grade`;
   }
   if (candidate.state === "candidate_kernel_checked" && manifest && !hasTrustedReplayEvidence(candidate, manifest)) {
@@ -158,6 +175,35 @@ function rejectionReason(candidate: CandidateRun, selected: CandidateRun | null,
     return "verified refutation is routed to theorem repair/counterexample protocol";
   }
   return "no proof-grade evidence";
+}
+
+function candidateHardVetoes(candidate: CandidateRun, manifest?: CandidateManifest): string[] {
+  const hardVetoes = new Set([...candidate.hard_vetoes, ...(manifest?.hard_vetoes ?? [])]);
+  if (hasStatementDrift(candidate)) {
+    hardVetoes.add("statement_drift");
+  }
+  if (!hasBoundStatementHash(candidate, manifest)) {
+    hardVetoes.add("statement_hash_unbound");
+  }
+  if (hasUnapprovedAssumptionDelta(manifest)) {
+    hardVetoes.add("hidden_assumption");
+  }
+  if (requiresLeanEquivalenceReplay(manifest)) {
+    hardVetoes.add("lean_equivalence_replay_required");
+  }
+  if (candidate.state === "candidate_kernel_checked" && manifest && !hasProofGradeStatementEquivalence(manifest)) {
+    const claim = manifest.statement_equivalence_claim;
+    if (claim === "weaker") {
+      hardVetoes.add("statement_weakened");
+    } else if (claim === "stronger") {
+      hardVetoes.add("statement_strengthened");
+    } else if (claim === "different") {
+      hardVetoes.add("statement_drift");
+    } else if (claim === "unknown") {
+      hardVetoes.add("ambiguous_statement");
+    }
+  }
+  return [...hardVetoes];
 }
 
 export function decideCandidate(input: {
@@ -196,6 +242,7 @@ export function decideCandidate(input: {
         )
       : undefined;
   const selectionMode = selected ? "evidence_weighted" : refutation ? "verified_refutation" : "recovery_required";
+  const hardVetoes = [...new Set(input.candidates.flatMap((candidate) => candidateHardVetoes(candidate, manifestByCandidateId.get(candidate.candidate_id))))];
   const decision: EnsembleDecision = {
     selected_candidate_id: selected?.candidate_id ?? null,
     selection_mode: selectionMode,
@@ -207,7 +254,7 @@ export function decideCandidate(input: {
         candidate_id: candidate.candidate_id,
         reason: rejectionReason(candidate, selected, manifestByCandidateId.get(candidate.candidate_id))
       })),
-    hard_vetoes: [],
+    hard_vetoes: hardVetoes,
     recovery_plan: selected
       ? []
       : refutation
@@ -226,7 +273,7 @@ export function decideCandidate(input: {
     result: selected ? "pass" : refutation ? "repair_required" : "blocked",
     selected_candidate_id: selected?.candidate_id,
     evidence: [],
-    hard_vetoes: [],
+    hard_vetoes: hardVetoes,
     warnings: [],
     decision_rationale_summary: selected
       ? "Selected a kernel-checked exact/equivalent candidate by evidence-weighted scoring; agreement is not proof authority."

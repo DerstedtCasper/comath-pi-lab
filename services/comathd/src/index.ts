@@ -49,6 +49,7 @@ export * from "./proof-kernel/lean/lean-project.js";
 export * from "./proof-kernel/lean/static-cheat-scan.js";
 export * from "./proof-kernel/lean/statement-signature.js";
 export * from "./proof-kernel/lean/statement-equivalence.js";
+export * from "./proof-kernel/lean/statement-diff-gate.js";
 export * from "./proof-kernel/lean/dependency-closure.js";
 export * from "./proof-kernel/lean/axiom-profile.js";
 export * from "./proof-kernel/lean/clean-replay.js";
