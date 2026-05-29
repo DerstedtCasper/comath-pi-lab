@@ -132,6 +132,9 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.campaign.status",
   "comath.campaign.tick",
   "comath.campaign.nextActions",
+  "comath.campaign.resume",
+  "comath.campaign.cancel",
+  "comath.campaign.export",
   "comath.campaign.finalAudit",
   "comath.campaign.replay",
   "comath.agent.profileList",
@@ -437,13 +440,23 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
   }
 
   if (name === "comath.research.startCampaign") {
+    const mode = readString(input, "mode", { optional: true });
+    const paperPaths = Array.isArray(input.paper_paths) ? input.paper_paths.map(String) : undefined;
+    const attachments = Array.isArray(input.attachments) ? input.attachments.map(String) : undefined;
+    const workspaceRefs = Array.isArray(input.workspace_refs) ? input.workspace_refs.map(String) : undefined;
+    const budget = readString(input, "budget", { optional: true });
     return client.post("/campaign/start", {
       project_root: readString(input, "project_root"),
       project_name: readString(input, "project_name", { optional: true }),
       user_goal: readString(input, "user_goal"),
       domain: readString(input, "domain", { optional: true }),
       strict_mode: input.strict_mode === undefined ? true : input.strict_mode === true,
-      actor: readString(input, "actor")
+      actor: readString(input, "actor"),
+      ...(mode === undefined ? {} : { mode }),
+      ...(paperPaths === undefined ? {} : { paper_paths: paperPaths }),
+      ...(attachments === undefined ? {} : { attachments }),
+      ...(workspaceRefs === undefined ? {} : { workspace_refs: workspaceRefs }),
+      ...(budget === undefined ? {} : { budget })
     });
   }
 
@@ -468,6 +481,11 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
       user_goal: readString(input, "user_goal"),
       domain: readString(input, "domain", { optional: true }),
       strict_mode: input.strict_mode === undefined ? undefined : input.strict_mode === true,
+      mode: (readString(input, "mode", { optional: true }) as "goal" | "bounded" | undefined) ?? "goal",
+      paper_paths: Array.isArray(input.paper_paths) ? input.paper_paths.map(String) : [],
+      attachments: Array.isArray(input.attachments) ? input.attachments.map(String) : [],
+      workspace_refs: Array.isArray(input.workspace_refs) ? input.workspace_refs.map(String) : [],
+      budget: readString(input, "budget", { optional: true }),
       actor,
       max_ticks: maxTicks,
       capability
@@ -492,6 +510,28 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     const projectRoot = readString(input, "project_root");
     const campaignId = readString(input, "campaign_id");
     return client.get(`${campaignPath(campaignId, "/next-actions")}?project_root=${encodeQuery(projectRoot)}`);
+  }
+
+  if (name === "comath.campaign.resume") {
+    const campaignId = readString(input, "campaign_id");
+    return client.post(campaignPath(campaignId, "/resume"), {
+      project_root: readString(input, "project_root"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.campaign.cancel") {
+    const campaignId = readString(input, "campaign_id");
+    return client.post(campaignPath(campaignId, "/cancel"), {
+      project_root: readString(input, "project_root"),
+      actor: readString(input, "actor")
+    });
+  }
+
+  if (name === "comath.campaign.export") {
+    const projectRoot = readString(input, "project_root");
+    const campaignId = readString(input, "campaign_id");
+    return client.get(`${campaignPath(campaignId, "/export")}?project_root=${encodeQuery(projectRoot)}`);
   }
 
   if (name === "comath.campaign.finalAudit") {
@@ -905,7 +945,7 @@ export function createComathTools(): ToolDescriptor[] {
     },
     {
       name: "comath.research.startCampaign",
-      description: "Start a bounded ResearchCampaign through comathd's native proof-kernel path.",
+      description: "Start a goal-mode ResearchCampaign through comathd's native proof-kernel path.",
       mutates: true,
       input_schema: objectSchema(["project_root", "user_goal", "actor"], {
         project_root: stringProp,
@@ -913,12 +953,17 @@ export function createComathTools(): ToolDescriptor[] {
         user_goal: stringProp,
         domain: stringProp,
         strict_mode: { type: "boolean" },
+        mode: { type: "string", enum: ["goal", "bounded"] },
+        paper_paths: stringArrayProp,
+        attachments: stringArrayProp,
+        workspace_refs: stringArrayProp,
+        budget: stringProp,
         actor: stringProp
       })
     },
     {
       name: "comath.research.runCampaignLoop",
-      description: "Run a bounded one-command ResearchCampaign loop through comathd and return dashboard state.",
+      description: "Run a goal-mode ResearchCampaign loop through comathd and return dashboard state.",
       mutates: true,
       input_schema: objectSchema(["project_root", "user_goal", "actor", "confirmation_id"], {
         project_root: stringProp,
@@ -926,6 +971,11 @@ export function createComathTools(): ToolDescriptor[] {
         user_goal: stringProp,
         domain: stringProp,
         strict_mode: { type: "boolean" },
+        mode: { type: "string", enum: ["goal", "bounded"] },
+        paper_paths: stringArrayProp,
+        attachments: stringArrayProp,
+        workspace_refs: stringArrayProp,
+        budget: stringProp,
         actor: stringProp,
         max_ticks: { type: "number", minimum: 0 },
         confirmation_id: stringProp
@@ -953,6 +1003,35 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.campaign.nextActions",
       description: "Read campaign next actions without mutating trusted state.",
+      mutates: false,
+      input_schema: objectSchema(["project_root", "campaign_id"], {
+        project_root: stringProp,
+        campaign_id: stringProp
+      })
+    },
+    {
+      name: "comath.campaign.resume",
+      description: "Resume a paused goal-mode campaign through comathd without Pi writing trusted proof state.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "campaign_id", "actor"], {
+        project_root: stringProp,
+        campaign_id: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.campaign.cancel",
+      description: "Cancel a goal-mode campaign through comathd without Pi writing trusted proof state.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "campaign_id", "actor"], {
+        project_root: stringProp,
+        campaign_id: stringProp,
+        actor: stringProp
+      })
+    },
+    {
+      name: "comath.campaign.export",
+      description: "Read a non-authoritative campaign export descriptor and evidence-pack pointers through comathd.",
       mutates: false,
       input_schema: objectSchema(["project_root", "campaign_id"], {
         project_root: stringProp,
@@ -1519,6 +1598,48 @@ async function handleCampaignCommand(
     await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.campaign.nextActions", base));
     return;
   }
+  if (subcommand === "resume") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.campaign.resume");
+    if (!tool) {
+      throw new Error("campaign resume tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          ...base,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "cancel") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.campaign.cancel");
+    if (!tool) {
+      throw new Error("campaign cancel tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          ...base,
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "export") {
+    await notifyRuntimeResult(ctx, await executeComathTool(client, "comath.campaign.export", base));
+    return;
+  }
   if (subcommand === "final-audit") {
     const tool = createComathTools().find((descriptor) => descriptor.name === "comath.campaign.finalAudit");
     if (!tool) {
@@ -2066,7 +2187,7 @@ export default function registerComathPiRuntime(pi: PiExtensionApi, options: Reg
   }
 
   pi.registerCommand("cm:research", {
-    description: "Start or continue a bounded CoMath ResearchCampaign through comathd.",
+    description: "Start or continue a goal-mode CoMath ResearchCampaign through comathd.",
     handler: async (args, ctx) => {
       await handleResearchCommand(client, options, args, ctx);
     }

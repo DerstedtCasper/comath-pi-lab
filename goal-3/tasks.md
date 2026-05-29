@@ -260,20 +260,20 @@ Completion record:
 
 ## Task 16: Pi Goal-Mode End-To-End Workflow
 
-- [ ] Implement `/cm:research --goal --paper --attach --workspace-ref --mode goal --strict --budget` parsing and service routing.
-- [ ] Make default `/cm:research` mode `goal`; bounded tick is debug/CI only.
-- [ ] Implement allowed terminal states: `formal_replay_passed`, `formal_counterexample_confirmed`, `needs_user_statement_disambiguation`, `blocked_with_replayable_certificate`, `budget_exhausted_with_resume_state`.
-- [ ] Implement resume, cancel, export, blocker certificate, next actions, and dashboard fields required by the GA design.
-- [ ] Ensure Pi remains thin client and cannot write trusted proof state.
-- [ ] Add end-to-end smoke from natural goal to one terminal state, using deterministic local fixtures when Lean or network is unavailable.
+- [x] Implement `/cm:research --goal --paper --attach --workspace-ref --mode goal --strict --budget` parsing and service routing.
+- [x] Make default `/cm:research` mode `goal`; bounded tick is debug/CI only.
+- [x] Implement allowed terminal states: `formal_replay_passed`, `formal_counterexample_confirmed`, `needs_user_statement_disambiguation`, `blocked_with_replayable_certificate`, `budget_exhausted_with_resume_state`.
+- [x] Implement resume, cancel, export, blocker certificate, next actions, and dashboard fields required by the GA design.
+- [x] Ensure Pi remains thin client and cannot write trusted proof state.
+- [x] Add end-to-end smoke from natural goal to one terminal state, using deterministic local fixtures when Lean or network is unavailable.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: added Goal 3 Pi goal-mode parsing and policy support for `/cm:research --goal --paper --attach --workspace-ref --mode goal --strict --budget`, made `/cm:research` default to `mode: "goal"`, required explicit `--debug` or `--ci` for `--mode bounded`, and routed goal metadata through the existing thin `comathd` client path. Added the Goal 3 terminal vocabulary projection in Pi and comathd, including `formal_replay_passed`, `formal_counterexample_confirmed`, `needs_user_statement_disambiguation`, `blocked_with_replayable_certificate`, and `budget_exhausted_with_resume_state`. Added Pi-visible resume state, blocker certificate, next actions, and export descriptor fields, plus new `comath.campaign.resume`, `comath.campaign.cancel`, and `comath.campaign.export` tools and `/cm:campaign resume|cancel|export` command routing. Added service route support for campaign export and cancel, while keeping blocked resume fail-closed through existing repair-resume semantics. Updated Pi runtime registration so goal-mode continuation is not marked as bounded tick and comathd remains owner of resume/export state. Added deterministic Task 16 Pi and comathd route tests and updated older Phase 22/26 expectations to the new default goal semantics.
+- Verification evidence: TDD RED was observed before implementation: after `corepack pnpm --filter @comath/pi-extension build` exited 0, `node extensions/comath-pi/tests/goal3-task16-pi-goal-mode.test.mjs` failed because `../dist/index.js` did not export `goalModeTerminalStates`. After implementation, `node extensions/comath-pi/tests/goal3-task16-pi-goal-mode.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task16-pi-goal-mode-routes.test.mjs` exited 0; `node extensions/comath-pi/tests/phase22-research-loop.test.mjs` exited 0; `node extensions/comath-pi/tests/phase18-research-campaign-tools.test.mjs` exited 0; `corepack pnpm --filter @comath/pi-extension exec node tests/phase26-pi-runtime-registration.test.mjs` exited 0; `node extensions/comath-pi/tests/phase66-goal-compatible-campaign-ux.test.mjs` exited 0; `node services/comathd/tests/unit/phase69-v3-terminal-vocabulary.test.mjs` exited 0; `node services/comathd/tests/unit/phase71-stage-gate-repair-resume.test.mjs` exited 0. Package gates passed: `corepack pnpm --filter @comath/pi-extension test`, `corepack pnpm --filter @comath/comathd test`, `corepack pnpm --filter @comath/pi-extension typecheck`, and `corepack pnpm --filter @comath/comathd typecheck`. Static checks: `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath '.comath'` returned `False`; scan for Pi filesystem write APIs in `extensions/comath-pi/src` returned no hits; scan for `.comath` in Pi source found only pre-existing subagent write-scope strings and comathd authority metadata; scan for stale bounded `/cm:research` wording returned no hits.
+- Residual risk: Task 16 implements goal-mode command/routing/UX contracts and deterministic terminal/blocker/export smoke coverage, not live long-running autonomous agent execution, durable service lifecycle management, or a positive non-fixture proof workflow. Bounded tick remains available as explicit debug/CI mode and `comath.campaign.tick` remains a bounded mutation primitive, which is intentional but must not be treated as default goal-mode. Full GA acceptance tests and a positive proof research workflow without old theorem-family/Nat shortcuts remain Task 17.
+- Next step: Task 17 should add the GA trust-core negative suite and a positive end-to-end proof research workflow that binds FormalSpecLock, dependency lock, toolchain hash, artifact hash, and replay manifest without relying on production theorem-family recognizers.
+- Commit: pending
 
 ## Task 17: GA Acceptance Tests And Positive Proof Research Workflow
 

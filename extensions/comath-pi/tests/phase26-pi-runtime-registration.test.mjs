@@ -50,7 +50,9 @@ assert.deepEqual(registration.service_authority.comathd_owns, [
   "TriviumDB_adapter",
   "Lean_verification",
   "final_audit",
-  "global_replay"
+  "global_replay",
+  "goal_mode_resume_state",
+  "goal_mode_export_pack"
 ]);
 
 const researchCommand = registration.commands.find((command) => command.command === "/cm:research");
@@ -66,6 +68,7 @@ assert.equal(campaignTick?.dispatch_tool, "comath.campaign.tick");
 
 const byToolName = new Map(registration.tools.map((tool) => [tool.name, tool]));
 assert.equal(byToolName.get("comath.research.runCampaignLoop")?.pi_goal_continuation, true);
+assert.equal(byToolName.get("comath.research.runCampaignLoop")?.bounded_tick, false);
 assert.equal(byToolName.get("comath.campaign.tick")?.bounded_tick, true);
 assert.equal(byToolName.get("comath.campaign.status")?.requires_confirmation, false);
 assert.equal(byToolName.get("comath.campaign.finalAudit")?.requires_confirmation, true);
@@ -159,6 +162,9 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.campaign.status",
       "comath.campaign.tick",
       "comath.campaign.nextActions",
+      "comath.campaign.resume",
+      "comath.campaign.cancel",
+      "comath.campaign.export",
       "comath.campaign.finalAudit",
       "comath.campaign.replay",
       "comath.agent.profileList",

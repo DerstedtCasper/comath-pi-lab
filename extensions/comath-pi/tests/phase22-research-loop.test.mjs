@@ -295,8 +295,9 @@ const exhausted = await runResearchCampaignLoop(exhaustedHarness.client, {
   }),
   max_ticks: 0
 });
-assert.equal(exhausted.terminal, false);
-assert.equal(exhausted.stopped_reason, "tick_budget_exhausted");
+assert.equal(exhausted.terminal, true);
+assert.equal(exhausted.stopped_reason, "budget_exhausted_with_resume_state");
+assert.equal(exhausted.goal_terminal_state, "budget_exhausted_with_resume_state");
 assert.equal(exhausted.ticks.length, 0);
 
 const externalOnlyHarness = createLoopClient(["candidate_arbitration"], ["user_visible_theorem_repair_required"]);

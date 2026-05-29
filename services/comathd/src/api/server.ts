@@ -36,6 +36,7 @@ import {
 } from "../workstream/workstream-store.js";
 import { getCampaign, writeCampaign } from "../proof-kernel/campaign/research-campaign.js";
 import {
+  exportCampaignGoalModeEvidence,
   repairStageGateAndResume,
   replayCampaign,
   startCampaign,
@@ -140,6 +141,12 @@ async function route(method: string, path: string, body: unknown, context: Route
               user_goal: string;
               domain?: string;
               strict_mode?: boolean;
+              mode?: "goal" | "bounded";
+              paper_paths?: string[];
+              attachments?: string[];
+              workspace_refs?: string[];
+              budget?: string;
+              goal_mode_policy?: Record<string, unknown>;
               actor?: string;
             }
           )
@@ -840,6 +847,21 @@ async function route(method: string, path: string, body: unknown, context: Route
         return dynamicRouteError(error);
       }
     }
+
+    const exportMatch = /^\/campaign\/([^/]+)\/export$/.exec(url.pathname);
+    if (exportMatch) {
+      try {
+        return success(
+          exportCampaignGoalModeEvidence({
+            project_root: url.searchParams.get("project_root") ?? "",
+            campaign_id: decodeURIComponent(exportMatch[1] ?? ""),
+            actor: url.searchParams.get("actor") ?? "api"
+          })
+        );
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
   }
 
   if (method.toUpperCase() === "POST") {
@@ -961,6 +983,31 @@ async function route(method: string, path: string, body: unknown, context: Route
         return success({
           campaign: withExternalV3TerminalState(
             writeCampaign(request.project_root, { ...campaign, status: "running" }, request.actor ?? "api")
+          )
+        });
+      } catch (error) {
+        return dynamicRouteError(error);
+      }
+    }
+
+    const cancelMatch = /^\/campaign\/([^/]+)\/cancel$/.exec(url.pathname);
+    if (cancelMatch) {
+      try {
+        const request = body as { project_root: string; actor?: string };
+        const campaign = getCampaignOr404(request.project_root, decodeURIComponent(cancelMatch[1] ?? ""));
+        if (!campaign) {
+          return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
+        }
+        if (campaign.status === "terminal") {
+          return success({ campaign: withExternalV3TerminalState(campaign) });
+        }
+        return success({
+          campaign: withExternalV3TerminalState(
+            writeCampaign(
+              request.project_root,
+              { ...campaign, current_stage: "cancelled", status: "terminal", terminal_state: "cancelled_by_user" },
+              request.actor ?? "api"
+            )
           )
         });
       } catch (error) {

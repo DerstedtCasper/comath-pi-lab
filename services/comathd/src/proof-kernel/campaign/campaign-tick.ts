@@ -27,6 +27,12 @@ export type StartCampaignInput = {
   user_goal: string;
   domain?: string;
   strict_mode?: boolean;
+  mode?: "goal" | "bounded";
+  paper_paths?: string[];
+  attachments?: string[];
+  workspace_refs?: string[];
+  budget?: string;
+  goal_mode_policy?: Record<string, unknown>;
   actor?: string;
 };
 
@@ -521,6 +527,7 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
       )}\n`
     );
     const blocker = {
+      code: "NEEDS_FORMAL_SPEC_LOCK",
       reason: "needs_formal_spec_lock",
       artifact_path: blockerRel,
       hard_vetoes: ["statement_unlocked"]
@@ -546,7 +553,7 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
       event_type: "campaign.needs_formal_spec_lock",
       actor,
       target_id: campaign.campaign_id,
-      payload: { root_claim_id: claim.id, blocker_artifact_path: blockerRel }
+    payload: { root_claim_id: claim.id, blocker_artifact_path: blockerRel }
     });
     return { campaign: writeCampaign(input.project_root, campaign, actor), blocker: "needs_formal_spec_lock" };
   }
@@ -768,6 +775,44 @@ function blockForBroadSynthesisPlanning(input: {
     campaign: next,
     obligation: { ...input.obligation, status: "blocked" },
     blocker: broadSynthesisBlockedReason
+  };
+}
+
+export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
+  export_manifest: {
+    schema_version: "comath.pi_goal_export.v1";
+    campaign_id: string;
+    project_id: string;
+    root_claim_id: string;
+    terminal_state: ResearchCampaign["terminal_state"] | null;
+    current_stage: ResearchCampaign["current_stage"];
+    status: ResearchCampaign["status"];
+    blocker_certificates: Record<string, unknown>[];
+    next_actions: string[];
+    evidence_pack_ready: boolean;
+    proof_authority: "none";
+    can_promote_claim: false;
+  };
+} {
+  const campaign = getCampaign(input.project_root, input.campaign_id);
+  if (!campaign) {
+    throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
+  }
+  return {
+    export_manifest: {
+      schema_version: "comath.pi_goal_export.v1",
+      campaign_id: campaign.campaign_id,
+      project_id: campaign.project_id,
+      root_claim_id: campaign.root_claim_id,
+      terminal_state: campaign.terminal_state ?? null,
+      current_stage: campaign.current_stage,
+      status: campaign.status,
+      blocker_certificates: campaign.blockers,
+      next_actions: campaign.next_actions,
+      evidence_pack_ready: campaign.terminal_state === "completed_formal_proof",
+      proof_authority: "none",
+      can_promote_claim: false
+    }
   };
 }
 

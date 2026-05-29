@@ -113,7 +113,9 @@ const COMATHD_OWNED_STATE = [
   "TriviumDB_adapter",
   "Lean_verification",
   "final_audit",
-  "global_replay"
+  "global_replay",
+  "goal_mode_resume_state",
+  "goal_mode_export_pack"
 ];
 
 function stripHostInjectedConfirmation(schema: RuntimeToolDescriptor["input_schema"]): RuntimeToolDescriptor["input_schema"] {
@@ -141,7 +143,7 @@ function commandMetadata(command: string): Pick<
 > {
   if (command === "/cm:research") {
     return {
-      subcommands: ["start", "--goal", "--strict"],
+      subcommands: ["start", "--goal", "--paper", "--attach", "--workspace-ref", "--mode", "--strict", "--budget"],
       dispatch_tool: "comath.research.runCampaignLoop",
       mutates: true,
       goal_compatible: true
@@ -149,7 +151,7 @@ function commandMetadata(command: string): Pick<
   }
   if (command === "/cm:campaign") {
     return {
-      subcommands: ["status", "tick", "next-actions", "final-audit", "replay"],
+      subcommands: ["status", "tick", "next-actions", "resume", "cancel", "export", "final-audit", "replay"],
       dispatch_tool: "comath.campaign.tick",
       mutates: true,
       goal_compatible: true
@@ -220,7 +222,7 @@ export function createPiRuntimeRegistration(
     input_schema: tool.mutates ? stripHostInjectedConfirmation(tool.input_schema) : tool.input_schema,
     requires_confirmation: tool.mutates,
     pi_goal_continuation: tool.name === "comath.research.runCampaignLoop",
-    bounded_tick: tool.name === "comath.campaign.tick" || tool.name === "comath.research.runCampaignLoop"
+    bounded_tick: tool.name === "comath.campaign.tick"
   }));
   const mutatingTools = tools.filter((tool) => tool.mutates).map((tool) => tool.name).sort();
 
