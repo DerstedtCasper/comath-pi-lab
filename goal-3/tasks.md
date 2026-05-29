@@ -228,20 +228,20 @@ Completion record:
 
 ## Task 14: Real 1+8 Agent Workflow And Stage-Local Eight Variants
 
-- [ ] Implement A0 Coordinator plus A1-A8 specialist prompt pack with global invariants.
-- [ ] Enforce strict JSON schema, `proof_authority = none`, `may_mutate_trusted_state = false`, locked statement hash preservation, assumption/dependency/statement-change labeling.
-- [ ] Implement real `AgentStageRunner` or equivalent task-card flow with workspace, logs, candidate packs, and backend adapters.
-- [ ] Ensure stage-local V1-V8 variants are real independent candidates and no variant id can decide success.
-- [ ] Implement aggregator precedence: hard veto > Lean evidence > statement/dependency integrity > score > vote.
-- [ ] Add tests for synthetic V1 winner rejection, advisory-only votes, candidate hard veto, failure memory writeback, and strict JSON rejection.
+- [x] Implement A0 Coordinator plus A1-A8 specialist prompt pack with global invariants.
+- [x] Enforce strict JSON schema, `proof_authority = none`, `may_mutate_trusted_state = false`, locked statement hash preservation, assumption/dependency/statement-change labeling.
+- [x] Implement real `AgentStageRunner` or equivalent task-card flow with workspace, logs, candidate packs, and backend adapters.
+- [x] Ensure stage-local V1-V8 variants are real independent candidates and no variant id can decide success.
+- [x] Implement aggregator precedence: hard veto > Lean evidence > statement/dependency integrity > score > vote.
+- [x] Add tests for synthetic V1 winner rejection, advisory-only votes, candidate hard veto, failure memory writeback, and strict JSON rejection.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: added `ga-agent-stage-runner.ts` as the Goal 3 GA agent-stage contract and deterministic local runner boundary. It defines the A0 coordinator plus A1-A8 specialist team, default prompt text, global invariants, V1-V8 task cards, strict `gaAgentOutputSchema`, per-variant workspaces/logs/candidate manifests, non-authoritative agent outputs, advisory reviewer votes, synthetic V1 winner detection, and aggregation through the existing decision forest. Rejected pseudo-kernel candidates are downgraded into failure-memory writeback so a candidate that claimed `candidate_kernel_checked` without service-owned Lean replay is preserved as a blocked failed route rather than silently ignored. Exported the new API and wired `goal3-task14-ga-agent-stage-workflow.test.mjs` into the default `@comath/comathd` test chain.
+- Verification evidence: TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, `node services/comathd/tests/unit/goal3-task14-ga-agent-stage-workflow.test.mjs` failed because `../../dist/index.js` did not export `aggregateGaAgentStageCandidates`. A second RED was observed for failure-memory strengthening: the test failed when rejected pseudo-kernel V1 was not recorded in the failure aggregate. After implementation and repair, `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task14-ga-agent-stage-workflow.test.mjs` exited 0; `node services/comathd/tests/unit/phase61-v3-candidate-contract.test.mjs` exited 0; `node services/comathd/tests/unit/phase62-v3-decision-forest.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task13-mathprove-native-stage-machine.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task11-external-wheel-registry.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0 with the new Task 14 test included. Static scan of the new runner/test found only `proof_authority: none`, `may_mutate_trusted_state: false`, advisory vote fields, and the intended `synthetic_variant_winner_rejected` veto. `Test-Path -LiteralPath '.comath'` returned `False`; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- Residual risk: Task 14 implements a service-owned, deterministic agent-stage runner contract and local adapter hook, not live model execution, real provider account/network validation, cross-process recovery, or OS-level sandboxing. The new runner still represents per-candidate Lean success by service-owned replay evidence references supplied to the adapter; later Task 16/17/20 work must connect live goal-mode routing, positive proof workflows, and final evidence packs through the stricter Lean Authority v3 gates before any broad GA claim.
+- Next step: Task 15 should run the fifth comprehensive check-debug loop over Tasks 13-14, especially prompt/runtime invariant weakening, trusted-state mutation, vote-as-proof, locked statement hash bypasses, strict JSON rejection, and representative agent-stage behavior without external model dependency.
+- Commit: pending
 
 ## Task 15: Comprehensive Check-Debug Loop 5
 
