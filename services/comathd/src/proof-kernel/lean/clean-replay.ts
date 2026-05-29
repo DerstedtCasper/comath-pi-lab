@@ -1,4 +1,4 @@
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -7,6 +7,11 @@ import { finalLeanReplaySchema, type FinalLeanReplay } from "../../types/schemas
 import { nextSequentialId } from "../../utils/id.js";
 import { checkAxiomProfile } from "./axiom-profile.js";
 import { checkDependencyClosure } from "./dependency-closure.js";
+import {
+  appendFinalReplayRegistryEntryV3,
+  createFinalReplayManifestV3,
+  writeThirdPartyReplayPackV3
+} from "./final-replay-manifest-v3.js";
 import { hashLeanProjectFiles, sha256FileSync, type LeanProjectFiles } from "./lean-project.js";
 import { runServiceOwnedLeanCommandV3 } from "./lean-run-manifest-v3.js";
 import { checkStatementEquivalence } from "./statement-equivalence.js";
@@ -70,16 +75,29 @@ export function runCleanLeanReplay(input: {
   const evidenceRoot = assertPathAllowed(input.projectRoot, evidenceRootRel, { purpose: "runtime-write" });
   mkdirSync(evidenceRoot, { recursive: true });
 
-  const existingReplayDirs = existsSync(join(input.leanProject.leanRoot, "final_replay")) ? ["RPLY-0000"] : [];
+  const replayBaseRel = join(".comath", "lean", "final_replay");
+  const replayBase = assertPathAllowed(input.projectRoot, replayBaseRel, { purpose: "runtime-write" });
+  mkdirSync(replayBase, { recursive: true });
+  const existingReplayDirs = readdirSync(replayBase, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^RPLY-\d{4,}$/.test(entry.name))
+    .map((entry) => entry.name);
   const replay_id = nextSequentialId("RPLY", existingReplayDirs);
-  const replayRootRel = join(".comath", "lean", "final_replay", replay_id);
+  const replayRootRel = join(replayBaseRel, replay_id);
   const replayRoot = assertPathAllowed(input.projectRoot, replayRootRel, { purpose: "runtime-write" });
   const cleanRoot = join(replayRoot, "clean");
-  rmSync(replayRoot, { recursive: true, force: true });
+  if (existsSync(replayRoot)) {
+    throw new Error("final_replay_registry_append_only_violation");
+  }
   mkdirSync(cleanRoot, { recursive: true });
 
   copyFileSync(input.leanProject.toolchainFile, join(cleanRoot, "lean-toolchain"));
   copyFileSync(input.leanProject.lakefile, join(cleanRoot, "lakefile.lean"));
+  const sourceLakeManifest = join(dirname(input.leanProject.lakefile), "lake-manifest.json");
+  if (existsSync(sourceLakeManifest)) {
+    copyFileSync(sourceLakeManifest, join(cleanRoot, "lake-manifest.json"));
+  } else {
+    write(join(cleanRoot, "lake-manifest.json"), `${JSON.stringify({ packages: [] }, null, 2)}\n`);
+  }
   cpSync(join(input.leanProject.leanRoot, "MathResearch"), join(cleanRoot, "MathResearch"), { recursive: true });
   cpSync(join(input.leanProject.leanRoot, "Audit"), join(cleanRoot, "Audit"), { recursive: true });
   cpSync(join(input.leanProject.leanRoot, "FormalSpec"), join(cleanRoot, "FormalSpec"), { recursive: true });
@@ -91,18 +109,19 @@ export function runCleanLeanReplay(input: {
   const stdoutPathRel = join(evidenceRootRel, "final_replay.log");
   const stderrPathRel = join(evidenceRootRel, "final_replay.stderr.log");
   const manifestPathRel = join(evidenceRootRel, "final_replay_manifest.json");
+  const manifestV3PathRel = join(evidenceRootRel, "final_replay_manifest_v3.json");
   const leanToolchain = readFileSync(input.leanProject.toolchainFile, "utf8").trim();
 
   const static_audit = runStaticCheatScan({
     projectRoot: input.projectRoot,
-    leanRoot: input.leanProject.leanRoot,
+    leanRoot: cleanRoot,
     reportPath: staticAuditPathRel
   });
   const dependency_closure = checkDependencyClosure({
     projectRoot: input.projectRoot,
-    leanRoot: input.leanProject.leanRoot,
-    toolchainFile: input.leanProject.toolchainFile,
-    lakefile: input.leanProject.lakefile,
+    leanRoot: cleanRoot,
+    toolchainFile: join(cleanRoot, "lean-toolchain"),
+    lakefile: join(cleanRoot, "lakefile.lean"),
     reportPath: dependencyPathRel
   });
 
@@ -111,9 +130,22 @@ export function runCleanLeanReplay(input: {
   const cleanInputs = [
     join(cleanRoot, "lean-toolchain"),
     join(cleanRoot, "lakefile.lean"),
+    join(cleanRoot, "lake-manifest.json"),
     join(cleanRoot, input.leanProject.theoremFileRel),
     join(cleanRoot, input.leanProject.auditFileRel)
-  ];
+  ].filter((path) => existsSync(path));
+  const source_hashes_before = Object.fromEntries(
+    [
+      join(cleanRoot, "lean-toolchain"),
+      join(cleanRoot, "lakefile.lean"),
+      join(cleanRoot, "lake-manifest.json"),
+      join(cleanRoot, input.leanProject.theoremFileRel),
+      join(cleanRoot, input.leanProject.auditFileRel),
+      join(cleanRoot, "FormalSpec", "target.json")
+    ]
+      .filter((path) => existsSync(path))
+      .map((path) => [relative(cleanRoot, path).replace(/\\/g, "/"), sha256FileSync(path)])
+  );
 
   const theoremCheck = runServiceOwnedLeanCommandV3({
     projectRoot: input.projectRoot,
@@ -233,6 +265,54 @@ export function runCleanLeanReplay(input: {
   });
 
   write(assertPathAllowed(input.projectRoot, manifestPathRel, { purpose: "runtime-write" }), `${JSON.stringify(final_replay, null, 2)}\n`);
+  if (existsSync(join(cleanRoot, "lake-manifest.json"))) {
+    const leanRunManifestPaths = ["LRUN-0001", "LRUN-0002", "LRUN-0003"].map((runId) =>
+      join(evidenceRootRel, `${runId}.manifest.json`).replace(/\\/g, "/")
+    );
+    const final_replay_v3 = createFinalReplayManifestV3({
+      projectRoot: input.projectRoot,
+      replay_id,
+      campaign_id: input.campaign_id,
+      claim_id: input.claim_id,
+      theorem_name: input.leanProject.theoremName,
+      clean_workspace_path: cleanRoot,
+      command: input.leanProject.replayCommand.split(/\s+/).filter(Boolean),
+      exit_code,
+      result: allGatesPassed ? "pass" : "fail",
+      source_hashes_before,
+      stdout_path: stdoutPathRel,
+      stderr_path: stderrPathRel,
+      report_paths: {
+        static_audit: staticAuditPathRel,
+        axiom_profile: axiomPathRel,
+        dependency_closure: dependencyPathRel,
+        statement_equivalence: statementPathRel
+      },
+      lean_run_manifest_paths: leanRunManifestPaths,
+      dependency_lock: {
+        lean_toolchain_path: join(cleanRoot, "lean-toolchain"),
+        lake_manifest_path: join(cleanRoot, "lake-manifest.json"),
+        lakefile_path: join(cleanRoot, "lakefile.lean"),
+        external_revisions: []
+      },
+      network_policy: "disabled",
+      sandbox_policy: {
+        network: "disabled",
+        os_isolation: "process_boundary_only"
+      },
+      resource_budget: {
+        timeout_ms: 30000,
+        max_stdout_bytes: 65536,
+        max_stderr_bytes: 65536
+      }
+    });
+    write(
+      assertPathAllowed(input.projectRoot, manifestV3PathRel, { purpose: "runtime-write" }),
+      `${JSON.stringify(final_replay_v3, null, 2)}\n`
+    );
+    appendFinalReplayRegistryEntryV3(input.projectRoot, final_replay_v3);
+    writeThirdPartyReplayPackV3(input.projectRoot, final_replay_v3);
+  }
   return {
     final_replay,
     static_audit,

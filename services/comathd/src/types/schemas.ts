@@ -663,6 +663,77 @@ export const leanRunManifestV3Schema = z
   })
   .strict();
 
+export const finalReplayManifestV3Schema = z
+  .object({
+    schema_version: z.literal("comath.final_replay_manifest.v3"),
+    replay_id: stableId,
+    campaign_id: stableId,
+    claim_id: stableId,
+    theorem_name: z.string().min(1),
+    runner: z.literal("comathd.LeanAuthority"),
+    proof_authority: z.literal("lean_kernel_clean_replay"),
+    clean_workspace_path: z.string().min(1),
+    clean_workspace_sha256: sha256,
+    source_hashes_before: z.record(z.string(), z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict()),
+    source_hashes_after: z.record(z.string(), z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict()),
+    command: z.array(z.string().min(1)).min(1),
+    exit_code: z.number().int(),
+    result: z.enum(["pass", "fail"]),
+    stdout_path: z.string().min(1),
+    stderr_path: z.string().min(1),
+    report_paths: z
+      .object({
+        static_audit: z.string().min(1),
+        axiom_profile: z.string().min(1),
+        dependency_closure: z.string().min(1),
+        statement_equivalence: z.string().min(1)
+      })
+      .strict(),
+    artifact_hashes: z
+      .object({
+        stdout: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        stderr: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        static_audit: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        axiom_profile: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        dependency_closure: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        statement_equivalence: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict()
+      })
+      .strict(),
+    lean_run_manifest_paths: z.array(z.string().min(1)).default([]),
+    dependency_lock: z
+      .object({
+        lean_toolchain_path: z.string().min(1),
+        lean_toolchain: z.string().min(1),
+        lean_toolchain_sha256: sha256,
+        lake_manifest_path: z.string().min(1),
+        lake_manifest_sha256: sha256,
+        lakefile_path: z.string().min(1),
+        lakefile_sha256: sha256,
+        external_revisions: z.array(z.unknown()).default([]),
+        external_revisions_sha256: sha256
+      })
+      .strict(),
+    network_policy: z.enum(["disabled", "dependency_fetch_only", "unknown"]),
+    sandbox_policy: z
+      .object({
+        network: z.enum(["disabled", "dependency_fetch_only", "unknown"]),
+        os_isolation: z.string().min(1)
+      })
+      .strict(),
+    resource_budget: z
+      .object({
+        timeout_ms: z.number().int().positive(),
+        max_stdout_bytes: z.number().int().positive(),
+        max_stderr_bytes: z.number().int().positive()
+      })
+      .strict(),
+    binary_hashes: z.record(z.string(), sha256).default({}),
+    no_symlink_escape: z.boolean(),
+    third_party_replay_command: z.array(z.string().min(1)).min(1),
+    created_at: isoTimestamp
+  })
+  .strict();
+
 export const stageRunRefSchema = z
   .object({
     id: stableId,
@@ -861,6 +932,7 @@ export type DialecticalStress = z.infer<typeof dialecticalStressSchema>;
 export type GateDecision = z.infer<typeof gateDecisionSchema>;
 export type FinalLeanReplay = z.infer<typeof finalLeanReplaySchema>;
 export type LeanRunManifestV3 = z.infer<typeof leanRunManifestV3Schema>;
+export type FinalReplayManifestV3 = z.infer<typeof finalReplayManifestV3Schema>;
 export type StageRunRef = z.infer<typeof stageRunRefSchema>;
 export type ResearchCampaign = z.infer<typeof researchCampaignSchema>;
 export type CitationRecord = z.infer<typeof citationRecordSchema>;

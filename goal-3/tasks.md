@@ -131,22 +131,22 @@ Completion record:
 
 ## Task 8: Lean Authority v3 Final Replay, Replay Registry, And Evidence Pack
 
-- [ ] Implement append-only final replay registry.
-- [ ] Ensure final replay uses a clean workspace and records clean workspace hash.
-- [ ] Hash source files before and after replay.
-- [ ] Run static/dependency/audit checks against the clean workspace, not the original root.
-- [ ] Pin `lean-toolchain`, `lake-manifest.json`, mathlib/external package revisions, and dependency lock.
-- [ ] Record network policy, sandbox policy, resource budget, binary hashes where available, and no symlink escape.
-- [ ] Export third-party replay pack with README_REPLAY and expected hashes.
-- [ ] Add tests for replay overwrite prevention, modified file after replay, unpinned dependency, network replay policy, and symlink escape.
+- [x] Implement append-only final replay registry.
+- [x] Ensure final replay uses a clean workspace and records clean workspace hash.
+- [x] Hash source files before and after replay.
+- [x] Run static/dependency/audit checks against the clean workspace, not the original root.
+- [x] Pin `lean-toolchain`, `lake-manifest.json`, mathlib/external package revisions, and dependency lock.
+- [x] Record network policy, sandbox policy, resource budget, binary hashes where available, and no symlink escape.
+- [x] Export third-party replay pack with README_REPLAY and expected hashes.
+- [x] Add tests for replay overwrite prevention, modified file after replay, unpinned dependency, network replay policy, and symlink escape.
 
 Completion record:
 
-- Work done:
-- Verification evidence:
-- Residual risk:
-- Next step:
-- Commit:
+- Work done: added `FinalReplayManifest v3` schema/export plus service-owned `final-replay-manifest-v3.ts` helpers for clean workspace hashing, before/after source hashes, append-only replay registry, dependency lock hashing, network/sandbox/resource metadata, symlink-escape checks, manifest verification, and third-party replay pack export with `README_REPLAY.md` and `expected_hashes.json`. Wired `runCleanLeanReplay()` so final replay ids are allocated from the real `.comath/lean/final_replay` registry without deleting prior replay roots, static/dependency checks run against the clean workspace, local-only replays pin `lake-manifest.json`, and v3 manifest/registry/replay-pack artifacts are written beside the legacy `final_replay_manifest.json` for compatibility.
+- Verification evidence: TDD RED was observed before implementation: `node services/comathd/tests/unit/goal3-task8-lean-authority-v3-final-replay.test.mjs` failed because `../../dist/index.js` did not export `appendFinalReplayRegistryEntryV3`. After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task8-lean-authority-v3-final-replay.test.mjs` exited 0; `node services/comathd/tests/unit/goal3-task7-lean-run-manifest-v3.test.mjs` exited 0; `node services/comathd/tests/unit/phase64-lean-authority-v2-final-gate.test.mjs` exited 0; `node services/comathd/tests/unit/phase18-ga-proof-kernel-gates.test.mjs` exited 0; `node services/comathd/tests/unit/phase77-runner-network-sandbox-policy.test.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; full `corepack pnpm --filter @comath/comathd test` exited 0. Static scan confirmed v3 schema strings, overwrite/network/symlink/pin vetoes, `final_replay_manifest_v3.json`, `README_REPLAY.md`, and clean-root static/dependency scan wiring; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath '.comath'` returned `False`.
+- Residual risk: Task 8 intentionally keeps the legacy `final_replay_manifest.json` promotion gate compatible; final promotion still reads the v2-style manifest until later GA gates consume v3 manifests directly. `lake-manifest.json` is pinned as an empty local-only manifest when older generated Lean projects do not provide one; full Lake package graph, mathlib/external revision/license closure, Lean-aware integrity scanning, and AxiomProfileV2 remain for Task 10. A manual Phase 75 historical positive Nat-linear integration test still expects the removed Goal 3 production Nat path and blocks for no-reinvent reasons; the default comathd test chain now carries the Goal 3 fail-closed replacement.
+- Next step: Task 9 should run the third comprehensive check-debug loop over build/typecheck/test gates, fake replay artifacts, replay id overwrite behavior, host-path leaks in evidence packs, and generated runtime cleanliness.
+- Commit: pending
 
 ## Task 9: Comprehensive Check-Debug Loop 3
 

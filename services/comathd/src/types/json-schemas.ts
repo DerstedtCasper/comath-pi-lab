@@ -2,6 +2,7 @@ import {
   artifactRefSchema,
   assumptionLedgerSchema,
   claimSchema,
+  finalReplayManifestV3Schema,
   formalSpecLockSchema,
   graphPatchSchema,
   leanRunManifestV3Schema,
@@ -28,6 +29,7 @@ claimSchema.parse;
 formalSpecLockSchema.parse;
 assumptionLedgerSchema.parse;
 leanRunManifestV3Schema.parse;
+finalReplayManifestV3Schema.parse;
 memoryEdgeSchema.parse;
 artifactRefSchema.parse;
 graphPatchSchema.parse;
@@ -38,6 +40,7 @@ export const jsonSchemas = {
   formalSpecLock: objectSchema("FormalSpecLock"),
   assumptionLedger: objectSchema("AssumptionLedger"),
   leanRunManifestV3: objectSchema("LeanRunManifestV3"),
+  finalReplayManifestV3: objectSchema("FinalReplayManifestV3"),
   memoryEdge: objectSchema("MemoryEdge"),
   artifactRef: objectSchema("ArtifactRef"),
   graphPatch: objectSchema("GraphPatch")
