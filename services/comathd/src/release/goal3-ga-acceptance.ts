@@ -400,6 +400,8 @@ export type FinalAuthorityPackagingV3TrancheReport = {
   task_count: number;
   task_ids: string[];
   results: FinalAuthorityPackagingV3Report[];
+  tranche_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
+  missing_final_evidence_classes: Goal3GaPm002FinalEvidenceClass[];
   packaging_report_path: string;
   proof_authority: "none" | "lean_kernel_clean_replay";
   can_promote_claim: false;
@@ -2031,6 +2033,10 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3(inpu
     claimId: `${claimIdPrefix}-${task.task_id}`,
     sourceReport: input.sourceReportsByTaskId?.[task.task_id]
   }));
+  const missingFinalEvidenceClasses = Array.from(new Set(results.flatMap((result) => result.missing_final_evidence_classes)));
+  const trancheStatus = results.every((result) => result.final_evidence_status === "verified_final_authority_evidence")
+    ? "verified_final_authority_evidence"
+    : "blocked_missing_final_evidence";
   const packagingReportPath = genericFinalPackagingTrancheReportPath(input.startTaskId, input.endTaskId);
   const report: FinalAuthorityPackagingV3TrancheReport = {
     schema_version: "comath.final_authority_packaging_tranche.v3",
@@ -2039,6 +2045,8 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3(inpu
     task_count: results.length,
     task_ids: tasks.map((task) => task.task_id),
     results,
+    tranche_status: trancheStatus,
+    missing_final_evidence_classes: missingFinalEvidenceClasses,
     packaging_report_path: packagingReportPath,
     proof_authority: results.every((result) => result.proof_authority === "lean_kernel_clean_replay")
       ? "lean_kernel_clean_replay"
