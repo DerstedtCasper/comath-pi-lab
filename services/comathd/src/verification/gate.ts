@@ -316,6 +316,20 @@ function projectJsonTaskId(projectRoot: string, relativePath: string): string | 
   return typeof taskId === "string" ? taskId : null;
 }
 
+function projectJsonStringField(projectRoot: string, relativePath: string, field: string): string | null {
+  const value = readJsonInsideProject(projectRoot, relativePath);
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const fieldValue = (value as Record<string, unknown>)[field];
+  return typeof fieldValue === "string" ? fieldValue : null;
+}
+
+function projectJsonOptionalStringFieldMatches(projectRoot: string, relativePath: string, field: string, expected: string): boolean {
+  const value = projectJsonStringField(projectRoot, relativePath, field);
+  return value === null || value === expected;
+}
+
 function requestedJsonArtifactByPath(projectRoot: string, artifacts: ArtifactRef[], relativePath: string): unknown | null {
   const normalizedPath = relativePath.replace(/\\/g, "/");
   const directMatch = artifacts
@@ -399,9 +413,19 @@ function hasVerifiedDerivedBindingManifest(
     typeof bindingRecord.formal_spec_lock_path === "string" &&
     hashJsonInsideProject(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.formal_spec_lock_sha256 &&
     projectJsonTaskId(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.task_id &&
+    projectJsonOptionalStringFieldMatches(projectRoot, bindingRecord.formal_spec_lock_path, "claim_id", bindingRecord.claim_id as string) &&
+    projectJsonStringField(projectRoot, bindingRecord.formal_spec_lock_path, "statement_hash") ===
+      projectJsonStringField(projectRoot, report.statement_check_path as string, "locked_statement_hash") &&
     typeof bindingRecord.assumption_ledger_path === "string" &&
     hashJsonInsideProject(projectRoot, bindingRecord.assumption_ledger_path) === bindingRecord.assumption_ledger_sha256 &&
     projectJsonTaskId(projectRoot, bindingRecord.assumption_ledger_path) === bindingRecord.task_id &&
+    projectJsonOptionalStringFieldMatches(projectRoot, bindingRecord.assumption_ledger_path, "claim_id", bindingRecord.claim_id as string) &&
+    projectJsonOptionalStringFieldMatches(
+      projectRoot,
+      bindingRecord.assumption_ledger_path,
+      "formal_spec_lock_hash",
+      projectJsonStringField(projectRoot, report.statement_check_path as string, "locked_statement_hash") ?? ""
+    ) &&
     dependencyLockHash === bindingRecord.dependency_lock_sha256 &&
     artifactHashesHash === bindingRecord.artifact_hashes_sha256 &&
     dependencyLock.lean_toolchain_sha256 === bindingRecord.toolchain_sha256 &&

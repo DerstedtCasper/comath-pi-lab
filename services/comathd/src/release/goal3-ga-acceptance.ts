@@ -2468,9 +2468,23 @@ function hashProjectJsonFile(projectRoot: string, path: string): string | null {
   return sha256Text(canonicalJson(value));
 }
 
+function jsonStringField(value: unknown, field: string): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const fieldValue = (value as Record<string, unknown>)[field];
+  return typeof fieldValue === "string" ? fieldValue : null;
+}
+
+function optionalStringFieldMatches(value: unknown, field: string, expected: string): boolean {
+  const actual = jsonStringField(value, field);
+  return actual === null || actual === expected;
+}
+
 function verifyOptionalFinalAuthorityBindings(input: {
   projectRoot: string;
   taskId: string;
+  claimId: string;
   evidence: FinalAuthorityPackagingV3EvidenceInput;
   finalReplayManifest: unknown;
   finalReplayManifestPath: string;
@@ -2481,6 +2495,10 @@ function verifyOptionalFinalAuthorityBindings(input: {
   const finalReplayRecord = input.finalReplayManifest && typeof input.finalReplayManifest === "object"
     ? (input.finalReplayManifest as Record<string, unknown>)
     : {};
+  const statementCheck = typeof evidence.statement_check_path === "string"
+    ? readJsonInsideProject(input.projectRoot, evidence.statement_check_path)
+    : null;
+  const lockedStatementHash = jsonStringField(statementCheck, "locked_statement_hash");
 
   if (typeof evidence.formal_spec_lock_path === "string" || evidence.formal_spec_lock_sha256 !== undefined) {
     submitted.add("formal_spec_lock_binding");
@@ -2496,7 +2514,10 @@ function verifyOptionalFinalAuthorityBindings(input: {
     if (
       !validSha256(evidence.formal_spec_lock_sha256) ||
       actualHash !== evidence.formal_spec_lock_sha256 ||
-      formalSpecLockRecord.task_id !== input.taskId
+      formalSpecLockRecord.task_id !== input.taskId ||
+      !optionalStringFieldMatches(formalSpecLock, "claim_id", input.claimId) ||
+      lockedStatementHash === null ||
+      formalSpecLockRecord.statement_hash !== lockedStatementHash
     ) {
       input.missing.add("formal_spec_lock_binding");
     }
@@ -2516,7 +2537,13 @@ function verifyOptionalFinalAuthorityBindings(input: {
     if (
       !validSha256(evidence.assumption_ledger_sha256) ||
       actualHash !== evidence.assumption_ledger_sha256 ||
-      assumptionLedgerRecord.task_id !== input.taskId
+      assumptionLedgerRecord.task_id !== input.taskId ||
+      !optionalStringFieldMatches(assumptionLedger, "claim_id", input.claimId) ||
+      (
+        lockedStatementHash !== null &&
+        jsonStringField(assumptionLedger, "formal_spec_lock_hash") !== null &&
+        assumptionLedgerRecord.formal_spec_lock_hash !== lockedStatementHash
+      )
     ) {
       input.missing.add("assumption_ledger_binding");
     }
@@ -2568,6 +2595,7 @@ function verifyOptionalFinalAuthorityBindings(input: {
 function verifyFinalAuthorityEvidenceSourceReportV3(input: {
   projectRoot: string;
   taskId: string;
+  claimId: string;
   evidence?: FinalAuthorityPackagingV3EvidenceInput;
 }): FinalAuthorityPackagingV3SourceReport {
   const evidence = input.evidence ?? {};
@@ -2624,6 +2652,7 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
   const submittedBindingClasses = verifyOptionalFinalAuthorityBindings({
     projectRoot: input.projectRoot,
     taskId: input.taskId,
+    claimId: input.claimId,
     evidence,
     finalReplayManifest,
     finalReplayManifestPath,
@@ -2673,6 +2702,7 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceFromEvidenceV3
   const sourceReport = verifyFinalAuthorityEvidenceSourceReportV3({
     projectRoot: input.projectRoot,
     taskId: input.taskId,
+    claimId: input.claimId,
     evidence: input.evidence
   });
   return packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3({
@@ -2862,10 +2892,12 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheFromEvi
   }
 
   const sourceReportsByTaskId: Record<string, FinalAuthorityPackagingV3SourceReport> = {};
+  const claimIdPrefix = input.claimIdPrefix ?? "C";
   for (const task of manifest.tasks.slice(startIndex, endIndex + 1)) {
     sourceReportsByTaskId[task.task_id] = verifyFinalAuthorityEvidenceSourceReportV3({
       projectRoot: input.projectRoot,
       taskId: task.task_id,
+      claimId: `${claimIdPrefix}-${task.task_id}`,
       evidence: input.evidenceByTaskId?.[task.task_id]
     });
   }
