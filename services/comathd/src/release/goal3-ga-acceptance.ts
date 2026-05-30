@@ -506,6 +506,12 @@ export type FinalAuthorityDerivedBindingsV3Manifest = {
   artifact_hashes_sha256: string;
   toolchain_sha256: string;
   replay_manifest_sha256: string;
+  final_authority_report_bindings: {
+    structured_audit: { path: string; sha256: string };
+    dependency_closure: { path: string; sha256: string };
+    axiom_profile: { path: string; sha256: string };
+    statement_check: { path: string; sha256: string };
+  };
   caller_supplied_hashes_trusted: false;
   proof_authority: "none";
   can_promote_claim: false;
@@ -2658,6 +2664,24 @@ export function deriveFinalAuthorityEvidenceBindingsV3(input: {
   const artifactHashesSha256 = finalReplayRecord.artifact_hashes ? sha256Text(canonicalJson(finalReplayRecord.artifact_hashes)) : "";
   const toolchainSha256 = typeof dependencyLock.lean_toolchain_sha256 === "string" ? dependencyLock.lean_toolchain_sha256 : "";
   const replayManifestSha256 = finalReplayManifestPath ? hashProjectJsonFile(input.projectRoot, finalReplayManifestPath) ?? "" : "";
+  const finalAuthorityReportBindings = {
+    structured_audit: {
+      path: input.evidence.structured_audit_path ?? "",
+      sha256: hashProjectJsonFile(input.projectRoot, input.evidence.structured_audit_path ?? "") ?? ""
+    },
+    dependency_closure: {
+      path: input.evidence.dependency_closure_path ?? "",
+      sha256: hashProjectJsonFile(input.projectRoot, input.evidence.dependency_closure_path ?? "") ?? ""
+    },
+    axiom_profile: {
+      path: input.evidence.axiom_profile_path ?? "",
+      sha256: hashProjectJsonFile(input.projectRoot, input.evidence.axiom_profile_path ?? "") ?? ""
+    },
+    statement_check: {
+      path: input.evidence.statement_check_path ?? "",
+      sha256: hashProjectJsonFile(input.projectRoot, input.evidence.statement_check_path ?? "") ?? ""
+    }
+  };
   const bindingManifestPath = genericFinalAuthorityDerivedBindingsPath(input.taskId);
   const bindingManifest: FinalAuthorityDerivedBindingsV3Manifest = {
     schema_version: "comath.final_authority_derived_bindings.v3",
@@ -2673,6 +2697,7 @@ export function deriveFinalAuthorityEvidenceBindingsV3(input: {
     artifact_hashes_sha256: artifactHashesSha256,
     toolchain_sha256: toolchainSha256,
     replay_manifest_sha256: replayManifestSha256,
+    final_authority_report_bindings: finalAuthorityReportBindings,
     caller_supplied_hashes_trusted: false,
     proof_authority: "none",
     can_promote_claim: false,

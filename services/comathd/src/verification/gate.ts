@@ -369,6 +369,23 @@ function hasVerifiedDerivedBindingManifest(
   const dependencyLock = finalReplayManifest.dependency_lock && typeof finalReplayManifest.dependency_lock === "object"
     ? (finalReplayManifest.dependency_lock as Record<string, unknown>)
     : {};
+  const reportBindings = bindingRecord.final_authority_report_bindings && typeof bindingRecord.final_authority_report_bindings === "object"
+    ? (bindingRecord.final_authority_report_bindings as Record<string, unknown>)
+    : null;
+  const reportBindingMatches = (bindingKey: string, reportPathKey: string): boolean => {
+    const binding = reportBindings?.[bindingKey];
+    if (!binding || typeof binding !== "object") {
+      return false;
+    }
+    const bindingEntry = binding as Record<string, unknown>;
+    const reportPath = report[reportPathKey];
+    return (
+      typeof reportPath === "string" &&
+      typeof bindingEntry.path === "string" &&
+      bindingEntry.path.replace(/\\/g, "/") === reportPath.replace(/\\/g, "/") &&
+      hashJsonInsideProject(projectRoot, bindingEntry.path) === bindingEntry.sha256
+    );
+  };
   return (
     typeof bindingRecord.formal_spec_lock_path === "string" &&
     hashJsonInsideProject(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.formal_spec_lock_sha256 &&
@@ -377,7 +394,11 @@ function hasVerifiedDerivedBindingManifest(
     dependencyLockHash === bindingRecord.dependency_lock_sha256 &&
     artifactHashesHash === bindingRecord.artifact_hashes_sha256 &&
     dependencyLock.lean_toolchain_sha256 === bindingRecord.toolchain_sha256 &&
-    hashJsonInsideProject(projectRoot, report.final_replay_manifest_v3_path as string) === bindingRecord.replay_manifest_sha256
+    hashJsonInsideProject(projectRoot, report.final_replay_manifest_v3_path as string) === bindingRecord.replay_manifest_sha256 &&
+    reportBindingMatches("structured_audit", "structured_audit_path") &&
+    reportBindingMatches("dependency_closure", "dependency_closure_path") &&
+    reportBindingMatches("axiom_profile", "axiom_profile_path") &&
+    reportBindingMatches("statement_check", "statement_check_path")
   );
 }
 
