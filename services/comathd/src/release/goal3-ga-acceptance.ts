@@ -2,8 +2,11 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { assumptionLedgerSchema, formalSpecLockSchema } from "../types/schemas.js";
+import { assumptionLedgerSchema, formalSpecLockSchema, type Claim, type GateResult } from "../types/schemas.js";
 import { statementHash } from "../utils/statement.js";
+import { importArtifact } from "../artifacts/store.js";
+import { appendEvidenceRecord } from "../evidence/store.js";
+import { promoteClaim } from "../verification/gate.js";
 import { evaluateStatementDiffGate } from "../proof-kernel/lean/statement-diff-gate.js";
 import {
   createServiceOwnedLeanRunManifestV3,
@@ -516,6 +519,22 @@ export type FinalAuthorityDerivedBindingsV3Manifest = {
   proof_authority: "none";
   can_promote_claim: false;
   promotion_requires_gate: true;
+};
+
+export type Goal3GaPositiveMatrixFinalAuthorityPromotionBundle = {
+  schema_version: "comath.goal3_positive_matrix_final_authority_promotion_bundle.v1";
+  task_id: string;
+  claim_id: string;
+  packaging_report: FinalAuthorityPackagingV3Report;
+  derived_binding_manifest_path: string;
+  evidence_id: string;
+  artifact_ids: string[];
+  gate: GateResult;
+  claim: Claim;
+  proof_authority: "lean_kernel_clean_replay";
+  promoted_by_ordinary_gate: true;
+  promotion_requires_gate: true;
+  direct_claim_mutation: false;
 };
 
 type Goal3GaDeclaredReplayMaterialCheck = {
@@ -2733,6 +2752,77 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBin
     claimId: input.claimId,
     evidence: derived.evidence
   });
+}
+
+export async function promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3(input: {
+  projectRoot: string;
+  projectId: string;
+  taskId: string;
+  claimId: string;
+  evidence: FinalAuthorityPackagingV3DerivedBindingInput;
+  actor: string;
+}): Promise<Goal3GaPositiveMatrixFinalAuthorityPromotionBundle> {
+  const report = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
+    projectRoot: input.projectRoot,
+    taskId: input.taskId,
+    claimId: input.claimId,
+    evidence: input.evidence
+  });
+  if (report.final_evidence_status !== "verified_final_authority_evidence" || report.proof_authority !== "lean_kernel_clean_replay") {
+    throw new Error("positive_matrix_final_authority_evidence_not_verified");
+  }
+  const derivedBindingManifestPath = genericFinalAuthorityDerivedBindingsPath(input.taskId);
+  const packagingArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.projectId,
+    source_path: report.packaging_report_path,
+    kind: "runner_output",
+    actor: input.actor
+  });
+  const finalReplayArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.projectId,
+    source_path: report.final_replay_manifest_v3_path,
+    kind: "runner_output",
+    actor: input.actor
+  });
+  const derivedBindingArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.projectId,
+    source_path: derivedBindingManifestPath,
+    kind: "runner_output",
+    actor: input.actor
+  });
+  const evidence = appendEvidenceRecord(input.projectRoot, {
+    project_id: input.projectId,
+    claim_id: input.claimId,
+    kind: "lean",
+    summary: `${input.taskId} verified final-authority packaging, FinalReplayManifest v3, and derived binding manifest submitted for ordinary promotion-gate review.`,
+    artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id]
+  });
+  const promotion = promoteClaim(input.projectRoot, {
+    project_id: input.projectId,
+    claim_id: input.claimId,
+    target_status: "formally_checked",
+    evidence_ids: [evidence.id],
+    artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id],
+    actor: input.actor
+  });
+  return {
+    schema_version: "comath.goal3_positive_matrix_final_authority_promotion_bundle.v1",
+    task_id: input.taskId,
+    claim_id: input.claimId,
+    packaging_report: report,
+    derived_binding_manifest_path: derivedBindingManifestPath,
+    evidence_id: evidence.id,
+    artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id],
+    gate: promotion.gate,
+    claim: promotion.claim,
+    proof_authority: "lean_kernel_clean_replay",
+    promoted_by_ordinary_gate: true,
+    promotion_requires_gate: true,
+    direct_claim_mutation: false
+  };
 }
 
 export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheFromEvidenceV3(input: {
