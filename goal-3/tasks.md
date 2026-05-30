@@ -1041,3 +1041,20 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. Task 59 was a verification/debug loop and does not make PM-046 through PM-089 promoted or formally checked. The generic executor tests use injected Lean/Lake command results to exercise service-owned execution deterministically; future tasks still need real live Lean/mathlib clean replay, verified FinalReplayManifest v3, structured audit, dependency closure, axiom profile, statement check, third-party replay pack, FormalSpecLock/AssumptionLedger/dependency-lock evidence, and ordinary gate-mediated promotion prerequisites before any PM-046 through PM-089 claim can be promoted.
 - Next step: Task 60 should continue generic Lean Authority executor/final-authority coverage to PM-090 through PM-100 or attach complete verified final-authority evidence for a narrow positive-matrix task without reintroducing theorem-family recognition, Nat-linear synthesis, default assumptions, or non-Lean proof authority.
 - Commit: 607484d
+
+## Task 60: Generic Positive-Matrix Lean Authority Executor For PM-090 Through PM-100
+
+- [ ] Re-read all Goal 3 required context files before touching code.
+- [ ] Add a failing test proving PM-090 through PM-100 use the existing generic service-owned Lean Authority executor over project-local declared replay material, without PM-specific theorem recognition, Nat-linear synthesis, default assumptions, external proof authority, or direct promotion.
+- [ ] Ensure the tranche report records the mixed category boundary for PM-090 theorem-search-assisted and PM-091 through PM-100 tactic-repair tasks while keeping search/tactic material non-authoritative.
+- [ ] Ensure successful Lean/Lake command exits for PM-090 through PM-100 still produce non-promotional final-authority packaging until verified FinalReplayManifest v3, structured audit, dependency closure, axiom profile, statement check, and third-party replay pack evidence exist.
+- [ ] Ensure the PM-090 through PM-100 tranche does not write out-of-range PM-089 or PM-101 executor artifacts.
+- [ ] Run focused tests, package build/typecheck/test gates as appropriate, static no-reinvent scans, runtime artifact cleanliness checks, record evidence, and commit.
+
+Completion record:
+
+- Work done: added `goal3-task60-pm090-pm100-generic-lean-executor.test.mjs` to pin the PM-090 through PM-100 generic Lean Authority executor tranche to the final theorem-search-assisted/tactic-repair boundary, non-authority category counts, tranche-level no-reinvent guard values, and out-of-range PM-089/PM-101 artifact quarantine. Extended `services/comathd/src/release/goal3-ga-acceptance.ts` so the positive-matrix tranche report now persists an explicit `no_reinvent_guards` object with the tranche-wide false/non-authority flags the Task 60 test expects. Added the new unit test to `services/comathd/package.json` so it runs in the default `@comath/comathd` test chain.
+- Verification evidence: RED before implementation: `node services/comathd/tests/unit/goal3-task60-pm090-pm100-generic-lean-executor.test.mjs` failed with `AssertionError` because `trancheReport.no_reinvent_guards` was `undefined`. After implementation, `corepack pnpm --filter @comath/comathd build` passed; `node services/comathd/tests/unit/goal3-task60-pm090-pm100-generic-lean-executor.test.mjs` passed; focused regression tests passed for Tasks 54, 55, 56, 58, 45, and 7; `corepack pnpm --filter @comath/comathd typecheck` passed; full `corepack pnpm --filter @comath/comathd test` passed; root `corepack pnpm build`, root `corepack pnpm typecheck`, and root `corepack pnpm test` all passed.
+- Residual risk: This is still a bounded positive-matrix executor/report hardening task, not live Lean kernel replay promotion for PM-090 through PM-100. The tranche still records `blocked_missing_final_evidence` until the missing final-authority artifacts exist.
+- Next step: Task 61 should continue any remaining Goal 3 frontier work after the PM-090 through PM-100 tranche hardening, while keeping the no-reinvent and Lean-authority boundaries intact.
+- Commit: b01b03d

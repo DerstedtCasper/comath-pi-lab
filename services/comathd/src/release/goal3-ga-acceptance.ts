@@ -364,6 +364,15 @@ export type Goal3GaPositiveMatrixLeanAuthorityExecutorReport = {
   can_promote_claim: false;
 };
 
+export type Goal3GaPositiveMatrixNoReinventGuards = {
+  uses_pm_specific_theorem_recognition: false;
+  uses_production_theorem_family_recognizer: false;
+  uses_controlled_nat_linear_synthesis: false;
+  uses_default_assumptions: false;
+  external_evidence_or_vote_proof_authority: false;
+  direct_promotion_path: false;
+};
+
 export type Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
   schema_version: "comath.goal3_positive_matrix_lean_authority_executor_tranche.v1";
   start_task_id: string;
@@ -372,6 +381,7 @@ export type Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
   task_ids: string[];
   category_counts: Partial<Record<Goal3GaPositiveMatrixCategory, number>>;
   non_authority_input_counts: Partial<Record<Goal3GaPositiveMatrixCategory, { task_count: number; proof_authority: "none" }>>;
+  no_reinvent_guards: Goal3GaPositiveMatrixNoReinventGuards;
   results: Goal3GaPositiveMatrixLeanAuthorityExecutorReport[];
   tranche_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
   tranche_report_path: string;
@@ -2052,6 +2062,14 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
       { task_count: taskCount ?? 0, proof_authority: "none" as const }
     ])
   ) as Partial<Record<Goal3GaPositiveMatrixCategory, { task_count: number; proof_authority: "none" }>>;
+  const noReinventGuards: Goal3GaPositiveMatrixNoReinventGuards = {
+    uses_pm_specific_theorem_recognition: false,
+    uses_production_theorem_family_recognizer: false,
+    uses_controlled_nat_linear_synthesis: false,
+    uses_default_assumptions: false,
+    external_evidence_or_vote_proof_authority: false,
+    direct_promotion_path: false
+  };
 
   const trancheReportPath = positiveMatrixExecutorTrancheReportPath(input.startTaskId, input.endTaskId);
   const report: Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
@@ -2062,6 +2080,7 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
     task_ids: tasks.map((task) => task.task_id),
     category_counts: categoryCounts,
     non_authority_input_counts: nonAuthorityInputCounts,
+    no_reinvent_guards: noReinventGuards,
     results,
     tranche_status: results.every((result) => result.final_authority_packaging.final_evidence_status === "verified_final_authority_evidence")
       ? "verified_final_authority_evidence"
