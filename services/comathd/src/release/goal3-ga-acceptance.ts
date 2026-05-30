@@ -266,6 +266,18 @@ export type Goal3GaDeclaredReplayMaterialSource = {
   can_promote_claim?: false;
 };
 
+export type Goal3GaPm002ReplayMaterialPackPreflight = {
+  schema_version: "comath.goal3_pm002_replay_material_pack_preflight.v1";
+  task_id: "PM-002";
+  material_root_path: string;
+  material_source: Goal3GaDeclaredReplayMaterialSource;
+  material_hashes_sha256: Record<string, string>;
+  live_replay_executor_status: "not_executed";
+  blocker_code: "live_replay_executor_not_configured";
+  proof_authority: "none";
+  can_promote_claim: false;
+};
+
 type Goal3GaDeclaredReplayMaterialCheck = {
   source_path: string;
   status: "not_declared" | "missing_or_incomplete" | "ready_for_live_executor";
@@ -1125,6 +1137,209 @@ function declaredReplayMaterialPaths(source: Goal3GaDeclaredReplayMaterialSource
   ];
 }
 
+function writeJsonProjectFile(projectRoot: string, relativePath: string, value: unknown): string {
+  return writeProjectFile(projectRoot, relativePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function taskByIdOrThrow(taskId: string): Goal3GaPositiveMatrixTask {
+  const task = createGoal3GaPositiveTaskManifest().tasks.find((item) => item.task_id === taskId);
+  if (!task) {
+    throw new Error("unknown_positive_matrix_task");
+  }
+  return task;
+}
+
+function materialPath(task: Goal3GaPositiveMatrixTask, leaf: string): string {
+  return `.comath/release/positive_matrix/${task.task_id}/${leaf}`;
+}
+
+export function createGoal3GaPm002ReplayMaterialPackPreflight(input: {
+  projectRoot: string;
+}): Goal3GaPm002ReplayMaterialPackPreflight {
+  const task = taskByIdOrThrow("PM-002");
+  const theoremName = task.target.expected_theorem_name;
+  const materialRoot = `.comath/release/positive_matrix/${task.task_id}`;
+  const leanSourcePath = materialPath(task, "MathResearch/Target.lean");
+  const leanToolchainPath = materialPath(task, "lean-toolchain");
+  const lakefilePath = materialPath(task, "lakefile.lean");
+  const lakeManifestPath = materialPath(task, "lake-manifest.json");
+  const formalSpecLockPath = materialPath(task, "formal_spec_lock.json");
+  const assumptionLedgerPath = materialPath(task, "assumption_ledger.json");
+  const dependencyLockPath = materialPath(task, "dependency_lock.json");
+  const leanRunManifestPath = materialPath(task, "lean_run_manifest_v3.json");
+  const finalReplayManifestPath = materialPath(task, "final_replay_manifest_v3.json");
+  const structuredAuditPath = materialPath(task, "structured_audit.json");
+  const replayPackPath = materialPath(task, "replay_pack");
+
+  const leanSource = [
+    "import Mathlib",
+    "",
+    "namespace MathResearch",
+    "",
+    `${task.formal_spec_lock_input.theorem_header} := by`,
+    "  simp",
+    "",
+    `#check ${theoremName}`,
+    `#print axioms ${theoremName}`,
+    "",
+    "end MathResearch",
+    ""
+  ].join("\n");
+  writeProjectFile(input.projectRoot, leanSourcePath, leanSource);
+  writeProjectFile(input.projectRoot, leanToolchainPath, `${task.dependency_lock_expectation.lean_toolchain}\n`);
+  writeProjectFile(
+    input.projectRoot,
+    lakefilePath,
+    [
+      "import Lake",
+      "open Lake DSL",
+      "",
+      "package MathResearch where",
+      "  -- Task 38 preflight material only; final replay must regenerate trusted manifests.",
+      "",
+      "require mathlib from git \"https://github.com/leanprover-community/mathlib4\" @ \"v4.23.0\"",
+      "",
+      "lean_lib MathResearch where",
+      "  roots := #[`MathResearch.Target]",
+      ""
+    ].join("\n")
+  );
+  writeJsonProjectFile(input.projectRoot, lakeManifestPath, {
+    version: 7,
+    packages: [
+      {
+        name: "mathlib",
+        type: "git",
+        url: "https://github.com/leanprover-community/mathlib4",
+        rev: "v4.23.0",
+        proof_authority: "none"
+      }
+    ],
+    material_status: "preflight_only_not_lake_resolved"
+  });
+  writeJsonProjectFile(input.projectRoot, formalSpecLockPath, {
+    schema_version: "comath.formal_spec_lock.v2",
+    task_id: task.task_id,
+    theorem_name: theoremName,
+    theorem_header: task.formal_spec_lock_input.theorem_header,
+    theorem_type_pretty: task.formal_spec_lock_input.theorem_type_pretty,
+    statement_hash: task.formal_spec_lock_input.statement_hash,
+    variables: task.formal_spec_lock_input.variables,
+    assumptions: task.formal_spec_lock_input.assumptions,
+    imports_allowed: task.formal_spec_lock_input.imports_allowed,
+    proof_authority: "none"
+  });
+  writeJsonProjectFile(input.projectRoot, assumptionLedgerPath, {
+    schema_version: "comath.assumption_ledger.v2",
+    task_id: task.task_id,
+    entries: task.assumption_ledger_input.entries,
+    proof_authority: "none"
+  });
+  writeJsonProjectFile(input.projectRoot, dependencyLockPath, {
+    schema_version: "comath.dependency_lock.v3",
+    task_id: task.task_id,
+    lean_toolchain: task.dependency_lock_expectation.lean_toolchain,
+    allowed_import_prefixes: task.dependency_lock_expectation.allowed_import_prefixes,
+    external_dependency_state: task.dependency_lock_expectation.external_dependency_state,
+    network_policy_final_replay: "disabled",
+    material_status: "preflight_only_not_trusted_replay_dependency",
+    proof_authority: "none"
+  });
+  writeJsonProjectFile(input.projectRoot, structuredAuditPath, {
+    schema_version: "comath.structured_lean_audit.v3.preflight",
+    task_id: task.task_id,
+    theorem_name: theoremName,
+    result: "blocked",
+    hard_vetoes: ["lean_replay_not_executed"],
+    material_status: "preflight_only_not_structured_lean_audited",
+    proof_authority: "none"
+  });
+  writeJsonProjectFile(input.projectRoot, leanRunManifestPath, {
+    schema_version: "comath.lean_run_manifest.v3.preflight",
+    run_id: `LRUN-${task.task_id}-PREFLIGHT`,
+    task_id: task.task_id,
+    purpose: "final_replay",
+    command: task.replay_command,
+    exit_code: null,
+    material_status: "preflight_only_not_lean_executed",
+    runner: "comathd.Goal3ReplayMaterialPackPreflight",
+    proof_authority: "none"
+  });
+  writeJsonProjectFile(input.projectRoot, finalReplayManifestPath, {
+    schema_version: "comath.final_replay_manifest.v3.preflight",
+    replay_id: `RPLY-${task.task_id}-PREFLIGHT`,
+    task_id: task.task_id,
+    theorem_name: theoremName,
+    command: task.replay_command,
+    result: "blocked",
+    promotion_allowed: false,
+    material_status: "preflight_only_not_final_replayed",
+    proof_authority: "none"
+  });
+  writeProjectFile(
+    input.projectRoot,
+    `${replayPackPath}/README_REPLAY.md`,
+    [
+      "# PM-002 Replay Material Preflight",
+      "",
+      "This pack is service-generated declared material only.",
+      "It is not a Lean clean replay result and cannot promote a claim.",
+      "A real Lean Authority v3 executor must replace preflight manifests with service-owned replay evidence.",
+      ""
+    ].join("\n")
+  );
+
+  const materialSource: Goal3GaDeclaredReplayMaterialSource = {
+    schema_version: "comath.goal3_declared_replay_material_source.v1",
+    task_id: task.task_id,
+    lean_source_path: leanSourcePath,
+    lean_toolchain_path: leanToolchainPath,
+    lakefile_path: lakefilePath,
+    lake_manifest_path: lakeManifestPath,
+    formal_spec_lock_path: formalSpecLockPath,
+    assumption_ledger_path: assumptionLedgerPath,
+    dependency_lock_path: dependencyLockPath,
+    lean_run_manifest_v3_path: leanRunManifestPath,
+    final_replay_manifest_v3_path: finalReplayManifestPath,
+    structured_audit_path: structuredAuditPath,
+    third_party_replay_pack_path: replayPackPath,
+    lean_run_manifest_id: `LRUN-${task.task_id}-PREFLIGHT`,
+    final_replay_manifest_id: `RPLY-${task.task_id}-PREFLIGHT`,
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+
+  const materialHashes = Object.fromEntries(
+    Object.entries({
+      lean_source_path: leanSourcePath,
+      lean_toolchain_path: leanToolchainPath,
+      lakefile_path: lakefilePath,
+      lake_manifest_path: lakeManifestPath,
+      formal_spec_lock_path: formalSpecLockPath,
+      assumption_ledger_path: assumptionLedgerPath,
+      dependency_lock_path: dependencyLockPath,
+      lean_run_manifest_v3_path: leanRunManifestPath,
+      final_replay_manifest_v3_path: finalReplayManifestPath,
+      structured_audit_path: structuredAuditPath,
+      replay_pack_readme_path: `${replayPackPath}/README_REPLAY.md`
+    }).map(([key, path]) => [key, sha256File(join(input.projectRoot, path))])
+  );
+
+  const preflight: Goal3GaPm002ReplayMaterialPackPreflight = {
+    schema_version: "comath.goal3_pm002_replay_material_pack_preflight.v1",
+    task_id: "PM-002",
+    material_root_path: materialRoot,
+    material_source: materialSource,
+    material_hashes_sha256: materialHashes,
+    live_replay_executor_status: "not_executed",
+    blocker_code: "live_replay_executor_not_configured",
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+  writeJsonProjectFile(input.projectRoot, materialPath(task, "material_pack_preflight.json"), preflight);
+  return preflight;
+}
+
 function validateDeclaredReplayMaterialSource(input: {
   projectRoot: string;
   task: Goal3GaPositiveMatrixTask;
@@ -1226,13 +1441,29 @@ function normalizeLiveReplayOutcomeForProject(
     normalized.structured_audit_path,
     normalized.third_party_replay_pack_path
   ];
-  if (paths.every((path) => evidencePathExistsInsideProject(projectRoot, path))) {
-    return normalized;
+  if (!paths.every((path) => evidencePathExistsInsideProject(projectRoot, path))) {
+    return {
+      ok: false,
+      blocker_code: "live_replay_success_evidence_unreadable",
+      detail: "A live replay adapter reported success with evidence paths that were missing, absolute, or outside the project root."
+    };
+  }
+
+  try {
+    const leanRunManifest = JSON.parse(readFileSync(join(projectRoot, normalized.lean_run_manifest_v3_path), "utf8"));
+    const finalReplayManifest = JSON.parse(readFileSync(join(projectRoot, normalized.final_replay_manifest_v3_path), "utf8"));
+    const leanRunVerification = verifyLeanRunManifestV3Evidence(projectRoot, leanRunManifest);
+    const finalReplayVerification = verifyFinalReplayManifestV3(projectRoot, finalReplayManifest);
+    if (leanRunVerification.ok && finalReplayVerification.ok) {
+      return normalized;
+    }
+  } catch {
+    // Fall through to a structured fail-closed blocker below.
   }
   return {
     ok: false,
-    blocker_code: "live_replay_success_evidence_unreadable",
-    detail: "A live replay adapter reported success with evidence paths that were missing, absolute, or outside the project root."
+    blocker_code: "live_replay_success_manifest_verification_failed",
+    detail: "A live replay adapter reported success, but the supplied LeanRunManifest v3 or FinalReplayManifest v3 did not verify as service-owned Lean Authority evidence."
   };
 }
 
