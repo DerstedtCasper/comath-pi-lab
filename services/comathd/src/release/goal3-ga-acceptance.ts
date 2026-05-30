@@ -194,6 +194,9 @@ export type Goal3GaPositiveLiveReplayConversionCertificate = {
   lean_run_manifest_id: string;
   final_replay_manifest_id: string;
   certificate_path: string;
+  declared_replay_material_source_path: string;
+  declared_replay_material_status: "not_declared" | "missing_or_incomplete" | "ready_for_live_executor";
+  declared_replay_material_missing_paths: string[];
   network_policy_final_replay: "disabled";
   proof_authority: "none" | "lean_kernel_clean_replay";
   can_promote_claim: false;
@@ -242,6 +245,32 @@ export type Goal3GaPositiveLiveReplayOutcome =
       blocker_code: string;
       detail: string;
     };
+
+export type Goal3GaDeclaredReplayMaterialSource = {
+  schema_version: "comath.goal3_declared_replay_material_source.v1";
+  task_id: string;
+  lean_source_path: string;
+  lean_toolchain_path: string;
+  lakefile_path: string;
+  lake_manifest_path: string;
+  formal_spec_lock_path: string;
+  assumption_ledger_path: string;
+  dependency_lock_path: string;
+  lean_run_manifest_v3_path: string;
+  final_replay_manifest_v3_path: string;
+  structured_audit_path: string;
+  third_party_replay_pack_path: string;
+  lean_run_manifest_id: string;
+  final_replay_manifest_id: string;
+  proof_authority?: "none";
+  can_promote_claim?: false;
+};
+
+type Goal3GaDeclaredReplayMaterialCheck = {
+  source_path: string;
+  status: "not_declared" | "missing_or_incomplete" | "ready_for_live_executor";
+  missing_paths: string[];
+};
 
 export type Goal3GaPositiveMatrixTrancheReport = {
   schema_version: "comath.goal3_positive_matrix_tranche.v1";
@@ -1032,6 +1061,7 @@ function createLiveReplayConversionCertificate(input: {
   projectRoot: string;
   task: Goal3GaPositiveMatrixTask;
   outcome: Goal3GaPositiveLiveReplayOutcome;
+  materialCheck?: Goal3GaDeclaredReplayMaterialCheck;
 }): Goal3GaPositiveLiveReplayConversionCertificate {
   const formalSpecLockHash = sha256Text(canonicalJson(input.task.formal_spec_lock_input));
   const assumptionLedgerHash = sha256Text(canonicalJson(input.task.assumption_ledger_input));
@@ -1059,6 +1089,9 @@ function createLiveReplayConversionCertificate(input: {
     lean_run_manifest_id: passed ? input.outcome.lean_run_manifest_id : "",
     final_replay_manifest_id: passed ? input.outcome.final_replay_manifest_id : "",
     certificate_path: certificatePath,
+    declared_replay_material_source_path: input.materialCheck?.source_path ?? "",
+    declared_replay_material_status: input.materialCheck?.status ?? "not_declared",
+    declared_replay_material_missing_paths: input.materialCheck?.missing_paths ?? [],
     network_policy_final_replay: input.task.dependency_lock_expectation.network_policy_final_replay,
     proof_authority: passed ? "lean_kernel_clean_replay" : "none",
     can_promote_claim: false,
@@ -1070,6 +1103,68 @@ function createLiveReplayConversionCertificate(input: {
   };
   writeProjectFile(input.projectRoot, certificatePath, `${JSON.stringify(certificate, null, 2)}\n`);
   return certificate;
+}
+
+function declaredReplayMaterialSourcePath(task: Goal3GaPositiveMatrixTask): string {
+  return `.comath/release/positive_matrix/${task.task_id}/declared_replay_material_source.json`;
+}
+
+function declaredReplayMaterialPaths(source: Goal3GaDeclaredReplayMaterialSource): string[] {
+  return [
+    source.lean_source_path,
+    source.lean_toolchain_path,
+    source.lakefile_path,
+    source.lake_manifest_path,
+    source.formal_spec_lock_path,
+    source.assumption_ledger_path,
+    source.dependency_lock_path,
+    source.lean_run_manifest_v3_path,
+    source.final_replay_manifest_v3_path,
+    source.structured_audit_path,
+    source.third_party_replay_pack_path
+  ];
+}
+
+function validateDeclaredReplayMaterialSource(input: {
+  projectRoot: string;
+  task: Goal3GaPositiveMatrixTask;
+  source?: Goal3GaDeclaredReplayMaterialSource;
+}): Goal3GaDeclaredReplayMaterialCheck {
+  if (!input.source) {
+    return { source_path: "", status: "not_declared", missing_paths: [] };
+  }
+  const sourcePath = declaredReplayMaterialSourcePath(input.task);
+  const sourceToPersist: Goal3GaDeclaredReplayMaterialSource = {
+    ...input.source,
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+  writeProjectFile(input.projectRoot, sourcePath, `${JSON.stringify(sourceToPersist, null, 2)}\n`);
+  const missingPaths = declaredReplayMaterialPaths(sourceToPersist).filter(
+    (path) => !evidencePathExistsInsideProject(input.projectRoot, path)
+  );
+  const idsMissing = [sourceToPersist.lean_run_manifest_id, sourceToPersist.final_replay_manifest_id].some(
+    (value) => value.trim().length === 0
+  );
+  const taskMismatch = sourceToPersist.task_id !== input.task.task_id;
+  return {
+    source_path: sourcePath,
+    status: missingPaths.length === 0 && !idsMissing && !taskMismatch ? "ready_for_live_executor" : "missing_or_incomplete",
+    missing_paths: Array.from(new Set(missingPaths))
+  };
+}
+
+function declaredReplayMaterialBlockerOutcome(
+  check: Goal3GaDeclaredReplayMaterialCheck
+): Goal3GaPositiveLiveReplayOutcome | null {
+  if (check.status !== "missing_or_incomplete") {
+    return null;
+  }
+  return {
+    ok: false,
+    blocker_code: "declared_replay_material_missing",
+    detail: "A declared PM-002 replay material source was provided, but one or more required Lean source, Lake/toolchain, FormalSpecLock, AssumptionLedger, dependency lock, LeanRunManifest v3, FinalReplayManifest v3, structured audit, or replay-pack paths are missing, absolute, outside the project root, or incomplete."
+  };
 }
 
 function defaultLiveReplayOutcome(): Goal3GaPositiveLiveReplayOutcome {
@@ -1259,6 +1354,7 @@ export function runGoal3GaPositiveMatrixLiveReplayConversion(input: {
   projectRoot: string;
   taskIds: string[];
   liveReplay?: (task: Goal3GaPositiveMatrixTask) => Goal3GaPositiveLiveReplayOutcome;
+  replayMaterialSource?: (task: Goal3GaPositiveMatrixTask) => Goal3GaDeclaredReplayMaterialSource | undefined;
 }): Goal3GaPositiveLiveReplayConversionReport {
   const manifest = createGoal3GaPositiveTaskManifest();
   const taskById = new Map(manifest.tasks.map((task) => [task.task_id, task]));
@@ -1270,11 +1366,17 @@ export function runGoal3GaPositiveMatrixLiveReplayConversion(input: {
     return task;
   });
   const results: Goal3GaPositiveLiveReplayConversionResult[] = selectedTasks.map((task) => {
+    const materialCheck = validateDeclaredReplayMaterialSource({
+      projectRoot: input.projectRoot,
+      task,
+      source: input.replayMaterialSource?.(task)
+    });
+    const materialBlocker = declaredReplayMaterialBlockerOutcome(materialCheck);
     const outcome = normalizeLiveReplayOutcomeForProject(
       input.projectRoot,
-      input.liveReplay ? input.liveReplay(task) : defaultLiveReplayOutcome()
+      materialBlocker ?? (input.liveReplay ? input.liveReplay(task) : defaultLiveReplayOutcome())
     );
-    const certificate = createLiveReplayConversionCertificate({ projectRoot: input.projectRoot, task, outcome });
+    const certificate = createLiveReplayConversionCertificate({ projectRoot: input.projectRoot, task, outcome, materialCheck });
     const certificateHash = sha256Text(canonicalJson(certificate));
     const blockers = outcome.ok ? [] : ["live_clean_replay_attempt_failed", outcome.blocker_code, ...blockerCodesForPositiveMatrixTask(task)];
     return {
