@@ -354,6 +354,45 @@ export type Goal3GaPm002FinalAuthorityPackagingReport = {
   promotion_requires_gate: true;
 };
 
+export type FinalAuthorityPackagingV3Report = {
+  schema_version: "comath.final_authority_packaging.v3";
+  task_id: string;
+  claim_id: string;
+  final_evidence_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
+  blocker_code: "final_authority_evidence_incomplete" | "";
+  blocker_detail: string;
+  missing_final_evidence_classes: Goal3GaPm002FinalEvidenceClass[];
+  lean_run_manifest_paths: string[];
+  final_replay_manifest_v3_path: string;
+  structured_audit_path: string;
+  dependency_closure_path: string;
+  axiom_profile_path: string;
+  statement_check_path: string;
+  third_party_replay_pack_path: string;
+  blocker_path: string;
+  packaging_report_path: string;
+  source_packaging_report_path: string;
+  proof_authority: "none" | "lean_kernel_clean_replay";
+  can_promote_claim: false;
+  promotion_requires_gate: true;
+};
+
+export type FinalAuthorityPackagingV3SourceReport = {
+  final_evidence_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
+  blocker_code: "final_authority_evidence_incomplete" | "";
+  blocker_detail: string;
+  missing_final_evidence_classes: Goal3GaPm002FinalEvidenceClass[];
+  lean_run_manifest_paths: string[];
+  final_replay_manifest_v3_path: string;
+  structured_audit_path: string;
+  dependency_closure_path: string;
+  axiom_profile_path: string;
+  statement_check_path: string;
+  third_party_replay_pack_path: string;
+  packaging_report_path: string;
+  proof_authority: "none" | "lean_kernel_clean_replay";
+};
+
 type Goal3GaDeclaredReplayMaterialCheck = {
   source_path: string;
   status: "not_declared" | "missing_or_incomplete" | "ready_for_live_executor";
@@ -1849,6 +1888,53 @@ function replayPackExists(projectRoot: string, path: string): boolean {
 function pm002FinalPackagingReportPath(kind: "blocker" | "report"): string {
   const task = taskByIdOrThrow("PM-002");
   return materialPath(task, kind === "blocker" ? "final_authority_evidence_blocker.json" : "final_authority_packaging_report.json");
+}
+
+function genericFinalPackagingReportPath(taskId: string, kind: "blocker" | "report"): string {
+  const leaf = kind === "blocker" ? "final_authority_evidence_blocker_v3.json" : "final_authority_packaging_report_v3.json";
+  return join(".comath", "release", "positive_matrix", taskId, leaf).replace(/\\/g, "/");
+}
+
+export function packageFinalAuthorityEvidenceV3(input: {
+  projectRoot: string;
+  taskId: string;
+  claimId: string;
+  sourceReport: FinalAuthorityPackagingV3SourceReport;
+}): FinalAuthorityPackagingV3Report {
+  if (!/^PM-\d{3}$/.test(input.taskId)) {
+    throw new Error("invalid_final_authority_packaging_task_id");
+  }
+
+  const blockerPath = genericFinalPackagingReportPath(input.taskId, "blocker");
+  const packagingReportPath = genericFinalPackagingReportPath(input.taskId, "report");
+  const report: FinalAuthorityPackagingV3Report = {
+    schema_version: "comath.final_authority_packaging.v3",
+    task_id: input.taskId,
+    claim_id: input.claimId,
+    final_evidence_status: input.sourceReport.final_evidence_status,
+    blocker_code: input.sourceReport.blocker_code,
+    blocker_detail: input.sourceReport.blocker_detail,
+    missing_final_evidence_classes: [...input.sourceReport.missing_final_evidence_classes],
+    lean_run_manifest_paths: [...input.sourceReport.lean_run_manifest_paths],
+    final_replay_manifest_v3_path: input.sourceReport.final_replay_manifest_v3_path,
+    structured_audit_path: input.sourceReport.structured_audit_path,
+    dependency_closure_path: input.sourceReport.dependency_closure_path,
+    axiom_profile_path: input.sourceReport.axiom_profile_path,
+    statement_check_path: input.sourceReport.statement_check_path,
+    third_party_replay_pack_path: input.sourceReport.third_party_replay_pack_path,
+    blocker_path: input.sourceReport.missing_final_evidence_classes.length === 0 ? "" : blockerPath,
+    packaging_report_path: packagingReportPath,
+    source_packaging_report_path: input.sourceReport.packaging_report_path,
+    proof_authority: input.sourceReport.proof_authority,
+    can_promote_claim: false,
+    promotion_requires_gate: true
+  };
+
+  writeJsonProjectFile(input.projectRoot, packagingReportPath, report);
+  if (report.missing_final_evidence_classes.length > 0) {
+    writeJsonProjectFile(input.projectRoot, blockerPath, report);
+  }
+  return report;
 }
 
 export function packageGoal3GaPm002FinalAuthorityEvidence(input: {

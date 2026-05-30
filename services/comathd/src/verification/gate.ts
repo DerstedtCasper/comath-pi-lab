@@ -288,7 +288,7 @@ function replayPackExists(projectRoot: string, relativePath: string): boolean {
   return true;
 }
 
-function hasVerifiedPm002FinalAuthorityPackaging(
+function hasVerifiedFinalAuthorityPackagingV3(
   projectRoot: string,
   request: Pick<ClaimPromotionRequest, "claim_id">,
   artifacts: ArtifactRef[]
@@ -299,9 +299,17 @@ function hasVerifiedPm002FinalAuthorityPackaging(
       continue;
     }
     const report = packaging as Record<string, unknown>;
+    const schemaVersion = report.schema_version;
+    if (schemaVersion !== "comath.final_authority_packaging.v3" && schemaVersion !== "comath.goal3_pm002_final_authority_packaging.v1") {
+      continue;
+    }
+    if (schemaVersion === "comath.goal3_pm002_final_authority_packaging.v1" && report.task_id !== "PM-002") {
+      continue;
+    }
+    if (schemaVersion === "comath.final_authority_packaging.v3" && report.claim_id !== request.claim_id) {
+      continue;
+    }
     if (
-      report.schema_version !== "comath.goal3_pm002_final_authority_packaging.v1" ||
-      report.task_id !== "PM-002" ||
       report.final_evidence_status !== "verified_final_authority_evidence" ||
       report.proof_authority !== "lean_kernel_clean_replay" ||
       report.can_promote_claim !== false ||
@@ -389,7 +397,7 @@ function hasPromotionGradeLeanAuthorityEvidence(
 ): boolean {
   return (
     hasHashBoundFreshProofKernelReplay(projectRoot, request, artifacts) ||
-    hasVerifiedPm002FinalAuthorityPackaging(projectRoot, request, artifacts)
+    hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts)
   );
 }
 
@@ -400,7 +408,7 @@ function hasPassedLeanAuthorityReplayEvidence(
 ): boolean {
   return (
     hasPassedProofKernelReplay(projectRoot, request, artifacts) ||
-    hasVerifiedPm002FinalAuthorityPackaging(projectRoot, request, artifacts)
+    hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts)
   );
 }
 
