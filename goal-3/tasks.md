@@ -1044,12 +1044,12 @@ Completion record:
 
 ## Task 60: Generic Positive-Matrix Lean Authority Executor For PM-090 Through PM-100
 
-- [ ] Re-read all Goal 3 required context files before touching code.
-- [ ] Add a failing test proving PM-090 through PM-100 use the existing generic service-owned Lean Authority executor over project-local declared replay material, without PM-specific theorem recognition, Nat-linear synthesis, default assumptions, external proof authority, or direct promotion.
-- [ ] Ensure the tranche report records the mixed category boundary for PM-090 theorem-search-assisted and PM-091 through PM-100 tactic-repair tasks while keeping search/tactic material non-authoritative.
-- [ ] Ensure successful Lean/Lake command exits for PM-090 through PM-100 still produce non-promotional final-authority packaging until verified FinalReplayManifest v3, structured audit, dependency closure, axiom profile, statement check, and third-party replay pack evidence exist.
-- [ ] Ensure the PM-090 through PM-100 tranche does not write out-of-range PM-089 or PM-101 executor artifacts.
-- [ ] Run focused tests, package build/typecheck/test gates as appropriate, static no-reinvent scans, runtime artifact cleanliness checks, record evidence, and commit.
+- [x] Re-read all Goal 3 required context files before touching code.
+- [x] Add a failing test proving PM-090 through PM-100 use the existing generic service-owned Lean Authority executor over project-local declared replay material, without PM-specific theorem recognition, Nat-linear synthesis, default assumptions, external proof authority, or direct promotion.
+- [x] Ensure the tranche report records the mixed category boundary for PM-090 theorem-search-assisted and PM-091 through PM-100 tactic-repair tasks while keeping search/tactic material non-authoritative.
+- [x] Ensure successful Lean/Lake command exits for PM-090 through PM-100 still produce non-promotional final-authority packaging until verified FinalReplayManifest v3, structured audit, dependency closure, axiom profile, statement check, and third-party replay pack evidence exist.
+- [x] Ensure the PM-090 through PM-100 tranche does not write out-of-range PM-089 or PM-101 executor artifacts.
+- [x] Run focused tests, package build/typecheck/test gates as appropriate, static no-reinvent scans, runtime artifact cleanliness checks, record evidence, and commit.
 
 Completion record:
 
