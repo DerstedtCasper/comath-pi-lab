@@ -7,6 +7,7 @@ import { statementHash } from "../utils/statement.js";
 import { evaluateStatementDiffGate } from "../proof-kernel/lean/statement-diff-gate.js";
 import {
   createServiceOwnedLeanRunManifestV3,
+  runServiceOwnedLeanCommandV3,
   verifyLeanRunManifestV3Evidence
 } from "../proof-kernel/lean/lean-run-manifest-v3.js";
 import {
@@ -285,6 +286,8 @@ type Goal3GaPm002LeanAuthorityProbeResult = {
   stderr: string;
 };
 
+type Goal3GaPm002LeanAuthorityCommandResult = Goal3GaPm002LeanAuthorityProbeResult;
+
 export type Goal3GaPm002LeanAuthorityExecutorBlocker = {
   schema_version: "comath.goal3_pm002_lean_authority_executor_blocker.v1";
   task_id: "PM-002";
@@ -292,10 +295,13 @@ export type Goal3GaPm002LeanAuthorityExecutorBlocker = {
   blocker_code:
     | "declared_replay_material_missing"
     | "lean_toolchain_unavailable_for_live_replay"
+    | "lean_replay_command_failed"
+    | "lean_authority_evidence_incomplete"
     | "live_replay_executor_not_configured";
   blocker_detail: string;
   attempted_commands: string[][];
   replay_plan_commands: string[][];
+  lean_run_manifest_paths: string[];
   material_source_path: string;
   lean_source_path: string;
   lean_toolchain_path: string;
@@ -1527,6 +1533,16 @@ function summarizeProbeFailure(label: string, result: Goal3GaPm002LeanAuthorityP
   return output ? `${label} failed: ${output}` : `${label} failed with exit code ${result.exit_code}`;
 }
 
+function summarizeCommandFailure(command: string[], result: Goal3GaPm002LeanAuthorityCommandResult): string {
+  const output = [result.stdout, result.stderr].filter((item) => item.trim().length > 0).join("\n").trim();
+  const label = command.join(" ");
+  return output ? `${label} failed: ${output}` : `${label} failed with exit code ${result.exit_code}`;
+}
+
+function pm002RunManifestPath(projectRoot: string, runId: string): string {
+  return relative(projectRoot, join(projectRoot, ".comath", "evidence", "C-0002", "lean", `${runId}.manifest.json`)).replace(/\\/g, "/");
+}
+
 function writePm002ExecutorBlocker(input: {
   projectRoot: string;
   materialSource: Goal3GaDeclaredReplayMaterialSource;
@@ -1534,6 +1550,7 @@ function writePm002ExecutorBlocker(input: {
   blocker_code: Goal3GaPm002LeanAuthorityExecutorBlocker["blocker_code"];
   blocker_detail: string;
   attempted_commands: string[][];
+  lean_run_manifest_paths?: string[];
 }): { path: string; blocker: Goal3GaPm002LeanAuthorityExecutorBlocker } {
   const task = taskByIdOrThrow("PM-002");
   const path = materialPath(task, "lean_authority_executor_blocker.json");
@@ -1548,6 +1565,7 @@ function writePm002ExecutorBlocker(input: {
       ["lake", "env", "lean", "MathResearch/Target.lean"],
       ["lake", "build", "MathResearch"]
     ],
+    lean_run_manifest_paths: input.lean_run_manifest_paths ?? [],
     material_source_path: input.materialCheck.source_path,
     lean_source_path: input.materialSource.lean_source_path,
     lean_toolchain_path: input.materialSource.lean_toolchain_path,
@@ -1566,6 +1584,7 @@ export function executeGoal3GaPm002LeanAuthorityReplay(input: {
   materialSource: Goal3GaDeclaredReplayMaterialSource;
   probeLeanVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
   probeLakeVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+  runReplayCommand?: (command: string[], cwd: string) => Goal3GaPm002LeanAuthorityCommandResult;
 }): Goal3GaPm002LeanAuthorityExecutorReport {
   const task = taskByIdOrThrow("PM-002");
   if (input.materialSource.task_id !== task.task_id) {
@@ -1669,30 +1688,97 @@ export function executeGoal3GaPm002LeanAuthorityReplay(input: {
     };
   }
 
+  const leanToolchain = readFileSync(join(input.projectRoot, input.materialSource.lean_toolchain_path), "utf8").trim();
+  const inputFiles = [
+    join(input.projectRoot, input.materialSource.lean_source_path),
+    join(input.projectRoot, input.materialSource.lean_toolchain_path),
+    join(input.projectRoot, input.materialSource.lakefile_path),
+    join(input.projectRoot, input.materialSource.lake_manifest_path),
+    join(input.projectRoot, input.materialSource.formal_spec_lock_path),
+    join(input.projectRoot, input.materialSource.assumption_ledger_path),
+    join(input.projectRoot, input.materialSource.dependency_lock_path)
+  ];
+  const replayCommands = [
+    { runId: "LRUN-0002", purpose: "check" as const, command: ["lake", "env", "lean", "MathResearch/Target.lean"] },
+    { runId: "LRUN-0003", purpose: "build" as const, command: ["lake", "build", "MathResearch"] }
+  ];
+  const manifestPaths: string[] = [];
+  const attemptedCommands = [["lean", "--version"], ["lake", "--version"]];
+
+  for (const replay of replayCommands) {
+    const run = runServiceOwnedLeanCommandV3({
+      projectRoot: input.projectRoot,
+      run_id: replay.runId,
+      claim_id: "C-0002",
+      campaign_id: "CAM-0002",
+      candidate_id: "CAND-0002",
+      purpose: replay.purpose,
+      command: replay.command,
+      cwd: materialRoot,
+      input_files: inputFiles,
+      leanVersionOutput: leanProbe.stdout,
+      lakeVersionOutput: lakeProbe.stdout,
+      leanToolchain,
+      network_policy: "disabled",
+      sandbox: "none",
+      proof_authority: "none",
+      run: input.runReplayCommand
+    });
+    manifestPaths.push(pm002RunManifestPath(input.projectRoot, replay.runId));
+    attemptedCommands.push(replay.command);
+    if (run.manifest.exit_code !== 0) {
+      const blockerDetail = summarizeCommandFailure(replay.command, { exit_code: run.manifest.exit_code, stdout: run.stdout, stderr: run.stderr });
+      const { path } = writePm002ExecutorBlocker({
+        projectRoot: input.projectRoot,
+        materialSource: input.materialSource,
+        materialCheck,
+        blocker_code: "lean_replay_command_failed",
+        blocker_detail: blockerDetail,
+        attempted_commands: attemptedCommands,
+        lean_run_manifest_paths: manifestPaths
+      });
+      const live_replay_conversion = runGoal3GaPositiveMatrixLiveReplayConversion({
+        projectRoot: input.projectRoot,
+        taskIds: ["PM-002"],
+        replayMaterialSource: () => input.materialSource,
+        liveReplay: () => ({ ok: false, blocker_code: "lean_replay_command_failed", detail: blockerDetail })
+      });
+      return {
+        schema_version: "comath.goal3_pm002_lean_authority_executor.v1",
+        task_id: "PM-002",
+        executor_status: "blocked_before_replay",
+        blocker_code: "lean_replay_command_failed",
+        blocker_detail: blockerDetail,
+        executor_blocker_path: path,
+        live_replay_conversion,
+        proof_authority: "none",
+        can_promote_claim: false
+      };
+    }
+  }
+
   const blockerDetail =
-    "Lean and Lake version probes succeeded, but Task 40 has not yet produced verified LeanRunManifest v3 and FinalReplayManifest v3 evidence for PM-002.";
+    "PM-002 declared Lean/Lake commands exited successfully, but complete verified FinalReplayManifest v3, structured audit, dependency closure, axiom profile, and statement-boundary evidence were not produced.";
   const { path } = writePm002ExecutorBlocker({
     projectRoot: input.projectRoot,
     materialSource: input.materialSource,
     materialCheck,
-    blocker_code: "live_replay_executor_not_configured",
+    blocker_code: "lean_authority_evidence_incomplete",
     blocker_detail: blockerDetail,
-    attempted_commands: [
-      ["lean", "--version"],
-      ["lake", "--version"]
-    ]
+    attempted_commands: attemptedCommands,
+    lean_run_manifest_paths: manifestPaths
   });
   const live_replay_conversion = runGoal3GaPositiveMatrixLiveReplayConversion({
     projectRoot: input.projectRoot,
     taskIds: ["PM-002"],
     replayMaterialSource: () => input.materialSource,
-    liveReplay: () => ({ ok: false, blocker_code: "live_replay_executor_not_configured", detail: blockerDetail })
+    liveReplay: () => ({ ok: false, blocker_code: "lean_authority_evidence_incomplete", detail: blockerDetail })
   });
   return {
     schema_version: "comath.goal3_pm002_lean_authority_executor.v1",
     task_id: "PM-002",
     executor_status: "blocked_before_replay",
-    blocker_code: "live_replay_executor_not_configured",
+    blocker_code: "lean_authority_evidence_incomplete",
     blocker_detail: blockerDetail,
     executor_blocker_path: path,
     live_replay_conversion,
