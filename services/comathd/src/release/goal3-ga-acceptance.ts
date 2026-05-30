@@ -1937,6 +1937,50 @@ export function packageFinalAuthorityEvidenceV3(input: {
   return report;
 }
 
+export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3(input: {
+  projectRoot: string;
+  taskId: string;
+  claimId: string;
+  sourceReport?: FinalAuthorityPackagingV3SourceReport;
+}): FinalAuthorityPackagingV3Report {
+  const task = taskByIdOrThrow(input.taskId);
+  if (task.task_id === "PM-001") {
+    throw new Error("invalid_positive_matrix_final_authority_task");
+  }
+
+  const missingFinalEvidenceClasses: Goal3GaPm002FinalEvidenceClass[] = [
+    "lean_run_manifest_v3",
+    "final_replay_manifest_v3",
+    "structured_audit",
+    "dependency_closure",
+    "axiom_profile",
+    "statement_check",
+    "third_party_replay_pack"
+  ];
+  const sourceReport = input.sourceReport ?? {
+    final_evidence_status: "blocked_missing_final_evidence" as const,
+    blocker_code: "final_authority_evidence_incomplete" as const,
+    blocker_detail: `${task.task_id} final Lean Authority v3 evidence is missing or unverifiable; the task remains a replayable blocker until service-owned LeanRunManifest v3, FinalReplayManifest v3, structured audit, dependency closure, axiom profile, statement check, and third-party replay pack material are attached.`,
+    missing_final_evidence_classes: missingFinalEvidenceClasses,
+    lean_run_manifest_paths: [],
+    final_replay_manifest_v3_path: "",
+    structured_audit_path: "",
+    dependency_closure_path: "",
+    axiom_profile_path: "",
+    statement_check_path: "",
+    third_party_replay_pack_path: "",
+    packaging_report_path: "",
+    proof_authority: "none" as const
+  };
+
+  return packageFinalAuthorityEvidenceV3({
+    projectRoot: input.projectRoot,
+    taskId: task.task_id,
+    claimId: input.claimId,
+    sourceReport
+  });
+}
+
 export function packageGoal3GaPm002FinalAuthorityEvidence(input: {
   projectRoot: string;
   materialSource: Goal3GaDeclaredReplayMaterialSource;
