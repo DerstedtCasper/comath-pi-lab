@@ -2414,11 +2414,35 @@ function reportPasses(projectRoot: string, path: string): boolean {
   return record.result === "pass" && hardVetoes.length === 0;
 }
 
-function replayPackExists(projectRoot: string, path: string): boolean {
+function expectedReplayPackHashes(finalReplayManifest: Record<string, unknown>): Record<string, unknown> {
+  return {
+    clean_workspace_sha256: finalReplayManifest.clean_workspace_sha256,
+    source_hashes_after: finalReplayManifest.source_hashes_after,
+    artifact_hashes: finalReplayManifest.artifact_hashes,
+    dependency_lock: finalReplayManifest.dependency_lock,
+    lean_run_manifest_paths: finalReplayManifest.lean_run_manifest_paths
+  };
+}
+
+function replayPackMatchesFinalReplay(projectRoot: string, path: string, finalReplayManifest: unknown): boolean {
+  if (!finalReplayManifest || typeof finalReplayManifest !== "object") {
+    return false;
+  }
+  const manifestPath = `${path}/FinalReplayManifest.json`;
+  const expectedHashesPath = `${path}/expected_hashes.json`;
+  if (
+    !evidencePathExistsInsideProject(projectRoot, `${path}/README_REPLAY.md`) ||
+    !evidencePathExistsInsideProject(projectRoot, manifestPath) ||
+    !evidencePathExistsInsideProject(projectRoot, expectedHashesPath)
+  ) {
+    return false;
+  }
+  const packManifest = readJsonInsideProject(projectRoot, manifestPath);
+  const packExpectedHashes = readJsonInsideProject(projectRoot, expectedHashesPath);
+  const finalReplayRecord = finalReplayManifest as Record<string, unknown>;
   return (
-    evidencePathExistsInsideProject(projectRoot, `${path}/README_REPLAY.md`) &&
-    evidencePathExistsInsideProject(projectRoot, `${path}/FinalReplayManifest.json`) &&
-    evidencePathExistsInsideProject(projectRoot, `${path}/expected_hashes.json`)
+    canonicalJson(packManifest) === canonicalJson(finalReplayManifest) &&
+    canonicalJson(packExpectedHashes) === canonicalJson(expectedReplayPackHashes(finalReplayRecord))
   );
 }
 
@@ -2714,7 +2738,7 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
   if (statementCheckPath && !finalReplayReportPathMatches(finalReplayRecord, "statement_equivalence", statementCheckPath)) {
     missing.add("statement_check");
   }
-  if (!thirdPartyReplayPackPath || !replayPackExists(input.projectRoot, thirdPartyReplayPackPath)) {
+  if (!thirdPartyReplayPackPath || !replayPackMatchesFinalReplay(input.projectRoot, thirdPartyReplayPackPath, finalReplayManifest)) {
     missing.add("third_party_replay_pack");
   }
 
@@ -3183,7 +3207,7 @@ export function packageGoal3GaPm002FinalAuthorityEvidence(input: {
   if (!statementCheckPath || !reportPasses(input.projectRoot, statementCheckPath)) {
     missing.add("statement_check");
   }
-  if (!replayPackExists(input.projectRoot, input.materialSource.third_party_replay_pack_path)) {
+  if (!replayPackMatchesFinalReplay(input.projectRoot, input.materialSource.third_party_replay_pack_path, finalReplayManifest)) {
     missing.add("third_party_replay_pack");
   }
 

@@ -277,7 +277,21 @@ function reportPasses(projectRoot: string, relativePath: string): boolean {
   }
 }
 
-function replayPackExists(projectRoot: string, relativePath: string): boolean {
+function expectedReplayPackHashes(finalReplayManifest: Record<string, unknown>): Record<string, unknown> {
+  return {
+    clean_workspace_sha256: finalReplayManifest.clean_workspace_sha256,
+    source_hashes_after: finalReplayManifest.source_hashes_after,
+    artifact_hashes: finalReplayManifest.artifact_hashes,
+    dependency_lock: finalReplayManifest.dependency_lock,
+    lean_run_manifest_paths: finalReplayManifest.lean_run_manifest_paths
+  };
+}
+
+function replayPackMatchesFinalReplay(
+  projectRoot: string,
+  relativePath: string,
+  finalReplayManifest: Record<string, unknown>
+): boolean {
   for (const required of ["README_REPLAY.md", "FinalReplayManifest.json", "expected_hashes.json"]) {
     try {
       assertPathAllowed(projectRoot, join(relativePath, required), { purpose: "read", resolveRealpath: true });
@@ -285,7 +299,12 @@ function replayPackExists(projectRoot: string, relativePath: string): boolean {
       return false;
     }
   }
-  return true;
+  const packManifest = readJsonInsideProject(projectRoot, join(relativePath, "FinalReplayManifest.json"));
+  const packExpectedHashes = readJsonInsideProject(projectRoot, join(relativePath, "expected_hashes.json"));
+  return (
+    canonicalBindingJson(packManifest) === canonicalBindingJson(finalReplayManifest) &&
+    canonicalBindingJson(packExpectedHashes) === canonicalBindingJson(expectedReplayPackHashes(finalReplayManifest))
+  );
 }
 
 function canonicalBindingJson(value: unknown): string {
@@ -576,7 +595,10 @@ function hasVerifiedFinalAuthorityPackagingV3(
     if (typeof report.statement_check_path !== "string" || !reportPasses(projectRoot, report.statement_check_path)) {
       continue;
     }
-    if (typeof report.third_party_replay_pack_path !== "string" || !replayPackExists(projectRoot, report.third_party_replay_pack_path)) {
+    if (
+      typeof report.third_party_replay_pack_path !== "string" ||
+      !replayPackMatchesFinalReplay(projectRoot, report.third_party_replay_pack_path, finalReplay as Record<string, unknown>)
+    ) {
       continue;
     }
     return true;
