@@ -372,6 +372,7 @@ export type Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
   task_ids: string[];
   results: Goal3GaPositiveMatrixLeanAuthorityExecutorReport[];
   tranche_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
+  tranche_report_path: string;
   proof_authority: "none" | "lean_kernel_clean_replay";
   can_promote_claim: false;
   promotion_requires_gate: true;
@@ -1729,6 +1730,16 @@ function positiveMatrixExecutorBlockerPath(task: Goal3GaPositiveMatrixTask): str
   return materialPath(task, "lean_authority_executor_blocker_v3.json");
 }
 
+function positiveMatrixExecutorTrancheReportPath(startTaskId: string, endTaskId: string): string {
+  return join(
+    ".comath",
+    "release",
+    "positive_matrix",
+    `${startTaskId}_${endTaskId}`,
+    "lean_authority_executor_tranche_v1.json"
+  ).replace(/\\/g, "/");
+}
+
 function positiveMatrixReplayPlanCommands(): string[][] {
   return [
     ["lake", "env", "lean", "MathResearch/Target.lean"],
@@ -2030,7 +2041,8 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
     });
   });
 
-  return {
+  const trancheReportPath = positiveMatrixExecutorTrancheReportPath(input.startTaskId, input.endTaskId);
+  const report: Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
     schema_version: "comath.goal3_positive_matrix_lean_authority_executor_tranche.v1",
     start_task_id: input.startTaskId,
     end_task_id: input.endTaskId,
@@ -2040,6 +2052,7 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
     tranche_status: results.every((result) => result.final_authority_packaging.final_evidence_status === "verified_final_authority_evidence")
       ? "verified_final_authority_evidence"
       : "blocked_missing_final_evidence",
+    tranche_report_path: trancheReportPath,
     proof_authority: results.every((result) => result.final_authority_packaging.proof_authority === "lean_kernel_clean_replay")
       ? "lean_kernel_clean_replay"
       : "none",
@@ -2047,6 +2060,8 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
     promotion_requires_gate: true,
     promoted_count: 0
   };
+  writeJsonProjectFile(input.projectRoot, trancheReportPath, report);
+  return report;
 }
 
 export function executeGoal3GaPm002LeanAuthorityReplay(input: {
