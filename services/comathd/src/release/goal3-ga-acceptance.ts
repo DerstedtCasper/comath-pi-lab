@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { assumptionLedgerSchema, formalSpecLockSchema } from "../types/schemas.js";
@@ -274,6 +275,45 @@ export type Goal3GaPm002ReplayMaterialPackPreflight = {
   material_hashes_sha256: Record<string, string>;
   live_replay_executor_status: "not_executed";
   blocker_code: "live_replay_executor_not_configured";
+  proof_authority: "none";
+  can_promote_claim: false;
+};
+
+type Goal3GaPm002LeanAuthorityProbeResult = {
+  exit_code: number;
+  stdout: string;
+  stderr: string;
+};
+
+export type Goal3GaPm002LeanAuthorityExecutorBlocker = {
+  schema_version: "comath.goal3_pm002_lean_authority_executor_blocker.v1";
+  task_id: "PM-002";
+  executor_status: "blocked_before_replay";
+  blocker_code:
+    | "declared_replay_material_missing"
+    | "lean_toolchain_unavailable_for_live_replay"
+    | "live_replay_executor_not_configured";
+  blocker_detail: string;
+  attempted_commands: string[][];
+  replay_plan_commands: string[][];
+  material_source_path: string;
+  lean_source_path: string;
+  lean_toolchain_path: string;
+  lakefile_path: string;
+  lake_manifest_path: string;
+  network_policy_final_replay: "disabled";
+  proof_authority: "none";
+  can_promote_claim: false;
+};
+
+export type Goal3GaPm002LeanAuthorityExecutorReport = {
+  schema_version: "comath.goal3_pm002_lean_authority_executor.v1";
+  task_id: "PM-002";
+  executor_status: "blocked_before_replay" | "live_replay_conversion_completed";
+  blocker_code: Goal3GaPm002LeanAuthorityExecutorBlocker["blocker_code"] | "";
+  blocker_detail: string;
+  executor_blocker_path: string;
+  live_replay_conversion: Goal3GaPositiveLiveReplayConversionReport;
   proof_authority: "none";
   can_promote_claim: false;
 };
@@ -1464,6 +1504,200 @@ function normalizeLiveReplayOutcomeForProject(
     ok: false,
     blocker_code: "live_replay_success_manifest_verification_failed",
     detail: "A live replay adapter reported success, but the supplied LeanRunManifest v3 or FinalReplayManifest v3 did not verify as service-owned Lean Authority evidence."
+  };
+}
+
+function runVersionProbe(command: string[], cwd: string): Goal3GaPm002LeanAuthorityProbeResult {
+  const [program, ...args] = command;
+  const result = spawnSync(program, args, {
+    cwd,
+    encoding: "utf8",
+    timeout: 30_000,
+    env: { ...process.env, COMATH_RUNNER_NETWORK: "disabled" }
+  });
+  return {
+    exit_code: result.status ?? 1,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? (result.error ? String(result.error) : "")
+  };
+}
+
+function summarizeProbeFailure(label: string, result: Goal3GaPm002LeanAuthorityProbeResult): string {
+  const output = [result.stdout, result.stderr].filter((item) => item.trim().length > 0).join("\n").trim();
+  return output ? `${label} failed: ${output}` : `${label} failed with exit code ${result.exit_code}`;
+}
+
+function writePm002ExecutorBlocker(input: {
+  projectRoot: string;
+  materialSource: Goal3GaDeclaredReplayMaterialSource;
+  materialCheck: Goal3GaDeclaredReplayMaterialCheck;
+  blocker_code: Goal3GaPm002LeanAuthorityExecutorBlocker["blocker_code"];
+  blocker_detail: string;
+  attempted_commands: string[][];
+}): { path: string; blocker: Goal3GaPm002LeanAuthorityExecutorBlocker } {
+  const task = taskByIdOrThrow("PM-002");
+  const path = materialPath(task, "lean_authority_executor_blocker.json");
+  const blocker: Goal3GaPm002LeanAuthorityExecutorBlocker = {
+    schema_version: "comath.goal3_pm002_lean_authority_executor_blocker.v1",
+    task_id: "PM-002",
+    executor_status: "blocked_before_replay",
+    blocker_code: input.blocker_code,
+    blocker_detail: input.blocker_detail,
+    attempted_commands: input.attempted_commands,
+    replay_plan_commands: [
+      ["lake", "env", "lean", "MathResearch/Target.lean"],
+      ["lake", "build", "MathResearch"]
+    ],
+    material_source_path: input.materialCheck.source_path,
+    lean_source_path: input.materialSource.lean_source_path,
+    lean_toolchain_path: input.materialSource.lean_toolchain_path,
+    lakefile_path: input.materialSource.lakefile_path,
+    lake_manifest_path: input.materialSource.lake_manifest_path,
+    network_policy_final_replay: "disabled",
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+  writeJsonProjectFile(input.projectRoot, path, blocker);
+  return { path, blocker };
+}
+
+export function executeGoal3GaPm002LeanAuthorityReplay(input: {
+  projectRoot: string;
+  materialSource: Goal3GaDeclaredReplayMaterialSource;
+  probeLeanVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+  probeLakeVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+}): Goal3GaPm002LeanAuthorityExecutorReport {
+  const task = taskByIdOrThrow("PM-002");
+  if (input.materialSource.task_id !== task.task_id) {
+    throw new Error("invalid_pm002_material_source_task");
+  }
+
+  const materialCheck = validateDeclaredReplayMaterialSource({
+    projectRoot: input.projectRoot,
+    task,
+    source: input.materialSource
+  });
+  if (materialCheck.status !== "ready_for_live_executor") {
+    const blockerDetail = "PM-002 declared replay material is missing, outside the project root, or incomplete.";
+    const { path } = writePm002ExecutorBlocker({
+      projectRoot: input.projectRoot,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "declared_replay_material_missing",
+      blocker_detail: blockerDetail,
+      attempted_commands: []
+    });
+    const live_replay_conversion = runGoal3GaPositiveMatrixLiveReplayConversion({
+      projectRoot: input.projectRoot,
+      taskIds: ["PM-002"],
+      replayMaterialSource: () => input.materialSource
+    });
+    return {
+      schema_version: "comath.goal3_pm002_lean_authority_executor.v1",
+      task_id: "PM-002",
+      executor_status: "blocked_before_replay",
+      blocker_code: "declared_replay_material_missing",
+      blocker_detail: blockerDetail,
+      executor_blocker_path: path,
+      live_replay_conversion,
+      proof_authority: "none",
+      can_promote_claim: false
+    };
+  }
+
+  const materialRoot = join(input.projectRoot, materialPath(task, ""));
+  const leanProbe = input.probeLeanVersion ? input.probeLeanVersion() : runVersionProbe(["lean", "--version"], materialRoot);
+  if (leanProbe.exit_code !== 0) {
+    const blockerDetail = summarizeProbeFailure("lean --version", leanProbe);
+    const { path } = writePm002ExecutorBlocker({
+      projectRoot: input.projectRoot,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "lean_toolchain_unavailable_for_live_replay",
+      blocker_detail: blockerDetail,
+      attempted_commands: [["lean", "--version"]]
+    });
+    const live_replay_conversion = runGoal3GaPositiveMatrixLiveReplayConversion({
+      projectRoot: input.projectRoot,
+      taskIds: ["PM-002"],
+      replayMaterialSource: () => input.materialSource,
+      liveReplay: () => ({ ok: false, blocker_code: "lean_toolchain_unavailable_for_live_replay", detail: blockerDetail })
+    });
+    return {
+      schema_version: "comath.goal3_pm002_lean_authority_executor.v1",
+      task_id: "PM-002",
+      executor_status: "blocked_before_replay",
+      blocker_code: "lean_toolchain_unavailable_for_live_replay",
+      blocker_detail: blockerDetail,
+      executor_blocker_path: path,
+      live_replay_conversion,
+      proof_authority: "none",
+      can_promote_claim: false
+    };
+  }
+
+  const lakeProbe = input.probeLakeVersion ? input.probeLakeVersion() : runVersionProbe(["lake", "--version"], materialRoot);
+  if (lakeProbe.exit_code !== 0) {
+    const blockerDetail = summarizeProbeFailure("lake --version", lakeProbe);
+    const { path } = writePm002ExecutorBlocker({
+      projectRoot: input.projectRoot,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "lean_toolchain_unavailable_for_live_replay",
+      blocker_detail: blockerDetail,
+      attempted_commands: [
+        ["lean", "--version"],
+        ["lake", "--version"]
+      ]
+    });
+    const live_replay_conversion = runGoal3GaPositiveMatrixLiveReplayConversion({
+      projectRoot: input.projectRoot,
+      taskIds: ["PM-002"],
+      replayMaterialSource: () => input.materialSource,
+      liveReplay: () => ({ ok: false, blocker_code: "lean_toolchain_unavailable_for_live_replay", detail: blockerDetail })
+    });
+    return {
+      schema_version: "comath.goal3_pm002_lean_authority_executor.v1",
+      task_id: "PM-002",
+      executor_status: "blocked_before_replay",
+      blocker_code: "lean_toolchain_unavailable_for_live_replay",
+      blocker_detail: blockerDetail,
+      executor_blocker_path: path,
+      live_replay_conversion,
+      proof_authority: "none",
+      can_promote_claim: false
+    };
+  }
+
+  const blockerDetail =
+    "Lean and Lake version probes succeeded, but Task 40 has not yet produced verified LeanRunManifest v3 and FinalReplayManifest v3 evidence for PM-002.";
+  const { path } = writePm002ExecutorBlocker({
+    projectRoot: input.projectRoot,
+    materialSource: input.materialSource,
+    materialCheck,
+    blocker_code: "live_replay_executor_not_configured",
+    blocker_detail: blockerDetail,
+    attempted_commands: [
+      ["lean", "--version"],
+      ["lake", "--version"]
+    ]
+  });
+  const live_replay_conversion = runGoal3GaPositiveMatrixLiveReplayConversion({
+    projectRoot: input.projectRoot,
+    taskIds: ["PM-002"],
+    replayMaterialSource: () => input.materialSource,
+    liveReplay: () => ({ ok: false, blocker_code: "live_replay_executor_not_configured", detail: blockerDetail })
+  });
+  return {
+    schema_version: "comath.goal3_pm002_lean_authority_executor.v1",
+    task_id: "PM-002",
+    executor_status: "blocked_before_replay",
+    blocker_code: "live_replay_executor_not_configured",
+    blocker_detail: blockerDetail,
+    executor_blocker_path: path,
+    live_replay_conversion,
+    proof_authority: "none",
+    can_promote_claim: false
   };
 }
 
