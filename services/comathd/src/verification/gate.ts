@@ -334,6 +334,11 @@ function shortLeanDeclarationName(name: string): string {
   return name.split(".").filter(Boolean).at(-1) ?? name;
 }
 
+function leanDeclarationNamespace(name: string): string {
+  const parts = name.split(".").filter(Boolean);
+  return parts.length > 1 ? parts.slice(0, -1).join(".") : "";
+}
+
 function theoremHeaderDeclarationName(header: string | null): string | null {
   if (header === null) {
     return null;
@@ -357,6 +362,11 @@ function formalSpecTheoremIdentityMatches(
   const finalReplayTheoremName = finalReplayManifest.theorem_name;
   const formalSpecShortName = shortLeanDeclarationName(formalSpecTheoremName);
   if (formalSpecTheoremName !== finalReplayTheoremName && formalSpecShortName !== shortLeanDeclarationName(finalReplayTheoremName)) {
+    return false;
+  }
+
+  const formalSpecNamespace = projectJsonStringField(projectRoot, formalSpecLockPath, "namespace");
+  if (formalSpecNamespace !== null && formalSpecNamespace.trim() !== "" && formalSpecNamespace !== leanDeclarationNamespace(finalReplayTheoremName)) {
     return false;
   }
 
