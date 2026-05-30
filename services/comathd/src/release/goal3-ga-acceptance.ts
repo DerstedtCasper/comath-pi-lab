@@ -2470,6 +2470,7 @@ function hashProjectJsonFile(projectRoot: string, path: string): string | null {
 
 function verifyOptionalFinalAuthorityBindings(input: {
   projectRoot: string;
+  taskId: string;
   evidence: FinalAuthorityPackagingV3EvidenceInput;
   finalReplayManifest: unknown;
   finalReplayManifestPath: string;
@@ -2483,20 +2484,40 @@ function verifyOptionalFinalAuthorityBindings(input: {
 
   if (typeof evidence.formal_spec_lock_path === "string" || evidence.formal_spec_lock_sha256 !== undefined) {
     submitted.add("formal_spec_lock_binding");
+    const formalSpecLock = typeof evidence.formal_spec_lock_path === "string"
+      ? readJsonInsideProject(input.projectRoot, evidence.formal_spec_lock_path)
+      : null;
+    const formalSpecLockRecord = formalSpecLock && typeof formalSpecLock === "object"
+      ? (formalSpecLock as Record<string, unknown>)
+      : {};
     const actualHash = typeof evidence.formal_spec_lock_path === "string"
       ? hashProjectJsonFile(input.projectRoot, evidence.formal_spec_lock_path)
       : null;
-    if (!validSha256(evidence.formal_spec_lock_sha256) || actualHash !== evidence.formal_spec_lock_sha256) {
+    if (
+      !validSha256(evidence.formal_spec_lock_sha256) ||
+      actualHash !== evidence.formal_spec_lock_sha256 ||
+      formalSpecLockRecord.task_id !== input.taskId
+    ) {
       input.missing.add("formal_spec_lock_binding");
     }
   }
 
   if (typeof evidence.assumption_ledger_path === "string" || evidence.assumption_ledger_sha256 !== undefined) {
     submitted.add("assumption_ledger_binding");
+    const assumptionLedger = typeof evidence.assumption_ledger_path === "string"
+      ? readJsonInsideProject(input.projectRoot, evidence.assumption_ledger_path)
+      : null;
+    const assumptionLedgerRecord = assumptionLedger && typeof assumptionLedger === "object"
+      ? (assumptionLedger as Record<string, unknown>)
+      : {};
     const actualHash = typeof evidence.assumption_ledger_path === "string"
       ? hashProjectJsonFile(input.projectRoot, evidence.assumption_ledger_path)
       : null;
-    if (!validSha256(evidence.assumption_ledger_sha256) || actualHash !== evidence.assumption_ledger_sha256) {
+    if (
+      !validSha256(evidence.assumption_ledger_sha256) ||
+      actualHash !== evidence.assumption_ledger_sha256 ||
+      assumptionLedgerRecord.task_id !== input.taskId
+    ) {
       input.missing.add("assumption_ledger_binding");
     }
   }
@@ -2602,6 +2623,7 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
 
   const submittedBindingClasses = verifyOptionalFinalAuthorityBindings({
     projectRoot: input.projectRoot,
+    taskId: input.taskId,
     evidence,
     finalReplayManifest,
     finalReplayManifestPath,

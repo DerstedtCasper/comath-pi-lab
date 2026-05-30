@@ -307,6 +307,15 @@ function hashJsonInsideProject(projectRoot: string, relativePath: string): strin
   return value === null ? null : sha256Text(canonicalBindingJson(value));
 }
 
+function projectJsonTaskId(projectRoot: string, relativePath: string): string | null {
+  const value = readJsonInsideProject(projectRoot, relativePath);
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const taskId = (value as Record<string, unknown>).task_id;
+  return typeof taskId === "string" ? taskId : null;
+}
+
 function requestedJsonArtifactByPath(projectRoot: string, artifacts: ArtifactRef[], relativePath: string): unknown | null {
   const normalizedPath = relativePath.replace(/\\/g, "/");
   const directMatch = artifacts
@@ -389,8 +398,10 @@ function hasVerifiedDerivedBindingManifest(
   return (
     typeof bindingRecord.formal_spec_lock_path === "string" &&
     hashJsonInsideProject(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.formal_spec_lock_sha256 &&
+    projectJsonTaskId(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.task_id &&
     typeof bindingRecord.assumption_ledger_path === "string" &&
     hashJsonInsideProject(projectRoot, bindingRecord.assumption_ledger_path) === bindingRecord.assumption_ledger_sha256 &&
+    projectJsonTaskId(projectRoot, bindingRecord.assumption_ledger_path) === bindingRecord.task_id &&
     dependencyLockHash === bindingRecord.dependency_lock_sha256 &&
     artifactHashesHash === bindingRecord.artifact_hashes_sha256 &&
     dependencyLock.lean_toolchain_sha256 === bindingRecord.toolchain_sha256 &&
