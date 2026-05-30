@@ -90,6 +90,7 @@ try {
     schema_version: "comath.formal_spec_lock.v2",
     task_id: taskId,
     theorem_name: "Goal3Positive068",
+    theorem_header: "theorem Goal3Positive068 : True",
     statement_hash: claim.statement_hash,
     proof_authority: "none"
   };

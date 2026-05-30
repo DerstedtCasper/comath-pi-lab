@@ -2481,6 +2481,36 @@ function optionalStringFieldMatches(value: unknown, field: string, expected: str
   return actual === null || actual === expected;
 }
 
+function shortLeanDeclarationName(name: string): string {
+  return name.split(".").filter(Boolean).at(-1) ?? name;
+}
+
+function theoremHeaderDeclarationName(header: string | null): string | null {
+  if (header === null) {
+    return null;
+  }
+  const match = /\b(?:theorem|lemma)\s+([A-Za-z_][A-Za-z0-9_'.]*)/.exec(header);
+  return match ? shortLeanDeclarationName(match[1]) : null;
+}
+
+function formalSpecTheoremIdentityMatches(formalSpecLock: unknown, finalReplayManifest: Record<string, unknown>): boolean {
+  if (typeof finalReplayManifest.theorem_name !== "string") {
+    return false;
+  }
+  const formalSpecTheoremName = jsonStringField(formalSpecLock, "theorem_name");
+  if (formalSpecTheoremName === null) {
+    return false;
+  }
+  const finalReplayTheoremName = finalReplayManifest.theorem_name;
+  const formalSpecShortName = shortLeanDeclarationName(formalSpecTheoremName);
+  if (formalSpecTheoremName !== finalReplayTheoremName && formalSpecShortName !== shortLeanDeclarationName(finalReplayTheoremName)) {
+    return false;
+  }
+
+  const headerDeclarationName = theoremHeaderDeclarationName(jsonStringField(formalSpecLock, "theorem_header"));
+  return headerDeclarationName !== null && headerDeclarationName === formalSpecShortName;
+}
+
 function verifyOptionalFinalAuthorityBindings(input: {
   projectRoot: string;
   taskId: string;
@@ -2516,6 +2546,7 @@ function verifyOptionalFinalAuthorityBindings(input: {
       actualHash !== evidence.formal_spec_lock_sha256 ||
       formalSpecLockRecord.task_id !== input.taskId ||
       !optionalStringFieldMatches(formalSpecLock, "claim_id", input.claimId) ||
+      !formalSpecTheoremIdentityMatches(formalSpecLock, finalReplayRecord) ||
       lockedStatementHash === null ||
       formalSpecLockRecord.statement_hash !== lockedStatementHash
     ) {

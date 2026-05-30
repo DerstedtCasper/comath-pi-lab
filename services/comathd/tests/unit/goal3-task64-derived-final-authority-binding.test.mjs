@@ -54,6 +54,7 @@ const formalSpecLock = {
   schema_version: "comath.formal_spec_lock.v2",
   task_id: taskId,
   theorem_name: "Goal3Positive064",
+  theorem_header: "theorem Goal3Positive064 : True",
   statement_hash: "pm064-locked-statement-hash",
   proof_authority: "none"
 };

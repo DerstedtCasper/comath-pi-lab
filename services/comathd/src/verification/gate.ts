@@ -330,6 +330,40 @@ function projectJsonOptionalStringFieldMatches(projectRoot: string, relativePath
   return value === null || value === expected;
 }
 
+function shortLeanDeclarationName(name: string): string {
+  return name.split(".").filter(Boolean).at(-1) ?? name;
+}
+
+function theoremHeaderDeclarationName(header: string | null): string | null {
+  if (header === null) {
+    return null;
+  }
+  const match = /\b(?:theorem|lemma)\s+([A-Za-z_][A-Za-z0-9_'.]*)/.exec(header);
+  return match ? shortLeanDeclarationName(match[1]) : null;
+}
+
+function formalSpecTheoremIdentityMatches(
+  projectRoot: string,
+  formalSpecLockPath: string,
+  finalReplayManifest: Record<string, unknown>
+): boolean {
+  if (typeof finalReplayManifest.theorem_name !== "string") {
+    return false;
+  }
+  const formalSpecTheoremName = projectJsonStringField(projectRoot, formalSpecLockPath, "theorem_name");
+  if (formalSpecTheoremName === null) {
+    return false;
+  }
+  const finalReplayTheoremName = finalReplayManifest.theorem_name;
+  const formalSpecShortName = shortLeanDeclarationName(formalSpecTheoremName);
+  if (formalSpecTheoremName !== finalReplayTheoremName && formalSpecShortName !== shortLeanDeclarationName(finalReplayTheoremName)) {
+    return false;
+  }
+
+  const headerDeclarationName = theoremHeaderDeclarationName(projectJsonStringField(projectRoot, formalSpecLockPath, "theorem_header"));
+  return headerDeclarationName !== null && headerDeclarationName === formalSpecShortName;
+}
+
 function requestedJsonArtifactByPath(projectRoot: string, artifacts: ArtifactRef[], relativePath: string): unknown | null {
   const normalizedPath = relativePath.replace(/\\/g, "/");
   const directMatch = artifacts
@@ -414,6 +448,7 @@ function hasVerifiedDerivedBindingManifest(
     hashJsonInsideProject(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.formal_spec_lock_sha256 &&
     projectJsonTaskId(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.task_id &&
     projectJsonOptionalStringFieldMatches(projectRoot, bindingRecord.formal_spec_lock_path, "claim_id", bindingRecord.claim_id as string) &&
+    formalSpecTheoremIdentityMatches(projectRoot, bindingRecord.formal_spec_lock_path, finalReplayManifest) &&
     projectJsonStringField(projectRoot, bindingRecord.formal_spec_lock_path, "statement_hash") ===
       projectJsonStringField(projectRoot, report.statement_check_path as string, "locked_statement_hash") &&
     typeof bindingRecord.assumption_ledger_path === "string" &&
