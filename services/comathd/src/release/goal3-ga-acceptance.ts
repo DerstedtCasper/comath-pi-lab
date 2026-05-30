@@ -415,6 +415,27 @@ type Goal3GaDeclaredReplayMaterialCheck = {
   missing_paths: string[];
 };
 
+const finalAuthorityEvidenceClassOrder: Goal3GaPm002FinalEvidenceClass[] = [
+  "lean_run_manifest_v3",
+  "final_replay_manifest_v3",
+  "structured_audit",
+  "dependency_closure",
+  "axiom_profile",
+  "statement_check",
+  "third_party_replay_pack"
+];
+
+export type FinalAuthorityPackagingV3EvidenceInput = Partial<Pick<FinalAuthorityPackagingV3SourceReport,
+  | "lean_run_manifest_paths"
+  | "final_replay_manifest_v3_path"
+  | "structured_audit_path"
+  | "dependency_closure_path"
+  | "axiom_profile_path"
+  | "statement_check_path"
+  | "third_party_replay_pack_path"
+  | "packaging_report_path"
+>>;
+
 export type Goal3GaPositiveMatrixTrancheReport = {
   schema_version: "comath.goal3_positive_matrix_tranche.v1";
   total_required_tasks: 100;
@@ -1919,6 +1940,138 @@ function genericFinalPackagingTrancheReportPath(startTaskId: string, endTaskId: 
     `${startTaskId}_${endTaskId}`,
     "final_authority_packaging_tranche_v3.json"
   ).replace(/\\/g, "/");
+}
+
+function orderedMissingFinalEvidenceClasses(missing: Set<Goal3GaPm002FinalEvidenceClass>): Goal3GaPm002FinalEvidenceClass[] {
+  return finalAuthorityEvidenceClassOrder.filter((evidenceClass) => missing.has(evidenceClass));
+}
+
+function verifyFinalAuthorityEvidenceSourceReportV3(input: {
+  projectRoot: string;
+  taskId: string;
+  evidence?: FinalAuthorityPackagingV3EvidenceInput;
+}): FinalAuthorityPackagingV3SourceReport {
+  const evidence = input.evidence ?? {};
+  const leanRunManifestPaths = Array.isArray(evidence.lean_run_manifest_paths)
+    ? evidence.lean_run_manifest_paths.filter((path): path is string => typeof path === "string" && path.length > 0)
+    : [];
+  const finalReplayManifestPath = typeof evidence.final_replay_manifest_v3_path === "string" ? evidence.final_replay_manifest_v3_path : "";
+  const structuredAuditPath = typeof evidence.structured_audit_path === "string" ? evidence.structured_audit_path : "";
+  const dependencyClosurePath = typeof evidence.dependency_closure_path === "string" ? evidence.dependency_closure_path : "";
+  const axiomProfilePath = typeof evidence.axiom_profile_path === "string" ? evidence.axiom_profile_path : "";
+  const statementCheckPath = typeof evidence.statement_check_path === "string" ? evidence.statement_check_path : "";
+  const thirdPartyReplayPackPath = typeof evidence.third_party_replay_pack_path === "string" ? evidence.third_party_replay_pack_path : "";
+  const packagingReportPath = typeof evidence.packaging_report_path === "string" ? evidence.packaging_report_path : "";
+
+  const missing = new Set<Goal3GaPm002FinalEvidenceClass>();
+  if (leanRunManifestPaths.length === 0) {
+    missing.add("lean_run_manifest_v3");
+  }
+  for (const manifestPath of leanRunManifestPaths) {
+    const manifest = readJsonInsideProject(input.projectRoot, manifestPath);
+    const verification = verifyLeanRunManifestV3Evidence(input.projectRoot, manifest);
+    if (!verification.ok) {
+      missing.add("lean_run_manifest_v3");
+    }
+  }
+
+  const finalReplayManifest = finalReplayManifestPath ? readJsonInsideProject(input.projectRoot, finalReplayManifestPath) : null;
+  const finalReplayVerification = verifyFinalReplayManifestV3(input.projectRoot, finalReplayManifest);
+  const finalReplayRecord = finalReplayManifest && typeof finalReplayManifest === "object" ? (finalReplayManifest as Record<string, unknown>) : {};
+  const finalReplayPassed =
+    finalReplayRecord.result === "pass" &&
+    finalReplayRecord.exit_code === 0 &&
+    finalReplayRecord.proof_authority === "lean_kernel_clean_replay";
+  if (!finalReplayManifestPath || !finalReplayVerification.ok || !finalReplayPassed) {
+    missing.add("final_replay_manifest_v3");
+  }
+
+  if (!structuredAuditPath || !reportPasses(input.projectRoot, structuredAuditPath)) {
+    missing.add("structured_audit");
+  }
+  if (!dependencyClosurePath || !reportPasses(input.projectRoot, dependencyClosurePath)) {
+    missing.add("dependency_closure");
+  }
+  if (!axiomProfilePath || !reportPasses(input.projectRoot, axiomProfilePath)) {
+    missing.add("axiom_profile");
+  }
+  if (!statementCheckPath || !reportPasses(input.projectRoot, statementCheckPath)) {
+    missing.add("statement_check");
+  }
+  if (!thirdPartyReplayPackPath || !replayPackExists(input.projectRoot, thirdPartyReplayPackPath)) {
+    missing.add("third_party_replay_pack");
+  }
+
+  const missingFinalEvidenceClasses = orderedMissingFinalEvidenceClasses(missing);
+  return {
+    final_evidence_status: missingFinalEvidenceClasses.length === 0 ? "verified_final_authority_evidence" : "blocked_missing_final_evidence",
+    blocker_code: missingFinalEvidenceClasses.length === 0 ? "" : "final_authority_evidence_incomplete",
+    blocker_detail:
+      missingFinalEvidenceClasses.length === 0
+        ? `${input.taskId} final Lean Authority v3 evidence verifies, but claim promotion still requires the ordinary promotion gate.`
+        : `${input.taskId} final Lean Authority v3 evidence is missing or unverifiable; the task remains a replayable blocker until all final evidence classes verify from project-local artifacts.`,
+    missing_final_evidence_classes: missingFinalEvidenceClasses,
+    lean_run_manifest_paths: leanRunManifestPaths,
+    final_replay_manifest_v3_path: finalReplayManifestPath,
+    structured_audit_path: structuredAuditPath,
+    dependency_closure_path: dependencyClosurePath,
+    axiom_profile_path: axiomProfilePath,
+    statement_check_path: statementCheckPath,
+    third_party_replay_pack_path: thirdPartyReplayPackPath,
+    packaging_report_path: packagingReportPath,
+    proof_authority: missingFinalEvidenceClasses.length === 0 ? "lean_kernel_clean_replay" : "none"
+  };
+}
+
+export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceFromEvidenceV3(input: {
+  projectRoot: string;
+  taskId: string;
+  claimId: string;
+  evidence?: FinalAuthorityPackagingV3EvidenceInput;
+}): FinalAuthorityPackagingV3Report {
+  const sourceReport = verifyFinalAuthorityEvidenceSourceReportV3({
+    projectRoot: input.projectRoot,
+    taskId: input.taskId,
+    evidence: input.evidence
+  });
+  return packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3({
+    projectRoot: input.projectRoot,
+    taskId: input.taskId,
+    claimId: input.claimId,
+    sourceReport
+  });
+}
+
+export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheFromEvidenceV3(input: {
+  projectRoot: string;
+  startTaskId: string;
+  endTaskId: string;
+  claimIdPrefix?: string;
+  evidenceByTaskId?: Record<string, FinalAuthorityPackagingV3EvidenceInput | undefined>;
+}): FinalAuthorityPackagingV3TrancheReport {
+  const manifest = createGoal3GaPositiveTaskManifest();
+  const startIndex = manifest.tasks.findIndex((task) => task.task_id === input.startTaskId);
+  const endIndex = manifest.tasks.findIndex((task) => task.task_id === input.endTaskId);
+  if (startIndex < 0 || endIndex < 0 || startIndex > endIndex || input.startTaskId === "PM-001") {
+    throw new Error("invalid_positive_matrix_final_authority_tranche");
+  }
+
+  const sourceReportsByTaskId: Record<string, FinalAuthorityPackagingV3SourceReport> = {};
+  for (const task of manifest.tasks.slice(startIndex, endIndex + 1)) {
+    sourceReportsByTaskId[task.task_id] = verifyFinalAuthorityEvidenceSourceReportV3({
+      projectRoot: input.projectRoot,
+      taskId: task.task_id,
+      evidence: input.evidenceByTaskId?.[task.task_id]
+    });
+  }
+
+  return packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3({
+    projectRoot: input.projectRoot,
+    startTaskId: input.startTaskId,
+    endTaskId: input.endTaskId,
+    claimIdPrefix: input.claimIdPrefix,
+    sourceReportsByTaskId
+  });
 }
 
 export function packageFinalAuthorityEvidenceV3(input: {
