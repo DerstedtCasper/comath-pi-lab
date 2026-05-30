@@ -492,6 +492,26 @@ export type FinalAuthorityPackagingV3TrancheReport = {
   promoted_count: 0;
 };
 
+export type FinalAuthorityDerivedBindingsV3Manifest = {
+  schema_version: "comath.final_authority_derived_bindings.v3";
+  task_id: string;
+  claim_id: string;
+  binding_manifest_path: string;
+  final_replay_manifest_v3_path: string;
+  formal_spec_lock_path: string;
+  formal_spec_lock_sha256: string;
+  assumption_ledger_path: string;
+  assumption_ledger_sha256: string;
+  dependency_lock_sha256: string;
+  artifact_hashes_sha256: string;
+  toolchain_sha256: string;
+  replay_manifest_sha256: string;
+  caller_supplied_hashes_trusted: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  promotion_requires_gate: true;
+};
+
 type Goal3GaDeclaredReplayMaterialCheck = {
   source_path: string;
   status: "not_declared" | "missing_or_incomplete" | "ready_for_live_executor";
@@ -542,6 +562,18 @@ export type FinalAuthorityPackagingV3EvidenceInput = Partial<Pick<FinalAuthority
   artifact_hashes_sha256?: string;
   toolchain_sha256?: string;
   replay_manifest_sha256?: string;
+};
+
+export type FinalAuthorityPackagingV3DerivedBindingInput = Omit<FinalAuthorityPackagingV3EvidenceInput,
+  | "formal_spec_lock_sha256"
+  | "assumption_ledger_sha256"
+  | "dependency_lock_sha256"
+  | "artifact_hashes_sha256"
+  | "toolchain_sha256"
+  | "replay_manifest_sha256"
+> & {
+  formal_spec_lock_path: string;
+  assumption_ledger_path: string;
 };
 
 export type Goal3GaPositiveMatrixTrancheReport = {
@@ -2385,6 +2417,16 @@ function genericFinalPackagingTrancheReportPath(startTaskId: string, endTaskId: 
   ).replace(/\\/g, "/");
 }
 
+function genericFinalAuthorityDerivedBindingsPath(taskId: string): string {
+  return join(
+    ".comath",
+    "release",
+    "positive_matrix",
+    taskId,
+    "derived_final_authority_bindings_v3.json"
+  ).replace(/\\/g, "/");
+}
+
 function orderedMissingFinalEvidenceClasses(missing: Set<Goal3GaPm002FinalEvidenceClass>): Goal3GaPm002FinalEvidenceClass[] {
   return finalAuthorityEvidenceClassOrder.filter((evidenceClass) => missing.has(evidenceClass));
 }
@@ -2591,6 +2633,80 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceFromEvidenceV3
     taskId: input.taskId,
     claimId: input.claimId,
     sourceReport
+  });
+}
+
+export function deriveFinalAuthorityEvidenceBindingsV3(input: {
+  projectRoot: string;
+  taskId: string;
+  claimId: string;
+  evidence: FinalAuthorityPackagingV3DerivedBindingInput;
+}): { evidence: FinalAuthorityPackagingV3EvidenceInput; binding_manifest: FinalAuthorityDerivedBindingsV3Manifest } {
+  taskByIdOrThrow(input.taskId);
+  const finalReplayManifestPath = input.evidence.final_replay_manifest_v3_path ?? "";
+  const finalReplayManifest = finalReplayManifestPath ? readJsonInsideProject(input.projectRoot, finalReplayManifestPath) : null;
+  const finalReplayRecord = finalReplayManifest && typeof finalReplayManifest === "object"
+    ? (finalReplayManifest as Record<string, unknown>)
+    : {};
+  const dependencyLock = finalReplayRecord.dependency_lock && typeof finalReplayRecord.dependency_lock === "object"
+    ? (finalReplayRecord.dependency_lock as Record<string, unknown>)
+    : {};
+
+  const formalSpecLockSha256 = hashProjectJsonFile(input.projectRoot, input.evidence.formal_spec_lock_path) ?? "";
+  const assumptionLedgerSha256 = hashProjectJsonFile(input.projectRoot, input.evidence.assumption_ledger_path) ?? "";
+  const dependencyLockSha256 = finalReplayRecord.dependency_lock ? sha256Text(canonicalJson(finalReplayRecord.dependency_lock)) : "";
+  const artifactHashesSha256 = finalReplayRecord.artifact_hashes ? sha256Text(canonicalJson(finalReplayRecord.artifact_hashes)) : "";
+  const toolchainSha256 = typeof dependencyLock.lean_toolchain_sha256 === "string" ? dependencyLock.lean_toolchain_sha256 : "";
+  const replayManifestSha256 = finalReplayManifestPath ? hashProjectJsonFile(input.projectRoot, finalReplayManifestPath) ?? "" : "";
+  const bindingManifestPath = genericFinalAuthorityDerivedBindingsPath(input.taskId);
+  const bindingManifest: FinalAuthorityDerivedBindingsV3Manifest = {
+    schema_version: "comath.final_authority_derived_bindings.v3",
+    task_id: input.taskId,
+    claim_id: input.claimId,
+    binding_manifest_path: bindingManifestPath,
+    final_replay_manifest_v3_path: finalReplayManifestPath,
+    formal_spec_lock_path: input.evidence.formal_spec_lock_path,
+    formal_spec_lock_sha256: formalSpecLockSha256,
+    assumption_ledger_path: input.evidence.assumption_ledger_path,
+    assumption_ledger_sha256: assumptionLedgerSha256,
+    dependency_lock_sha256: dependencyLockSha256,
+    artifact_hashes_sha256: artifactHashesSha256,
+    toolchain_sha256: toolchainSha256,
+    replay_manifest_sha256: replayManifestSha256,
+    caller_supplied_hashes_trusted: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    promotion_requires_gate: true
+  };
+  writeJsonProjectFile(input.projectRoot, bindingManifestPath, bindingManifest);
+
+  return {
+    evidence: {
+      ...input.evidence,
+      formal_spec_lock_sha256: formalSpecLockSha256,
+      assumption_ledger_sha256: assumptionLedgerSha256,
+      dependency_lock_sha256: dependencyLockSha256,
+      artifact_hashes_sha256: artifactHashesSha256,
+      toolchain_sha256: toolchainSha256,
+      replay_manifest_sha256: replayManifestSha256,
+      packaging_report_path: input.evidence.packaging_report_path ?? bindingManifestPath
+    },
+    binding_manifest: bindingManifest
+  };
+}
+
+export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3(input: {
+  projectRoot: string;
+  taskId: string;
+  claimId: string;
+  evidence: FinalAuthorityPackagingV3DerivedBindingInput;
+}): FinalAuthorityPackagingV3Report {
+  const derived = deriveFinalAuthorityEvidenceBindingsV3(input);
+  return packageGoal3GaPositiveMatrixFinalAuthorityEvidenceFromEvidenceV3({
+    projectRoot: input.projectRoot,
+    taskId: input.taskId,
+    claimId: input.claimId,
+    evidence: derived.evidence
   });
 }
 
