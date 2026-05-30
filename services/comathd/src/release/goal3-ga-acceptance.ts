@@ -398,7 +398,13 @@ type Goal3GaPm002FinalEvidenceClass =
   | "dependency_closure"
   | "axiom_profile"
   | "statement_check"
-  | "third_party_replay_pack";
+  | "third_party_replay_pack"
+  | "formal_spec_lock_binding"
+  | "assumption_ledger_binding"
+  | "dependency_lock_binding"
+  | "artifact_hash_binding"
+  | "toolchain_hash_binding"
+  | "replay_manifest_hash_binding";
 
 export type Goal3GaPm002FinalAuthorityPackagingReport = {
   schema_version: "comath.goal3_pm002_final_authority_packaging.v1";
@@ -499,6 +505,22 @@ const finalAuthorityEvidenceClassOrder: Goal3GaPm002FinalEvidenceClass[] = [
   "dependency_closure",
   "axiom_profile",
   "statement_check",
+  "third_party_replay_pack",
+  "formal_spec_lock_binding",
+  "assumption_ledger_binding",
+  "dependency_lock_binding",
+  "artifact_hash_binding",
+  "toolchain_hash_binding",
+  "replay_manifest_hash_binding"
+];
+
+const coreFinalAuthorityEvidenceClasses: Goal3GaPm002FinalEvidenceClass[] = [
+  "lean_run_manifest_v3",
+  "final_replay_manifest_v3",
+  "structured_audit",
+  "dependency_closure",
+  "axiom_profile",
+  "statement_check",
   "third_party_replay_pack"
 ];
 
@@ -511,7 +533,16 @@ export type FinalAuthorityPackagingV3EvidenceInput = Partial<Pick<FinalAuthority
   | "statement_check_path"
   | "third_party_replay_pack_path"
   | "packaging_report_path"
->>;
+>> & {
+  formal_spec_lock_path?: string;
+  formal_spec_lock_sha256?: string;
+  assumption_ledger_path?: string;
+  assumption_ledger_sha256?: string;
+  dependency_lock_sha256?: string;
+  artifact_hashes_sha256?: string;
+  toolchain_sha256?: string;
+  replay_manifest_sha256?: string;
+};
 
 export type Goal3GaPositiveMatrixTrancheReport = {
   schema_version: "comath.goal3_positive_matrix_tranche.v1";
@@ -2358,6 +2389,94 @@ function orderedMissingFinalEvidenceClasses(missing: Set<Goal3GaPm002FinalEviden
   return finalAuthorityEvidenceClassOrder.filter((evidenceClass) => missing.has(evidenceClass));
 }
 
+function validSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
+}
+
+function hashProjectJsonFile(projectRoot: string, path: string): string | null {
+  const value = readJsonInsideProject(projectRoot, path);
+  if (value === null) {
+    return null;
+  }
+  return sha256Text(canonicalJson(value));
+}
+
+function verifyOptionalFinalAuthorityBindings(input: {
+  projectRoot: string;
+  evidence: FinalAuthorityPackagingV3EvidenceInput;
+  finalReplayManifest: unknown;
+  finalReplayManifestPath: string;
+  missing: Set<Goal3GaPm002FinalEvidenceClass>;
+}): Set<Goal3GaPm002FinalEvidenceClass> {
+  const submitted = new Set<Goal3GaPm002FinalEvidenceClass>();
+  const evidence = input.evidence;
+  const finalReplayRecord = input.finalReplayManifest && typeof input.finalReplayManifest === "object"
+    ? (input.finalReplayManifest as Record<string, unknown>)
+    : {};
+
+  if (typeof evidence.formal_spec_lock_path === "string" || evidence.formal_spec_lock_sha256 !== undefined) {
+    submitted.add("formal_spec_lock_binding");
+    const actualHash = typeof evidence.formal_spec_lock_path === "string"
+      ? hashProjectJsonFile(input.projectRoot, evidence.formal_spec_lock_path)
+      : null;
+    if (!validSha256(evidence.formal_spec_lock_sha256) || actualHash !== evidence.formal_spec_lock_sha256) {
+      input.missing.add("formal_spec_lock_binding");
+    }
+  }
+
+  if (typeof evidence.assumption_ledger_path === "string" || evidence.assumption_ledger_sha256 !== undefined) {
+    submitted.add("assumption_ledger_binding");
+    const actualHash = typeof evidence.assumption_ledger_path === "string"
+      ? hashProjectJsonFile(input.projectRoot, evidence.assumption_ledger_path)
+      : null;
+    if (!validSha256(evidence.assumption_ledger_sha256) || actualHash !== evidence.assumption_ledger_sha256) {
+      input.missing.add("assumption_ledger_binding");
+    }
+  }
+
+  if (evidence.dependency_lock_sha256 !== undefined) {
+    submitted.add("dependency_lock_binding");
+    const dependencyLockHash = finalReplayRecord.dependency_lock
+      ? sha256Text(canonicalJson(finalReplayRecord.dependency_lock))
+      : null;
+    if (!validSha256(evidence.dependency_lock_sha256) || dependencyLockHash !== evidence.dependency_lock_sha256) {
+      input.missing.add("dependency_lock_binding");
+    }
+  }
+
+  if (evidence.artifact_hashes_sha256 !== undefined) {
+    submitted.add("artifact_hash_binding");
+    const artifactHashesHash = finalReplayRecord.artifact_hashes
+      ? sha256Text(canonicalJson(finalReplayRecord.artifact_hashes))
+      : null;
+    if (!validSha256(evidence.artifact_hashes_sha256) || artifactHashesHash !== evidence.artifact_hashes_sha256) {
+      input.missing.add("artifact_hash_binding");
+    }
+  }
+
+  if (evidence.toolchain_sha256 !== undefined) {
+    submitted.add("toolchain_hash_binding");
+    const dependencyLock = finalReplayRecord.dependency_lock && typeof finalReplayRecord.dependency_lock === "object"
+      ? (finalReplayRecord.dependency_lock as Record<string, unknown>)
+      : {};
+    if (!validSha256(evidence.toolchain_sha256) || dependencyLock.lean_toolchain_sha256 !== evidence.toolchain_sha256) {
+      input.missing.add("toolchain_hash_binding");
+    }
+  }
+
+  if (evidence.replay_manifest_sha256 !== undefined) {
+    submitted.add("replay_manifest_hash_binding");
+    const actualReplayManifestHash = input.finalReplayManifestPath
+      ? hashProjectJsonFile(input.projectRoot, input.finalReplayManifestPath)
+      : null;
+    if (!validSha256(evidence.replay_manifest_sha256) || actualReplayManifestHash !== evidence.replay_manifest_sha256) {
+      input.missing.add("replay_manifest_hash_binding");
+    }
+  }
+
+  return submitted;
+}
+
 function verifyFinalAuthorityEvidenceSourceReportV3(input: {
   projectRoot: string;
   taskId: string;
@@ -2414,8 +2533,21 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
     missing.add("third_party_replay_pack");
   }
 
+  const submittedBindingClasses = verifyOptionalFinalAuthorityBindings({
+    projectRoot: input.projectRoot,
+    evidence,
+    finalReplayManifest,
+    finalReplayManifestPath,
+    missing
+  });
+
   const missingFinalEvidenceClasses = orderedMissingFinalEvidenceClasses(missing);
-  const verifiedFinalEvidenceClasses = finalAuthorityEvidenceClassOrder.filter((evidenceClass) => !missing.has(evidenceClass));
+  const verifiedFinalEvidenceClasses = finalAuthorityEvidenceClassOrder.filter((evidenceClass) => {
+    if (missing.has(evidenceClass)) {
+      return false;
+    }
+    return coreFinalAuthorityEvidenceClasses.includes(evidenceClass) || submittedBindingClasses.has(evidenceClass);
+  });
   return {
     final_evidence_status: missingFinalEvidenceClasses.length === 0 ? "verified_final_authority_evidence" : "blocked_missing_final_evidence",
     blocker_code: missingFinalEvidenceClasses.length === 0 ? "" : "final_authority_evidence_incomplete",
