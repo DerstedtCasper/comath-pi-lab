@@ -2513,7 +2513,11 @@ function formalSpecTheoremIdentityMatches(formalSpecLock: unknown, finalReplayMa
   }
 
   const formalSpecNamespace = jsonStringField(formalSpecLock, "namespace");
-  if (formalSpecNamespace !== null && formalSpecNamespace.trim() !== "" && formalSpecNamespace !== leanDeclarationNamespace(finalReplayTheoremName)) {
+  const finalReplayNamespace = leanDeclarationNamespace(finalReplayTheoremName);
+  if (finalReplayNamespace !== "" && (formalSpecNamespace === null || formalSpecNamespace.trim() === "")) {
+    return false;
+  }
+  if (formalSpecNamespace !== null && formalSpecNamespace.trim() !== "" && formalSpecNamespace !== finalReplayNamespace) {
     return false;
   }
 

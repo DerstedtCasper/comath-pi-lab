@@ -71,6 +71,7 @@ const audit = writeProjectFile(`${cleanRootRel}/Audit/TargetAudit.lean`, "import
 const formalSpecLock = {
   schema_version: "comath.formal_spec_lock.v2",
   task_id: taskId,
+  namespace: "MathResearch",
   theorem_name: "Goal3Positive062",
   theorem_header: "theorem Goal3Positive062 : True",
   statement_hash: "pm062-locked-statement-hash",

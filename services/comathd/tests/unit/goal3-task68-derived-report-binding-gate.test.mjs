@@ -89,6 +89,7 @@ try {
   const formalSpecLock = {
     schema_version: "comath.formal_spec_lock.v2",
     task_id: taskId,
+    namespace: "MathResearch",
     theorem_name: "Goal3Positive068",
     theorem_header: "theorem Goal3Positive068 : True",
     statement_hash: claim.statement_hash,

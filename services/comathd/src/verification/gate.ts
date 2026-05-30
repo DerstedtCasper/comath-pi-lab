@@ -366,7 +366,11 @@ function formalSpecTheoremIdentityMatches(
   }
 
   const formalSpecNamespace = projectJsonStringField(projectRoot, formalSpecLockPath, "namespace");
-  if (formalSpecNamespace !== null && formalSpecNamespace.trim() !== "" && formalSpecNamespace !== leanDeclarationNamespace(finalReplayTheoremName)) {
+  const finalReplayNamespace = leanDeclarationNamespace(finalReplayTheoremName);
+  if (finalReplayNamespace !== "" && (formalSpecNamespace === null || formalSpecNamespace.trim() === "")) {
+    return false;
+  }
+  if (formalSpecNamespace !== null && formalSpecNamespace.trim() !== "" && formalSpecNamespace !== finalReplayNamespace) {
     return false;
   }
 

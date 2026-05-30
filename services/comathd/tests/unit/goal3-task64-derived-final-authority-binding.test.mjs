@@ -53,6 +53,7 @@ const cleanRootRel = `.comath/lean/final_replay/${replayId}/clean`;
 const formalSpecLock = {
   schema_version: "comath.formal_spec_lock.v2",
   task_id: taskId,
+  namespace: "MathResearch",
   theorem_name: "Goal3Positive064",
   theorem_header: "theorem Goal3Positive064 : True",
   statement_hash: "pm064-locked-statement-hash",

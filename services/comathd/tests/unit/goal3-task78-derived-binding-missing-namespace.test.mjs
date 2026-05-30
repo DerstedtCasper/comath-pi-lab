@@ -12,13 +12,12 @@ import {
   initProject,
   packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3,
   promoteClaim,
-  promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3,
   registerClaim,
   statementHash,
   writeThirdPartyReplayPackV3
 } from "../../dist/index.js";
 
-const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task70-promotion-bundle-"));
+const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task78-missing-namespace-"));
 
 function writeProjectFile(relativePath, content) {
   const absolute = join(projectRoot, relativePath);
@@ -36,21 +35,21 @@ function hashRef(path) {
 }
 
 try {
-  const { project } = initProject({ name: "Goal 3 Task 70 Promotion Bundle", root_path: projectRoot });
-  const taskId = "PM-070";
-  const claimStatement = "theorem Goal3Positive070 : True";
+  const { project } = initProject({ name: "Goal 3 Task 78 Missing Namespace Binding", root_path: projectRoot });
+  const taskId = "PM-078";
+  const claimStatement = "theorem Goal3Positive078 : True";
   const claim = registerClaim(projectRoot, {
     project_id: project.project_id,
     statement: claimStatement,
     assumptions: [],
     domain: "logic",
     status: "conjectural",
-    actor: "goal3-task70"
+    actor: "goal3-task78"
   });
   assert.equal(claim.statement_hash, statementHash(claimStatement));
 
-  const replayId = "RPLY-0070";
-  const runId = "LRUN-0070";
+  const replayId = "RPLY-0078";
+  const runId = "LRUN-0078";
   const cleanRootRel = `.comath/lean/final_replay/${replayId}/clean`;
   const target = writeProjectFile(
     `${cleanRootRel}/MathResearch/Target.lean`,
@@ -59,45 +58,47 @@ try {
       "",
       "namespace MathResearch",
       "",
-      "theorem Goal3Positive070 : True := by",
+      "theorem Goal3Positive078 : True := by",
       "  trivial",
       "",
-      "#check Goal3Positive070",
-      "#print axioms Goal3Positive070",
+      "#check Goal3Positive078",
+      "#print axioms Goal3Positive078",
       "",
       "end MathResearch",
       ""
     ].join("\n")
   );
-  const audit = writeProjectFile(`${cleanRootRel}/Audit/TargetAudit.lean`, "import MathResearch.Target\n#check MathResearch.Goal3Positive070\n#print axioms MathResearch.Goal3Positive070\n");
+  const audit = writeProjectFile(`${cleanRootRel}/Audit/TargetAudit.lean`, "import MathResearch.Target\n#check MathResearch.Goal3Positive078\n#print axioms MathResearch.Goal3Positive078\n");
   const formalSpecRel = `${cleanRootRel}/FormalSpec/formal_spec_lock.json`;
   const assumptionLedgerRel = `${cleanRootRel}/FormalSpec/assumption_ledger.json`;
   const formalSpec = writeProjectFile(formalSpecRel, `${JSON.stringify({
     schema_version: "comath.formal_spec_lock.v2",
     task_id: taskId,
-    namespace: "MathResearch",
-    theorem_name: "Goal3Positive070",
-    theorem_header: "theorem Goal3Positive070 : True",
+    claim_id: claim.id,
+    theorem_name: "Goal3Positive078",
+    theorem_header: "theorem Goal3Positive078 : True",
     statement_hash: claim.statement_hash,
     proof_authority: "none"
   }, null, 2)}\n`);
   const assumptionLedger = writeProjectFile(assumptionLedgerRel, `${JSON.stringify({
     schema_version: "comath.assumption_ledger.v2",
     task_id: taskId,
+    claim_id: claim.id,
+    formal_spec_lock_hash: claim.statement_hash,
     entries: [],
     proof_authority: "none"
   }, null, 2)}\n`);
   const lakefile = writeProjectFile(`${cleanRootRel}/lakefile.lean`, "import Lake\nopen Lake DSL\npackage MathResearch where\nlean_lib MathResearch where\n  roots := #[`MathResearch.Target]\n");
   const toolchain = writeProjectFile(`${cleanRootRel}/lean-toolchain`, "leanprover/lean4:v4.23.0\n");
   const lakeManifest = writeProjectFile(`${cleanRootRel}/lake-manifest.json`, `${JSON.stringify({ version: 7, packages: [] }, null, 2)}\n`);
-  const stdout = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stdout.log`, "Goal3Positive070 checked\n");
+  const stdout = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stdout.log`, "Goal3Positive078 checked\n");
   const stderr = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stderr.log`, "");
 
   const leanRunManifest = createServiceOwnedLeanRunManifestV3({
     projectRoot,
     run_id: runId,
     claim_id: claim.id,
-    campaign_id: "CAM-0070",
+    campaign_id: "CAM-0078",
     purpose: "final_replay",
     command: ["lake", "build", "MathResearch"],
     cwd: join(projectRoot, cleanRootRel),
@@ -132,9 +133,9 @@ try {
   const finalReplayManifest = createFinalReplayManifestV3({
     projectRoot,
     replay_id: replayId,
-    campaign_id: "CAM-0070",
+    campaign_id: "CAM-0078",
     claim_id: claim.id,
-    theorem_name: "MathResearch.Goal3Positive070",
+    theorem_name: "MathResearch.Goal3Positive078",
     clean_workspace_path: join(projectRoot, cleanRootRel),
     command: ["lake", "build", "MathResearch"],
     exit_code: 0,
@@ -171,45 +172,52 @@ try {
   writeProjectFile(finalReplayManifestRel, `${JSON.stringify(finalReplayManifest, null, 2)}\n`);
   const replayPack = writeThirdPartyReplayPackV3(projectRoot, finalReplayManifest);
 
-  const evidenceInput = {
-    lean_run_manifest_paths: [leanRunManifestRel],
-    final_replay_manifest_v3_path: finalReplayManifestRel,
-    structured_audit_path: structuredAuditRel,
-    dependency_closure_path: dependencyClosureRel,
-    axiom_profile_path: axiomProfileRel,
-    statement_check_path: statementCheckRel,
-    third_party_replay_pack_path: replayPack.pack_path,
-    formal_spec_lock_path: formalSpecRel,
-    assumption_ledger_path: assumptionLedgerRel
-  };
-
   const report = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
     projectRoot,
     taskId,
     claimId: claim.id,
-    evidence: evidenceInput
+    evidence: {
+      lean_run_manifest_paths: [leanRunManifestRel],
+      final_replay_manifest_v3_path: finalReplayManifestRel,
+      structured_audit_path: structuredAuditRel,
+      dependency_closure_path: dependencyClosureRel,
+      axiom_profile_path: axiomProfileRel,
+      statement_check_path: statementCheckRel,
+      third_party_replay_pack_path: replayPack.pack_path,
+      formal_spec_lock_path: formalSpecRel,
+      assumption_ledger_path: assumptionLedgerRel
+    }
   });
-  assert.equal(report.final_evidence_status, "verified_final_authority_evidence");
+  assert.equal(report.final_evidence_status, "blocked_missing_final_evidence");
+  assert.ok(report.missing_final_evidence_classes.includes("formal_spec_lock_binding"));
+
   const packagingArtifact = await importArtifact({
     projectRoot,
     project_id: project.project_id,
     source_path: report.packaging_report_path,
     kind: "runner_output",
-    actor: "goal3-task70"
+    actor: "goal3-task78"
   });
   const finalManifestArtifact = await importArtifact({
     projectRoot,
     project_id: project.project_id,
     source_path: finalReplayManifestRel,
     kind: "runner_output",
-    actor: "goal3-task70"
+    actor: "goal3-task78"
   });
-  const evidenceRecord = appendEvidenceRecord(projectRoot, {
+  const bindingArtifact = await importArtifact({
+    projectRoot,
+    project_id: project.project_id,
+    source_path: `.comath/release/positive_matrix/${taskId}/derived_final_authority_bindings_v3.json`,
+    kind: "runner_output",
+    actor: "goal3-task78"
+  });
+  const evidence = appendEvidenceRecord(projectRoot, {
     project_id: project.project_id,
     claim_id: claim.id,
     kind: "lean",
-    summary: "Final-authority packaging without derived binding artifact must fail closed.",
-    artifact_ids: [packagingArtifact.id, finalManifestArtifact.id]
+    summary: "Missing FormalSpecLock namespace must fail closed for namespaced final replay theorem.",
+    artifact_ids: [packagingArtifact.id, finalManifestArtifact.id, bindingArtifact.id]
   });
   applyGatePromotedClaim(projectRoot, {
     ...claim,
@@ -219,39 +227,17 @@ try {
     updated_at: new Date().toISOString()
   });
 
-  const missingBinding = promoteClaim(projectRoot, {
+  const rejected = promoteClaim(projectRoot, {
     project_id: project.project_id,
     claim_id: claim.id,
     target_status: "formally_checked",
-    evidence_ids: [evidenceRecord.id],
-    artifact_ids: [packagingArtifact.id, finalManifestArtifact.id],
-    actor: "goal3-task70"
+    evidence_ids: [evidence.id],
+    artifact_ids: [packagingArtifact.id, finalManifestArtifact.id, bindingArtifact.id],
+    actor: "goal3-task78"
   });
-  assert.equal(missingBinding.gate.ok, false);
-  assert.ok(missingBinding.gate.vetoes.includes("final authority derived binding manifest missing"));
-
-  const promotion = await promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
-    projectRoot,
-    projectId: project.project_id,
-    taskId,
-    claimId: claim.id,
-    evidence: evidenceInput,
-    actor: "goal3-task70"
-  });
-  assert.equal(promotion.schema_version, "comath.goal3_positive_matrix_final_authority_promotion_bundle.v1");
-  assert.equal(promotion.task_id, taskId);
-  assert.equal(promotion.claim_id, claim.id);
-  assert.equal(promotion.packaging_report.final_evidence_status, "verified_final_authority_evidence");
-  assert.equal(promotion.proof_authority, "lean_kernel_clean_replay");
-  assert.equal(promotion.promoted_by_ordinary_gate, true);
-  assert.equal(promotion.promotion_requires_gate, true);
-  assert.equal(promotion.direct_claim_mutation, false);
-  assert.equal(promotion.gate.ok, true, JSON.stringify(promotion.gate.vetoes));
-  assert.equal(promotion.claim.status, "formally_checked");
-  assert.equal(promotion.artifact_ids.length, 3, "packaging, FinalReplayManifest, and derived binding artifacts must all be submitted");
-  assert.ok(promotion.derived_binding_manifest_path.endsWith("/derived_final_authority_bindings_v3.json"));
+  assert.equal(rejected.gate.ok, false, "missing FormalSpecLock namespace must not satisfy the ordinary promotion gate");
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }
 
-console.log("Goal 3 Task 70 derived-binding promotion bundle test passed.");
+console.log("Goal 3 Task 78 derived binding missing namespace test passed.");
