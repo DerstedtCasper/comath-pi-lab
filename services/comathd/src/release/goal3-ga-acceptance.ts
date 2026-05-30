@@ -324,6 +324,36 @@ export type Goal3GaPm002LeanAuthorityExecutorReport = {
   can_promote_claim: false;
 };
 
+type Goal3GaPm002FinalEvidenceClass =
+  | "lean_run_manifest_v3"
+  | "final_replay_manifest_v3"
+  | "structured_audit"
+  | "dependency_closure"
+  | "axiom_profile"
+  | "statement_check"
+  | "third_party_replay_pack";
+
+export type Goal3GaPm002FinalAuthorityPackagingReport = {
+  schema_version: "comath.goal3_pm002_final_authority_packaging.v1";
+  task_id: "PM-002";
+  final_evidence_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
+  blocker_code: "final_authority_evidence_incomplete" | "";
+  blocker_detail: string;
+  missing_final_evidence_classes: Goal3GaPm002FinalEvidenceClass[];
+  lean_run_manifest_paths: string[];
+  final_replay_manifest_v3_path: string;
+  structured_audit_path: string;
+  dependency_closure_path: string;
+  axiom_profile_path: string;
+  statement_check_path: string;
+  third_party_replay_pack_path: string;
+  blocker_path: string;
+  packaging_report_path: string;
+  proof_authority: "none" | "lean_kernel_clean_replay";
+  can_promote_claim: false;
+  promotion_requires_gate: true;
+};
+
 type Goal3GaDeclaredReplayMaterialCheck = {
   source_path: string;
   status: "not_declared" | "missing_or_incomplete" | "ready_for_live_executor";
@@ -1785,6 +1815,135 @@ export function executeGoal3GaPm002LeanAuthorityReplay(input: {
     proof_authority: "none",
     can_promote_claim: false
   };
+}
+
+function readJsonInsideProject(projectRoot: string, path: string): unknown | null {
+  if (!evidencePathExistsInsideProject(projectRoot, path)) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(join(projectRoot, path), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function reportPasses(projectRoot: string, path: string): boolean {
+  const value = readJsonInsideProject(projectRoot, path);
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const hardVetoes = Array.isArray(record.hard_vetoes) ? record.hard_vetoes : [];
+  return record.result === "pass" && hardVetoes.length === 0;
+}
+
+function replayPackExists(projectRoot: string, path: string): boolean {
+  return (
+    evidencePathExistsInsideProject(projectRoot, `${path}/README_REPLAY.md`) &&
+    evidencePathExistsInsideProject(projectRoot, `${path}/FinalReplayManifest.json`) &&
+    evidencePathExistsInsideProject(projectRoot, `${path}/expected_hashes.json`)
+  );
+}
+
+function pm002FinalPackagingReportPath(kind: "blocker" | "report"): string {
+  const task = taskByIdOrThrow("PM-002");
+  return materialPath(task, kind === "blocker" ? "final_authority_evidence_blocker.json" : "final_authority_packaging_report.json");
+}
+
+export function packageGoal3GaPm002FinalAuthorityEvidence(input: {
+  projectRoot: string;
+  materialSource: Goal3GaDeclaredReplayMaterialSource;
+  commandReplayReport: Goal3GaPm002LeanAuthorityExecutorReport;
+}): Goal3GaPm002FinalAuthorityPackagingReport {
+  const task = taskByIdOrThrow("PM-002");
+  if (input.materialSource.task_id !== task.task_id || input.commandReplayReport.task_id !== task.task_id) {
+    throw new Error("invalid_pm002_final_authority_packaging_task");
+  }
+
+  const leanRunManifestPaths = Array.from(new Set(input.commandReplayReport.live_replay_conversion.results.flatMap((result) => {
+    const blockerPath = input.commandReplayReport.executor_blocker_path;
+    const blocker = readJsonInsideProject(input.projectRoot, blockerPath) as { lean_run_manifest_paths?: unknown } | null;
+    return Array.isArray(blocker?.lean_run_manifest_paths) ? blocker.lean_run_manifest_paths.filter((path): path is string => typeof path === "string") : [];
+  })));
+
+  const missing = new Set<Goal3GaPm002FinalEvidenceClass>();
+  if (leanRunManifestPaths.length === 0) {
+    missing.add("lean_run_manifest_v3");
+  }
+  for (const manifestPath of leanRunManifestPaths) {
+    const manifest = readJsonInsideProject(input.projectRoot, manifestPath);
+    const verification = verifyLeanRunManifestV3Evidence(input.projectRoot, manifest);
+    if (!verification.ok) {
+      missing.add("lean_run_manifest_v3");
+    }
+  }
+
+  const finalReplayManifest = readJsonInsideProject(input.projectRoot, input.materialSource.final_replay_manifest_v3_path);
+  const finalReplayVerification = verifyFinalReplayManifestV3(input.projectRoot, finalReplayManifest);
+  const finalReplayRecord = finalReplayManifest && typeof finalReplayManifest === "object" ? (finalReplayManifest as Record<string, unknown>) : {};
+  const finalReplayPassed =
+    finalReplayRecord.result === "pass" &&
+    finalReplayRecord.exit_code === 0 &&
+    finalReplayRecord.proof_authority === "lean_kernel_clean_replay";
+  if (!finalReplayVerification.ok || !finalReplayPassed) {
+    missing.add("final_replay_manifest_v3");
+  }
+
+  const finalReplay = finalReplayManifest && typeof finalReplayManifest === "object" ? (finalReplayManifest as { report_paths?: Record<string, unknown> }) : null;
+  const dependencyClosurePath =
+    typeof finalReplay?.report_paths?.dependency_closure === "string" ? finalReplay.report_paths.dependency_closure : "";
+  const axiomProfilePath = typeof finalReplay?.report_paths?.axiom_profile === "string" ? finalReplay.report_paths.axiom_profile : "";
+  const statementCheckPath = typeof finalReplay?.report_paths?.statement_equivalence === "string" ? finalReplay.report_paths.statement_equivalence : "";
+
+  if (!reportPasses(input.projectRoot, input.materialSource.structured_audit_path)) {
+    missing.add("structured_audit");
+  }
+  if (!dependencyClosurePath || !reportPasses(input.projectRoot, dependencyClosurePath)) {
+    missing.add("dependency_closure");
+  }
+  if (!axiomProfilePath || !reportPasses(input.projectRoot, axiomProfilePath)) {
+    missing.add("axiom_profile");
+  }
+  if (!statementCheckPath || !reportPasses(input.projectRoot, statementCheckPath)) {
+    missing.add("statement_check");
+  }
+  if (!replayPackExists(input.projectRoot, input.materialSource.third_party_replay_pack_path)) {
+    missing.add("third_party_replay_pack");
+  }
+
+  const blockerPath = pm002FinalPackagingReportPath("blocker");
+  const packagingReportPath = pm002FinalPackagingReportPath("report");
+  const missingFinalEvidenceClasses = Array.from(missing).sort();
+  const report: Goal3GaPm002FinalAuthorityPackagingReport = {
+    schema_version: "comath.goal3_pm002_final_authority_packaging.v1",
+    task_id: "PM-002",
+    final_evidence_status: missingFinalEvidenceClasses.length === 0 ? "verified_final_authority_evidence" : "blocked_missing_final_evidence",
+    blocker_code: missingFinalEvidenceClasses.length === 0 ? "" : "final_authority_evidence_incomplete",
+    blocker_detail:
+      missingFinalEvidenceClasses.length === 0
+        ? "PM-002 final authority evidence verifies, but claim promotion still requires the ordinary promotion gate."
+        : "PM-002 command replay evidence is present, but final Lean Authority v3 evidence is missing or unverifiable.",
+    missing_final_evidence_classes: missingFinalEvidenceClasses,
+    lean_run_manifest_paths: leanRunManifestPaths,
+    final_replay_manifest_v3_path: input.materialSource.final_replay_manifest_v3_path,
+    structured_audit_path: input.materialSource.structured_audit_path,
+    dependency_closure_path: dependencyClosurePath,
+    axiom_profile_path: axiomProfilePath,
+    statement_check_path: statementCheckPath,
+    third_party_replay_pack_path: input.materialSource.third_party_replay_pack_path,
+    blocker_path: missingFinalEvidenceClasses.length === 0 ? "" : blockerPath,
+    packaging_report_path: packagingReportPath,
+    proof_authority: missingFinalEvidenceClasses.length === 0 ? "lean_kernel_clean_replay" : "none",
+    can_promote_claim: false,
+    promotion_requires_gate: true
+  };
+
+  writeJsonProjectFile(input.projectRoot, packagingReportPath, report);
+  if (missingFinalEvidenceClasses.length > 0) {
+    writeJsonProjectFile(input.projectRoot, blockerPath, report);
+  }
+  return report;
 }
 
 export function runGoal3GaPositiveMatrixBatch(input: {
