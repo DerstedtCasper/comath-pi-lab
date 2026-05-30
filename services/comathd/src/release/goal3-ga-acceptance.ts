@@ -393,6 +393,20 @@ export type FinalAuthorityPackagingV3SourceReport = {
   proof_authority: "none" | "lean_kernel_clean_replay";
 };
 
+export type FinalAuthorityPackagingV3TrancheReport = {
+  schema_version: "comath.final_authority_packaging_tranche.v3";
+  start_task_id: string;
+  end_task_id: string;
+  task_count: number;
+  task_ids: string[];
+  results: FinalAuthorityPackagingV3Report[];
+  packaging_report_path: string;
+  proof_authority: "none" | "lean_kernel_clean_replay";
+  can_promote_claim: false;
+  promotion_requires_gate: true;
+  promoted_count: 0;
+};
+
 type Goal3GaDeclaredReplayMaterialCheck = {
   source_path: string;
   status: "not_declared" | "missing_or_incomplete" | "ready_for_live_executor";
@@ -1895,6 +1909,16 @@ function genericFinalPackagingReportPath(taskId: string, kind: "blocker" | "repo
   return join(".comath", "release", "positive_matrix", taskId, leaf).replace(/\\/g, "/");
 }
 
+function genericFinalPackagingTrancheReportPath(startTaskId: string, endTaskId: string): string {
+  return join(
+    ".comath",
+    "release",
+    "positive_matrix",
+    `${startTaskId}_${endTaskId}`,
+    "final_authority_packaging_tranche_v3.json"
+  ).replace(/\\/g, "/");
+}
+
 export function packageFinalAuthorityEvidenceV3(input: {
   projectRoot: string;
   taskId: string;
@@ -1979,6 +2003,52 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3(input: {
     claimId: input.claimId,
     sourceReport
   });
+}
+
+export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3(input: {
+  projectRoot: string;
+  startTaskId: string;
+  endTaskId: string;
+  claimIdPrefix?: string;
+  sourceReportsByTaskId?: Record<string, FinalAuthorityPackagingV3SourceReport | undefined>;
+}): FinalAuthorityPackagingV3TrancheReport {
+  const manifest = createGoal3GaPositiveTaskManifest();
+  const startIndex = manifest.tasks.findIndex((task) => task.task_id === input.startTaskId);
+  const endIndex = manifest.tasks.findIndex((task) => task.task_id === input.endTaskId);
+  if (startIndex < 0 || endIndex < 0 || startIndex > endIndex || input.startTaskId === "PM-001") {
+    throw new Error("invalid_positive_matrix_final_authority_tranche");
+  }
+
+  const tasks = manifest.tasks.slice(startIndex, endIndex + 1);
+  if (tasks.some((task) => task.task_id === "PM-001")) {
+    throw new Error("invalid_positive_matrix_final_authority_tranche");
+  }
+
+  const claimIdPrefix = input.claimIdPrefix ?? "C";
+  const results = tasks.map((task) => packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3({
+    projectRoot: input.projectRoot,
+    taskId: task.task_id,
+    claimId: `${claimIdPrefix}-${task.task_id}`,
+    sourceReport: input.sourceReportsByTaskId?.[task.task_id]
+  }));
+  const packagingReportPath = genericFinalPackagingTrancheReportPath(input.startTaskId, input.endTaskId);
+  const report: FinalAuthorityPackagingV3TrancheReport = {
+    schema_version: "comath.final_authority_packaging_tranche.v3",
+    start_task_id: input.startTaskId,
+    end_task_id: input.endTaskId,
+    task_count: results.length,
+    task_ids: tasks.map((task) => task.task_id),
+    results,
+    packaging_report_path: packagingReportPath,
+    proof_authority: results.every((result) => result.proof_authority === "lean_kernel_clean_replay")
+      ? "lean_kernel_clean_replay"
+      : "none",
+    can_promote_claim: false,
+    promotion_requires_gate: true,
+    promoted_count: 0
+  };
+  writeJsonProjectFile(input.projectRoot, packagingReportPath, report);
+  return report;
 }
 
 export function packageGoal3GaPm002FinalAuthorityEvidence(input: {
