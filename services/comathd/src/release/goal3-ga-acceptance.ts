@@ -324,6 +324,60 @@ export type Goal3GaPm002LeanAuthorityExecutorReport = {
   can_promote_claim: false;
 };
 
+type Goal3GaPositiveMatrixLeanAuthorityExecutorBlockerCode =
+  | "declared_replay_material_missing"
+  | "lean_toolchain_unavailable_for_live_replay"
+  | "lean_replay_command_failed"
+  | "lean_authority_evidence_incomplete"
+  | "live_replay_executor_not_configured";
+
+export type Goal3GaPositiveMatrixLeanAuthorityExecutorBlocker = {
+  schema_version: "comath.goal3_positive_matrix_lean_authority_executor_blocker.v1";
+  task_id: string;
+  claim_id: string;
+  executor_status: "blocked_before_replay";
+  blocker_code: Goal3GaPositiveMatrixLeanAuthorityExecutorBlockerCode;
+  blocker_detail: string;
+  attempted_commands: string[][];
+  replay_plan_commands: string[][];
+  lean_run_manifest_paths: string[];
+  material_source_path: string;
+  lean_source_path: string;
+  lean_toolchain_path: string;
+  lakefile_path: string;
+  lake_manifest_path: string;
+  network_policy_final_replay: "disabled";
+  proof_authority: "none";
+  can_promote_claim: false;
+};
+
+export type Goal3GaPositiveMatrixLeanAuthorityExecutorReport = {
+  schema_version: "comath.goal3_positive_matrix_lean_authority_executor.v1";
+  task_id: string;
+  claim_id: string;
+  executor_status: "blocked_before_replay" | "live_replay_conversion_completed";
+  blocker_code: Goal3GaPositiveMatrixLeanAuthorityExecutorBlockerCode | "";
+  blocker_detail: string;
+  executor_blocker_path: string;
+  final_authority_packaging: FinalAuthorityPackagingV3Report;
+  proof_authority: "none";
+  can_promote_claim: false;
+};
+
+export type Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
+  schema_version: "comath.goal3_positive_matrix_lean_authority_executor_tranche.v1";
+  start_task_id: string;
+  end_task_id: string;
+  task_count: number;
+  task_ids: string[];
+  results: Goal3GaPositiveMatrixLeanAuthorityExecutorReport[];
+  tranche_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
+  proof_authority: "none" | "lean_kernel_clean_replay";
+  can_promote_claim: false;
+  promotion_requires_gate: true;
+  promoted_count: 0;
+};
+
 type Goal3GaPm002FinalEvidenceClass =
   | "lean_run_manifest_v3"
   | "final_replay_manifest_v3"
@@ -1659,6 +1713,111 @@ function pm002RunManifestPath(projectRoot: string, runId: string): string {
   return relative(projectRoot, join(projectRoot, ".comath", "evidence", "C-0002", "lean", `${runId}.manifest.json`)).replace(/\\/g, "/");
 }
 
+function positiveMatrixRunManifestPath(projectRoot: string, claimId: string, runId: string): string {
+  return relative(projectRoot, join(projectRoot, ".comath", "evidence", claimId, "lean", `${runId}.manifest.json`)).replace(/\\/g, "/");
+}
+
+function positiveMatrixTaskNumber(task: Goal3GaPositiveMatrixTask): string {
+  return task.task_id.slice(3).padStart(4, "0");
+}
+
+function positiveMatrixClaimId(prefix: string, task: Goal3GaPositiveMatrixTask): string {
+  return `${prefix}-${positiveMatrixTaskNumber(task)}`;
+}
+
+function positiveMatrixExecutorBlockerPath(task: Goal3GaPositiveMatrixTask): string {
+  return materialPath(task, "lean_authority_executor_blocker_v3.json");
+}
+
+function positiveMatrixReplayPlanCommands(): string[][] {
+  return [
+    ["lake", "env", "lean", "MathResearch/Target.lean"],
+    ["lake", "build", "MathResearch"]
+  ];
+}
+
+function writePositiveMatrixExecutorBlocker(input: {
+  projectRoot: string;
+  task: Goal3GaPositiveMatrixTask;
+  claimId: string;
+  materialSource: Goal3GaDeclaredReplayMaterialSource;
+  materialCheck: Goal3GaDeclaredReplayMaterialCheck;
+  blocker_code: Goal3GaPositiveMatrixLeanAuthorityExecutorBlockerCode;
+  blocker_detail: string;
+  attempted_commands: string[][];
+  lean_run_manifest_paths?: string[];
+}): { path: string; blocker: Goal3GaPositiveMatrixLeanAuthorityExecutorBlocker } {
+  const path = positiveMatrixExecutorBlockerPath(input.task);
+  const blocker: Goal3GaPositiveMatrixLeanAuthorityExecutorBlocker = {
+    schema_version: "comath.goal3_positive_matrix_lean_authority_executor_blocker.v1",
+    task_id: input.task.task_id,
+    claim_id: input.claimId,
+    executor_status: "blocked_before_replay",
+    blocker_code: input.blocker_code,
+    blocker_detail: input.blocker_detail,
+    attempted_commands: input.attempted_commands,
+    replay_plan_commands: positiveMatrixReplayPlanCommands(),
+    lean_run_manifest_paths: input.lean_run_manifest_paths ?? [],
+    material_source_path: input.materialCheck.source_path,
+    lean_source_path: input.materialSource.lean_source_path,
+    lean_toolchain_path: input.materialSource.lean_toolchain_path,
+    lakefile_path: input.materialSource.lakefile_path,
+    lake_manifest_path: input.materialSource.lake_manifest_path,
+    network_policy_final_replay: "disabled",
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+  writeJsonProjectFile(input.projectRoot, path, blocker);
+  return { path, blocker };
+}
+
+function blockedPositiveMatrixExecutorReport(input: {
+  projectRoot: string;
+  task: Goal3GaPositiveMatrixTask;
+  claimId: string;
+  materialSource: Goal3GaDeclaredReplayMaterialSource;
+  materialCheck: Goal3GaDeclaredReplayMaterialCheck;
+  blocker_code: Goal3GaPositiveMatrixLeanAuthorityExecutorBlockerCode;
+  blocker_detail: string;
+  attempted_commands: string[][];
+  lean_run_manifest_paths?: string[];
+}): Goal3GaPositiveMatrixLeanAuthorityExecutorReport {
+  const { path } = writePositiveMatrixExecutorBlocker({
+    projectRoot: input.projectRoot,
+    task: input.task,
+    claimId: input.claimId,
+    materialSource: input.materialSource,
+    materialCheck: input.materialCheck,
+    blocker_code: input.blocker_code,
+    blocker_detail: input.blocker_detail,
+    attempted_commands: input.attempted_commands,
+    lean_run_manifest_paths: input.lean_run_manifest_paths
+  });
+  const finalAuthorityPackaging = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceFromEvidenceV3({
+    projectRoot: input.projectRoot,
+    taskId: input.task.task_id,
+    claimId: input.claimId,
+    evidence: {
+      lean_run_manifest_paths: input.lean_run_manifest_paths ?? [],
+      final_replay_manifest_v3_path: input.materialSource.final_replay_manifest_v3_path,
+      structured_audit_path: input.materialSource.structured_audit_path,
+      third_party_replay_pack_path: input.materialSource.third_party_replay_pack_path
+    }
+  });
+  return {
+    schema_version: "comath.goal3_positive_matrix_lean_authority_executor.v1",
+    task_id: input.task.task_id,
+    claim_id: input.claimId,
+    executor_status: "blocked_before_replay",
+    blocker_code: input.blocker_code,
+    blocker_detail: input.blocker_detail,
+    executor_blocker_path: path,
+    final_authority_packaging: finalAuthorityPackaging,
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+}
+
 function writePm002ExecutorBlocker(input: {
   projectRoot: string;
   materialSource: Goal3GaDeclaredReplayMaterialSource;
@@ -1693,6 +1852,201 @@ function writePm002ExecutorBlocker(input: {
   };
   writeJsonProjectFile(input.projectRoot, path, blocker);
   return { path, blocker };
+}
+
+export function executeGoal3GaPositiveMatrixLeanAuthorityReplay(input: {
+  projectRoot: string;
+  taskId: string;
+  claimId: string;
+  materialSource: Goal3GaDeclaredReplayMaterialSource;
+  probeLeanVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+  probeLakeVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+  runReplayCommand?: (command: string[], cwd: string) => Goal3GaPm002LeanAuthorityCommandResult;
+}): Goal3GaPositiveMatrixLeanAuthorityExecutorReport {
+  const task = taskByIdOrThrow(input.taskId);
+  if (task.task_id === "PM-001") {
+    throw new Error("invalid_positive_matrix_lean_authority_executor_task");
+  }
+  if (input.materialSource.task_id !== task.task_id) {
+    throw new Error("invalid_positive_matrix_material_source_task");
+  }
+
+  const materialCheck = validateDeclaredReplayMaterialSource({
+    projectRoot: input.projectRoot,
+    task,
+    source: input.materialSource
+  });
+  if (materialCheck.status !== "ready_for_live_executor") {
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "declared_replay_material_missing",
+      blocker_detail: `${task.task_id} declared replay material is missing, outside the project root, or incomplete.`,
+      attempted_commands: []
+    });
+  }
+
+  const materialRoot = join(input.projectRoot, materialPath(task, ""));
+  const leanProbe = input.probeLeanVersion ? input.probeLeanVersion() : runVersionProbe(["lean", "--version"], materialRoot);
+  if (leanProbe.exit_code !== 0) {
+    const blockerDetail = summarizeProbeFailure("lean --version", leanProbe);
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "lean_toolchain_unavailable_for_live_replay",
+      blocker_detail: blockerDetail,
+      attempted_commands: [["lean", "--version"]]
+    });
+  }
+
+  const lakeProbe = input.probeLakeVersion ? input.probeLakeVersion() : runVersionProbe(["lake", "--version"], materialRoot);
+  if (lakeProbe.exit_code !== 0) {
+    const blockerDetail = summarizeProbeFailure("lake --version", lakeProbe);
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "lean_toolchain_unavailable_for_live_replay",
+      blocker_detail: blockerDetail,
+      attempted_commands: [
+        ["lean", "--version"],
+        ["lake", "--version"]
+      ]
+    });
+  }
+
+  const leanToolchain = readFileSync(join(input.projectRoot, input.materialSource.lean_toolchain_path), "utf8").trim();
+  const inputFiles = [
+    join(input.projectRoot, input.materialSource.lean_source_path),
+    join(input.projectRoot, input.materialSource.lean_toolchain_path),
+    join(input.projectRoot, input.materialSource.lakefile_path),
+    join(input.projectRoot, input.materialSource.lake_manifest_path),
+    join(input.projectRoot, input.materialSource.formal_spec_lock_path),
+    join(input.projectRoot, input.materialSource.assumption_ledger_path),
+    join(input.projectRoot, input.materialSource.dependency_lock_path)
+  ];
+  const replayCommands = positiveMatrixReplayPlanCommands().map((command, index) => ({
+    runId: `LRUN-${positiveMatrixTaskNumber(task)}${String(index + 1).padStart(2, "0")}`,
+    purpose: index === 0 ? "check" as const : "build" as const,
+    command
+  }));
+  const attemptedCommands = [["lean", "--version"], ["lake", "--version"]];
+  const manifestPaths: string[] = [];
+
+  for (const replay of replayCommands) {
+    const run = runServiceOwnedLeanCommandV3({
+      projectRoot: input.projectRoot,
+      run_id: replay.runId,
+      claim_id: input.claimId,
+      campaign_id: `CAM-${positiveMatrixTaskNumber(task)}`,
+      candidate_id: `CAND-${positiveMatrixTaskNumber(task)}`,
+      purpose: replay.purpose,
+      command: replay.command,
+      cwd: materialRoot,
+      input_files: inputFiles,
+      leanVersionOutput: leanProbe.stdout,
+      lakeVersionOutput: lakeProbe.stdout,
+      leanToolchain,
+      network_policy: "disabled",
+      sandbox: "none",
+      proof_authority: "none",
+      run: input.runReplayCommand
+    });
+    const manifestPath = positiveMatrixRunManifestPath(input.projectRoot, input.claimId, replay.runId);
+    manifestPaths.push(manifestPath);
+    attemptedCommands.push(replay.command);
+    if (run.manifest.exit_code !== 0) {
+      return blockedPositiveMatrixExecutorReport({
+        projectRoot: input.projectRoot,
+        task,
+        claimId: input.claimId,
+        materialSource: input.materialSource,
+        materialCheck,
+        blocker_code: "lean_replay_command_failed",
+        blocker_detail: summarizeCommandFailure(replay.command, { exit_code: run.manifest.exit_code, stdout: run.stdout, stderr: run.stderr }),
+        attempted_commands: attemptedCommands,
+        lean_run_manifest_paths: manifestPaths
+      });
+    }
+  }
+
+  return blockedPositiveMatrixExecutorReport({
+    projectRoot: input.projectRoot,
+    task,
+    claimId: input.claimId,
+    materialSource: input.materialSource,
+    materialCheck,
+    blocker_code: "lean_authority_evidence_incomplete",
+    blocker_detail: `${task.task_id} declared Lean/Lake commands exited successfully, but complete verified FinalReplayManifest v3, structured audit, dependency closure, axiom profile, statement-boundary evidence, and third-party replay pack material were not produced.`,
+    attempted_commands: attemptedCommands,
+    lean_run_manifest_paths: manifestPaths
+  });
+}
+
+export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
+  projectRoot: string;
+  startTaskId: string;
+  endTaskId: string;
+  claimIdPrefix?: string;
+  materialSourceByTaskId?: Record<string, Goal3GaDeclaredReplayMaterialSource | undefined>;
+  probeLeanVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+  probeLakeVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+  runReplayCommand?: (command: string[], cwd: string) => Goal3GaPm002LeanAuthorityCommandResult;
+}): Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport {
+  const manifest = createGoal3GaPositiveTaskManifest();
+  const startIndex = manifest.tasks.findIndex((task) => task.task_id === input.startTaskId);
+  const endIndex = manifest.tasks.findIndex((task) => task.task_id === input.endTaskId);
+  if (startIndex < 0 || endIndex < 0 || startIndex > endIndex || input.startTaskId === "PM-001") {
+    throw new Error("invalid_positive_matrix_lean_authority_executor_tranche");
+  }
+
+  const tasks = manifest.tasks.slice(startIndex, endIndex + 1);
+  if (tasks.some((task) => task.task_id === "PM-001")) {
+    throw new Error("invalid_positive_matrix_lean_authority_executor_tranche");
+  }
+
+  const claimIdPrefix = input.claimIdPrefix ?? "C";
+  const results = tasks.map((task) => {
+    const materialSource = input.materialSourceByTaskId?.[task.task_id];
+    if (!materialSource) {
+      throw new Error("positive_matrix_declared_replay_material_missing");
+    }
+    return executeGoal3GaPositiveMatrixLeanAuthorityReplay({
+      projectRoot: input.projectRoot,
+      taskId: task.task_id,
+      claimId: positiveMatrixClaimId(claimIdPrefix, task),
+      materialSource,
+      probeLeanVersion: input.probeLeanVersion,
+      probeLakeVersion: input.probeLakeVersion,
+      runReplayCommand: input.runReplayCommand
+    });
+  });
+
+  return {
+    schema_version: "comath.goal3_positive_matrix_lean_authority_executor_tranche.v1",
+    start_task_id: input.startTaskId,
+    end_task_id: input.endTaskId,
+    task_count: results.length,
+    task_ids: tasks.map((task) => task.task_id),
+    results,
+    tranche_status: results.every((result) => result.final_authority_packaging.final_evidence_status === "verified_final_authority_evidence")
+      ? "verified_final_authority_evidence"
+      : "blocked_missing_final_evidence",
+    proof_authority: results.every((result) => result.final_authority_packaging.proof_authority === "lean_kernel_clean_replay")
+      ? "lean_kernel_clean_replay"
+      : "none",
+    can_promote_claim: false,
+    promotion_requires_gate: true,
+    promoted_count: 0
+  };
 }
 
 export function executeGoal3GaPm002LeanAuthorityReplay(input: {
