@@ -591,3 +591,39 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. PM-002 through PM-100 now have deterministic non-promotional replay-attempt certificate coverage only; none of those Task 21 positive-matrix items has live Lean4/mathlib clean replay evidence. They remain `replayable_blocker` until future tasks attach real Lean sources, pinned dependency material, LeanRunManifest v3, FinalReplayManifest v3, structured audit, and third-party replay pack evidence for each task. Completing PM-100 does not satisfy GA proof authority or final release readiness.
 - Next step: Task 35 should run the next comprehensive/final broader review over the completed PM-002 through PM-100 replay-attempt certificate sweep, then decide the next unfinished GA release blocker without marking Goal 3 complete.
 - Commit: 1c14ac9
+
+## Task 35: Comprehensive Check-Debug Loop 11
+
+- [x] Re-read all Goal 3 required context files before touching code.
+- [x] Check requirement drift against Goal 3 input, plan, v2 audit/design docs, and Task 31-34 positive-matrix records.
+- [x] Re-run the final positive-matrix tranche suites plus representative earlier positive-matrix and GA workflow suites.
+- [x] Run package build/typecheck/test gates and applicable root smoke checks.
+- [x] Re-scan no-reinvent boundaries, direct promotion paths, non-Lean proof-authority leaks, runtime artifacts, host-path leaks, and PM-002 through PM-100 overclaim risks.
+- [x] Repair any concrete high-risk regression found.
+- [x] Record the check-debug result, residual blockers, next task scope, and commit.
+
+Completion record:
+
+- Work done: re-read the full Goal 3 required context set: `goal-3/input.md`, `goal-3/plan.md`, `goal-3/tasks.md`, the v2 no-reinvent audit, the v2 open formal workbench design, the v2 agent prompt protocol, `AGENTS.md`, `README.md`, `TODO.md`, `REVIEW.md`, `COMATH_PI_LAB_DEV_PLAN.md`, `CODEX_GOAL_RUNBOOK.md`, and `docs/architecture/module-boundaries.md`. Added this Task 35 comprehensive check-debug loop after the PM-090 through PM-100 tranche to close the PM-002 through PM-100 replay-attempt certificate sweep without treating it as GA completion. Checked the Task 31-34 positive-matrix records against the Goal 3 no-reinvent, statement-boundary, and Lean-authority doctrine. No product-code repair was required: PM-002 through PM-100 remain deterministic non-promotional replay-attempt certificate coverage, not live Lean4/mathlib clean replay evidence.
+- Verification evidence: `git status -sb` was clean on `main` before Task 35; `corepack pnpm --filter @comath/comathd build` exited 0; focused suites exited 0: `node services/comathd/tests/unit/goal3-task34-positive-matrix-tranche.test.mjs`, `node services/comathd/tests/unit/goal3-task32-positive-matrix-tranche.test.mjs`, `node services/comathd/tests/unit/goal3-task31-positive-matrix-tranche.test.mjs`, `node services/comathd/tests/unit/goal3-task29-positive-matrix-tranche.test.mjs`, `node services/comathd/tests/unit/goal3-task28-positive-matrix-tranche.test.mjs`, `node services/comathd/tests/unit/goal3-task21-positive-matrix-runner.test.mjs`, `node services/comathd/tests/unit/goal3-task17-ga-acceptance-workflow.test.mjs`, `node services/comathd/tests/unit/goal3-task2-no-toy-production-path.test.mjs`, and `node services/comathd/tests/unit/goal4-p0-no-reinvent-violations.test.mjs`; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; full `corepack pnpm --filter @comath/comathd test` exited 0; root `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test` exited 0, including Pi package tests, Phase 45 Pi/comathd install-session e2e, and Phase 17 integrity evaluation. Static no-reinvent scan over `services/comathd/src` found only `release/v3-negative-ga-slices.ts` adversarial negative fixtures, explicit false no-reinvent/non-authority fields in `release/goal3-ga-acceptance.ts`, and `synthetic_variant_winner_rejected` hard-veto handling; it did not find a restored production theorem-family recognizer, Nat-linear synthesis/parser, default-assumption path, CAS/search/vote proof authority, or direct-promotion bypass. Promotion/proof-authority scan found ordinary gate/schema/status/Lean Authority plumbing plus non-authority adapter/agent surfaces; host-path scan over `services/comathd/src` and `extensions/comath-pi/src` returned no product-source host absolute paths; `Test-Path -LiteralPath '.comath'` returned `False`; `git ls-files '.comath' '.tmp' 'dist' 'node_modules' 'services/comathd/dist' 'extensions/comath-pi/dist'` returned no tracked runtime/build artifacts; `git diff --check` exited 0 with the usual Windows LF-to-CRLF warning for `goal-3/tasks.md` only.
+- Residual risk: Goal 3 remains incomplete. PM-002 through PM-100 now have broad deterministic replay-attempt certificate coverage, but none of those items has live Lean4/mathlib clean replay evidence. They remain `replayable_blocker` with `proof_authority: "none"` and `can_promote_claim: false` until future tasks attach actual Lean sources, pinned dependency material, LeanRunManifest v3, FinalReplayManifest v3, structured audit, and third-party replay pack evidence. PM-001 remains the deterministic representative fixture; it is not evidence that the full positive matrix has been clean-replayed.
+- Next step: Task 36 should start converting the certificate-only positive matrix into live replay evidence by selecting a small PM-002+ tranche for actual Lean4/mathlib clean replay attempts, while preserving fail-closed blocker certificates for anything that cannot be replayed in the current environment.
+- Commit:
+
+## Task 36: Begin Live Clean-Replay Conversion For PM-002+ Positive Matrix
+
+- [ ] Re-read all Goal 3 required context files before touching code.
+- [ ] Select the smallest safe PM-002+ tranche from the positive matrix for actual Lean4/mathlib clean replay attempts.
+- [ ] For each selected task, attach real Lean source, pinned dependency material, LeanRunManifest v3, FinalReplayManifest v3, structured audit, and third-party replay pack evidence when clean replay succeeds.
+- [ ] If live replay cannot run or fails, preserve a specific replayable blocker certificate with `proof_authority: "none"` and `can_promote_claim: false`.
+- [ ] Ensure no production theorem-family recognizer, Nat-linear synthesis, default assumptions, CAS/literature/search/vote authority, or direct promotion path is introduced.
+- [ ] Run focused tests, package build/typecheck/test gates, static no-reinvent scans, and runtime artifact cleanliness checks.
+- [ ] Record validation evidence, residual blockers, next live-replay scope, and commit.
+
+Completion record:
+
+- Work done:
+- Verification evidence:
+- Residual risk:
+- Next step:
+- Commit:
