@@ -371,6 +371,7 @@ export type Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
   task_count: number;
   task_ids: string[];
   category_counts: Partial<Record<Goal3GaPositiveMatrixCategory, number>>;
+  non_authority_input_counts: Partial<Record<Goal3GaPositiveMatrixCategory, { task_count: number; proof_authority: "none" }>>;
   results: Goal3GaPositiveMatrixLeanAuthorityExecutorReport[];
   tranche_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
   tranche_report_path: string;
@@ -2045,6 +2046,12 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
     counts[task.category] = (counts[task.category] ?? 0) + 1;
     return counts;
   }, {});
+  const nonAuthorityInputCounts = Object.fromEntries(
+    Object.entries(categoryCounts).map(([category, taskCount]) => [
+      category,
+      { task_count: taskCount ?? 0, proof_authority: "none" as const }
+    ])
+  ) as Partial<Record<Goal3GaPositiveMatrixCategory, { task_count: number; proof_authority: "none" }>>;
 
   const trancheReportPath = positiveMatrixExecutorTrancheReportPath(input.startTaskId, input.endTaskId);
   const report: Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
@@ -2054,6 +2061,7 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
     task_count: results.length,
     task_ids: tasks.map((task) => task.task_id),
     category_counts: categoryCounts,
+    non_authority_input_counts: nonAuthorityInputCounts,
     results,
     tranche_status: results.every((result) => result.final_authority_packaging.final_evidence_status === "verified_final_authority_evidence")
       ? "verified_final_authority_evidence"
