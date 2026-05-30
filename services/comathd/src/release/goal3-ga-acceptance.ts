@@ -2525,6 +2525,21 @@ function formalSpecTheoremIdentityMatches(formalSpecLock: unknown, finalReplayMa
   return headerDeclarationName !== null && headerDeclarationName === formalSpecShortName;
 }
 
+function finalReplayReportPathMatches(
+  finalReplayManifest: Record<string, unknown>,
+  finalReplayReportKey: string,
+  submittedPath: string
+): boolean {
+  const reportPaths = finalReplayManifest.report_paths && typeof finalReplayManifest.report_paths === "object"
+    ? (finalReplayManifest.report_paths as Record<string, unknown>)
+    : null;
+  const expectedPath = reportPaths?.[finalReplayReportKey];
+  return (
+    typeof expectedPath === "string" &&
+    expectedPath.replace(/\\/g, "/") === submittedPath.replace(/\\/g, "/")
+  );
+}
+
 function verifyOptionalFinalAuthorityBindings(input: {
   projectRoot: string;
   taskId: string;
@@ -2684,10 +2699,19 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
   if (!dependencyClosurePath || !reportPasses(input.projectRoot, dependencyClosurePath)) {
     missing.add("dependency_closure");
   }
+  if (dependencyClosurePath && !finalReplayReportPathMatches(finalReplayRecord, "dependency_closure", dependencyClosurePath)) {
+    missing.add("dependency_closure");
+  }
   if (!axiomProfilePath || !reportPasses(input.projectRoot, axiomProfilePath)) {
     missing.add("axiom_profile");
   }
+  if (axiomProfilePath && !finalReplayReportPathMatches(finalReplayRecord, "axiom_profile", axiomProfilePath)) {
+    missing.add("axiom_profile");
+  }
   if (!statementCheckPath || !reportPasses(input.projectRoot, statementCheckPath)) {
+    missing.add("statement_check");
+  }
+  if (statementCheckPath && !finalReplayReportPathMatches(finalReplayRecord, "statement_equivalence", statementCheckPath)) {
     missing.add("statement_check");
   }
   if (!thirdPartyReplayPackPath || !replayPackExists(input.projectRoot, thirdPartyReplayPackPath)) {

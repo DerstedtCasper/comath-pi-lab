@@ -378,6 +378,21 @@ function formalSpecTheoremIdentityMatches(
   return headerDeclarationName !== null && headerDeclarationName === formalSpecShortName;
 }
 
+function finalReplayReportPathMatches(
+  finalReplayManifest: Record<string, unknown>,
+  finalReplayReportKey: string,
+  submittedPath: string
+): boolean {
+  const reportPaths = finalReplayManifest.report_paths && typeof finalReplayManifest.report_paths === "object"
+    ? (finalReplayManifest.report_paths as Record<string, unknown>)
+    : null;
+  const expectedPath = reportPaths?.[finalReplayReportKey];
+  return (
+    typeof expectedPath === "string" &&
+    expectedPath.replace(/\\/g, "/") === submittedPath.replace(/\\/g, "/")
+  );
+}
+
 function requestedJsonArtifactByPath(projectRoot: string, artifacts: ArtifactRef[], relativePath: string): unknown | null {
   const normalizedPath = relativePath.replace(/\\/g, "/");
   const directMatch = artifacts
@@ -457,6 +472,10 @@ function hasVerifiedDerivedBindingManifest(
       hashJsonInsideProject(projectRoot, bindingEntry.path) === bindingEntry.sha256
     );
   };
+  const reportPathMatchesFinalReplay = (reportPathKey: string, finalReplayReportKey: string): boolean => {
+    const reportPath = report[reportPathKey];
+    return typeof reportPath === "string" && finalReplayReportPathMatches(finalReplayManifest, finalReplayReportKey, reportPath);
+  };
   return (
     typeof bindingRecord.formal_spec_lock_path === "string" &&
     hashJsonInsideProject(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.formal_spec_lock_sha256 &&
@@ -479,6 +498,9 @@ function hasVerifiedDerivedBindingManifest(
     artifactHashesHash === bindingRecord.artifact_hashes_sha256 &&
     dependencyLock.lean_toolchain_sha256 === bindingRecord.toolchain_sha256 &&
     hashJsonInsideProject(projectRoot, report.final_replay_manifest_v3_path as string) === bindingRecord.replay_manifest_sha256 &&
+    reportPathMatchesFinalReplay("dependency_closure_path", "dependency_closure") &&
+    reportPathMatchesFinalReplay("axiom_profile_path", "axiom_profile") &&
+    reportPathMatchesFinalReplay("statement_check_path", "statement_equivalence") &&
     reportBindingMatches("structured_audit", "structured_audit_path") &&
     reportBindingMatches("dependency_closure", "dependency_closure_path") &&
     reportBindingMatches("axiom_profile", "axiom_profile_path") &&
