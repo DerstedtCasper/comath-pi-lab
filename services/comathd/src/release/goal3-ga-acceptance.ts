@@ -369,6 +369,7 @@ export type FinalAuthorityPackagingV3Report = {
   axiom_profile_path: string;
   statement_check_path: string;
   third_party_replay_pack_path: string;
+  source_verification: FinalAuthorityPackagingV3SourceVerification;
   blocker_path: string;
   packaging_report_path: string;
   source_packaging_report_path: string;
@@ -382,6 +383,7 @@ export type FinalAuthorityPackagingV3SourceReport = {
   blocker_code: "final_authority_evidence_incomplete" | "";
   blocker_detail: string;
   missing_final_evidence_classes: Goal3GaPm002FinalEvidenceClass[];
+  source_verification: FinalAuthorityPackagingV3SourceVerification;
   lean_run_manifest_paths: string[];
   final_replay_manifest_v3_path: string;
   structured_audit_path: string;
@@ -391,6 +393,14 @@ export type FinalAuthorityPackagingV3SourceReport = {
   third_party_replay_pack_path: string;
   packaging_report_path: string;
   proof_authority: "none" | "lean_kernel_clean_replay";
+};
+
+export type FinalAuthorityPackagingV3SourceVerification = {
+  verification_basis: "project_local_artifacts";
+  caller_success_metadata_trusted: false;
+  verified_final_evidence_classes: Goal3GaPm002FinalEvidenceClass[];
+  missing_final_evidence_classes: Goal3GaPm002FinalEvidenceClass[];
+  lean_run_manifest_paths_checked: number;
 };
 
 export type FinalAuthorityPackagingV3TrancheReport = {
@@ -2003,6 +2013,7 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
   }
 
   const missingFinalEvidenceClasses = orderedMissingFinalEvidenceClasses(missing);
+  const verifiedFinalEvidenceClasses = finalAuthorityEvidenceClassOrder.filter((evidenceClass) => !missing.has(evidenceClass));
   return {
     final_evidence_status: missingFinalEvidenceClasses.length === 0 ? "verified_final_authority_evidence" : "blocked_missing_final_evidence",
     blocker_code: missingFinalEvidenceClasses.length === 0 ? "" : "final_authority_evidence_incomplete",
@@ -2011,6 +2022,13 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
         ? `${input.taskId} final Lean Authority v3 evidence verifies, but claim promotion still requires the ordinary promotion gate.`
         : `${input.taskId} final Lean Authority v3 evidence is missing or unverifiable; the task remains a replayable blocker until all final evidence classes verify from project-local artifacts.`,
     missing_final_evidence_classes: missingFinalEvidenceClasses,
+    source_verification: {
+      verification_basis: "project_local_artifacts",
+      caller_success_metadata_trusted: false,
+      verified_final_evidence_classes: verifiedFinalEvidenceClasses,
+      missing_final_evidence_classes: missingFinalEvidenceClasses,
+      lean_run_manifest_paths_checked: leanRunManifestPaths.length
+    },
     lean_run_manifest_paths: leanRunManifestPaths,
     final_replay_manifest_v3_path: finalReplayManifestPath,
     structured_audit_path: structuredAuditPath,
@@ -2101,6 +2119,7 @@ export function packageFinalAuthorityEvidenceV3(input: {
     axiom_profile_path: input.sourceReport.axiom_profile_path,
     statement_check_path: input.sourceReport.statement_check_path,
     third_party_replay_pack_path: input.sourceReport.third_party_replay_pack_path,
+    source_verification: input.sourceReport.source_verification,
     blocker_path: input.sourceReport.missing_final_evidence_classes.length === 0 ? "" : blockerPath,
     packaging_report_path: packagingReportPath,
     source_packaging_report_path: input.sourceReport.packaging_report_path,
@@ -2141,6 +2160,13 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3(input: {
     blocker_code: "final_authority_evidence_incomplete" as const,
     blocker_detail: `${task.task_id} final Lean Authority v3 evidence is missing or unverifiable; the task remains a replayable blocker until service-owned LeanRunManifest v3, FinalReplayManifest v3, structured audit, dependency closure, axiom profile, statement check, and third-party replay pack material are attached.`,
     missing_final_evidence_classes: missingFinalEvidenceClasses,
+    source_verification: {
+      verification_basis: "project_local_artifacts" as const,
+      caller_success_metadata_trusted: false as const,
+      verified_final_evidence_classes: [],
+      missing_final_evidence_classes: missingFinalEvidenceClasses,
+      lean_run_manifest_paths_checked: 0
+    },
     lean_run_manifest_paths: [],
     final_replay_manifest_v3_path: "",
     structured_audit_path: "",
