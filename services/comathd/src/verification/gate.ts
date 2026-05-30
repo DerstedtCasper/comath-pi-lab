@@ -11,6 +11,7 @@ import { assertPathAllowed } from "../security/path-policy.js";
 import {
   claimSchema,
   finalLeanReplaySchema,
+  finalReplayManifestV3Schema,
   gateResultSchema,
   type ArtifactRef,
   type Claim,
@@ -19,6 +20,7 @@ import {
   type GateResult
 } from "../types/schemas.js";
 import { nextSequentialId } from "../utils/id.js";
+import { verifyFinalReplayManifestV3 } from "../proof-kernel/lean/final-replay-manifest-v3.js";
 import { runnerResultSha256 } from "./runner-contracts.js";
 
 export type ClaimPromotionRequest = {
@@ -246,6 +248,111 @@ function finalReplayArtifactsAreFresh(projectRoot: string, replay: unknown): boo
   return true;
 }
 
+function readJsonArtifact(projectRoot: string, artifact: ArtifactRef): unknown | null {
+  try {
+    const path = assertPathAllowed(projectRoot, artifact.path, { purpose: "read", resolveRealpath: true });
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function readJsonInsideProject(projectRoot: string, relativePath: string): unknown | null {
+  try {
+    const path = assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true });
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function reportPasses(projectRoot: string, relativePath: string): boolean {
+  try {
+    const path = assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true });
+    const report = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    const hardVetoes = Array.isArray(report.hard_vetoes) ? report.hard_vetoes : [];
+    return report.result === "pass" && hardVetoes.length === 0;
+  } catch {
+    return false;
+  }
+}
+
+function replayPackExists(projectRoot: string, relativePath: string): boolean {
+  for (const required of ["README_REPLAY.md", "FinalReplayManifest.json", "expected_hashes.json"]) {
+    try {
+      assertPathAllowed(projectRoot, join(relativePath, required), { purpose: "read", resolveRealpath: true });
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+function hasVerifiedPm002FinalAuthorityPackaging(
+  projectRoot: string,
+  request: Pick<ClaimPromotionRequest, "claim_id">,
+  artifacts: ArtifactRef[]
+): boolean {
+  for (const packagingArtifact of artifacts) {
+    const packaging = readJsonArtifact(projectRoot, packagingArtifact);
+    if (!packaging || typeof packaging !== "object") {
+      continue;
+    }
+    const report = packaging as Record<string, unknown>;
+    if (
+      report.schema_version !== "comath.goal3_pm002_final_authority_packaging.v1" ||
+      report.task_id !== "PM-002" ||
+      report.final_evidence_status !== "verified_final_authority_evidence" ||
+      report.proof_authority !== "lean_kernel_clean_replay" ||
+      report.can_promote_claim !== false ||
+      report.promotion_requires_gate !== true
+    ) {
+      continue;
+    }
+    const missing = Array.isArray(report.missing_final_evidence_classes) ? report.missing_final_evidence_classes : ["missing"];
+    if (missing.length !== 0) {
+      continue;
+    }
+    if (report.final_replay_manifest_v3_path !== undefined && typeof report.final_replay_manifest_v3_path !== "string") {
+      continue;
+    }
+    const manifestPath = typeof report.final_replay_manifest_v3_path === "string" ? report.final_replay_manifest_v3_path : "";
+    const finalReplay = readJsonInsideProject(projectRoot, manifestPath);
+    const parsed = finalReplayManifestV3Schema.safeParse(finalReplay);
+    if (!parsed.success || parsed.data.claim_id !== request.claim_id || parsed.data.result !== "pass" || parsed.data.exit_code !== 0) {
+      continue;
+    }
+    const requestedManifestArtifact = artifacts.some((artifact) => {
+      const artifactManifest = finalReplayManifestV3Schema.safeParse(readJsonArtifact(projectRoot, artifact));
+      return artifactManifest.success && artifactManifest.data.claim_id === parsed.data.claim_id && artifactManifest.data.replay_id === parsed.data.replay_id;
+    });
+    if (!requestedManifestArtifact) {
+      continue;
+    }
+    const finalReplayVerification = verifyFinalReplayManifestV3(projectRoot, finalReplay);
+    if (!finalReplayVerification.ok) {
+      continue;
+    }
+    if (typeof report.structured_audit_path !== "string" || !reportPasses(projectRoot, report.structured_audit_path)) {
+      continue;
+    }
+    if (typeof report.dependency_closure_path !== "string" || !reportPasses(projectRoot, report.dependency_closure_path)) {
+      continue;
+    }
+    if (typeof report.axiom_profile_path !== "string" || !reportPasses(projectRoot, report.axiom_profile_path)) {
+      continue;
+    }
+    if (typeof report.statement_check_path !== "string" || !reportPasses(projectRoot, report.statement_check_path)) {
+      continue;
+    }
+    if (typeof report.third_party_replay_pack_path !== "string" || !replayPackExists(projectRoot, report.third_party_replay_pack_path)) {
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
 function hasHashBoundFreshProofKernelReplay(
   projectRoot: string,
   request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
@@ -273,6 +380,28 @@ function hasHashBoundFreshProofKernelReplay(
     }
   }
   return false;
+}
+
+function hasPromotionGradeLeanAuthorityEvidence(
+  projectRoot: string,
+  request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
+  artifacts: ArtifactRef[]
+): boolean {
+  return (
+    hasHashBoundFreshProofKernelReplay(projectRoot, request, artifacts) ||
+    hasVerifiedPm002FinalAuthorityPackaging(projectRoot, request, artifacts)
+  );
+}
+
+function hasPassedLeanAuthorityReplayEvidence(
+  projectRoot: string,
+  request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
+  artifacts: ArtifactRef[]
+): boolean {
+  return (
+    hasPassedProofKernelReplay(projectRoot, request, artifacts) ||
+    hasVerifiedPm002FinalAuthorityPackaging(projectRoot, request, artifacts)
+  );
 }
 
 function evidenceBindingVetoes(projectRoot: string, request: ClaimPromotionRequest): string[] {
@@ -401,10 +530,10 @@ function statusEvidenceVetoes(projectRoot: string, claim: Claim, request: ClaimP
     if (!artifactKinds.has("code") && !artifactKinds.has("runner_output")) {
       vetoes.push("formally_checked requires proof artifact");
     }
-    if (!hasPassedProofKernelReplay(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts)) {
+    if (!hasPassedLeanAuthorityReplayEvidence(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts)) {
       vetoes.push("formally_checked requires passed proof-kernel final replay manifest");
     }
-    if (!hasHashBoundFreshProofKernelReplay(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts)) {
+    if (!hasPromotionGradeLeanAuthorityEvidence(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts)) {
       vetoes.push("formally_checked requires hash-bound fresh final replay artifacts");
     }
   }
