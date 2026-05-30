@@ -370,6 +370,7 @@ export type Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
   end_task_id: string;
   task_count: number;
   task_ids: string[];
+  category_counts: Partial<Record<Goal3GaPositiveMatrixCategory, number>>;
   results: Goal3GaPositiveMatrixLeanAuthorityExecutorReport[];
   tranche_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
   tranche_report_path: string;
@@ -2040,6 +2041,10 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
       runReplayCommand: input.runReplayCommand
     });
   });
+  const categoryCounts = tasks.reduce<Partial<Record<Goal3GaPositiveMatrixCategory, number>>>((counts, task) => {
+    counts[task.category] = (counts[task.category] ?? 0) + 1;
+    return counts;
+  }, {});
 
   const trancheReportPath = positiveMatrixExecutorTrancheReportPath(input.startTaskId, input.endTaskId);
   const report: Goal3GaPositiveMatrixLeanAuthorityExecutorTrancheReport = {
@@ -2048,6 +2053,7 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
     end_task_id: input.endTaskId,
     task_count: results.length,
     task_ids: tasks.map((task) => task.task_id),
+    category_counts: categoryCounts,
     results,
     tranche_status: results.every((result) => result.final_authority_packaging.final_evidence_status === "verified_final_authority_evidence")
       ? "verified_final_authority_evidence"
