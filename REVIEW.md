@@ -1,3 +1,40 @@
+## Goal 3 Task 88 / Real Replay Attempt Archive Evidence Layer
+
+Scope: add a service-owned archive/evidence layer for Task86 real Lean replay attempts without turning replay blockers into proof authority.
+
+Changes:
+
+- Added `archiveGoal3GaPositiveMatrixRealReplayAttemptEvidence()`.
+- The archive helper calls the Task86 real replay slice, writes `.comath/release/positive_matrix/<TASK>/real_lean_replay_attempt_archive_v1.json`, imports archive/blocker/packaging files as `other` artifacts, and appends `audit` evidence.
+- The archive helper rejects replay material whose FormalSpecLock or AssumptionLedger is bound to a different claim.
+- Archive records stay non-authoritative: `proof_authority: none`, `can_promote_claim: false`, `archive_is_proof_authority: false`, `no_injected_final_replay_authority: true`, `direct_claim_mutation: false`.
+- Added `goal3-task88-real-replay-attempt-archive.test.mjs` and wired it into the default `@comath/comathd` test chain.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/goal3-task88-real-replay-attempt-archive.test.mjs
+Initial RED result: exit 1; ../../dist/index.js did not export archiveGoal3GaPositiveMatrixRealReplayAttemptEvidence.
+```
+
+Verification:
+
+- `node services/comathd/tests/unit/goal3-task88-real-replay-attempt-archive.test.mjs`
+- `node services/comathd/tests/unit/goal3-task85-pm084-live-final-authority-completion.test.mjs`
+- `node services/comathd/tests/unit/goal3-task86-real-lean-replay-slice-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task87-injected-final-replay-authority-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task45-generic-final-authority-packaging-gate.test.mjs`
+- `corepack pnpm --filter @comath/comathd build`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+- `corepack pnpm build`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+
+Boundary notes: Task88 does not enable real replay by default, does not download or install Lean/mathlib, does not restore injected final replay authority, and does not add theorem recognition, Nat-linear synthesis, default assumptions, or a new proof authority. On this workstation, `lean`/`lake` resolve to elan shims but no active toolchain is configured, so real PM-084 replay remains a replayable environment blocker.
+
+Residual risks: real PM-084 Lean/mathlib execution still requires a prepared Lean toolchain and declared replay material in runtime state. Broader positive-matrix live replay, production Pi/Codex lifecycle validation, and comprehensive GA release validation remain open.
+
 ## Goal 3 Task 87 / Injected Final Replay Authority Gate
 
 Scope: close the no-cheat gap where the exported generic positive-matrix Lean Authority executor could use an injected `runReplayCommand` callback to fabricate final replay success.

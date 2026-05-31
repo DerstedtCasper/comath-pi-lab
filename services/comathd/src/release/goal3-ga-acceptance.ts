@@ -4,8 +4,9 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { assumptionLedgerSchema, formalSpecLockSchema, type Claim, type GateResult } from "../types/schemas.js";
 import { statementHash } from "../utils/statement.js";
-import { importArtifact } from "../artifacts/store.js";
-import { appendEvidenceRecord } from "../evidence/store.js";
+import { importArtifact, listArtifactRefs } from "../artifacts/store.js";
+import { appendEvidenceRecord, readEvidenceRecords } from "../evidence/store.js";
+import { nextSequentialId } from "../utils/id.js";
 import { promoteClaim } from "../verification/gate.js";
 import { evaluateStatementDiffGate } from "../proof-kernel/lean/statement-diff-gate.js";
 import {
@@ -366,6 +367,49 @@ export type Goal3GaPositiveMatrixLeanAuthorityExecutorReport = {
   final_authority_packaging: FinalAuthorityPackagingV3Report;
   proof_authority: "none";
   can_promote_claim: false;
+};
+
+export type Goal3GaPositiveMatrixRealReplayAttemptArchive = {
+  schema_version: "comath.goal3_positive_matrix_real_replay_attempt_archive.v1";
+  archive_id: string;
+  project_id: string;
+  task_id: string;
+  claim_id: string;
+  actor: string;
+  created_at: string;
+  archive_path: string;
+  attempt_mode: "goal3_positive_matrix_real_lean_replay_slice";
+  real_replay_enabled: boolean;
+  environment_gate: {
+    env_var: "COMATH_ENABLE_GOAL3_REAL_LEAN_REPLAY";
+    satisfied: boolean;
+  };
+  material_source_path: string;
+  material_status: Goal3GaDeclaredReplayMaterialCheck["status"];
+  material_missing_paths: string[];
+  executor_status: Goal3GaPositiveMatrixLeanAuthorityExecutorReport["executor_status"];
+  attempt_status: "replayable_environment_blocker" | "real_replay_completed_archived";
+  terminal_classification: "replayable_blocker" | "clean_replay_passed";
+  blocker_code: Goal3GaPositiveMatrixLeanAuthorityExecutorReport["blocker_code"];
+  blocker_detail: string;
+  attempted_commands: string[][];
+  replay_plan_commands: string[][];
+  lean_run_manifest_paths: string[];
+  executor_blocker_path: string;
+  final_replay_manifest_v3_path: string;
+  final_authority_packaging_report_path: string;
+  final_authority_packaging_status: FinalAuthorityPackagingV3Report["final_evidence_status"];
+  final_authority_packaging_proof_authority: FinalAuthorityPackagingV3Report["proof_authority"];
+  missing_final_evidence_classes: Goal3GaPm002FinalEvidenceClass[];
+  artifact_ids: string[];
+  evidence_id: string;
+  proof_authority: "none";
+  can_promote_claim: false;
+  promotion_requires_gate: true;
+  archive_is_proof_authority: false;
+  no_injected_final_replay_authority: true;
+  direct_claim_mutation: false;
+  promoted_count: 0;
 };
 
 export type Goal3GaPositiveMatrixNoReinventGuards = {
@@ -2456,6 +2500,151 @@ export function executeGoal3GaPositiveMatrixRealLeanReplaySlice(input: {
     materialSource: input.materialSource,
     completeFinalAuthorityEvidence: true
   });
+}
+
+function stringCommandList(value: unknown): string[][] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((command): command is string[] => Array.isArray(command) && command.every((part) => typeof part === "string"))
+    .map((command) => [...command]);
+}
+
+function archivePath(taskId: string): string {
+  return join(".comath", "release", "positive_matrix", taskId, "real_lean_replay_attempt_archive_v1.json").replace(/\\/g, "/");
+}
+
+function declaredReplayMaterialBindsClaim(projectRoot: string, source: Goal3GaDeclaredReplayMaterialSource, claimId: string): boolean {
+  const formalSpec = readJsonInsideProject(projectRoot, source.formal_spec_lock_path);
+  const assumptionLedger = readJsonInsideProject(projectRoot, source.assumption_ledger_path);
+  const formalSpecClaimId = jsonStringField(formalSpec, "claim_id");
+  const assumptionLedgerClaimId = jsonStringField(assumptionLedger, "claim_id");
+  return (
+    (formalSpecClaimId === null || formalSpecClaimId === claimId) &&
+    (assumptionLedgerClaimId === null || assumptionLedgerClaimId === claimId)
+  );
+}
+
+export async function archiveGoal3GaPositiveMatrixRealReplayAttemptEvidence(input: {
+  projectRoot: string;
+  projectId: string;
+  taskId: string;
+  claimId: string;
+  materialSource: Goal3GaDeclaredReplayMaterialSource;
+  realReplayEnabled?: boolean;
+  actor: string;
+}): Promise<Goal3GaPositiveMatrixRealReplayAttemptArchive> {
+  const task = taskByIdOrThrow(input.taskId);
+  if (!declaredReplayMaterialBindsClaim(input.projectRoot, input.materialSource, input.claimId)) {
+    throw new Error("real_replay_archive_material_claim_mismatch");
+  }
+  const materialCheck = validateDeclaredReplayMaterialSource({
+    projectRoot: input.projectRoot,
+    task,
+    source: input.materialSource
+  });
+  const realReplayEnabled = input.realReplayEnabled ?? goal3RealLeanReplaySliceEnabled();
+  const report = executeGoal3GaPositiveMatrixRealLeanReplaySlice({
+    projectRoot: input.projectRoot,
+    taskId: input.taskId,
+    claimId: input.claimId,
+    materialSource: input.materialSource,
+    realReplayEnabled
+  });
+  const blocker = readJsonInsideProject(input.projectRoot, report.executor_blocker_path);
+  const blockerRecord = blocker && typeof blocker === "object" ? (blocker as Record<string, unknown>) : {};
+  const attemptedCommands = stringCommandList(blockerRecord.attempted_commands);
+  const replayPlanCommands = stringCommandList(blockerRecord.replay_plan_commands);
+  const leanRunManifestPaths = Array.isArray(blockerRecord.lean_run_manifest_paths)
+    ? blockerRecord.lean_run_manifest_paths.filter((path): path is string => typeof path === "string")
+    : [...report.final_authority_packaging.lean_run_manifest_paths];
+  const artifactInputs = [
+    report.executor_blocker_path,
+    report.final_authority_packaging.packaging_report_path
+  ].filter((path) => path && evidencePathExistsInsideProject(input.projectRoot, path));
+  const importedArtifacts = [];
+  for (const source_path of artifactInputs) {
+    importedArtifacts.push(await importArtifact({
+      projectRoot: input.projectRoot,
+      project_id: input.projectId,
+      source_path,
+      kind: "other",
+      actor: input.actor
+    }));
+  }
+
+  const archiveArtifactId = nextSequentialId("AR", listArtifactRefs(input.projectRoot).map((artifact) => artifact.id));
+  const evidenceId = nextSequentialId("EV", readEvidenceRecords(input.projectRoot).map((evidence) => evidence.id));
+  const artifactIds = [...importedArtifacts.map((artifact) => artifact.id), archiveArtifactId];
+  const path = archivePath(input.taskId);
+  const archive: Goal3GaPositiveMatrixRealReplayAttemptArchive = {
+    schema_version: "comath.goal3_positive_matrix_real_replay_attempt_archive.v1",
+    archive_id: `ARCH-${input.taskId}-${input.claimId}`,
+    project_id: input.projectId,
+    task_id: input.taskId,
+    claim_id: input.claimId,
+    actor: input.actor,
+    created_at: new Date().toISOString(),
+    archive_path: path,
+    attempt_mode: "goal3_positive_matrix_real_lean_replay_slice",
+    real_replay_enabled: realReplayEnabled,
+    environment_gate: {
+      env_var: "COMATH_ENABLE_GOAL3_REAL_LEAN_REPLAY",
+      satisfied: realReplayEnabled
+    },
+    material_source_path: materialCheck.source_path,
+    material_status: materialCheck.status,
+    material_missing_paths: [...materialCheck.missing_paths],
+    executor_status: report.executor_status,
+    attempt_status: report.executor_status === "live_replay_conversion_completed"
+      ? "real_replay_completed_archived"
+      : "replayable_environment_blocker",
+    terminal_classification: report.executor_status === "live_replay_conversion_completed" ? "clean_replay_passed" : "replayable_blocker",
+    blocker_code: report.blocker_code,
+    blocker_detail: report.blocker_detail,
+    attempted_commands: attemptedCommands,
+    replay_plan_commands: replayPlanCommands,
+    lean_run_manifest_paths: leanRunManifestPaths,
+    executor_blocker_path: report.executor_blocker_path,
+    final_replay_manifest_v3_path: report.final_authority_packaging.final_replay_manifest_v3_path,
+    final_authority_packaging_report_path: report.final_authority_packaging.packaging_report_path,
+    final_authority_packaging_status: report.final_authority_packaging.final_evidence_status,
+    final_authority_packaging_proof_authority: report.final_authority_packaging.proof_authority,
+    missing_final_evidence_classes: [...report.final_authority_packaging.missing_final_evidence_classes],
+    artifact_ids: artifactIds,
+    evidence_id: evidenceId,
+    proof_authority: "none",
+    can_promote_claim: false,
+    promotion_requires_gate: true,
+    archive_is_proof_authority: false,
+    no_injected_final_replay_authority: true,
+    direct_claim_mutation: false,
+    promoted_count: 0
+  };
+  writeJsonProjectFile(input.projectRoot, path, archive);
+  const archiveArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.projectId,
+    source_path: path,
+    kind: "other",
+    actor: input.actor
+  });
+  if (archiveArtifact.id !== archiveArtifactId) {
+    throw new Error("real_replay_attempt_archive_artifact_id_drift");
+  }
+  const evidence = appendEvidenceRecord(input.projectRoot, {
+    id: evidenceId,
+    project_id: input.projectId,
+    claim_id: input.claimId,
+    kind: "audit",
+    summary: `${input.taskId} real Lean replay attempt archived as non-authoritative replayable evidence.`,
+    artifact_ids: artifactIds
+  });
+  if (evidence.id !== evidenceId) {
+    throw new Error("real_replay_attempt_archive_evidence_id_drift");
+  }
+  return archive;
 }
 
 export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
