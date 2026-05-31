@@ -36,6 +36,32 @@ function parseEvidencePath(raw: string): { path: string; expectedHash?: string }
   };
 }
 
+function parseEquivalenceEvidencePath(raw: string): { path: string; expectedHash?: string } | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const prefixed =
+    /^(lean_equivalence_replay|lean_equivalence_run_manifest|equivalence_lean_run_manifest|equivalence_final_replay_manifest):(.+)$/i.exec(
+      trimmed
+    );
+  const candidate = prefixed ? prefixed[2]!.trim() : trimmed;
+  if (!/equivalence/i.test(prefixed?.[1] ?? candidate)) {
+    return undefined;
+  }
+  if (!/lean_run_manifest|final_replay_manifest/i.test(candidate)) {
+    return undefined;
+  }
+  const [path, expectedHash] = candidate.split("#", 2);
+  if (!path || !/\.json$/i.test(path.trim())) {
+    return undefined;
+  }
+  return {
+    path: path.trim(),
+    expectedHash: expectedHash && /^[0-9a-f]{64}$/i.test(expectedHash) ? expectedHash.toLowerCase() : undefined
+  };
+}
+
 function readEvidenceJson(input: {
   projectRoot: string;
   path: string;
@@ -106,6 +132,31 @@ function isVerifiedFinalReplayManifest(input: {
 export function hasVerifiedServiceOwnedLeanManifestEvidence(input: ServiceOwnedLeanEvidenceContext): boolean {
   return input.evidence.some((evidence) => {
     const ref = parseEvidencePath(evidence);
+    if (!ref) {
+      return false;
+    }
+    const manifest = readEvidenceJson({ projectRoot: input.projectRoot, path: ref.path, expectedHash: ref.expectedHash });
+    return (
+      isVerifiedLeanRunManifest({
+        projectRoot: input.projectRoot,
+        campaignId: input.campaignId,
+        claimId: input.claimId,
+        candidateId: input.candidateId,
+        manifest
+      }) ||
+      isVerifiedFinalReplayManifest({
+        projectRoot: input.projectRoot,
+        campaignId: input.campaignId,
+        claimId: input.claimId,
+        manifest
+      })
+    );
+  });
+}
+
+export function hasVerifiedServiceOwnedLeanEquivalenceEvidence(input: ServiceOwnedLeanEvidenceContext): boolean {
+  return input.evidence.some((evidence) => {
+    const ref = parseEquivalenceEvidencePath(evidence);
     if (!ref) {
       return false;
     }

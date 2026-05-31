@@ -33,12 +33,13 @@ Implemented Goal 3 trust-core evidence includes:
 - FormalSpecLock and AssumptionLedger schema and intake tests.
 - StatementDiffGate and statement-drift red-team tests.
 - LeanRunManifest v3, final replay, dependency closure, integrity scanner, axiom profile, and no-cheat tests.
+- Artifact-backed Lean evidence gates for live adapter replay claims and non-exact statement-equivalence replay claims.
 - External wheel registry tests for proof-authority-none adapter outputs.
 - Native MathProve-style stage-machine and GA agent-stage workflow tests.
 - Pi goal-mode route and extension tests.
 - Goal 3 GA negative and representative positive proof-workflow harnesses.
 
-Task 17's positive matrix is a harness with representative seeds and a replayable blocker for the unexecuted 100-task breadth. Task96 hardens batch consumers so representative fixture or aggregate harness evidence is not displayed as per-task clean replay. Task97 hardens the promotion gate so legacy final replay manifests cannot substitute for Lean Authority v3 final replay packaging. Task98 also blocks legacy PM-002 v1 final-authority packaging reports from satisfying `formally_checked`; only generic Lean Authority v3 packaging is promotion-grade. Task99 requires promotion-grade FinalReplayManifest v3 evidence to bind Lean/Lake executable binary hashes to a passing final-replay LeanRunManifest. Task100 prevents campaign/Pi proof-success read models and goal export readiness from treating legacy `completed_formal_proof` as proof success unless an explicit `formal_replay_authority_evidence` envelope is present. Do not claim that all 100 positive proof tasks have been clean-replayed.
+Task 17's positive matrix is a harness with representative seeds and a replayable blocker for the unexecuted 100-task breadth. Task96 hardens batch consumers so representative fixture or aggregate harness evidence is not displayed as per-task clean replay. Task97 hardens the promotion gate so legacy final replay manifests cannot substitute for Lean Authority v3 final replay packaging. Task98 also blocks legacy PM-002 v1 final-authority packaging reports from satisfying `formally_checked`; only generic Lean Authority v3 packaging is promotion-grade. Task99 requires promotion-grade FinalReplayManifest v3 evidence to bind Lean/Lake executable binary hashes to a passing final-replay LeanRunManifest. Task100 prevents campaign/Pi proof-success read models and goal export readiness from treating legacy `completed_formal_proof` as proof success unless an explicit `formal_replay_authority_evidence` envelope is present. Task111-112 require live adapter and non-exact statement-equivalence replay claims to cite verified service-owned Lean replay manifests rather than marker strings. Do not claim that all 100 positive proof tasks have been clean-replayed.
 
 ## Runtime Baseline
 

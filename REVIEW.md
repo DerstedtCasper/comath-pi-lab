@@ -1,3 +1,24 @@
+# Goal 3 Task 112 / Artifact-Backed Statement-Equivalence Replay Evidence Gate
+
+Scope: prevent marker-only or id-only non-exact statement-equivalence evidence from satisfying candidate arbitration, StatementDiffGate, or registered logical/transitive statement-equivalence acceptance.
+
+Work performed:
+
+- Used two read-only subagents to inspect remaining equivalence replay evidence risks across decision arbitration, StatementDiffGate, registered logical/transitive witnesses, and bounded materialization.
+- Added `goal3-task112-statement-equivalence-artifact-gate.test.mjs`. RED showed `lean_equivalence_replay:CAND-*` marker-only evidence could still select a non-exact equivalent candidate.
+- Added `hasVerifiedServiceOwnedLeanEquivalenceEvidence()` requiring equivalence-specific evidence refs to resolve to verified service-owned LeanRunManifest v3 or FinalReplayManifest v3 artifacts with matching campaign/claim/candidate identity.
+- Hardened non-exact `statement_equivalence_claim: "equivalent"` arbitration, StatementDiffGate replay witnesses, registered logical equivalence, registered transitive equivalence, and bounded materialized equivalence witness propagation.
+- Updated Task5, Phase56, Phase78, Phase79, and Phase80 fixtures so positive non-exact equivalence cases carry artifact-backed Lean replay manifest paths.
+
+Verification evidence:
+
+- Focused GREEN tests: Task112, Task5, Phase18 proof-kernel gates, Phase56, Phase62, Phase78, Phase79, Phase80, and Task111.
+- Package gates passed: `corepack pnpm --dir services/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`.
+
+Boundary notes: Task112 still does not make equivalence-search plans or materialized metadata proof authority. Non-exact statement equivalence can satisfy these local gates only when it points at verified service-owned Lean replay manifests; final promotion remains downstream Lean Authority and clean replay gated.
+
+Residual risks: automatic equivalence proof search/execution, real live Lean/mathlib execution for broader candidates, OS-level isolation, production Pi/Codex lifecycle validation, and final GA audit remain open.
+
 # Goal 3 Task 111 / Artifact-Backed Live Adapter Lean Evidence Gate
 
 Scope: prevent marker-only live adapter evidence strings from substituting for service-owned LeanRunManifest v3 or FinalReplayManifest v3 artifacts when candidates are marked `candidate_kernel_checked` or when replay-project descriptors/material sources are produced.

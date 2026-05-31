@@ -11,7 +11,10 @@ import {
   type ResearchCampaign
 } from "../../types/schemas.js";
 import { ensembleDecisionRel } from "./paths.js";
-import { hasVerifiedServiceOwnedLeanManifestEvidence } from "./service-owned-lean-evidence.js";
+import {
+  hasVerifiedServiceOwnedLeanEquivalenceEvidence,
+  hasVerifiedServiceOwnedLeanManifestEvidence
+} from "./service-owned-lean-evidence.js";
 
 export type EnsembleDecision = {
   selected_candidate_id: string | null;
@@ -76,21 +79,42 @@ function hasBoundStatementHash(candidate: CandidateRun, manifest?: CandidateMani
   );
 }
 
-function hasProofGradeStatementEquivalence(manifest: CandidateManifest): boolean {
-  if (manifest.statement_equivalence_claim === "exact") {
+function hasProofGradeStatementEquivalence(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  candidate: CandidateRun;
+  manifest: CandidateManifest;
+}): boolean {
+  if (input.manifest.statement_equivalence_claim === "exact") {
     return true;
   }
-  if (manifest.statement_equivalence_claim !== "equivalent") {
+  if (input.manifest.statement_equivalence_claim !== "equivalent") {
     return false;
   }
-  return manifest.evidence.some((evidence) => /lean_equivalence_replay|equivalence_lean_run_manifest/i.test(evidence));
+  return hasVerifiedServiceOwnedLeanEquivalenceEvidence({
+    projectRoot: input.projectRoot,
+    campaignId: input.campaign.campaign_id,
+    claimId: input.campaign.root_claim_id,
+    candidateId: input.candidate.candidate_id,
+    evidence: input.manifest.evidence
+  });
 }
 
-function requiresLeanEquivalenceReplay(manifest?: CandidateManifest): boolean {
+function requiresLeanEquivalenceReplay(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  candidate: CandidateRun;
+  manifest?: CandidateManifest;
+}): boolean {
   return Boolean(
-    manifest &&
-      manifest.statement_equivalence_claim === "equivalent" &&
-      !manifest.evidence.some((evidence) => /lean_equivalence_replay|equivalence_lean_run_manifest/i.test(evidence))
+    input.manifest &&
+      input.manifest.statement_equivalence_claim === "equivalent" &&
+      !hasProofGradeStatementEquivalence({
+        projectRoot: input.projectRoot,
+        campaign: input.campaign,
+        candidate: input.candidate,
+        manifest: input.manifest
+      })
   );
 }
 
@@ -170,9 +194,13 @@ function rejectionReason(input: {
   if (hasHardVeto(candidate, manifest)) {
     return `hard veto: ${[...candidate.hard_vetoes, ...(manifest?.hard_vetoes ?? [])].join(", ")}`;
   }
-  if (candidate.state === "candidate_kernel_checked" && manifest && !hasProofGradeStatementEquivalence(manifest)) {
-    if (requiresLeanEquivalenceReplay(manifest)) {
-      return "non-exact statement equivalence requires Lean-proved equivalence replay evidence";
+  if (
+    candidate.state === "candidate_kernel_checked" &&
+    manifest &&
+    !hasProofGradeStatementEquivalence({ projectRoot: input.projectRoot, campaign: input.campaign, candidate, manifest })
+  ) {
+    if (requiresLeanEquivalenceReplay({ projectRoot: input.projectRoot, campaign: input.campaign, candidate, manifest })) {
+      return "non-exact statement equivalence requires artifact-backed Lean equivalence replay evidence";
     }
     return `statement equivalence ${manifest.statement_equivalence_claim} is not proof-grade`;
   }
@@ -195,7 +223,13 @@ function rejectionReason(input: {
   return "no proof-grade evidence";
 }
 
-function candidateHardVetoes(candidate: CandidateRun, manifest?: CandidateManifest): string[] {
+function candidateHardVetoes(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  candidate: CandidateRun;
+  manifest?: CandidateManifest;
+}): string[] {
+  const { candidate, manifest } = input;
   const hardVetoes = new Set([...candidate.hard_vetoes, ...(manifest?.hard_vetoes ?? [])]);
   if (hasStatementDrift(candidate)) {
     hardVetoes.add("statement_drift");
@@ -206,10 +240,14 @@ function candidateHardVetoes(candidate: CandidateRun, manifest?: CandidateManife
   if (hasUnapprovedAssumptionDelta(manifest)) {
     hardVetoes.add("hidden_assumption");
   }
-  if (requiresLeanEquivalenceReplay(manifest)) {
+  if (requiresLeanEquivalenceReplay(input)) {
     hardVetoes.add("lean_equivalence_replay_required");
   }
-  if (candidate.state === "candidate_kernel_checked" && manifest && !hasProofGradeStatementEquivalence(manifest)) {
+  if (
+    candidate.state === "candidate_kernel_checked" &&
+    manifest &&
+    !hasProofGradeStatementEquivalence({ projectRoot: input.projectRoot, campaign: input.campaign, candidate, manifest })
+  ) {
     const claim = manifest.statement_equivalence_claim;
     if (claim === "weaker") {
       hardVetoes.add("statement_weakened");
@@ -239,7 +277,12 @@ export function decideCandidate(input: {
         hasBoundStatementHash(candidate, manifestByCandidateId.get(candidate.candidate_id)) &&
         !hasHardVeto(candidate, manifestByCandidateId.get(candidate.candidate_id)) &&
         !hasUnapprovedAssumptionDelta(manifestByCandidateId.get(candidate.candidate_id)) &&
-        hasProofGradeStatementEquivalence(manifestByCandidateId.get(candidate.candidate_id)!) &&
+        hasProofGradeStatementEquivalence({
+          projectRoot: input.projectRoot,
+          campaign: input.campaign,
+          candidate,
+          manifest: manifestByCandidateId.get(candidate.candidate_id)!
+        }) &&
         hasTrustedReplayEvidence({
           projectRoot: input.projectRoot,
           campaign: input.campaign,
@@ -265,7 +308,18 @@ export function decideCandidate(input: {
         )
       : undefined;
   const selectionMode = selected ? "evidence_weighted" : refutation ? "verified_refutation" : "recovery_required";
-  const hardVetoes = [...new Set(input.candidates.flatMap((candidate) => candidateHardVetoes(candidate, manifestByCandidateId.get(candidate.candidate_id))))];
+  const hardVetoes = [
+    ...new Set(
+      input.candidates.flatMap((candidate) =>
+        candidateHardVetoes({
+          projectRoot: input.projectRoot,
+          campaign: input.campaign,
+          candidate,
+          manifest: manifestByCandidateId.get(candidate.candidate_id)
+        })
+      )
+    )
+  ];
   const decision: EnsembleDecision = {
     selected_candidate_id: selected?.candidate_id ?? null,
     selection_mode: selectionMode,

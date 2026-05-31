@@ -1,8 +1,12 @@
+import { hasVerifiedServiceOwnedLeanEquivalenceEvidence } from "../ensemble/service-owned-lean-evidence.js";
+
 export type StatementDiffEquivalenceClaim = "exact" | "equivalent" | "weaker" | "stronger" | "different" | "unknown";
 
 export type StatementDiffGateInput = {
+  projectRoot?: string;
   formal_spec_lock: {
     claim_id?: string;
+    campaign_id?: string;
     theorem_header: string;
     theorem_type_pretty: string;
     statement_hash: string;
@@ -20,6 +24,9 @@ export type StatementDiffGateInput = {
       kind?: string;
       lean_run_manifest_id?: string;
       final_replay_manifest_id?: string;
+      lean_run_manifest_path?: string;
+      final_replay_manifest_v3_path?: string;
+      evidence?: string[];
       witness_artifact_id?: string;
     };
     domain_markers?: string[];
@@ -82,11 +89,27 @@ function allowedAssumptionKeys(input: StatementDiffGateInput): Set<string> {
   return keys;
 }
 
-function hasLeanEquivalenceReplayWitness(witness: StatementDiffGateInput["candidate_statement"]["equivalence_witness"]): boolean {
+function hasLeanEquivalenceReplayWitness(input: StatementDiffGateInput): boolean {
+  const witness = input.candidate_statement.equivalence_witness;
   if (!witness || witness.kind !== "lean_kernel_checked_equivalence_replay") {
     return false;
   }
-  return Boolean(witness.lean_run_manifest_id?.trim() || witness.final_replay_manifest_id?.trim());
+  if (!input.projectRoot || !input.formal_spec_lock.claim_id || !input.formal_spec_lock.campaign_id) {
+    return false;
+  }
+  const evidence = [...(witness.evidence ?? [])];
+  if (witness.lean_run_manifest_path) {
+    evidence.push(`equivalence_lean_run_manifest:${witness.lean_run_manifest_path}`);
+  }
+  if (witness.final_replay_manifest_v3_path) {
+    evidence.push(`equivalence_final_replay_manifest:${witness.final_replay_manifest_v3_path}`);
+  }
+  return hasVerifiedServiceOwnedLeanEquivalenceEvidence({
+    projectRoot: input.projectRoot,
+    campaignId: input.formal_spec_lock.campaign_id,
+    claimId: input.formal_spec_lock.claim_id,
+    evidence
+  });
 }
 
 function quantifierClass(statement: string): "exists" | "forall" | "none" {
@@ -161,7 +184,7 @@ export function evaluateStatementDiffGate(input: StatementDiffGateInput): Statem
     lockedType === candidateType &&
     input.formal_spec_lock.statement_hash === input.candidate_statement.statement_hash;
   const nonExact = claim === "equivalent" || (claim === "exact" && !exactShape);
-  const hasReplayWitness = hasLeanEquivalenceReplayWitness(input.candidate_statement.equivalence_witness);
+  const hasReplayWitness = hasLeanEquivalenceReplayWitness(input);
   if (nonExact && !hasReplayWitness) {
     addFinding(
       findings,

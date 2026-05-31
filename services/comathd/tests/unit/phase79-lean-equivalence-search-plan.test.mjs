@@ -1,13 +1,59 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { checkStatementEquivalence } from "../../dist/index.js";
+import { dirname, join } from "node:path";
+import { checkStatementEquivalence, createServiceOwnedLeanRunManifestV3 } from "../../dist/index.js";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-lean-equivalence-search-plan-"));
 const source = "MathResearch.C0001 (n : Nat) : n + 0 = n";
 const target = "MathResearch.C0001 (n : Nat) : Nat.add n 0 = n";
 const planPath = join(".comath", "evidence", "C-0001", "lean", "equivalence_search_plan.json");
+let runCounter = 7900;
+
+function writeProjectFile(root, relativePath, content) {
+  const path = join(root, relativePath);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content, "utf8");
+  return path;
+}
+
+function writeVerifiedLeanRunManifest(root, { campaignId = "CAM-0079", claimId = "C-0001", candidateId = "CAND-0079" } = {}) {
+  const relRoot = `.comath/evidence/${claimId}/lean/${candidateId}/equivalence-${++runCounter}`;
+  const inputRel = `${relRoot}/Target.lean`;
+  const toolchainRel = `${relRoot}/lean-toolchain`;
+  const stdoutRel = `${relRoot}/stdout.log`;
+  const stderrRel = `${relRoot}/stderr.log`;
+  const manifestRel = `${relRoot}/lean_run_manifest_v3.json`;
+  writeProjectFile(root, inputRel, "theorem C0001 : True := by trivial\n");
+  writeProjectFile(root, toolchainRel, "leanprover/lean4:v4.23.0\n");
+  writeProjectFile(root, stdoutRel, "ok\n");
+  writeProjectFile(root, stderrRel, "");
+  const manifest = createServiceOwnedLeanRunManifestV3({
+    projectRoot: root,
+    run_id: `LRUN-${runCounter}`,
+    claim_id: claimId,
+    campaign_id: campaignId,
+    candidate_id: candidateId,
+    purpose: "audit",
+    command: ["lake", "build", "MathResearch.C0001", "Audit.C0001"],
+    cwd: join(root, relRoot),
+    input_files: [join(root, inputRel), join(root, toolchainRel)],
+    lean_version: "4.23.0",
+    lake_version: "5.0.0",
+    elan_toolchain: "leanprover/lean4:v4.23.0",
+    lean_toolchain_file: join(root, toolchainRel),
+    network_policy: "disabled",
+    sandbox: "none",
+    exit_code: 0,
+    stdout_path: join(root, stdoutRel),
+    stderr_path: join(root, stderrRel),
+    started_at: "2026-06-01T00:00:00.000Z",
+    ended_at: "2026-06-01T00:00:01.000Z",
+    proof_authority: "lean_kernel_check"
+  });
+  writeProjectFile(root, manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifestRel;
+}
 
 function check(overrides = {}) {
   return checkStatementEquivalence({
@@ -77,6 +123,9 @@ try {
     checkStatementEquivalence({
       projectRoot: registeredRoot,
       reportPath: join(".comath", "evidence", "C-0001", "lean", "statement-registered.json"),
+      campaign_id: "CAM-0079",
+      claim_id: "C-0001",
+      candidate_id: "CAND-0079",
       locked_statement_hash: "sha256:locked",
       formal_spec_statement: source,
       lean_check_output: `${target}\n`,
@@ -90,6 +139,7 @@ try {
           witness_kind: "lean_kernel_checked_equivalence",
           witness_artifact_id: "ART-EQUIV-0001",
           witness_artifact_sha256: `sha256:${"a".repeat(64)}`,
+          witness_artifact_path: writeVerifiedLeanRunManifest(registeredRoot),
           lemma_names: ["MathResearch.c0001_equiv"],
           justification: "Kernel-checked direct witness."
         }
@@ -105,6 +155,9 @@ try {
     checkStatementEquivalence({
       projectRoot: transitiveRoot,
       reportPath: join(".comath", "evidence", "C-0001", "lean", "statement-transitive.json"),
+      campaign_id: "CAM-0079",
+      claim_id: "C-0001",
+      candidate_id: "CAND-0079",
       locked_statement_hash: "sha256:locked",
       formal_spec_statement: source,
       lean_check_output: `${target}\n`,
@@ -123,6 +176,7 @@ try {
               witness_kind: "lean_kernel_checked_equivalence",
               witness_artifact_id: "ART-EQUIV-0002",
               witness_artifact_sha256: `sha256:${"b".repeat(64)}`,
+              witness_artifact_path: writeVerifiedLeanRunManifest(transitiveRoot),
               lemma_names: ["MathResearch.c0001_step1"],
               justification: "Kernel-checked first link."
             },
@@ -132,6 +186,7 @@ try {
               witness_kind: "lean_kernel_checked_equivalence",
               witness_artifact_id: "ART-EQUIV-0003",
               witness_artifact_sha256: `sha256:${"c".repeat(64)}`,
+              witness_artifact_path: writeVerifiedLeanRunManifest(transitiveRoot),
               lemma_names: ["MathResearch.c0001_step2"],
               justification: "Kernel-checked second link."
             }

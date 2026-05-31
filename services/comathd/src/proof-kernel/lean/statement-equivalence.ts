@@ -7,6 +7,7 @@ import {
   extractLeanTheoremDeclarationSignature,
   type LeanStatementSignature
 } from "./statement-signature.js";
+import { hasVerifiedServiceOwnedLeanEquivalenceEvidence } from "../ensemble/service-owned-lean-evidence.js";
 
 export type StatementEquivalenceReport = {
   result: "pass" | "fail";
@@ -35,6 +36,7 @@ export type StatementEquivalenceReport = {
     witness_kind?: "lean_kernel_checked_equivalence";
     witness_artifact_id?: string;
     witness_artifact_sha256?: string;
+    witness_artifact_path?: string;
     lemma_names?: string[];
     transitive_links?: StatementRegisteredLogicalEquivalence[];
   };
@@ -81,6 +83,7 @@ export type StatementEquivalenceWitnessMaterialization = {
   witness_kind: "lean_kernel_checked_equivalence";
   witness_artifact_id: string;
   witness_artifact_sha256: string;
+  witness_artifact_path?: string;
   lemma_names: string[];
   justification: string;
   required_final_authority: readonly [
@@ -104,6 +107,7 @@ export type StatementRegisteredLogicalEquivalence = {
   witness_kind: "lean_kernel_checked_equivalence";
   witness_artifact_id: string;
   witness_artifact_sha256: string;
+  witness_artifact_path?: string;
   lemma_names: string[];
   justification: string;
 };
@@ -144,13 +148,37 @@ function isSha256Digest(value: string): boolean {
   return /^sha256:[0-9a-f]{64}$/i.test(value.trim());
 }
 
-function isValidLogicalEquivalenceLink(equivalence: StatementRegisteredLogicalEquivalence): boolean {
+function equivalenceEvidenceRef(equivalence: StatementRegisteredLogicalEquivalence): string | undefined {
+  if (!equivalence.witness_artifact_path?.trim()) {
+    return undefined;
+  }
+  return `equivalence_lean_run_manifest:${equivalence.witness_artifact_path.trim()}`;
+}
+
+function isValidLogicalEquivalenceLink(input: {
+  equivalence: StatementRegisteredLogicalEquivalence;
+  projectRoot: string;
+  campaignId?: string;
+  claimId?: string;
+  candidateId?: string;
+}): boolean {
+  const evidenceRef = equivalenceEvidenceRef(input.equivalence);
   return (
-    equivalence.witness_kind === "lean_kernel_checked_equivalence" &&
-    equivalence.witness_artifact_id.trim().length > 0 &&
-    isSha256Digest(equivalence.witness_artifact_sha256) &&
-    equivalence.lemma_names.length > 0 &&
-    equivalence.lemma_names.every((name) => name.trim().length > 0)
+    input.equivalence.witness_kind === "lean_kernel_checked_equivalence" &&
+    input.equivalence.witness_artifact_id.trim().length > 0 &&
+    isSha256Digest(input.equivalence.witness_artifact_sha256) &&
+    input.equivalence.lemma_names.length > 0 &&
+    input.equivalence.lemma_names.every((name) => name.trim().length > 0) &&
+    Boolean(evidenceRef) &&
+    Boolean(input.campaignId) &&
+    Boolean(input.claimId) &&
+    hasVerifiedServiceOwnedLeanEquivalenceEvidence({
+      projectRoot: input.projectRoot,
+      campaignId: input.campaignId ?? "",
+      claimId: input.claimId ?? "",
+      candidateId: input.candidateId,
+      evidence: [evidenceRef!]
+    })
   );
 }
 
@@ -261,6 +289,7 @@ export function materializeStatementEquivalenceSearchPlan(input: {
     formal_spec_statement: string;
     equivalent_signature: string;
     witness_kind: "lean_kernel_checked_equivalence";
+    witness_artifact_path?: string;
     lemma_names: string[];
     justification: string;
   }>;
@@ -298,6 +327,7 @@ export function materializeStatementEquivalenceSearchPlan(input: {
     equivalent_signature: plan.target_signature.normalized_signature,
     witness_kind: "lean_kernel_checked_equivalence" as const,
     witness_artifact_id: witnessArtifactId,
+    ...(materialization.witness_artifact_path ? { witness_artifact_path: materialization.witness_artifact_path } : {}),
     lemma_names: materialization.lemma_names.map((name) => name.trim()),
     justification: materialization.justification,
     required_final_authority: [
@@ -323,6 +353,7 @@ export function materializeStatementEquivalenceSearchPlan(input: {
     witness_kind: artifact.witness_kind,
     witness_artifact_id: artifact.witness_artifact_id,
     witness_artifact_sha256: artifact.witness_artifact_sha256,
+    ...(artifact.witness_artifact_path ? { witness_artifact_path: artifact.witness_artifact_path } : {}),
     lemma_names: artifact.lemma_names,
     justification: artifact.justification
   };
@@ -332,12 +363,22 @@ function findLogicalEquivalenceWitness(input: {
   equivalences: StatementRegisteredLogicalEquivalence[];
   normalizedExpected: string;
   normalizedActual: string;
+  projectRoot: string;
+  campaignId?: string;
+  claimId?: string;
+  candidateId?: string;
 }): StatementEquivalenceReport["equivalence_witness"] | undefined {
   const witness = input.equivalences.find(
     (equivalence) =>
       normalizeStatement(equivalence.formal_spec_statement) === input.normalizedExpected &&
       normalizeStatement(equivalence.equivalent_signature) === input.normalizedActual &&
-      isValidLogicalEquivalenceLink(equivalence)
+      isValidLogicalEquivalenceLink({
+        equivalence,
+        projectRoot: input.projectRoot,
+        campaignId: input.campaignId,
+        claimId: input.claimId,
+        candidateId: input.candidateId
+      })
   );
   if (!witness) {
     return undefined;
@@ -350,6 +391,7 @@ function findLogicalEquivalenceWitness(input: {
     witness_kind: witness.witness_kind,
     witness_artifact_id: witness.witness_artifact_id,
     witness_artifact_sha256: witness.witness_artifact_sha256,
+    witness_artifact_path: witness.witness_artifact_path,
     lemma_names: witness.lemma_names
   };
 }
@@ -358,6 +400,10 @@ function findTransitiveLogicalEquivalenceWitness(input: {
   equivalences: StatementRegisteredTransitiveLogicalEquivalence[];
   normalizedExpected: string;
   normalizedActual: string;
+  projectRoot: string;
+  campaignId?: string;
+  claimId?: string;
+  candidateId?: string;
 }): StatementEquivalenceReport["equivalence_witness"] | undefined {
   for (const equivalence of input.equivalences) {
     if (
@@ -372,7 +418,16 @@ function findTransitiveLogicalEquivalenceWitness(input: {
     const lemmaNames: string[] = [];
     let valid = true;
     for (const link of equivalence.links) {
-      if (normalizeStatement(link.formal_spec_statement) !== current || !isValidLogicalEquivalenceLink(link)) {
+      if (
+        normalizeStatement(link.formal_spec_statement) !== current ||
+        !isValidLogicalEquivalenceLink({
+          equivalence: link,
+          projectRoot: input.projectRoot,
+          campaignId: input.campaignId,
+          claimId: input.claimId,
+          candidateId: input.candidateId
+        })
+      ) {
         valid = false;
         break;
       }
@@ -399,6 +454,9 @@ function findTransitiveLogicalEquivalenceWitness(input: {
 
 export function checkStatementEquivalence(input: {
   projectRoot: string;
+  campaign_id?: string;
+  claim_id?: string;
+  candidate_id?: string;
   reportPath: string;
   locked_statement_hash: string;
   formal_spec_statement: string;
@@ -433,7 +491,11 @@ export function checkStatementEquivalence(input: {
       ? findLogicalEquivalenceWitness({
           equivalences: input.allowed_registered_logical_equivalences ?? [],
           normalizedExpected,
-          normalizedActual: target.signature.normalized_signature
+          normalizedActual: target.signature.normalized_signature,
+          projectRoot: input.projectRoot,
+          campaignId: input.campaign_id,
+          claimId: input.claim_id,
+          candidateId: input.candidate_id
         })
       : undefined;
   const transitiveLogicalEquivalenceWitness =
@@ -441,7 +503,11 @@ export function checkStatementEquivalence(input: {
       ? findTransitiveLogicalEquivalenceWitness({
           equivalences: input.allowed_registered_transitive_logical_equivalences ?? [],
           normalizedExpected,
-          normalizedActual: target.signature.normalized_signature
+          normalizedActual: target.signature.normalized_signature,
+          projectRoot: input.projectRoot,
+          campaignId: input.campaign_id,
+          claimId: input.claim_id,
+          candidateId: input.candidate_id
         })
       : undefined;
   const accepted =

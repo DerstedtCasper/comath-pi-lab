@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  createServiceOwnedLeanRunManifestV3,
   createStatementDriftRedTeamReport,
   decideCandidate,
   evaluateStatementDiffGate,
@@ -11,9 +12,11 @@ import {
 } from "../../dist/index.js";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task5-statement-diff-gate-"));
+let runCounter = 5000;
 
 const lock = {
   claim_id: "C-0001",
+  campaign_id: "CAM-0005",
   theorem_header: "theorem add_zero_nat",
   theorem_type_pretty: "(n : Nat) : n + 0 = n",
   statement_hash: "locked-hash",
@@ -23,6 +26,7 @@ const lock = {
 
 function check(candidate) {
   return evaluateStatementDiffGate({
+    projectRoot,
     formal_spec_lock: lock,
     assumption_ledger_entries: [],
     candidate_statement: {
@@ -41,6 +45,44 @@ function writeProjectFile(relativePath, content) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content, "utf8");
   return path;
+}
+
+function writeVerifiedLeanRunManifest({ campaignId = "CAM-0005", claimId = "C-0001", candidateId = "CAND-0005" } = {}) {
+  const relRoot = `.comath/evidence/${claimId}/lean/${candidateId}/equivalence-${++runCounter}`;
+  const inputRel = `${relRoot}/Target.lean`;
+  const toolchainRel = `${relRoot}/lean-toolchain`;
+  const stdoutRel = `${relRoot}/stdout.log`;
+  const stderrRel = `${relRoot}/stderr.log`;
+  const manifestRel = `${relRoot}/lean_run_manifest_v3.json`;
+  writeProjectFile(inputRel, "theorem C0001 : True := by trivial\n");
+  writeProjectFile(toolchainRel, "leanprover/lean4:v4.23.0\n");
+  writeProjectFile(stdoutRel, "ok\n");
+  writeProjectFile(stderrRel, "");
+  const manifest = createServiceOwnedLeanRunManifestV3({
+    projectRoot,
+    run_id: `LRUN-${runCounter}`,
+    claim_id: claimId,
+    campaign_id: campaignId,
+    candidate_id: candidateId,
+    purpose: "audit",
+    command: ["lake", "build", "MathResearch.C0001", "Audit.C0001"],
+    cwd: join(projectRoot, relRoot),
+    input_files: [join(projectRoot, inputRel), join(projectRoot, toolchainRel)],
+    lean_version: "4.23.0",
+    lake_version: "5.0.0",
+    elan_toolchain: "leanprover/lean4:v4.23.0",
+    lean_toolchain_file: join(projectRoot, toolchainRel),
+    network_policy: "disabled",
+    sandbox: "none",
+    exit_code: 0,
+    stdout_path: join(projectRoot, stdoutRel),
+    stderr_path: join(projectRoot, stderrRel),
+    started_at: "2026-06-01T00:00:00.000Z",
+    ended_at: "2026-06-01T00:00:01.000Z",
+    proof_authority: "lean_kernel_check"
+  });
+  writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifestRel;
 }
 
 function writeCandidateManifest(candidate, extra = {}) {
@@ -125,7 +167,10 @@ try {
 
   const replayedEquivalent = check({
     statement_equivalence_claim: "equivalent",
-    equivalence_witness: { kind: "lean_kernel_checked_equivalence_replay", lean_run_manifest_id: "LR-0001" }
+    equivalence_witness: {
+      kind: "lean_kernel_checked_equivalence_replay",
+      lean_run_manifest_path: writeVerifiedLeanRunManifest()
+    }
   });
   assert.equal(replayedEquivalent.result, "pass");
   assert.equal(replayedEquivalent.equivalence_mode, "lean_replayed_equivalent");
@@ -193,7 +238,7 @@ try {
   assert.equal(decision.gate.hard_vetoes.includes("lean_equivalence_replay_required"), true);
   assert.equal(
     decision.decision.rejected_candidates.some(
-      (item) => item.candidate_id === "CAND-0005" && /Lean-proved equivalence replay/i.test(item.reason)
+      (item) => item.candidate_id === "CAND-0005" && /artifact-backed Lean equivalence replay/i.test(item.reason)
     ),
     true
   );
