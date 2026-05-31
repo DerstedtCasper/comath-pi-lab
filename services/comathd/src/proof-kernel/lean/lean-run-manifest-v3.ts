@@ -244,7 +244,7 @@ export function runServiceOwnedLeanCommandV3(input: {
     stderr_path: stderrPath,
     started_at: startedAt,
     ended_at: endedAt,
-    proof_authority: input.proof_authority
+    proof_authority: result.exit_code === 0 ? input.proof_authority : "none"
   });
   const manifestRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.manifest.json`);
   const manifestPath = assertPathAllowed(input.projectRoot, manifestRel, { purpose: "runtime-write" });

@@ -10,6 +10,7 @@ import { assertPathAllowed } from "../../security/path-policy.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
 import { runGaAgentStageCandidates } from "../ensemble/ga-agent-stage-runner.js";
+import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-candidate-lean-check.js";
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
 import { defaultVariants } from "../ensemble/variant-registry.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
@@ -2208,7 +2209,12 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       campaign,
       obligation,
       stage: "lemma_sprint",
-      locked_statement_hash: obligation.statement_hash
+      locked_statement_hash: obligation.statement_hash,
+      adapter: createServiceOwnedNativeCandidateLeanAdapter({
+        projectRoot: input.project_root,
+        campaign,
+        obligation
+      })
     });
     const candidatesRel = writeStoredCandidates(input.project_root, campaign, obligation.obligation_id, batch.candidates);
     const generationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_generation.json", {

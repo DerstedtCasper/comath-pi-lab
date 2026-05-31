@@ -411,7 +411,13 @@ export function runGaAgentStageCandidates(input: {
   obligation: ProofObligation;
   stage: ProofKernelStage;
   locked_statement_hash: string;
-  adapter?: (input: { taskCard: GaAgentTaskCard }) => GaAgentStageAdapterResult;
+  adapter?: (input: {
+    taskCard: GaAgentTaskCard;
+    candidateId: string;
+    projectRoot: string;
+    campaign: ResearchCampaign;
+    obligation: ProofObligation;
+  }) => GaAgentStageAdapterResult | undefined;
 }): GaAgentStageBatch {
   const taskCards = createGaAgentStageTaskCards(input);
   const candidates: CandidateRun[] = [];
@@ -419,9 +425,17 @@ export function runGaAgentStageCandidates(input: {
   const agentOutputs: GaAgentOutput[] = [];
 
   for (const taskCard of taskCards) {
-    const adapterResult = normalizeAdapterResult(input.adapter?.({ taskCard }));
     const variantNumber = variantOrdinal(taskCard.variant_id);
     const candidateId = `CAND-${input.campaign.campaign_id.replace(/^[A-Z]+-/, "")}${variantNumber}`;
+    const adapterResult = normalizeAdapterResult(
+      input.adapter?.({
+        taskCard,
+        candidateId,
+        projectRoot: input.projectRoot,
+        campaign: input.campaign,
+        obligation: input.obligation
+      })
+    );
     const workspacePath = assertPathAllowed(input.projectRoot, taskCard.workspace_path, { purpose: "runtime-write" });
     mkdirSync(workspacePath, { recursive: true });
     writeJson(input.projectRoot, join(taskCard.workspace_path, "task_card.json"), taskCard);

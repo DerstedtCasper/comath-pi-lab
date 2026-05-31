@@ -23,7 +23,7 @@ function parseEvidencePath(raw: string): { path: string; expectedHash?: string }
   }
   const prefixed = /^(lean_run_manifest|final_replay_manifest):(.+)$/i.exec(trimmed);
   const candidate = prefixed ? prefixed[2]!.trim() : trimmed;
-  if (!/lean_run_manifest|final_replay_manifest/i.test(candidate)) {
+  if (!prefixed && !/lean_run_manifest|final_replay_manifest/i.test(candidate)) {
     return undefined;
   }
   const [path, expectedHash] = candidate.split("#", 2);
