@@ -324,7 +324,9 @@ function projectJsonStringField(projectRoot: string, relativePath: string, field
 function projectFormalSpecLockBindingValid(input: {
   projectRoot: string;
   relativePath: string;
+  bindingScope?: "positive_matrix" | "campaign";
   taskId: unknown;
+  campaignId?: unknown;
   claimId: string;
   lockedStatementHash: string;
   finalReplayManifest: Record<string, unknown>;
@@ -332,10 +334,14 @@ function projectFormalSpecLockBindingValid(input: {
 }): boolean {
   const value = readJsonInsideProject(input.projectRoot, input.relativePath);
   const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const scopeMatches =
+    input.bindingScope === "campaign"
+      ? record.binding_scope === "campaign" && record.campaign_id === input.campaignId && record.task_id === undefined
+      : (record.binding_scope === undefined || record.binding_scope === "positive_matrix") && record.task_id === input.taskId;
   return (
     record.schema_version === "comath.formal_spec_lock.v2" &&
     record.proof_authority === "none" &&
-    record.task_id === input.taskId &&
+    scopeMatches &&
     record.claim_id === input.claimId &&
     formalSpecTheoremIdentityMatches(input.projectRoot, input.relativePath, input.finalReplayManifest) &&
     record.statement_hash === input.lockedStatementHash &&
@@ -346,16 +352,22 @@ function projectFormalSpecLockBindingValid(input: {
 function projectAssumptionLedgerBindingValid(input: {
   projectRoot: string;
   relativePath: string;
+  bindingScope?: "positive_matrix" | "campaign";
   taskId: unknown;
+  campaignId?: unknown;
   claimId: string;
   lockedStatementHash: string;
 }): boolean {
   const value = readJsonInsideProject(input.projectRoot, input.relativePath);
   const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const scopeMatches =
+    input.bindingScope === "campaign"
+      ? record.binding_scope === "campaign" && record.campaign_id === input.campaignId && record.task_id === undefined
+      : (record.binding_scope === undefined || record.binding_scope === "positive_matrix") && record.task_id === input.taskId;
   return (
     record.schema_version === "comath.assumption_ledger.v1" &&
     record.proof_authority === "none" &&
-    record.task_id === input.taskId &&
+    scopeMatches &&
     record.claim_id === input.claimId &&
     record.formal_spec_lock_hash === input.lockedStatementHash
   );
@@ -464,9 +476,17 @@ function hasVerifiedDerivedBindingManifest(
     return false;
   }
   const bindingRecord = binding as Record<string, unknown>;
+  const bindingScope = report.binding_scope === "campaign" ? "campaign" : "positive_matrix";
+  const scopeMatches =
+    bindingScope === "campaign"
+      ? bindingRecord.binding_scope === "campaign" &&
+        bindingRecord.campaign_id === report.campaign_id &&
+        bindingRecord.task_id === undefined
+      : (bindingRecord.binding_scope === undefined || bindingRecord.binding_scope === "positive_matrix") &&
+        bindingRecord.task_id === report.task_id;
   if (
     bindingRecord.schema_version !== "comath.final_authority_derived_bindings.v3" ||
-    bindingRecord.task_id !== report.task_id ||
+    !scopeMatches ||
     bindingRecord.claim_id !== report.claim_id ||
     bindingRecord.claim_id !== request.claim_id ||
     bindingRecord.binding_manifest_path !== report.source_packaging_report_path ||
@@ -515,7 +535,9 @@ function hasVerifiedDerivedBindingManifest(
     projectFormalSpecLockBindingValid({
       projectRoot,
       relativePath: bindingRecord.formal_spec_lock_path,
+      bindingScope,
       taskId: bindingRecord.task_id,
+      campaignId: bindingRecord.campaign_id,
       claimId: bindingRecord.claim_id as string,
       lockedStatementHash: request.locked_statement_hash,
       finalReplayManifest,
@@ -526,7 +548,9 @@ function hasVerifiedDerivedBindingManifest(
     projectAssumptionLedgerBindingValid({
       projectRoot,
       relativePath: bindingRecord.assumption_ledger_path,
+      bindingScope,
       taskId: bindingRecord.task_id,
+      campaignId: bindingRecord.campaign_id,
       claimId: bindingRecord.claim_id as string,
       lockedStatementHash: request.locked_statement_hash
     }) &&

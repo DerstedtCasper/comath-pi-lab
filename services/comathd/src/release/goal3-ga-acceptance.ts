@@ -522,7 +522,9 @@ export type Goal3GaPm002FinalAuthorityPackagingReport = {
 
 export type FinalAuthorityPackagingV3Report = {
   schema_version: "comath.final_authority_packaging.v3";
-  task_id: string;
+  binding_scope?: "positive_matrix" | "campaign";
+  task_id?: string;
+  campaign_id?: string;
   claim_id: string;
   final_evidence_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
   blocker_code: "final_authority_evidence_incomplete" | "";
@@ -596,7 +598,9 @@ export type FinalAuthorityPackagingV3TrancheReport = {
 
 export type FinalAuthorityDerivedBindingsV3Manifest = {
   schema_version: "comath.final_authority_derived_bindings.v3";
-  task_id: string;
+  binding_scope?: "positive_matrix" | "campaign";
+  task_id?: string;
+  campaign_id?: string;
   claim_id: string;
   binding_manifest_path: string;
   final_replay_manifest_v3_path: string;
@@ -623,6 +627,24 @@ export type FinalAuthorityDerivedBindingsV3Manifest = {
 export type Goal3GaPositiveMatrixFinalAuthorityPromotionBundle = {
   schema_version: "comath.goal3_positive_matrix_final_authority_promotion_bundle.v1";
   task_id: string;
+  claim_id: string;
+  packaging_report: FinalAuthorityPackagingV3Report;
+  derived_binding_manifest_path: string;
+  evidence_id: string;
+  artifact_ids: string[];
+  gate: GateResult;
+  claim: Claim;
+  formal_replay_authority_evidence?: FormalReplayAuthorityEvidence;
+  proof_authority: "none" | "lean_kernel_clean_replay";
+  promoted_by_ordinary_gate: boolean;
+  promotion_requires_gate: true;
+  direct_claim_mutation: false;
+};
+
+export type CampaignFinalAuthorityPromotionBundle = {
+  schema_version: "comath.campaign_final_authority_promotion_bundle.v1";
+  binding_scope: "campaign";
+  campaign_id: string;
   claim_id: string;
   packaging_report: FinalAuthorityPackagingV3Report;
   derived_binding_manifest_path: string;
@@ -3414,6 +3436,11 @@ function genericFinalPackagingReportPath(taskId: string, kind: "blocker" | "repo
   return join(".comath", "release", "positive_matrix", taskId, leaf).replace(/\\/g, "/");
 }
 
+function campaignFinalPackagingReportPath(campaignId: string, kind: "blocker" | "report"): string {
+  const leaf = kind === "blocker" ? "final_authority_evidence_blocker_v3.json" : "final_authority_packaging_report_v3.json";
+  return join(".comath", "campaign", campaignId, leaf).replace(/\\/g, "/");
+}
+
 function genericFinalPackagingTrancheReportPath(startTaskId: string, endTaskId: string): string {
   return join(
     ".comath",
@@ -3432,6 +3459,28 @@ function genericFinalAuthorityDerivedBindingsPath(taskId: string): string {
     taskId,
     "derived_final_authority_bindings_v3.json"
   ).replace(/\\/g, "/");
+}
+
+function campaignFinalAuthorityDerivedBindingsPath(campaignId: string): string {
+  return join(".comath", "campaign", campaignId, "derived_final_authority_bindings_v3.json").replace(/\\/g, "/");
+}
+
+function finalAuthorityScopeLabel(input: { bindingScope?: "positive_matrix" | "campaign"; taskId?: string; campaignId?: string }): string {
+  return input.bindingScope === "campaign" ? input.campaignId ?? "campaign" : input.taskId ?? "positive_matrix_task";
+}
+
+function finalAuthorityScopeMatchesRecord(
+  record: Record<string, unknown>,
+  input: { bindingScope?: "positive_matrix" | "campaign"; taskId?: string; campaignId?: string }
+): boolean {
+  if (input.bindingScope === "campaign") {
+    return record.binding_scope === "campaign" && record.campaign_id === input.campaignId && record.task_id === undefined;
+  }
+  return (
+    (record.binding_scope === undefined || record.binding_scope === "positive_matrix") &&
+    typeof input.taskId === "string" &&
+    record.task_id === input.taskId
+  );
 }
 
 function orderedMissingFinalEvidenceClasses(missing: Set<Goal3GaPm002FinalEvidenceClass>): Goal3GaPm002FinalEvidenceClass[] {
@@ -3519,7 +3568,9 @@ function finalReplayReportPathMatches(
 
 function verifyOptionalFinalAuthorityBindings(input: {
   projectRoot: string;
-  taskId: string;
+  bindingScope?: "positive_matrix" | "campaign";
+  taskId?: string;
+  campaignId?: string;
   claimId: string;
   evidence: FinalAuthorityPackagingV3EvidenceInput;
   finalReplayManifest: unknown;
@@ -3552,7 +3603,7 @@ function verifyOptionalFinalAuthorityBindings(input: {
       formalSpecLockRecord.proof_authority !== "none" ||
       !validSha256(evidence.formal_spec_lock_sha256) ||
       actualHash !== evidence.formal_spec_lock_sha256 ||
-      formalSpecLockRecord.task_id !== input.taskId ||
+      !finalAuthorityScopeMatchesRecord(formalSpecLockRecord, input) ||
       formalSpecLockRecord.claim_id !== input.claimId ||
       !formalSpecTheoremIdentityMatches(formalSpecLock, finalReplayRecord) ||
       lockedStatementHash === null ||
@@ -3578,7 +3629,7 @@ function verifyOptionalFinalAuthorityBindings(input: {
       assumptionLedgerRecord.proof_authority !== "none" ||
       !validSha256(evidence.assumption_ledger_sha256) ||
       actualHash !== evidence.assumption_ledger_sha256 ||
-      assumptionLedgerRecord.task_id !== input.taskId ||
+      !finalAuthorityScopeMatchesRecord(assumptionLedgerRecord, input) ||
       assumptionLedgerRecord.claim_id !== input.claimId ||
       lockedStatementHash === null ||
       assumptionLedgerRecord.formal_spec_lock_hash !== lockedStatementHash
@@ -3660,10 +3711,13 @@ function hasSemanticallyBoundFinalLeanRun(input: {
 
 function verifyFinalAuthorityEvidenceSourceReportV3(input: {
   projectRoot: string;
-  taskId: string;
+  bindingScope?: "positive_matrix" | "campaign";
+  taskId?: string;
+  campaignId?: string;
   claimId: string;
   evidence?: FinalAuthorityPackagingV3EvidenceInput;
 }): FinalAuthorityPackagingV3SourceReport {
+  const label = finalAuthorityScopeLabel(input);
   const evidence = input.evidence ?? {};
   const leanRunManifestPaths = Array.isArray(evidence.lean_run_manifest_paths)
     ? evidence.lean_run_manifest_paths.filter((path): path is string => typeof path === "string" && path.length > 0)
@@ -3746,7 +3800,9 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
 
   const submittedBindingClasses = verifyOptionalFinalAuthorityBindings({
     projectRoot: input.projectRoot,
+    bindingScope: input.bindingScope,
     taskId: input.taskId,
+    campaignId: input.campaignId,
     claimId: input.claimId,
     evidence,
     finalReplayManifest,
@@ -3766,8 +3822,8 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
     blocker_code: missingFinalEvidenceClasses.length === 0 ? "" : "final_authority_evidence_incomplete",
     blocker_detail:
       missingFinalEvidenceClasses.length === 0
-        ? `${input.taskId} final Lean Authority v3 evidence verifies, but claim promotion still requires the ordinary promotion gate.`
-        : `${input.taskId} final Lean Authority v3 evidence is missing or unverifiable; the task remains a replayable blocker until all final evidence classes verify from project-local artifacts.`,
+        ? `${label} final Lean Authority v3 evidence verifies, but claim promotion still requires the ordinary promotion gate.`
+        : `${label} final Lean Authority v3 evidence is missing or unverifiable; the task remains a replayable blocker until all final evidence classes verify from project-local artifacts.`,
     missing_final_evidence_classes: missingFinalEvidenceClasses,
     source_verification: {
       verification_basis: "project_local_artifacts",
@@ -3901,6 +3957,107 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBin
   });
 }
 
+export function deriveCampaignFinalAuthorityEvidenceBindingsV3(input: {
+  projectRoot: string;
+  campaignId: string;
+  claimId: string;
+  evidence: FinalAuthorityPackagingV3DerivedBindingInput;
+}): { evidence: FinalAuthorityPackagingV3EvidenceInput; binding_manifest: FinalAuthorityDerivedBindingsV3Manifest } {
+  const finalReplayManifestPath = input.evidence.final_replay_manifest_v3_path ?? "";
+  const finalReplayManifest = finalReplayManifestPath ? readJsonInsideProject(input.projectRoot, finalReplayManifestPath) : null;
+  const finalReplayRecord = finalReplayManifest && typeof finalReplayManifest === "object"
+    ? (finalReplayManifest as Record<string, unknown>)
+    : {};
+  const dependencyLock = finalReplayRecord.dependency_lock && typeof finalReplayRecord.dependency_lock === "object"
+    ? (finalReplayRecord.dependency_lock as Record<string, unknown>)
+    : {};
+
+  const formalSpecLockSha256 = hashProjectJsonFile(input.projectRoot, input.evidence.formal_spec_lock_path) ?? "";
+  const assumptionLedgerSha256 = hashProjectJsonFile(input.projectRoot, input.evidence.assumption_ledger_path) ?? "";
+  const dependencyLockSha256 = finalReplayRecord.dependency_lock ? sha256Text(canonicalJson(finalReplayRecord.dependency_lock)) : "";
+  const artifactHashesSha256 = finalReplayRecord.artifact_hashes ? sha256Text(canonicalJson(finalReplayRecord.artifact_hashes)) : "";
+  const toolchainSha256 = typeof dependencyLock.lean_toolchain_sha256 === "string" ? dependencyLock.lean_toolchain_sha256 : "";
+  const replayManifestSha256 = finalReplayManifestPath ? hashProjectJsonFile(input.projectRoot, finalReplayManifestPath) ?? "" : "";
+  const finalAuthorityReportBindings = {
+    structured_audit: {
+      path: input.evidence.structured_audit_path ?? "",
+      sha256: hashProjectJsonFile(input.projectRoot, input.evidence.structured_audit_path ?? "") ?? ""
+    },
+    dependency_closure: {
+      path: input.evidence.dependency_closure_path ?? "",
+      sha256: hashProjectJsonFile(input.projectRoot, input.evidence.dependency_closure_path ?? "") ?? ""
+    },
+    axiom_profile: {
+      path: input.evidence.axiom_profile_path ?? "",
+      sha256: hashProjectJsonFile(input.projectRoot, input.evidence.axiom_profile_path ?? "") ?? ""
+    },
+    statement_check: {
+      path: input.evidence.statement_check_path ?? "",
+      sha256: hashProjectJsonFile(input.projectRoot, input.evidence.statement_check_path ?? "") ?? ""
+    }
+  };
+  const bindingManifestPath = campaignFinalAuthorityDerivedBindingsPath(input.campaignId);
+  const bindingManifest: FinalAuthorityDerivedBindingsV3Manifest = {
+    schema_version: "comath.final_authority_derived_bindings.v3",
+    binding_scope: "campaign",
+    campaign_id: input.campaignId,
+    claim_id: input.claimId,
+    binding_manifest_path: bindingManifestPath,
+    final_replay_manifest_v3_path: finalReplayManifestPath,
+    formal_spec_lock_path: input.evidence.formal_spec_lock_path,
+    formal_spec_lock_sha256: formalSpecLockSha256,
+    assumption_ledger_path: input.evidence.assumption_ledger_path,
+    assumption_ledger_sha256: assumptionLedgerSha256,
+    dependency_lock_sha256: dependencyLockSha256,
+    artifact_hashes_sha256: artifactHashesSha256,
+    toolchain_sha256: toolchainSha256,
+    replay_manifest_sha256: replayManifestSha256,
+    final_authority_report_bindings: finalAuthorityReportBindings,
+    caller_supplied_hashes_trusted: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    promotion_requires_gate: true
+  };
+  writeJsonProjectFile(input.projectRoot, bindingManifestPath, bindingManifest);
+
+  return {
+    evidence: {
+      ...input.evidence,
+      formal_spec_lock_sha256: formalSpecLockSha256,
+      assumption_ledger_sha256: assumptionLedgerSha256,
+      dependency_lock_sha256: dependencyLockSha256,
+      artifact_hashes_sha256: artifactHashesSha256,
+      toolchain_sha256: toolchainSha256,
+      replay_manifest_sha256: replayManifestSha256,
+      packaging_report_path: input.evidence.packaging_report_path ?? bindingManifestPath
+    },
+    binding_manifest: bindingManifest
+  };
+}
+
+export function packageCampaignFinalAuthorityEvidenceWithDerivedBindingsV3(input: {
+  projectRoot: string;
+  campaignId: string;
+  claimId: string;
+  evidence: FinalAuthorityPackagingV3DerivedBindingInput;
+}): FinalAuthorityPackagingV3Report {
+  const derived = deriveCampaignFinalAuthorityEvidenceBindingsV3(input);
+  const sourceReport = verifyFinalAuthorityEvidenceSourceReportV3({
+    projectRoot: input.projectRoot,
+    bindingScope: "campaign",
+    campaignId: input.campaignId,
+    claimId: input.claimId,
+    evidence: derived.evidence
+  });
+  return packageFinalAuthorityEvidenceV3({
+    projectRoot: input.projectRoot,
+    bindingScope: "campaign",
+    campaignId: input.campaignId,
+    claimId: input.claimId,
+    sourceReport
+  });
+}
+
 export function createFormalReplayAuthorityEvidenceFromFinalAuthorityPackagingV3(input: {
   projectRoot: string;
   packaging: unknown;
@@ -3964,9 +4121,17 @@ export function createFormalReplayAuthorityEvidenceFromFinalAuthorityPackagingV3
   const derivedBindingRecord = derivedBinding && typeof derivedBinding === "object"
     ? (derivedBinding as Record<string, unknown>)
     : {};
+  const reportBindingScope = report.binding_scope === "campaign" ? "campaign" : "positive_matrix";
+  const derivedScopeMatches =
+    reportBindingScope === "campaign"
+      ? derivedBindingRecord.binding_scope === "campaign" &&
+        derivedBindingRecord.campaign_id === report.campaign_id &&
+        derivedBindingRecord.task_id === undefined
+      : (derivedBindingRecord.binding_scope === undefined || derivedBindingRecord.binding_scope === "positive_matrix") &&
+        derivedBindingRecord.task_id === report.task_id;
   if (
     derivedBindingRecord.schema_version !== "comath.final_authority_derived_bindings.v3" ||
-    derivedBindingRecord.task_id !== report.task_id ||
+    !derivedScopeMatches ||
     derivedBindingRecord.claim_id !== report.claim_id ||
     derivedBindingRecord.final_replay_manifest_v3_path !== finalReplayManifestPath ||
     derivedBindingRecord.proof_authority !== "none" ||
@@ -4109,6 +4274,89 @@ export async function promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDeri
   };
 }
 
+export async function promoteCampaignFinalAuthorityEvidenceWithDerivedBindingsV3(input: {
+  projectRoot: string;
+  projectId: string;
+  campaignId: string;
+  claimId: string;
+  evidence: FinalAuthorityPackagingV3DerivedBindingInput;
+  actor: string;
+}): Promise<CampaignFinalAuthorityPromotionBundle> {
+  const report = packageCampaignFinalAuthorityEvidenceWithDerivedBindingsV3({
+    projectRoot: input.projectRoot,
+    campaignId: input.campaignId,
+    claimId: input.claimId,
+    evidence: input.evidence
+  });
+  if (report.final_evidence_status !== "verified_final_authority_evidence" || report.proof_authority !== "lean_kernel_clean_replay") {
+    throw new Error("campaign_final_authority_evidence_not_verified");
+  }
+  const derivedBindingManifestPath = campaignFinalAuthorityDerivedBindingsPath(input.campaignId);
+  const packagingArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.projectId,
+    source_path: report.packaging_report_path,
+    kind: "runner_output",
+    actor: input.actor
+  });
+  const finalReplayArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.projectId,
+    source_path: report.final_replay_manifest_v3_path,
+    kind: "runner_output",
+    actor: input.actor
+  });
+  const derivedBindingArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.projectId,
+    source_path: derivedBindingManifestPath,
+    kind: "runner_output",
+    actor: input.actor
+  });
+  const evidence = appendEvidenceRecord(input.projectRoot, {
+    project_id: input.projectId,
+    claim_id: input.claimId,
+    kind: "lean",
+    summary: `${input.campaignId} verified campaign-native final-authority packaging, FinalReplayManifest v3, and derived binding manifest submitted for ordinary promotion-gate review.`,
+    artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id]
+  });
+  const promotion = promoteClaim(input.projectRoot, {
+    project_id: input.projectId,
+    claim_id: input.claimId,
+    target_status: "formally_checked",
+    evidence_ids: [evidence.id],
+    artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id],
+    actor: input.actor
+  });
+  const formalReplayAuthorityEvidence = promotion.gate.ok
+    ? createFormalReplayAuthorityEvidenceFromFinalAuthorityPackagingV3({
+        projectRoot: input.projectRoot,
+        packaging: report,
+        gate_result_id: promotion.gate.id
+      })
+    : undefined;
+  if (promotion.gate.ok && formalReplayAuthorityEvidence?.ok !== true) {
+    throw new Error("formal_replay_authority_evidence_binding_failed");
+  }
+  return {
+    schema_version: "comath.campaign_final_authority_promotion_bundle.v1",
+    binding_scope: "campaign",
+    campaign_id: input.campaignId,
+    claim_id: input.claimId,
+    packaging_report: report,
+    derived_binding_manifest_path: derivedBindingManifestPath,
+    evidence_id: evidence.id,
+    artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id],
+    gate: promotion.gate,
+    claim: promotion.claim,
+    formal_replay_authority_evidence: formalReplayAuthorityEvidence?.evidence,
+    proof_authority: promotion.gate.ok ? "lean_kernel_clean_replay" : "none",
+    promoted_by_ordinary_gate: promotion.gate.ok,
+    promotion_requires_gate: true,
+    direct_claim_mutation: false
+  };
+}
+
 export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheFromEvidenceV3(input: {
   projectRoot: string;
   startTaskId: string;
@@ -4145,13 +4393,20 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheFromEvi
 
 export function packageFinalAuthorityEvidenceV3(input: {
   projectRoot: string;
-  taskId: string;
+  bindingScope?: "positive_matrix" | "campaign";
+  taskId?: string;
+  campaignId?: string;
   claimId: string;
   sourceReport: FinalAuthorityPackagingV3SourceReport;
 }): FinalAuthorityPackagingV3Report {
-  if (!/^PM-\d{3}$/.test(input.taskId)) {
+  const bindingScope = input.bindingScope ?? "positive_matrix";
+  if (bindingScope === "positive_matrix" && (typeof input.taskId !== "string" || !/^PM-\d{3}$/.test(input.taskId))) {
     throw new Error("invalid_final_authority_packaging_task_id");
   }
+  if (bindingScope === "campaign" && (typeof input.campaignId !== "string" || input.campaignId.trim().length === 0)) {
+    throw new Error("invalid_final_authority_packaging_campaign_id");
+  }
+  const label = finalAuthorityScopeLabel({ bindingScope, taskId: input.taskId, campaignId: input.campaignId });
 
   const derivedBinding = input.sourceReport.packaging_report_path.endsWith("/derived_final_authority_bindings_v3.json")
     ? readJsonInsideProject(input.projectRoot, input.sourceReport.packaging_report_path)
@@ -4165,7 +4420,9 @@ export function packageFinalAuthorityEvidenceV3(input: {
   };
   const reverifiedSourceReport = verifyFinalAuthorityEvidenceSourceReportV3({
     projectRoot: input.projectRoot,
+    bindingScope,
     taskId: input.taskId,
+    campaignId: input.campaignId,
     claimId: input.claimId,
     evidence: {
       lean_run_manifest_paths: input.sourceReport.lean_run_manifest_paths,
@@ -4197,7 +4454,7 @@ export function packageFinalAuthorityEvidenceV3(input: {
     blocker_detail:
       mergedMissing.length === 0
         ? reverifiedSourceReport.blocker_detail
-        : `${input.taskId} final Lean Authority v3 evidence is missing or unverifiable after project-local re-verification.`,
+        : `${label} final Lean Authority v3 evidence is missing or unverifiable after project-local re-verification.`,
     missing_final_evidence_classes: mergedMissing,
     source_verification: {
       ...reverifiedSourceReport.source_verification,
@@ -4208,11 +4465,18 @@ export function packageFinalAuthorityEvidenceV3(input: {
     },
     proof_authority: mergedMissing.length === 0 ? reverifiedSourceReport.proof_authority : "none"
   };
-  const blockerPath = genericFinalPackagingReportPath(input.taskId, "blocker");
-  const packagingReportPath = genericFinalPackagingReportPath(input.taskId, "report");
+  const blockerPath =
+    bindingScope === "campaign"
+      ? campaignFinalPackagingReportPath(input.campaignId as string, "blocker")
+      : genericFinalPackagingReportPath(input.taskId as string, "blocker");
+  const packagingReportPath =
+    bindingScope === "campaign"
+      ? campaignFinalPackagingReportPath(input.campaignId as string, "report")
+      : genericFinalPackagingReportPath(input.taskId as string, "report");
   const report: FinalAuthorityPackagingV3Report = {
     schema_version: "comath.final_authority_packaging.v3",
-    task_id: input.taskId,
+    binding_scope: bindingScope,
+    ...(bindingScope === "positive_matrix" ? { task_id: input.taskId as string } : { campaign_id: input.campaignId as string }),
     claim_id: input.claimId,
     final_evidence_status: sourceReport.final_evidence_status,
     blocker_code: sourceReport.blocker_code,

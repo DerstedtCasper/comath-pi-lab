@@ -14,7 +14,9 @@ import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
 import { hasFormalReplayAuthorityPassEvidence } from "./external-terminal-vocabulary.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
 import {
+  packageCampaignFinalAuthorityEvidenceWithDerivedBindingsV3,
   packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3,
+  promoteCampaignFinalAuthorityEvidenceWithDerivedBindingsV3,
   promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3
 } from "../../release/goal3-ga-acceptance.js";
 import {
@@ -901,7 +903,8 @@ function blockCampaignAtFinalReplay(input: {
 }
 
 type FinalGlobalReplayRequest = {
-  taskId: string;
+  packagingScope: "positive_matrix" | "campaign";
+  taskId?: string;
   claimId: string;
   leanProject: LeanProjectFiles;
   formalSpecLockPath: string;
@@ -955,8 +958,9 @@ function readFinalGlobalReplayRequest(projectRoot: string, campaign: ResearchCam
   if (request.schema_version !== "comath.campaign_final_global_replay_request.v1") {
     throw new Error("final_replay_request_schema_version_invalid");
   }
-  const taskId = requireString(request.task_id, "task_id");
   const claimId = requireString(request.claim_id, "claim_id");
+  const taskId = typeof request.task_id === "string" && request.task_id.trim().length > 0 ? request.task_id : undefined;
+  const packagingScope = request.packaging_scope === "campaign" || taskId === undefined ? "campaign" : "positive_matrix";
   if (claimId !== campaign.root_claim_id) {
     throw new Error("final_replay_request_claim_mismatch");
   }
@@ -1002,6 +1006,7 @@ function readFinalGlobalReplayRequest(projectRoot: string, campaign: ResearchCam
   }
 
   return {
+    packagingScope,
     taskId,
     claimId,
     leanProject,
@@ -1074,12 +1079,20 @@ async function completeCampaignAtFinalGlobalReplay(input: {
     formal_spec_lock_path: artifactExists(input.projectRoot, cleanFormalSpecLockPath) ? cleanFormalSpecLockPath : request.formalSpecLockPath,
     assumption_ledger_path: artifactExists(input.projectRoot, cleanAssumptionLedgerPath) ? cleanAssumptionLedgerPath : request.assumptionLedgerPath
   };
-  const packaging = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
-    projectRoot: input.projectRoot,
-    taskId: request.taskId,
-    claimId: request.claimId,
-    evidence
-  });
+  const packaging =
+    request.packagingScope === "campaign"
+      ? packageCampaignFinalAuthorityEvidenceWithDerivedBindingsV3({
+          projectRoot: input.projectRoot,
+          campaignId: input.campaign.campaign_id,
+          claimId: request.claimId,
+          evidence
+        })
+      : packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
+          projectRoot: input.projectRoot,
+          taskId: requireString(request.taskId, "task_id"),
+          claimId: request.claimId,
+          evidence
+        });
   if (packaging.final_evidence_status !== "verified_final_authority_evidence") {
     return blockCampaignAtFinalReplay({
       ...input,
@@ -1099,14 +1112,24 @@ async function completeCampaignAtFinalGlobalReplay(input: {
     updated_at: now()
   });
 
-  const promotion = await promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
-    projectRoot: input.projectRoot,
-    projectId: input.campaign.project_id,
-    taskId: request.taskId,
-    claimId: request.claimId,
-    evidence,
-    actor: input.actor
-  });
+  const promotion =
+    request.packagingScope === "campaign"
+      ? await promoteCampaignFinalAuthorityEvidenceWithDerivedBindingsV3({
+          projectRoot: input.projectRoot,
+          projectId: input.campaign.project_id,
+          campaignId: input.campaign.campaign_id,
+          claimId: request.claimId,
+          evidence,
+          actor: input.actor
+        })
+      : await promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
+          projectRoot: input.projectRoot,
+          projectId: input.campaign.project_id,
+          taskId: requireString(request.taskId, "task_id"),
+          claimId: request.claimId,
+          evidence,
+          actor: input.actor
+        });
   if (!promotion.promoted_by_ordinary_gate || !promotion.formal_replay_authority_evidence) {
     return blockCampaignAtFinalReplay({
       ...input,
