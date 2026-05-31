@@ -16,7 +16,7 @@ import { assertPathAllowed } from "../../security/path-policy.js";
 import { finalReplayManifestV3Schema, type FinalReplayManifestV3 } from "../../types/schemas.js";
 import { sha256Buffer, sha256FileSync } from "./lean-project.js";
 import { appendAuditEvent, readAuditEvents } from "../../audit/jsonl-writer.js";
-import { verifyLeanRunManifestV3Evidence } from "./lean-run-manifest-v3.js";
+import { hasLeanRunManifestProvenanceIndexV1, verifyLeanRunManifestV3Evidence } from "./lean-run-manifest-v3.js";
 
 type HashRef = { sha256: string; size_bytes: number };
 
@@ -353,7 +353,8 @@ export function hasLeanLakeBinaryHashProvenanceV3(projectRoot: string, candidate
       record.exit_code === 0 &&
       record.lean_binary_sha256 === leanHash &&
       record.lake_binary_sha256 === lakeHash &&
-      verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok
+      verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok &&
+      hasLeanRunManifestProvenanceIndexV1({ projectRoot, manifest, manifest_path: manifestPath })
     );
   });
 }

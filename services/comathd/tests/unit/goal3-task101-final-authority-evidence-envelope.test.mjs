@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   appendFinalReplayRegistryEntryV3,
+  appendLeanRunManifestProvenanceIndexV1,
   applyGatePromotedClaim,
   createFinalReplayManifestV3,
   createFormalReplayAuthorityEvidenceFromFinalAuthorityPackagingV3,
@@ -158,6 +159,13 @@ try {
   });
   const leanRunManifestRel = `.comath/evidence/${claim.id}/lean/${runId}.manifest.json`;
   writeProjectFile(leanRunManifestRel, `${JSON.stringify(leanRunManifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: project.project_id,
+    actor: "goal3-task101",
+    manifest: leanRunManifest,
+    manifest_path: leanRunManifestRel
+  });
 
   const structuredAuditRel = `.comath/evidence/${claim.id}/lean/structured_audit.json`;
   const dependencyClosureRel = `.comath/evidence/${claim.id}/lean/dependency_closure.json`;

@@ -36,15 +36,24 @@ function assertAppendOnlyEvidencePath(path: string): void {
   }
 }
 
-function appendLeanRunManifestProvenance(input: {
+function leanRunManifestIndexPath(projectRoot: string, claimId: string): string {
+  return assertPathAllowed(
+    projectRoot,
+    join(".comath", "evidence", claimId, "lean", "lean_run_manifest_index.jsonl"),
+    { purpose: "runtime-write" }
+  );
+}
+
+export function appendLeanRunManifestProvenanceIndexV1(input: {
   projectRoot: string;
   project_id?: string;
   actor?: string;
   manifest: LeanRunManifestV3;
   manifest_path: string;
 }): void {
-  const manifestRel = normalizeRel(input.projectRoot, input.manifest_path);
-  const manifestHash = sha256FileSync(input.manifest_path).sha256;
+  const manifestPath = assertPathAllowed(input.projectRoot, input.manifest_path, { purpose: "read", resolveRealpath: true });
+  const manifestRel = normalizeRel(input.projectRoot, manifestPath);
+  const manifestHash = sha256FileSync(manifestPath).sha256;
   const row = {
     schema_version: "comath.lean_run_manifest_index.v1",
     claim_id: input.manifest.claim_id,
@@ -64,11 +73,7 @@ function appendLeanRunManifestProvenance(input: {
     proof_authority: input.manifest.proof_authority,
     recorded_at: new Date().toISOString()
   };
-  const indexPath = assertPathAllowed(
-    input.projectRoot,
-    join(".comath", "evidence", input.manifest.claim_id, "lean", "lean_run_manifest_index.jsonl"),
-    { purpose: "runtime-write" }
-  );
+  const indexPath = leanRunManifestIndexPath(input.projectRoot, input.manifest.claim_id);
   mkdirSync(dirname(indexPath), { recursive: true });
   appendFileSync(indexPath, `${JSON.stringify(row)}\n`, "utf8");
 
@@ -96,6 +101,68 @@ function appendLeanRunManifestProvenance(input: {
       }
     });
   }
+}
+
+export function hasLeanRunManifestProvenanceIndexV1(input: {
+  projectRoot: string;
+  manifest: unknown;
+  manifest_path: string;
+}): boolean {
+  const parsed = leanRunManifestV3Schema.safeParse(input.manifest);
+  if (!parsed.success) {
+    return false;
+  }
+  const manifest = parsed.data;
+  const manifestRel = normalizeRel(input.projectRoot, input.manifest_path);
+  let manifestHash: string;
+  try {
+    manifestHash = sha256FileSync(assertPathAllowed(input.projectRoot, input.manifest_path, { purpose: "read", resolveRealpath: true })).sha256;
+  } catch {
+    return false;
+  }
+
+  let indexPath: string;
+  try {
+    indexPath = assertPathAllowed(
+      input.projectRoot,
+      join(".comath", "evidence", manifest.claim_id, "lean", "lean_run_manifest_index.jsonl"),
+      { purpose: "read", resolveRealpath: true }
+    );
+  } catch {
+    return false;
+  }
+  if (!existsSync(indexPath)) {
+    return false;
+  }
+
+  return readFileSync(indexPath, "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .some((line) => {
+      try {
+        const row = JSON.parse(line) as Record<string, unknown>;
+        return (
+          row.schema_version === "comath.lean_run_manifest_index.v1" &&
+          row.claim_id === manifest.claim_id &&
+          row.campaign_id === manifest.campaign_id &&
+          row.candidate_id === manifest.candidate_id &&
+          row.run_id === manifest.run_id &&
+          row.purpose === manifest.purpose &&
+          row.manifest_path === manifestRel &&
+          row.manifest_sha256 === manifestHash &&
+          row.stdout_path === manifest.stdout_path &&
+          row.stdout_sha256 === manifest.stdout_sha256 &&
+          row.stderr_path === manifest.stderr_path &&
+          row.stderr_sha256 === manifest.stderr_sha256 &&
+          row.exit_code === manifest.exit_code &&
+          row.runner === "comathd.LeanRunner" &&
+          row.append_only === true &&
+          row.proof_authority === manifest.proof_authority
+        );
+      } catch {
+        return false;
+      }
+    });
 }
 
 function parseLeanVersion(output: string): string | undefined {
@@ -324,7 +391,7 @@ export function runServiceOwnedLeanCommandV3(input: {
     proof_authority: result.exit_code === 0 ? input.proof_authority : "none"
   });
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  appendLeanRunManifestProvenance({
+  appendLeanRunManifestProvenanceIndexV1({
     projectRoot: input.projectRoot,
     project_id: input.project_id,
     actor: input.actor,

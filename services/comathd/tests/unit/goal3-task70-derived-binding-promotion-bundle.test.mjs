@@ -7,6 +7,7 @@ import {
   appendEvidenceRecord,
   applyGatePromotedClaim,
   appendFinalReplayRegistryEntryV3,
+  appendLeanRunManifestProvenanceIndexV1,
   createFinalReplayManifestV3,
   createServiceOwnedLeanRunManifestV3,
   importArtifact,
@@ -126,6 +127,13 @@ try {
   });
   const leanRunManifestRel = `.comath/evidence/${claim.id}/lean/${runId}.manifest.json`;
   writeProjectFile(leanRunManifestRel, `${JSON.stringify(leanRunManifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: project.project_id,
+    actor: "goal3-task70",
+    manifest: leanRunManifest,
+    manifest_path: leanRunManifestRel
+  });
 
   const structuredAuditRel = `.comath/evidence/${claim.id}/lean/structured_audit.json`;
   const dependencyClosureRel = `.comath/evidence/${claim.id}/lean/dependency_closure.json`;

@@ -7,6 +7,7 @@ import {
   appendEvidenceRecord,
   applyGatePromotedClaim,
   appendFinalReplayRegistryEntryV3,
+  appendLeanRunManifestProvenanceIndexV1,
   createFinalReplayManifestV3,
   createGoal3GaPm002ReplayMaterialPackPreflight,
   createServiceOwnedLeanRunManifestV3,
@@ -124,6 +125,13 @@ try {
   });
   const finalRunManifestRel = `.comath/evidence/${claim.id}/lean/LRUN-004503.manifest.json`;
   writeProjectFile(finalRunManifestRel, `${JSON.stringify(finalRunManifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: project.project_id,
+    actor: "goal3-task45",
+    manifest: finalRunManifest,
+    manifest_path: finalRunManifestRel
+  });
   leanRunManifestPaths = [...leanRunManifestPaths, finalRunManifestRel];
   commandBlocker.lean_run_manifest_paths = leanRunManifestPaths;
   writeFileSync(join(projectRoot, commandReport.executor_blocker_path), `${JSON.stringify(commandBlocker, null, 2)}\n`, "utf8");

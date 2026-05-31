@@ -24,7 +24,10 @@ import {
   hasLeanLakeBinaryHashProvenanceV3,
   verifyFinalReplayManifestV3
 } from "../proof-kernel/lean/final-replay-manifest-v3.js";
-import { verifyLeanRunManifestV3Evidence } from "../proof-kernel/lean/lean-run-manifest-v3.js";
+import {
+  hasLeanRunManifestProvenanceIndexV1,
+  verifyLeanRunManifestV3Evidence
+} from "../proof-kernel/lean/lean-run-manifest-v3.js";
 import { runnerResultSha256, sha256Text } from "./runner-contracts.js";
 
 export type ClaimPromotionRequest = {
@@ -289,7 +292,10 @@ function leanRunManifestPathsMatchAndVerify(
   }
   return replayPaths.every((manifestPath) => {
     const manifest = readJsonInsideProject(projectRoot, manifestPath);
-    return verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok;
+    return (
+      verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok &&
+      hasLeanRunManifestProvenanceIndexV1({ projectRoot, manifest, manifest_path: manifestPath })
+    );
   });
 }
 
@@ -715,7 +721,6 @@ function finalAuthorityProvenanceVetoes(projectRoot: string, artifacts: Artifact
     const report = packaging as Record<string, unknown>;
     if (
       report.schema_version !== "comath.final_authority_packaging.v3" ||
-      report.final_evidence_status !== "verified_final_authority_evidence" ||
       typeof report.final_replay_manifest_v3_path !== "string"
     ) {
       continue;
@@ -742,7 +747,6 @@ function finalAuthorityBinaryHashProvenanceVetoes(projectRoot: string, artifacts
     const report = packaging as Record<string, unknown>;
     if (
       report.schema_version !== "comath.final_authority_packaging.v3" ||
-      report.final_evidence_status !== "verified_final_authority_evidence" ||
       typeof report.final_replay_manifest_v3_path !== "string"
     ) {
       continue;
@@ -751,6 +755,53 @@ function finalAuthorityBinaryHashProvenanceVetoes(projectRoot: string, artifacts
     if (!finalReplay || typeof finalReplay !== "object" || !hasLeanLakeBinaryHashProvenanceV3(projectRoot, finalReplay as Record<string, unknown>)) {
       vetoes.push("formally_checked requires Lean/Lake binary hash provenance");
     }
+  }
+  return [...new Set(vetoes)];
+}
+
+function finalAuthorityLeanRunManifestProvenanceVetoes(projectRoot: string, artifacts: ArtifactRef[]): string[] {
+  const vetoes: string[] = [];
+  const checkFinalReplay = (finalReplay: unknown) => {
+    if (!finalReplay || typeof finalReplay !== "object") {
+      return;
+    }
+    const replayPaths = stringArray((finalReplay as Record<string, unknown>).lean_run_manifest_paths).map(normalizedStoredPath);
+    for (const manifestPath of replayPaths) {
+      const manifest = readJsonInsideProject(projectRoot, manifestPath);
+      if (
+        verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok &&
+        !hasLeanRunManifestProvenanceIndexV1({ projectRoot, manifest, manifest_path: manifestPath })
+      ) {
+        vetoes.push("formally_checked requires LeanRunManifest provenance index");
+      }
+    }
+  };
+
+  for (const artifact of artifacts) {
+    if (artifact.kind !== "runner_output") {
+      continue;
+    }
+    const artifactManifest = finalReplayManifestV3Schema.safeParse(readJsonArtifact(projectRoot, artifact));
+    if (artifactManifest.success) {
+      checkFinalReplay(artifactManifest.data);
+    }
+    const packaging = readJsonArtifact(projectRoot, artifact);
+    if (!packaging || typeof packaging !== "object") {
+      continue;
+    }
+    const report = packaging as Record<string, unknown>;
+    if (
+      report.schema_version !== "comath.final_authority_packaging.v3" ||
+      report.final_evidence_status !== "verified_final_authority_evidence" ||
+      typeof report.final_replay_manifest_v3_path !== "string"
+    ) {
+      continue;
+    }
+    const finalReplay = readJsonInsideProject(projectRoot, report.final_replay_manifest_v3_path);
+    if (!finalReplay || typeof finalReplay !== "object") {
+      continue;
+    }
+    checkFinalReplay(finalReplay);
   }
   return [...new Set(vetoes)];
 }
@@ -915,6 +966,7 @@ function statusEvidenceVetoes(projectRoot: string, claim: Claim, request: ClaimP
     }
     vetoes.push(...finalAuthorityDerivedBindingVetoes(projectRoot, authorityRequest, artifacts));
     vetoes.push(...finalAuthorityProvenanceVetoes(projectRoot, artifacts));
+    vetoes.push(...finalAuthorityLeanRunManifestProvenanceVetoes(projectRoot, artifacts));
     vetoes.push(...finalAuthorityBinaryHashProvenanceVetoes(projectRoot, artifacts));
     vetoes.push(...finalReplayManifestArtifactKindVetoes(projectRoot, artifacts));
   }
