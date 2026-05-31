@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   appendEvidenceRecord,
-  applyGatePromotedClaim,
   appendFinalReplayRegistryEntryV3,
+  applyGatePromotedClaim,
   createFinalReplayManifestV3,
   createServiceOwnedLeanRunManifestV3,
   importArtifact,
@@ -18,7 +18,7 @@ import {
   writeThirdPartyReplayPackV3
 } from "../../dist/index.js";
 
-const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task68-report-binding-"));
+const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task99-binary-provenance-"));
 
 function writeProjectFile(relativePath, content) {
   const absolute = join(projectRoot, relativePath);
@@ -35,39 +35,22 @@ function hashRef(path) {
   return { sha256: sha256(path), size_bytes: statSync(path).size };
 }
 
-function canonicalJson(value) {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
-  }
-  return `{${Object.entries(value)
-    .filter(([, item]) => item !== undefined)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
-    .join(",")}}`;
-}
-
-function sha256JsonFile(relativePath) {
-  return createHash("sha256").update(canonicalJson(JSON.parse(readFileSync(join(projectRoot, relativePath), "utf8"))), "utf8").digest("hex");
-}
-
 try {
-  const { project } = initProject({ name: "Goal 3 Task 68 Report Binding", root_path: projectRoot });
-  const taskId = "PM-068";
-  const claimStatement = "theorem Goal3Positive068 : True";
+  const { project } = initProject({ name: "Goal 3 Task 99 Binary Provenance Gate", root_path: projectRoot });
+  const taskId = "PM-099";
+  const claimStatement = "theorem Goal3Positive099 : True";
   const claim = registerClaim(projectRoot, {
     project_id: project.project_id,
     statement: claimStatement,
     assumptions: [],
     domain: "logic",
     status: "conjectural",
-    actor: "goal3-task68"
+    actor: "goal3-task99"
   });
   assert.equal(claim.statement_hash, statementHash(claimStatement));
 
-  const replayId = "RPLY-0068";
+  const replayId = "RPLY-0099";
+  const runId = "LRUN-0099";
   const cleanRootRel = `.comath/lean/final_replay/${replayId}/clean`;
   const target = writeProjectFile(
     `${cleanRootRel}/MathResearch/Target.lean`,
@@ -76,80 +59,82 @@ try {
       "",
       "namespace MathResearch",
       "",
-      "theorem Goal3Positive068 : True := by",
+      "theorem Goal3Positive099 : True := by",
       "  trivial",
       "",
-      "#check Goal3Positive068",
-      "#print axioms Goal3Positive068",
+      "#check Goal3Positive099",
+      "#print axioms Goal3Positive099",
       "",
       "end MathResearch",
       ""
     ].join("\n")
   );
-  const audit = writeProjectFile(`${cleanRootRel}/Audit/TargetAudit.lean`, "import MathResearch.Target\n#check MathResearch.Goal3Positive068\n#print axioms MathResearch.Goal3Positive068\n");
-  const formalSpecLock = {
+  const audit = writeProjectFile(
+    `${cleanRootRel}/Audit/TargetAudit.lean`,
+    "import MathResearch.Target\n#check MathResearch.Goal3Positive099\n#print axioms MathResearch.Goal3Positive099\n"
+  );
+  const formalSpecRel = `${cleanRootRel}/FormalSpec/formal_spec_lock.json`;
+  const assumptionLedgerRel = `${cleanRootRel}/FormalSpec/assumption_ledger.json`;
+  const formalSpec = writeProjectFile(formalSpecRel, `${JSON.stringify({
     schema_version: "comath.formal_spec_lock.v2",
     task_id: taskId,
     claim_id: claim.id,
     namespace: "MathResearch",
-    theorem_name: "Goal3Positive068",
-    theorem_header: "theorem Goal3Positive068 : True",
+    theorem_name: "Goal3Positive099",
+    theorem_header: claimStatement,
     statement_hash: claim.statement_hash,
     proof_authority: "none"
-  };
-  const assumptionLedger = {
+  }, null, 2)}\n`);
+  const assumptionLedger = writeProjectFile(assumptionLedgerRel, `${JSON.stringify({
     schema_version: "comath.assumption_ledger.v1",
     task_id: taskId,
     claim_id: claim.id,
-    formal_spec_lock_hash: formalSpecLock.statement_hash,
+    formal_spec_lock_hash: claim.statement_hash,
     entries: [],
     proof_authority: "none"
-  };
-  const formalSpecRel = `${cleanRootRel}/FormalSpec/formal_spec_lock.json`;
-  const assumptionLedgerRel = `${cleanRootRel}/FormalSpec/assumption_ledger.json`;
-  const formalSpec = writeProjectFile(formalSpecRel, `${JSON.stringify(formalSpecLock, null, 2)}\n`);
-  const assumptionLedgerPath = writeProjectFile(assumptionLedgerRel, `${JSON.stringify(assumptionLedger, null, 2)}\n`);
-  const lakefile = writeProjectFile(`${cleanRootRel}/lakefile.lean`, "import Lake\nopen Lake DSL\npackage MathResearch where\nlean_lib MathResearch where\n  roots := #[`MathResearch.Target]\n");
+  }, null, 2)}\n`);
+  const lakefile = writeProjectFile(
+    `${cleanRootRel}/lakefile.lean`,
+    "import Lake\nopen Lake DSL\npackage MathResearch where\nlean_lib MathResearch where\n  roots := #[`MathResearch.Target]\n"
+  );
   const toolchain = writeProjectFile(`${cleanRootRel}/lean-toolchain`, "leanprover/lean4:v4.23.0\n");
   const lakeManifest = writeProjectFile(`${cleanRootRel}/lake-manifest.json`, `${JSON.stringify({ version: 7, packages: [] }, null, 2)}\n`);
-  const leanBinary = writeProjectFile(`${cleanRootRel}/bin/lean`, "dummy lean executable for Task68 binary provenance\n");
-  const lakeBinary = writeProjectFile(`${cleanRootRel}/bin/lake`, "dummy lake executable for Task68 binary provenance\n");
+  const stdout = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stdout.log`, "Goal3Positive099 checked\n");
+  const stderr = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stderr.log`, "");
 
-  const stdout = writeProjectFile(`.comath/evidence/${claim.id}/lean/LRUN-0068.stdout.log`, "Goal3Positive068 checked\n");
-  const stderr = writeProjectFile(`.comath/evidence/${claim.id}/lean/LRUN-0068.stderr.log`, "");
   const leanRunManifest = createServiceOwnedLeanRunManifestV3({
     projectRoot,
-    run_id: "LRUN-0068",
+    run_id: runId,
     claim_id: claim.id,
-    campaign_id: "CAM-0068",
+    campaign_id: "CAM-0099",
     purpose: "final_replay",
     command: ["lake", "build", "MathResearch"],
     cwd: join(projectRoot, cleanRootRel),
-    input_files: [target, audit, formalSpec, assumptionLedgerPath, lakefile, toolchain, lakeManifest],
+    input_files: [target, audit, formalSpec, assumptionLedger, lakefile, toolchain, lakeManifest],
     lean_version: "4.23.0",
     lake_version: "5.0.0",
     elan_toolchain: "leanprover/lean4:v4.23.0",
     lean_toolchain_file: toolchain,
     lake_manifest_file: lakeManifest,
-    lean_binary_file: leanBinary,
-    lake_binary_file: lakeBinary,
     network_policy: "disabled",
     sandbox: "none",
     exit_code: 0,
     stdout_path: stdout,
     stderr_path: stderr,
-    started_at: "2026-05-30T00:00:00.000Z",
-    ended_at: "2026-05-30T00:00:01.000Z",
+    started_at: "2026-05-31T00:00:00.000Z",
+    ended_at: "2026-05-31T00:00:01.000Z",
     proof_authority: "lean_kernel_check"
   });
-  const leanRunManifestRel = `.comath/evidence/${claim.id}/lean/LRUN-0068.manifest.json`;
+  assert.equal(leanRunManifest.lean_binary_sha256, undefined);
+  assert.equal(leanRunManifest.lake_binary_sha256, undefined);
+  const leanRunManifestRel = `.comath/evidence/${claim.id}/lean/${runId}.manifest.json`;
   writeProjectFile(leanRunManifestRel, `${JSON.stringify(leanRunManifest, null, 2)}\n`);
 
   const structuredAuditRel = `.comath/evidence/${claim.id}/lean/structured_audit.json`;
   const dependencyClosureRel = `.comath/evidence/${claim.id}/lean/dependency_closure.json`;
   const axiomProfileRel = `.comath/evidence/${claim.id}/lean/axiom_profile.json`;
   const statementCheckRel = `.comath/evidence/${claim.id}/lean/statement_equivalence.json`;
-  writeProjectFile(structuredAuditRel, `${JSON.stringify({ result: "pass", hard_vetoes: [], generated_by_run_id: "LRUN-0068" }, null, 2)}\n`);
+  writeProjectFile(structuredAuditRel, `${JSON.stringify({ result: "pass", hard_vetoes: [], generated_by_run_id: runId }, null, 2)}\n`);
   const staticAudit = writeProjectFile(`.comath/evidence/${claim.id}/lean/final_static_audit.json`, `${JSON.stringify({ result: "pass", hard_vetoes: [] })}\n`);
   const dependencyClosure = writeProjectFile(dependencyClosureRel, `${JSON.stringify({ result: "pass", hard_vetoes: [] })}\n`);
   const axiomProfile = writeProjectFile(axiomProfileRel, `${JSON.stringify({ result: "pass", detected_axioms: [], hard_vetoes: [] })}\n`);
@@ -158,9 +143,9 @@ try {
   const finalReplayManifest = createFinalReplayManifestV3({
     projectRoot,
     replay_id: replayId,
-    campaign_id: "CAM-0068",
+    campaign_id: "CAM-0099",
     claim_id: claim.id,
-    theorem_name: "MathResearch.Goal3Positive068",
+    theorem_name: "MathResearch.Goal3Positive099",
     clean_workspace_path: join(projectRoot, cleanRootRel),
     command: ["lake", "build", "MathResearch"],
     exit_code: 0,
@@ -169,7 +154,7 @@ try {
       "MathResearch/Target.lean": hashRef(target),
       "Audit/TargetAudit.lean": hashRef(audit),
       "FormalSpec/formal_spec_lock.json": hashRef(formalSpec),
-      "FormalSpec/assumption_ledger.json": hashRef(assumptionLedgerPath),
+      "FormalSpec/assumption_ledger.json": hashRef(assumptionLedger),
       "lakefile.lean": hashRef(lakefile),
       "lean-toolchain": hashRef(toolchain),
       "lake-manifest.json": hashRef(lakeManifest)
@@ -191,12 +176,12 @@ try {
     },
     network_policy: "disabled",
     sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" },
-    resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 },
-    binary_hashes: { lean: sha256(leanBinary), lake: sha256(lakeBinary) }
+    resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 }
   });
+  assert.deepEqual(finalReplayManifest.binary_hashes, {});
   const finalReplayManifestRel = `.comath/evidence/${claim.id}/lean/final_replay_manifest_v3.json`;
   writeProjectFile(finalReplayManifestRel, `${JSON.stringify(finalReplayManifest, null, 2)}\n`);
-  appendFinalReplayRegistryEntryV3(projectRoot, finalReplayManifest, { project_id: project.project_id, actor: "goal3-task68" });
+  appendFinalReplayRegistryEntryV3(projectRoot, finalReplayManifest, { project_id: project.project_id, actor: "goal3-task99" });
   const replayPack = writeThirdPartyReplayPackV3(projectRoot, finalReplayManifest);
 
   const report = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
@@ -217,37 +202,35 @@ try {
   });
   assert.equal(report.final_evidence_status, "verified_final_authority_evidence");
 
-  const bindingManifestPath = `.comath/release/positive_matrix/${taskId}/derived_final_authority_bindings_v3.json`;
-  const bindingManifest = JSON.parse(readFileSync(join(projectRoot, bindingManifestPath), "utf8"));
-  assert.deepEqual(bindingManifest.final_authority_report_bindings, {
-    structured_audit: { path: structuredAuditRel, sha256: sha256JsonFile(structuredAuditRel) },
-    dependency_closure: { path: dependencyClosureRel, sha256: sha256JsonFile(dependencyClosureRel) },
-    axiom_profile: { path: axiomProfileRel, sha256: sha256JsonFile(axiomProfileRel) },
-    statement_check: { path: statementCheckRel, sha256: sha256JsonFile(statementCheckRel) }
-  });
-  assert.equal(bindingManifest.caller_supplied_hashes_trusted, false);
-
   const packagingArtifact = await importArtifact({
     projectRoot,
     project_id: project.project_id,
     source_path: report.packaging_report_path,
     kind: "runner_output",
-    actor: "goal3-task68"
+    actor: "goal3-task99"
   });
-  const finalManifestArtifact = await importArtifact({
+  const finalReplayArtifact = await importArtifact({
     projectRoot,
     project_id: project.project_id,
     source_path: finalReplayManifestRel,
     kind: "runner_output",
-    actor: "goal3-task68"
+    actor: "goal3-task99"
+  });
+  const derivedBindingArtifact = await importArtifact({
+    projectRoot,
+    project_id: project.project_id,
+    source_path: report.source_packaging_report_path,
+    kind: "runner_output",
+    actor: "goal3-task99"
   });
   const evidence = appendEvidenceRecord(projectRoot, {
     project_id: project.project_id,
     claim_id: claim.id,
     kind: "lean",
-    summary: "Derived final-authority report bindings plus FinalReplayManifest v3 for ordinary gate review.",
-    artifact_ids: [packagingArtifact.id, finalManifestArtifact.id]
+    summary: "Task99 submits otherwise valid final authority evidence without Lean/Lake binary hashes.",
+    artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id]
   });
+
   applyGatePromotedClaim(projectRoot, {
     ...claim,
     formalization_status: "kernel_checked",
@@ -256,53 +239,19 @@ try {
     updated_at: new Date().toISOString()
   });
 
-  const tampered = {
-    ...bindingManifest,
-    final_authority_report_bindings: {
-      ...bindingManifest.final_authority_report_bindings,
-      statement_check: { ...bindingManifest.final_authority_report_bindings.statement_check, sha256: "0".repeat(64) }
-    }
-  };
-  const tamperedBindingRel = `.comath/release/positive_matrix/${taskId}/tampered_derived_final_authority_bindings_v3.json`;
-  writeProjectFile(tamperedBindingRel, `${JSON.stringify(tampered, null, 2)}\n`);
-  const tamperedBindingArtifact = await importArtifact({
-    projectRoot,
-    project_id: project.project_id,
-    source_path: tamperedBindingRel,
-    kind: "runner_output",
-    actor: "goal3-task68"
-  });
-
-  const rejected = promoteClaim(projectRoot, {
+  const promotion = promoteClaim(projectRoot, {
     project_id: project.project_id,
     claim_id: claim.id,
     target_status: "formally_checked",
     evidence_ids: [evidence.id],
-    artifact_ids: [packagingArtifact.id, finalManifestArtifact.id, tamperedBindingArtifact.id],
-    actor: "goal3-task68"
+    artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id],
+    actor: "goal3-task99"
   });
-  assert.equal(rejected.gate.ok, false, "tampered derived report binding must not satisfy the ordinary promotion gate");
-  assert.ok(rejected.gate.vetoes.includes("final authority derived binding manifest mismatch"));
-
-  const bindingArtifact = await importArtifact({
-    projectRoot,
-    project_id: project.project_id,
-    source_path: bindingManifestPath,
-    kind: "runner_output",
-    actor: "goal3-task68"
-  });
-  const promoted = promoteClaim(projectRoot, {
-    project_id: project.project_id,
-    claim_id: claim.id,
-    target_status: "formally_checked",
-    evidence_ids: [evidence.id],
-    artifact_ids: [packagingArtifact.id, finalManifestArtifact.id, bindingArtifact.id],
-    actor: "goal3-task68"
-  });
-  assert.equal(promoted.gate.ok, true, JSON.stringify(promoted.gate.vetoes));
-  assert.equal(promoted.claim.status, "formally_checked");
+  assert.equal(promotion.gate.ok, false, "promotion-grade final replay requires Lean/Lake binary hash provenance");
+  assert.equal(promotion.claim.status, "conjectural");
+  assert.ok(promotion.gate.vetoes.includes("formally_checked requires Lean/Lake binary hash provenance"));
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }
 
-console.log("Goal 3 Task 68 derived report binding gate test passed.");
+console.log("Goal 3 Task 99 final replay binary provenance gate test passed.");

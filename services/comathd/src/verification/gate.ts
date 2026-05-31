@@ -289,6 +289,47 @@ function leanRunManifestPathsMatchAndVerify(
   });
 }
 
+function isSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
+}
+
+function hasLeanLakeBinaryHashProvenance(
+  projectRoot: string,
+  finalReplayManifest: Record<string, unknown>
+): boolean {
+  const binaryHashes = finalReplayManifest.binary_hashes && typeof finalReplayManifest.binary_hashes === "object"
+    ? (finalReplayManifest.binary_hashes as Record<string, unknown>)
+    : {};
+  const leanHash = binaryHashes.lean;
+  const lakeHash = binaryHashes.lake;
+  if (!isSha256(leanHash) || !isSha256(lakeHash)) {
+    return false;
+  }
+
+  const replayPaths = stringArray(finalReplayManifest.lean_run_manifest_paths).map(normalizedStoredPath);
+  if (replayPaths.length === 0) {
+    return false;
+  }
+
+  return replayPaths.some((manifestPath) => {
+    const manifest = readJsonInsideProject(projectRoot, manifestPath);
+    if (!manifest || typeof manifest !== "object") {
+      return false;
+    }
+    const record = manifest as Record<string, unknown>;
+    return (
+      record.schema_version === "comath.lean_run_manifest.v3" &&
+      record.purpose === "final_replay" &&
+      record.runner === "comathd.LeanRunner" &&
+      record.proof_authority === "lean_kernel_check" &&
+      record.exit_code === 0 &&
+      record.lean_binary_sha256 === leanHash &&
+      record.lake_binary_sha256 === lakeHash &&
+      verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok
+    );
+  });
+}
+
 function canonicalBindingJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
@@ -602,6 +643,9 @@ function hasVerifiedFinalAuthorityPackagingV3(
     if (!leanRunManifestPathsMatchAndVerify(projectRoot, report, finalReplay as Record<string, unknown>)) {
       continue;
     }
+    if (!hasLeanLakeBinaryHashProvenance(projectRoot, finalReplay as Record<string, unknown>)) {
+      continue;
+    }
     if (!hasVerifiedDerivedBindingManifest(projectRoot, request, report, finalReplay as Record<string, unknown>, artifacts)) {
       continue;
     }
@@ -741,6 +785,32 @@ function finalAuthorityProvenanceVetoes(projectRoot: string, artifacts: Artifact
     const verification = verifyFinalReplayManifestV3(projectRoot, finalReplay);
     if (verification.ok && !hasFinalReplayRegistryProvenance(projectRoot, finalReplay)) {
       vetoes.push("formally_checked requires service-owned clean replay provenance");
+    }
+  }
+  return [...new Set(vetoes)];
+}
+
+function finalAuthorityBinaryHashProvenanceVetoes(projectRoot: string, artifacts: ArtifactRef[]): string[] {
+  const vetoes: string[] = [];
+  for (const artifact of artifacts) {
+    if (artifact.kind !== "runner_output") {
+      continue;
+    }
+    const packaging = readJsonArtifact(projectRoot, artifact);
+    if (!packaging || typeof packaging !== "object") {
+      continue;
+    }
+    const report = packaging as Record<string, unknown>;
+    if (
+      report.schema_version !== "comath.final_authority_packaging.v3" ||
+      report.final_evidence_status !== "verified_final_authority_evidence" ||
+      typeof report.final_replay_manifest_v3_path !== "string"
+    ) {
+      continue;
+    }
+    const finalReplay = readJsonInsideProject(projectRoot, report.final_replay_manifest_v3_path);
+    if (!finalReplay || typeof finalReplay !== "object" || !hasLeanLakeBinaryHashProvenance(projectRoot, finalReplay as Record<string, unknown>)) {
+      vetoes.push("formally_checked requires Lean/Lake binary hash provenance");
     }
   }
   return [...new Set(vetoes)];
@@ -906,6 +976,7 @@ function statusEvidenceVetoes(projectRoot: string, claim: Claim, request: ClaimP
     }
     vetoes.push(...finalAuthorityDerivedBindingVetoes(projectRoot, authorityRequest, artifacts));
     vetoes.push(...finalAuthorityProvenanceVetoes(projectRoot, artifacts));
+    vetoes.push(...finalAuthorityBinaryHashProvenanceVetoes(projectRoot, artifacts));
     vetoes.push(...finalReplayManifestArtifactKindVetoes(projectRoot, artifacts));
   }
 

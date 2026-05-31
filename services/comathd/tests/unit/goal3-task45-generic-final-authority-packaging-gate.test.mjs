@@ -72,6 +72,8 @@ try {
   const lakefile = writeProjectFile(`${cleanRootRel}/lakefile.lean`, readFileSync(join(projectRoot, preflight.material_source.lakefile_path), "utf8"));
   const toolchain = writeProjectFile(`${cleanRootRel}/lean-toolchain`, readFileSync(join(projectRoot, preflight.material_source.lean_toolchain_path), "utf8"));
   const lakeManifest = writeProjectFile(`${cleanRootRel}/lake-manifest.json`, readFileSync(join(projectRoot, preflight.material_source.lake_manifest_path), "utf8"));
+  const leanBinary = writeProjectFile(`${cleanRootRel}/bin/lean`, "dummy lean executable for Task45 binary provenance\n");
+  const lakeBinary = writeProjectFile(`${cleanRootRel}/bin/lake`, "dummy lake executable for Task45 binary provenance\n");
 
   const stdout = writeProjectFile(`.comath/evidence/${claim.id}/lean/final_replay.log`, "MathResearch.Goal3Positive002 : (M : Type) -> [Monoid M] -> (x : M) -> 1 * x = x\n");
   const stderr = writeProjectFile(`.comath/evidence/${claim.id}/lean/final_replay.stderr.log`, "");
@@ -109,6 +111,8 @@ try {
     elan_toolchain: "leanprover/lean4:v4.23.0",
     lean_toolchain_file: toolchain,
     lake_manifest_file: lakeManifest,
+    lean_binary_file: leanBinary,
+    lake_binary_file: lakeBinary,
     network_policy: "disabled",
     sandbox: "none",
     exit_code: 0,
@@ -159,7 +163,8 @@ try {
     },
     network_policy: "disabled",
     sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" },
-    resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 }
+    resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 },
+    binary_hashes: { lean: sha256(leanBinary), lake: sha256(lakeBinary) }
   });
   const finalReplayManifestRel = `.comath/evidence/${claim.id}/lean/final_replay_manifest_v3.json`;
   writeProjectFile(finalReplayManifestRel, `${JSON.stringify(finalReplayManifest, null, 2)}\n`);

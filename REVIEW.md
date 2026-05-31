@@ -1,3 +1,26 @@
+# Goal 3 Task 99 / Lean-Lake Binary Provenance Gate Hardening
+
+Scope: require promotion-grade FinalReplayManifest v3 evidence to bind Lean/Lake executable binary hashes to a passing final-replay LeanRunManifest. This closes the gap where a replay bundle could bind toolchain files and registry provenance while omitting the actual executed `lean` / `lake` binary provenance.
+
+Work performed:
+
+- Used high-concurrency read-only subagents to inspect binary provenance, terminal read-model semantics, and test compatibility.
+- Added `goal3-task99-final-replay-binary-provenance-gate.test.mjs`. RED showed an otherwise valid v3 final-authority bundle with empty `binary_hashes` and no LeanRunManifest binary hashes could still promote a claim to `formally_checked`.
+- Hardened `services/comathd/src/verification/gate.ts` so v3 final-authority packaging only satisfies promotion when `binary_hashes.lean` and `binary_hashes.lake` are SHA-256 values matching a passing final-replay LeanRunManifest v3.
+- Added the explicit veto `formally_checked requires Lean/Lake binary hash provenance`.
+- Updated promotion-grade positive fixtures in Task45/66/68/70 to carry dummy Lean/Lake executable files, LeanRunManifest binary hashes, and matching FinalReplayManifest `binary_hashes`.
+
+Verification evidence:
+
+- TDD RED: `node services/comathd/tests/unit/goal3-task99-final-replay-binary-provenance-gate.test.mjs` failed because `promotion.gate.ok` was `true`.
+- GREEN focused tests: Task99, Task45, Task66, Task68, and Task70.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task99 included.
+
+Boundary notes: Task99 is promotion-gate evidence hardening only. It does not install Lean, fetch mathlib, execute fresh clean replay, promote any positive-matrix task, harden campaign/Pi terminal read-model wording, or complete Goal 3 GA.
+
+Residual risks: concurrent read-only review confirmed the remaining high-value read-model risk: legacy or imported `completed_formal_proof` campaign records can still be projected to `formal_proof_verified` / `formal_replay_passed` unless the projection is bound to explicit current Lean Authority pass evidence.
+
 # Goal 3 Task 98 / Legacy PM-002 Packaging Promotion-Gate Hardening
 
 Scope: prevent legacy `comath.goal3_pm002_final_authority_packaging.v1` reports from authorizing `formally_checked` promotion. PM-002 v1 packaging remains historical compatibility material; promotion-grade proof authority now requires generic `comath.final_authority_packaging.v3`.
