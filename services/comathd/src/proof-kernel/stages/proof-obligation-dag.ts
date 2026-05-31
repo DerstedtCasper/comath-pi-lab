@@ -19,6 +19,7 @@ export type ProofObligationDagNode = {
   theorem_family: string;
   locked_statement_hash: string;
   lean_target: string | null;
+  theorem_header?: string;
   status: ProofObligation["status"];
   kind: "root" | "intermediate" | "leaf";
 };
@@ -58,6 +59,16 @@ function theoremFamilyId(obligation: ProofObligation): string {
     : "unregistered";
 }
 
+function formalSpecTheoremHeader(obligation: ProofObligation): string | undefined {
+  const header = obligation.locked_statement_structured.theorem_header;
+  return typeof header === "string" && header.trim().length > 0 ? header.trim() : undefined;
+}
+
+function theoremHeaderWithBodyStart(header: string): string {
+  const declaration = header.replace(/\s*:=\s*by[\s\S]*$/u, "").trim();
+  return `${declaration} := by`;
+}
+
 function campaignProofRel(campaign: ResearchCampaign, rel: string): string {
   return join(".comath", "campaign", campaign.campaign_id, "proof", rel);
 }
@@ -78,6 +89,7 @@ function buildDag(campaign: ResearchCampaign, obligation: ProofObligation): Proo
     theorem_family: theoremFamilyId(item),
     locked_statement_hash: item.statement_hash,
     lean_target: item.lean_target ?? null,
+    theorem_header: formalSpecTheoremHeader(item),
     status: item.status,
     kind: item.obligation_id === obligation.obligation_id ? "root" : parentIds.has(item.obligation_id) ? "intermediate" : "leaf"
   }));
@@ -153,6 +165,7 @@ export function validateProofObligationDag(dag: Pick<ProofObligationDag, "nodes"
 
 function obligationYaml(obligation: ProofObligation): string {
   const theoremFamily = theoremFamilyId(obligation);
+  const theoremHeader = formalSpecTheoremHeader(obligation);
   return [
     `obligation_id: ${obligation.obligation_id}`,
     `claim_id: ${obligation.claim_id}`,
@@ -160,6 +173,7 @@ function obligationYaml(obligation: ProofObligation): string {
     `locked_statement_hash: ${obligation.statement_hash}`,
     `locked_statement_nl: ${yamlString(obligation.locked_statement_nl)}`,
     `lean_target: ${yamlString(obligation.lean_target ?? "unresolved")}`,
+    ...(theoremHeader ? [`theorem_header: ${yamlString(theoremHeader)}`] : []),
     `status: ${obligation.status}`,
     "assumptions:",
     ...obligation.assumptions.map((assumption) => `  - ${yamlString(assumption)}`),
@@ -170,6 +184,16 @@ function obligationYaml(obligation: ProofObligation): string {
 }
 
 function skeletonSection(obligation: ProofObligation): string[] {
+  const theoremHeader = formalSpecTheoremHeader(obligation);
+  if (theoremHeader) {
+    return [
+      `-- proof_obligation: ${obligation.obligation_id}`,
+      theoremHeaderWithBodyStart(theoremHeader),
+      `  -- proof_obligation: ${obligation.obligation_id}`,
+      "  sorry",
+      ""
+    ];
+  }
   const target = obligation.lean_target;
   if (!target) {
     return [
@@ -218,6 +242,9 @@ export function writeProofPlanningArtifacts(input: {
       obligation_id: item.obligation_id,
       informal_statement: item.locked_statement_nl,
       formal_target: item.lean_target ?? "unresolved",
+      formal_theorem_header: formalSpecTheoremHeader(item) ?? null,
+      formal_spec_lock_statement_hash:
+        typeof item.locked_statement_structured.statement_hash === "string" ? item.locked_statement_structured.statement_hash : null,
       assumptions_used: item.assumptions,
       dependencies: item.dependencies,
       expected_evidence: ["Lean", "static_audit", "statement_equivalence", "dependency_closure", "axiom_profile"]
