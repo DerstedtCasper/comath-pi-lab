@@ -1,6 +1,6 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { delimiter, dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { finalLeanReplaySchema, type FinalLeanReplay } from "../../types/schemas.js";
@@ -23,6 +23,9 @@ export type CleanReplayResult = {
   axiom_profile: ReturnType<typeof checkAxiomProfile>;
   dependency_closure: ReturnType<typeof checkDependencyClosure>;
   statement_equivalence: ReturnType<typeof checkStatementEquivalence>;
+  lean_run_manifest_paths: string[];
+  final_replay_manifest_v3_path?: string;
+  third_party_replay_pack_path?: string;
 };
 
 function directElanTool(command: string, leanToolchain: string): string {
@@ -35,6 +38,28 @@ function directElanTool(command: string, leanToolchain: string): string {
   const elanHome = process.env.ELAN_HOME ?? join(homedir(), ".elan");
   const direct = join(elanHome, "toolchains", toolchainDir, "bin", exe);
   return existsSync(direct) ? direct : command;
+}
+
+function findExecutableOnPath(command: string): string | undefined {
+  const pathValue = process.env.PATH ?? "";
+  const extensions = process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";") : [""];
+  for (const dir of pathValue.split(delimiter).filter(Boolean)) {
+    for (const extension of extensions) {
+      const candidate = join(dir, process.platform === "win32" && extension && !command.toLowerCase().endsWith(extension.toLowerCase()) ? `${command}${extension}` : command);
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return undefined;
+}
+
+function serviceToolBinary(command: "lean" | "lake", leanToolchain: string): string | undefined {
+  const direct = directElanTool(command, leanToolchain);
+  if (direct !== command && existsSync(direct)) {
+    return direct;
+  }
+  return findExecutableOnPath(command);
 }
 
 function runCommand(
@@ -113,6 +138,8 @@ export function runCleanLeanReplay(input: {
   const manifestPathRel = join(evidenceRootRel, "final_replay_manifest.json");
   const manifestV3PathRel = join(evidenceRootRel, "final_replay_manifest_v3.json");
   const leanToolchain = readFileSync(input.leanProject.toolchainFile, "utf8").trim();
+  const leanBinaryFile = serviceToolBinary("lean", leanToolchain);
+  const lakeBinaryFile = serviceToolBinary("lake", leanToolchain);
 
   const static_audit = runStaticCheatScan({
     projectRoot: input.projectRoot,
@@ -134,7 +161,10 @@ export function runCleanLeanReplay(input: {
     join(cleanRoot, "lakefile.lean"),
     join(cleanRoot, "lake-manifest.json"),
     join(cleanRoot, input.leanProject.theoremFileRel),
-    join(cleanRoot, input.leanProject.auditFileRel)
+    join(cleanRoot, input.leanProject.auditFileRel),
+    join(cleanRoot, "FormalSpec", "formal_spec_lock.json"),
+    join(cleanRoot, "FormalSpec", "assumption_ledger.json"),
+    join(cleanRoot, "FormalSpec", "target.json")
   ].filter((path) => existsSync(path));
   const source_hashes_before = Object.fromEntries(
     [
@@ -143,6 +173,8 @@ export function runCleanLeanReplay(input: {
       join(cleanRoot, "lake-manifest.json"),
       join(cleanRoot, input.leanProject.theoremFileRel),
       join(cleanRoot, input.leanProject.auditFileRel),
+      join(cleanRoot, "FormalSpec", "formal_spec_lock.json"),
+      join(cleanRoot, "FormalSpec", "assumption_ledger.json"),
       join(cleanRoot, "FormalSpec", "target.json")
     ]
       .filter((path) => existsSync(path))
@@ -161,6 +193,8 @@ export function runCleanLeanReplay(input: {
     leanVersionOutput,
     lakeVersionOutput,
     leanToolchain,
+    lean_binary_file: leanBinaryFile,
+    lake_binary_file: lakeBinaryFile,
     network_policy: "disabled",
     sandbox: "none",
     proof_authority: "lean_kernel_check",
@@ -171,13 +205,15 @@ export function runCleanLeanReplay(input: {
     run_id: "LRUN-0002",
     claim_id: input.claim_id,
     campaign_id: input.campaign_id,
-    purpose: "build",
+    purpose: "final_replay",
     command: ["lake", "build", ...input.leanProject.buildTargets],
     cwd: cleanRoot,
     input_files: cleanInputs,
     leanVersionOutput,
     lakeVersionOutput,
     leanToolchain,
+    lean_binary_file: leanBinaryFile,
+    lake_binary_file: lakeBinaryFile,
     network_policy: "disabled",
     sandbox: "none",
     proof_authority: "lean_kernel_check",
@@ -195,6 +231,8 @@ export function runCleanLeanReplay(input: {
     leanVersionOutput,
     lakeVersionOutput,
     leanToolchain,
+    lean_binary_file: leanBinaryFile,
+    lake_binary_file: lakeBinaryFile,
     network_policy: "disabled",
     sandbox: "none",
     proof_authority: "lean_kernel_check",
@@ -271,6 +309,13 @@ export function runCleanLeanReplay(input: {
     const leanRunManifestPaths = ["LRUN-0001", "LRUN-0002", "LRUN-0003"].map((runId) =>
       join(evidenceRootRel, `${runId}.manifest.json`).replace(/\\/g, "/")
     );
+    const binary_hashes: Record<string, string> = {};
+    if (leanBinaryFile) {
+      binary_hashes.lean = sha256FileSync(leanBinaryFile).sha256;
+    }
+    if (lakeBinaryFile) {
+      binary_hashes.lake = sha256FileSync(lakeBinaryFile).sha256;
+    }
     const final_replay_v3 = createFinalReplayManifestV3({
       projectRoot: input.projectRoot,
       replay_id,
@@ -306,7 +351,8 @@ export function runCleanLeanReplay(input: {
         timeout_ms: 30000,
         max_stdout_bytes: 65536,
         max_stderr_bytes: 65536
-      }
+      },
+      binary_hashes
     });
     write(
       assertPathAllowed(input.projectRoot, manifestV3PathRel, { purpose: "runtime-write" }),
@@ -317,13 +363,24 @@ export function runCleanLeanReplay(input: {
       actor: input.actor,
       source: "clean_replay"
     } : undefined);
-    writeThirdPartyReplayPackV3(input.projectRoot, final_replay_v3);
+    const replayPack = writeThirdPartyReplayPackV3(input.projectRoot, final_replay_v3);
+    return {
+      final_replay,
+      static_audit,
+      axiom_profile,
+      dependency_closure,
+      statement_equivalence,
+      lean_run_manifest_paths: leanRunManifestPaths,
+      final_replay_manifest_v3_path: manifestV3PathRel.replace(/\\/g, "/"),
+      third_party_replay_pack_path: replayPack.pack_path
+    };
   }
   return {
     final_replay,
     static_audit,
     axiom_profile,
     dependency_closure,
-    statement_equivalence
+    statement_equivalence,
+    lean_run_manifest_paths: []
   };
 }

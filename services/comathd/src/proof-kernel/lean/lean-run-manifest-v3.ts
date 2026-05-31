@@ -170,6 +170,8 @@ export function runServiceOwnedLeanCommandV3(input: {
   leanVersionOutput: string;
   lakeVersionOutput: string;
   leanToolchain: string;
+  lean_binary_file?: string;
+  lake_binary_file?: string;
   network_policy: LeanRunManifestV3["network_policy"];
   sandbox: LeanRunManifestV3["sandbox"];
   proof_authority: LeanRunManifestV3["proof_authority"];
@@ -232,6 +234,8 @@ export function runServiceOwnedLeanCommandV3(input: {
     lean_version: metadata.lean_version,
     lake_version: metadata.lake_version,
     elan_toolchain: metadata.elan_toolchain,
+    lean_binary_file: input.lean_binary_file,
+    lake_binary_file: input.lake_binary_file,
     lean_toolchain_file: toolchainFile,
     network_policy: input.network_policy,
     sandbox: input.sandbox,

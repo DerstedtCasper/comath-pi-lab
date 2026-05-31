@@ -1,17 +1,22 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { appendAuditEvent } from "../../audit/jsonl-writer.js";
-import { getClaim, registerClaim } from "../../claim/claim-store.js";
+import { applyGatePromotedClaim, getClaim, registerClaim } from "../../claim/claim-store.js";
 import { ComathError } from "../../errors.js";
 import { initProject } from "../../project/project-store.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
-import type { CleanReplayResult } from "../lean/clean-replay.js";
+import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
+import type { LeanProjectFiles } from "../lean/lean-project.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
 import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
 import { hasFormalReplayAuthorityPassEvidence } from "./external-terminal-vocabulary.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
+import {
+  packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3,
+  promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3
+} from "../../release/goal3-ga-acceptance.js";
 import {
   candidateRunSchema,
   proofObligationSchema,
@@ -895,6 +900,249 @@ function blockCampaignAtFinalReplay(input: {
   };
 }
 
+type FinalGlobalReplayRequest = {
+  taskId: string;
+  claimId: string;
+  leanProject: LeanProjectFiles;
+  formalSpecLockPath: string;
+  assumptionLedgerPath: string;
+};
+
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${field}_missing`);
+  }
+  return value;
+}
+
+function requireStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.trim().length === 0)) {
+    throw new Error(`${field}_missing`);
+  }
+  return value;
+}
+
+function requireProjectRelPath(value: unknown, field: string): string {
+  const rel = normalizeRelPath(requireString(value, field));
+  if (isAbsolute(rel) || rel === "." || rel.startsWith("../") || rel.includes("/../")) {
+    throw new Error(`${field}_must_be_project_relative`);
+  }
+  return rel;
+}
+
+function requireLeanRootRelPath(value: unknown, field: string): string {
+  const rel = normalizeRelPath(requireString(value, field));
+  if (isAbsolute(rel) || rel === "." || rel.startsWith("../") || rel.includes("/../")) {
+    throw new Error(`${field}_must_be_lean_root_relative`);
+  }
+  return rel;
+}
+
+function objectRecord(value: unknown, field: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${field}_missing`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function readFinalGlobalReplayRequest(projectRoot: string, campaign: ResearchCampaign): FinalGlobalReplayRequest | undefined {
+  const requestRel = campaignRel(campaign, "final_replay_request.json");
+  if (!artifactExists(projectRoot, requestRel)) {
+    return undefined;
+  }
+  const raw = JSON.parse(readFileSync(assertPathAllowed(projectRoot, requestRel, { purpose: "read", resolveRealpath: true }), "utf8")) as unknown;
+  const request = objectRecord(raw, "final_replay_request");
+  if (request.schema_version !== "comath.campaign_final_global_replay_request.v1") {
+    throw new Error("final_replay_request_schema_version_invalid");
+  }
+  const taskId = requireString(request.task_id, "task_id");
+  const claimId = requireString(request.claim_id, "claim_id");
+  if (claimId !== campaign.root_claim_id) {
+    throw new Error("final_replay_request_claim_mismatch");
+  }
+
+  const leanProjectRaw = objectRecord(request.lean_project, "lean_project");
+  const formalSpecRaw = objectRecord(leanProjectRaw.formal_spec, "lean_project.formal_spec");
+  const leanRootRel = requireProjectRelPath(leanProjectRaw.lean_root, "lean_project.lean_root");
+  const theoremFileRel = requireLeanRootRelPath(leanProjectRaw.theorem_file_rel, "lean_project.theorem_file_rel");
+  const auditFileRel = requireLeanRootRelPath(leanProjectRaw.audit_file_rel, "lean_project.audit_file_rel");
+  const formalSpecFileRel = requireLeanRootRelPath(leanProjectRaw.formal_spec_file, "lean_project.formal_spec_file");
+  const assumptionLedgerFileRel = requireLeanRootRelPath(leanProjectRaw.assumption_ledger_file, "lean_project.assumption_ledger_file");
+  const lakefileRel = requireLeanRootRelPath(leanProjectRaw.lakefile, "lean_project.lakefile");
+  const toolchainRel = requireLeanRootRelPath(leanProjectRaw.toolchain_file, "lean_project.toolchain_file");
+  const leanRoot = assertPathAllowed(projectRoot, leanRootRel, { purpose: "read", resolveRealpath: true });
+  const leanPath = (rel: string) => assertPathAllowed(projectRoot, join(leanRootRel, rel), { purpose: "read", resolveRealpath: true });
+
+  const leanProject: LeanProjectFiles = {
+    projectRoot,
+    leanRoot,
+    theoremFile: leanPath(theoremFileRel),
+    theoremFileRel,
+    formalSpecFile: leanPath(formalSpecFileRel),
+    auditFile: leanPath(auditFileRel),
+    auditFileRel,
+    lakefile: leanPath(lakefileRel),
+    toolchainFile: leanPath(toolchainRel),
+    theoremName: requireString(leanProjectRaw.theorem_name, "lean_project.theorem_name"),
+    theoremFamilyId: requireString(leanProjectRaw.theorem_family_id, "lean_project.theorem_family_id"),
+    canonicalProposition: requireString(leanProjectRaw.canonical_proposition, "lean_project.canonical_proposition"),
+    buildTargets: requireStringArray(leanProjectRaw.build_targets, "lean_project.build_targets"),
+    replayCommand: requireString(leanProjectRaw.replay_command, "lean_project.replay_command"),
+    primaryDependency: requireString(leanProjectRaw.primary_dependency, "lean_project.primary_dependency"),
+    formalSpec: {
+      claim_id: requireString(formalSpecRaw.claim_id, "lean_project.formal_spec.claim_id"),
+      theorem_name: requireString(formalSpecRaw.theorem_name, "lean_project.formal_spec.theorem_name"),
+      namespace: requireString(formalSpecRaw.namespace, "lean_project.formal_spec.namespace"),
+      normalized_statement: requireString(formalSpecRaw.normalized_statement, "lean_project.formal_spec.normalized_statement"),
+      locked_statement_hash: requireString(formalSpecRaw.locked_statement_hash, "lean_project.formal_spec.locked_statement_hash")
+    }
+  };
+  if (leanProject.formalSpec.claim_id !== campaign.root_claim_id) {
+    throw new Error("final_replay_request_formal_spec_claim_mismatch");
+  }
+
+  return {
+    taskId,
+    claimId,
+    leanProject,
+    formalSpecLockPath: normalizeRelPath(join(leanRootRel, formalSpecFileRel)),
+    assumptionLedgerPath: normalizeRelPath(join(leanRootRel, assumptionLedgerFileRel))
+  };
+}
+
+async function completeCampaignAtFinalGlobalReplay(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  actor: string;
+}): Promise<CampaignTickResult> {
+  let request: FinalGlobalReplayRequest | undefined;
+  try {
+    request = readFinalGlobalReplayRequest(input.projectRoot, input.campaign);
+  } catch (error) {
+    return blockCampaignAtFinalReplay({
+      ...input,
+      reason: `service-owned Lean Authority v3 replay request is invalid: ${error instanceof Error ? error.message : "unknown_error"}`
+    });
+  }
+  if (!request) {
+    return blockCampaignAtFinalReplay({
+      ...input,
+      reason: "service-owned Lean Authority v3 replay target is not available"
+    });
+  }
+
+  let replay: CleanReplayResult;
+  try {
+    replay = runCleanLeanReplay({
+      projectRoot: input.projectRoot,
+      project_id: input.campaign.project_id,
+      actor: input.actor,
+      campaign_id: input.campaign.campaign_id,
+      claim_id: request.claimId,
+      leanProject: request.leanProject
+    });
+  } catch (error) {
+    return blockCampaignAtFinalReplay({
+      ...input,
+      reason: `service-owned Lean Authority v3 clean replay failed: ${error instanceof Error ? error.message : "unknown_error"}`
+    });
+  }
+
+  if (
+    replay.final_replay.result !== "pass" ||
+    !replay.final_replay_manifest_v3_path ||
+    replay.lean_run_manifest_paths.length === 0 ||
+    !replay.third_party_replay_pack_path
+  ) {
+    return blockCampaignAtFinalReplay({
+      ...input,
+      reason: "service-owned Lean Authority v3 clean replay did not produce promotion-grade final evidence"
+    });
+  }
+
+  const cleanFormalSpecLockPath = normalizeRelPath(join(replay.final_replay.clean_workspace_path, "FormalSpec", "formal_spec_lock.json"));
+  const cleanAssumptionLedgerPath = normalizeRelPath(join(replay.final_replay.clean_workspace_path, "FormalSpec", "assumption_ledger.json"));
+  const evidence = {
+    lean_run_manifest_paths: replay.lean_run_manifest_paths,
+    final_replay_manifest_v3_path: replay.final_replay_manifest_v3_path,
+    structured_audit_path: replay.final_replay.static_audit_path,
+    dependency_closure_path: replay.final_replay.dependency_closure_path,
+    axiom_profile_path: replay.final_replay.axiom_profile_path,
+    statement_check_path: replay.final_replay.statement_equivalence_path,
+    third_party_replay_pack_path: replay.third_party_replay_pack_path,
+    formal_spec_lock_path: artifactExists(input.projectRoot, cleanFormalSpecLockPath) ? cleanFormalSpecLockPath : request.formalSpecLockPath,
+    assumption_ledger_path: artifactExists(input.projectRoot, cleanAssumptionLedgerPath) ? cleanAssumptionLedgerPath : request.assumptionLedgerPath
+  };
+  const packaging = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
+    projectRoot: input.projectRoot,
+    taskId: request.taskId,
+    claimId: request.claimId,
+    evidence
+  });
+  if (packaging.final_evidence_status !== "verified_final_authority_evidence") {
+    return blockCampaignAtFinalReplay({
+      ...input,
+      reason: `service-owned Lean Authority v3 final authority packaging is incomplete: ${packaging.missing_final_evidence_classes.join(",")}`
+    });
+  }
+
+  const claim = getClaim(input.projectRoot, input.campaign.project_id, input.campaign.root_claim_id);
+  if (!claim) {
+    throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
+  }
+  applyGatePromotedClaim(input.projectRoot, {
+    ...claim,
+    formalization_status: "kernel_checked",
+    dependency_closure_status: "all_dependencies_present",
+    audit_state: "audit_passed",
+    updated_at: now()
+  });
+
+  const promotion = await promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
+    projectRoot: input.projectRoot,
+    projectId: input.campaign.project_id,
+    taskId: request.taskId,
+    claimId: request.claimId,
+    evidence,
+    actor: input.actor
+  });
+  if (!promotion.promoted_by_ordinary_gate || !promotion.formal_replay_authority_evidence) {
+    return blockCampaignAtFinalReplay({
+      ...input,
+      reason: "service-owned Lean Authority v3 evidence did not pass ordinary promotion gate"
+    });
+  }
+
+  const artifactPaths = [
+    replay.final_replay_manifest_v3_path,
+    packaging.packaging_report_path,
+    packaging.source_packaging_report_path,
+    replay.third_party_replay_pack_path
+  ].filter((path): path is string => typeof path === "string" && path.length > 0);
+  const completed = writeCampaign(
+    input.projectRoot,
+    researchCampaignSchema.parse({
+      ...input.campaign,
+      current_stage: "completed_formal_proof",
+      status: "terminal",
+      terminal_state: "completed_formal_proof",
+      open_obligations: [{ ...input.obligation, status: "kernel_checked" }],
+      formal_replay_authority_passed: true,
+      formal_replay_authority_evidence: promotion.formal_replay_authority_evidence,
+      stage_runs: [...input.campaign.stage_runs, completedStageRun(input.campaign, "final_global_replay", artifactPaths)],
+      next_actions: []
+    }),
+    input.actor
+  );
+  return {
+    campaign: completed,
+    obligation: { ...input.obligation, status: "kernel_checked" },
+    final_replay: replay.final_replay,
+    static_audit: replay.static_audit
+  };
+}
+
 export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
   const actor = input.actor ?? "campaign";
   const campaign = getCampaign(input.project_root, input.campaign_id);
@@ -1424,12 +1672,11 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "final_global_replay") {
-    return blockCampaignAtFinalReplay({
+    return completeCampaignAtFinalGlobalReplay({
       projectRoot: input.project_root,
       campaign,
       obligation,
-      actor,
-      reason: "service-owned Lean Authority v3 replay target is not available"
+      actor
     });
   }
 
