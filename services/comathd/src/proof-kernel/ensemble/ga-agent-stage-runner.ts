@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { z } from "zod";
 import { ComathError } from "../../errors.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
@@ -46,6 +46,29 @@ export type GaAgentTaskCard = {
 
 export type GaAgentOutput = z.infer<typeof gaAgentOutputSchema>;
 
+export type GaAgentReplayProject = {
+  lean_root: string;
+  theorem_file_rel: string;
+  formal_spec_file: string;
+  assumption_ledger_file: string;
+  audit_file_rel: string;
+  lakefile: string;
+  toolchain_file: string;
+  theorem_name: string;
+  theorem_family_id: string;
+  canonical_proposition: string;
+  build_targets: string[];
+  replay_command: string;
+  primary_dependency: string;
+  formal_spec: {
+    claim_id: string;
+    theorem_name: string;
+    namespace: string;
+    normalized_statement: string;
+    locked_statement_hash: string;
+  };
+};
+
 export type GaAgentStageAdapterResult = Partial<{
   state: CandidateRun["state"];
   score: number;
@@ -60,9 +83,13 @@ export type GaAgentStageAdapterResult = Partial<{
   hard_vetoes: string[];
   failures: string[];
   replay_command: string;
+  replay_project: GaAgentReplayProject;
   summary: string;
   maintainability_notes: string;
 }>;
+
+type NormalizedGaAgentStageAdapterResult = Required<Omit<GaAgentStageAdapterResult, "replay_project">> &
+  Pick<GaAgentStageAdapterResult, "replay_project">;
 
 export type GaAgentStageBatch = {
   task_cards: GaAgentTaskCard[];
@@ -171,6 +198,131 @@ function normalizedRel(path: string): string {
   return path.replace(/\\/g, "/");
 }
 
+function requireNonEmptyString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`candidate_replay_project_${field}_invalid`);
+  }
+  return value;
+}
+
+function requireStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`candidate_replay_project_${field}_invalid`);
+  }
+  return value.map((item, index) => requireNonEmptyString(item, `${field}_${index}`));
+}
+
+function requireObjectRecord(value: unknown, field: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`candidate_replay_project_${field}_invalid`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function rejectPathEscape(path: string, field: string): string {
+  const normalized = normalizedRel(path);
+  if (
+    normalized.length === 0 ||
+    isAbsolute(normalized) ||
+    normalized.startsWith("../") ||
+    normalized === ".." ||
+    normalized.split("/").includes("..")
+  ) {
+    throw new Error(`candidate_replay_project_${field}_path_escape`);
+  }
+  return normalized;
+}
+
+function parseReplayProject(raw: unknown): GaAgentReplayProject {
+  const project = requireObjectRecord(raw, "lean_project");
+  const formalSpec = requireObjectRecord(project.formal_spec, "formal_spec");
+  return {
+    lean_root: rejectPathEscape(requireNonEmptyString(project.lean_root, "lean_root"), "lean_root"),
+    theorem_file_rel: rejectPathEscape(requireNonEmptyString(project.theorem_file_rel, "theorem_file_rel"), "theorem_file_rel"),
+    formal_spec_file: rejectPathEscape(requireNonEmptyString(project.formal_spec_file, "formal_spec_file"), "formal_spec_file"),
+    assumption_ledger_file: rejectPathEscape(
+      requireNonEmptyString(project.assumption_ledger_file, "assumption_ledger_file"),
+      "assumption_ledger_file"
+    ),
+    audit_file_rel: rejectPathEscape(requireNonEmptyString(project.audit_file_rel, "audit_file_rel"), "audit_file_rel"),
+    lakefile: rejectPathEscape(requireNonEmptyString(project.lakefile, "lakefile"), "lakefile"),
+    toolchain_file: rejectPathEscape(requireNonEmptyString(project.toolchain_file, "toolchain_file"), "toolchain_file"),
+    theorem_name: requireNonEmptyString(project.theorem_name, "theorem_name"),
+    theorem_family_id: requireNonEmptyString(project.theorem_family_id, "theorem_family_id"),
+    canonical_proposition: requireNonEmptyString(project.canonical_proposition, "canonical_proposition"),
+    build_targets: requireStringArray(project.build_targets, "build_targets"),
+    replay_command: requireNonEmptyString(project.replay_command, "replay_command"),
+    primary_dependency: requireNonEmptyString(project.primary_dependency, "primary_dependency"),
+    formal_spec: {
+      claim_id: requireNonEmptyString(formalSpec.claim_id, "formal_spec_claim_id"),
+      theorem_name: requireNonEmptyString(formalSpec.theorem_name, "formal_spec_theorem_name"),
+      namespace: requireNonEmptyString(formalSpec.namespace, "formal_spec_namespace"),
+      normalized_statement: requireNonEmptyString(formalSpec.normalized_statement, "formal_spec_normalized_statement"),
+      locked_statement_hash: requireNonEmptyString(formalSpec.locked_statement_hash, "formal_spec_locked_statement_hash")
+    }
+  };
+}
+
+function createCandidateReplayProjectDescriptor(input: {
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  candidateId: string;
+  candidateStatementHash: string;
+  adapterResult: NormalizedGaAgentStageAdapterResult;
+}): Record<string, unknown> | undefined {
+  if (input.adapterResult.replay_project === undefined) {
+    return undefined;
+  }
+  if (input.adapterResult.state !== "candidate_kernel_checked") {
+    throw new Error("candidate_replay_project_requires_kernel_checked_candidate");
+  }
+  if (input.adapterResult.statement_equivalence_claim !== "exact") {
+    throw new Error("candidate_replay_project_requires_exact_statement");
+  }
+  if (
+    input.candidateStatementHash !== input.obligation.statement_hash ||
+    input.adapterResult.candidate_statement_hash !== input.obligation.statement_hash
+  ) {
+    throw new Error("candidate_replay_project_statement_hash_drift");
+  }
+  if (input.adapterResult.introduced_assumptions.length > 0) {
+    throw new Error("candidate_replay_project_hidden_assumption");
+  }
+  if (input.adapterResult.hard_vetoes.length > 0) {
+    throw new Error("candidate_replay_project_hard_vetoed");
+  }
+  if (!input.adapterResult.replay_command) {
+    throw new Error("candidate_replay_project_replay_command_missing");
+  }
+  if (!input.adapterResult.evidence.some((evidence) => /lean_run_manifest|final_replay_manifest|service_owned_lean_replay/i.test(evidence))) {
+    throw new Error("candidate_replay_project_requires_service_owned_lean_evidence");
+  }
+  const replayProject = parseReplayProject(input.adapterResult.replay_project);
+  if (replayProject.formal_spec.claim_id !== input.campaign.root_claim_id) {
+    throw new Error("candidate_replay_project_claim_mismatch");
+  }
+  if (replayProject.formal_spec.locked_statement_hash !== input.obligation.statement_hash) {
+    throw new Error("candidate_replay_project_statement_hash_drift");
+  }
+  if (replayProject.theorem_family_id !== input.campaign.campaign_id) {
+    throw new Error("candidate_replay_project_family_mismatch");
+  }
+  if (replayProject.replay_command !== input.adapterResult.replay_command) {
+    throw new Error("candidate_replay_project_replay_command_mismatch");
+  }
+  return {
+    schema_version: "comath.candidate_replay_project_descriptor.v1",
+    campaign_id: input.campaign.campaign_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    candidate_id: input.candidateId,
+    artifact_role: "candidate_replay_project_descriptor",
+    proof_authority: "none",
+    can_promote_claim: false,
+    lean_project: replayProject
+  };
+}
+
 function workspaceRel(campaign: ResearchCampaign, obligation: ProofObligation, variantSlug: string): string {
   return normalizedRel(join(".comath", "campaign", campaign.campaign_id, "ensembles", "lemma_sprint", obligation.obligation_id, "agents", variantSlug));
 }
@@ -221,7 +373,7 @@ export function createGaAgentStageTaskCards(input: {
   }));
 }
 
-function normalizeAdapterResult(result: GaAgentStageAdapterResult | undefined): Required<GaAgentStageAdapterResult> {
+function normalizeAdapterResult(result: GaAgentStageAdapterResult | undefined): NormalizedGaAgentStageAdapterResult {
   return {
     state: result?.state ?? "candidate_plausible_only",
     score: result?.score ?? 0,
@@ -236,6 +388,7 @@ function normalizeAdapterResult(result: GaAgentStageAdapterResult | undefined): 
     hard_vetoes: result?.hard_vetoes ?? [],
     failures: result?.failures ?? [],
     replay_command: result?.replay_command ?? "",
+    replay_project: result?.replay_project,
     summary: result?.summary ?? "Agent candidate draft; no proof authority.",
     maintainability_notes: result?.maintainability_notes ?? "Candidate remains advisory until service-owned gates pass."
   };
@@ -263,6 +416,23 @@ export function runGaAgentStageCandidates(input: {
     writeJson(input.projectRoot, join(taskCard.workspace_path, "task_card.json"), taskCard);
 
     const candidateStatementHash = adapterResult.candidate_statement_hash || input.locked_statement_hash;
+    const descriptor = createCandidateReplayProjectDescriptor({
+      campaign: input.campaign,
+      obligation: input.obligation,
+      candidateId,
+      candidateStatementHash,
+      adapterResult
+    });
+    const descriptorArtifact = descriptor
+      ? {
+          path: "candidate_replay_project_descriptor.json",
+          kind: "candidate_replay_project_descriptor",
+          required_for: ["candidate_replay_material_source"]
+        }
+      : undefined;
+    if (descriptor) {
+      writeJson(input.projectRoot, join(taskCard.workspace_path, "candidate_replay_project_descriptor.json"), descriptor);
+    }
     const manifest = candidateManifestSchema.parse({
       candidate_id: candidateId,
       campaign_id: input.campaign.campaign_id,
@@ -281,7 +451,8 @@ export function runGaAgentStageCandidates(input: {
       artifacts: [
         { path: "task_card.json", kind: "agent_task_card", required_for: ["agent_stage"] },
         { path: "agent_output.json", kind: "agent_output", required_for: ["agent_stage"] },
-        { path: "agent_stage_log.jsonl", kind: "agent_stage_log", required_for: ["agent_stage", "failure_memory"] }
+        { path: "agent_stage_log.jsonl", kind: "agent_stage_log", required_for: ["agent_stage", "failure_memory"] },
+        ...(descriptorArtifact ? [descriptorArtifact] : [])
       ],
       lean_files: adapterResult.lean_files,
       logs: adapterResult.logs,
@@ -304,7 +475,17 @@ export function runGaAgentStageCandidates(input: {
       stage: taskCard.stage,
       locked_statement_hash: input.locked_statement_hash,
       summary: adapterResult.summary,
-      artifacts: [{ path: normalizedRel(relative(input.projectRoot, manifestPath)), kind: "candidate_manifest" }],
+      artifacts: [
+        { path: normalizedRel(relative(input.projectRoot, manifestPath)), kind: "candidate_manifest" },
+        ...(descriptor
+          ? [
+              {
+                path: normalizedRel(join(taskCard.workspace_path, "candidate_replay_project_descriptor.json")),
+                kind: "candidate_replay_project_descriptor"
+              }
+            ]
+          : [])
+      ],
       proposed_candidates: [{ candidate_id: candidateId, manifest_path: normalizedRel(relative(input.projectRoot, manifestPath)) }],
       introduced_assumptions: adapterResult.introduced_assumptions,
       introduced_dependencies: adapterResult.introduced_dependencies,
