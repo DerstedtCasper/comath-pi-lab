@@ -260,11 +260,14 @@ function mapGoalTerminalState(campaign: any, proofAuthorityVerified = false): Go
     hasFormalReplayAuthorityEvidenceShape(campaign) && proofAuthorityVerified;
   if (goalModeTerminalStates.includes(campaign?.goal_mode_terminal_state)) {
     if (campaign.goal_mode_terminal_state === "formal_replay_passed" && !hasFormalReplayAuthorityEvidence) {
-      return undefined;
+      return "blocked_with_replayable_certificate";
     }
     return campaign.goal_mode_terminal_state;
   }
   const external = campaign?.external_v3_terminal_state;
+  if (hasUnverifiedFormalProofTerminal(campaign, proofAuthorityVerified)) {
+    return "blocked_with_replayable_certificate";
+  }
   if (external === "formal_proof_verified" && hasFormalReplayAuthorityEvidence) {
     return "formal_replay_passed";
   }
@@ -313,6 +316,19 @@ async function readCampaignExportProofAuthority(
   }
 }
 
+function hasFormalProofTerminalSignal(campaign: any): boolean {
+  return (
+    campaign?.goal_mode_terminal_state === "formal_replay_passed" ||
+    campaign?.external_v3_terminal_state === "formal_proof_verified" ||
+    campaign?.terminal_state === "completed_formal_proof" ||
+    campaign?.current_stage === "completed_formal_proof"
+  );
+}
+
+function hasUnverifiedFormalProofTerminal(campaign: any, proofAuthorityVerified = false): boolean {
+  return hasFormalProofTerminalSignal(campaign) && !proofAuthorityVerified;
+}
+
 function isTerminal(campaign: any, mode: "goal" | "bounded" = "bounded"): boolean {
   if (mode === "goal" && mapGoalTerminalState(campaign)) {
     return true;
@@ -341,6 +357,46 @@ function firstBlocker(campaign: any): Record<string, unknown> | undefined {
   return Array.isArray(campaign?.blockers) && campaign.blockers.length > 0 && typeof campaign.blockers[0] === "object"
     ? campaign.blockers[0]
     : undefined;
+}
+
+function unverifiedFormalProofBlocker(campaign: any): Record<string, unknown> {
+  return {
+    schema_version: "comath.pi_goal_blocker.v1",
+    code: "UNVERIFIED_FORMAL_REPLAY_AUTHORITY",
+    reason: "formal proof terminal state requires verified campaign export proof authority",
+    campaign_id: typeof campaign?.campaign_id === "string" ? campaign.campaign_id : undefined,
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+}
+
+function sanitizeCampaignForPublicResult(campaign: any, proofAuthorityVerified = false): any {
+  if (!hasUnverifiedFormalProofTerminal(campaign, proofAuthorityVerified)) {
+    return campaign;
+  }
+  const {
+    external_v3_terminal_state: _externalV3TerminalState,
+    goal_mode_terminal_state: _goalModeTerminalState,
+    formal_replay_authority_passed: _formalReplayAuthorityPassed,
+    formal_replay_authority_evidence: _formalReplayAuthorityEvidence,
+    ...publicCampaign
+  } = campaign ?? {};
+  return {
+    ...publicCampaign,
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+}
+
+function sanitizeTicksForPublicResult(ticks: any[], proofAuthorityVerified = false): any[] {
+  return ticks.map((tick) =>
+    tick && typeof tick === "object" && "campaign" in tick
+      ? {
+          ...tick,
+          campaign: sanitizeCampaignForPublicResult(tick.campaign, proofAuthorityVerified)
+        }
+      : tick
+  );
 }
 
 function buildResumeState(input: ResearchCampaignLoopInput, campaign: any): Record<string, unknown> | undefined {
@@ -407,10 +463,13 @@ export async function runResearchCampaignLoop(
       ? "budget_exhausted_with_resume_state"
       : mappedGoalTerminalState;
   const nextActions = Array.isArray(campaign?.next_actions) ? campaign.next_actions : [];
+  const unverifiedProofTerminal = hasUnverifiedFormalProofTerminal(campaign, proofAuthorityVerified);
+  const publicCampaign = sanitizeCampaignForPublicResult(campaign, proofAuthorityVerified);
+  const publicTicks = sanitizeTicksForPublicResult(ticks, proofAuthorityVerified);
   return {
-    campaign,
+    campaign: publicCampaign,
     obligation: start.obligation,
-    ticks,
+    ticks: publicTicks,
     dashboard,
     mode,
     external_v3_terminal_state:
@@ -421,7 +480,7 @@ export async function runResearchCampaignLoop(
           : undefined,
     goal_terminal_state: goalTerminalState,
     next_actions: nextActions,
-    blocker_certificate: firstBlocker(campaign),
+    blocker_certificate: firstBlocker(campaign) ?? (unverifiedProofTerminal ? unverifiedFormalProofBlocker(campaign) : undefined),
     resume_state: buildResumeState(input, campaign),
     export_descriptor: campaign?.campaign_id
       ? {

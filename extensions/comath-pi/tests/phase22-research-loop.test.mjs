@@ -263,9 +263,14 @@ const directHarness = createLoopClient();
 const result = await runResearchCampaignLoop(directHarness.client, loopInput);
 assert.equal(result.campaign.campaign_id, "CAM-0001");
 assert.equal(result.campaign.current_stage, "completed_formal_proof");
-assert.equal(result.campaign.external_v3_terminal_state, "formal_proof_verified");
+assert.equal(result.campaign.external_v3_terminal_state, undefined);
 assert.equal(result.external_v3_terminal_state, undefined, "stale external proof state must not be surfaced without export authority");
-assert.equal(result.goal_terminal_state, undefined, "stale external proof state must not map to goal proof success without authority flag");
+assert.equal(
+  result.goal_terminal_state,
+  "blocked_with_replayable_certificate",
+  "stale external proof state must degrade to a replayable blocker without export authority"
+);
+assert.equal(result.blocker_certificate?.code, "UNVERIFIED_FORMAL_REPLAY_AUTHORITY");
 assert.equal(result.terminal, true);
 assert.equal(result.stopped_reason, "terminal");
 assert.equal(result.ticks.length, 3);
@@ -282,8 +287,8 @@ const staleGoalModeHarness = createLoopClient(["completed_formal_proof"], [], {
 const staleGoalMode = await runResearchCampaignLoop(staleGoalModeHarness.client, loopInput);
 assert.equal(
   staleGoalMode.goal_terminal_state,
-  undefined,
-  "stale goal-mode proof state must not map to proof success without authority flag"
+  "blocked_with_replayable_certificate",
+  "stale goal-mode proof state must degrade to a replayable blocker without authority flag"
 );
 
 const authorityGoalModeHarness = createLoopClient(["completed_formal_proof"], [], {
@@ -303,7 +308,7 @@ const flagOnlyHarness = createLoopClient(["completed_formal_proof"], [], {
 const flagOnly = await runResearchCampaignLoop(flagOnlyHarness.client, loopInput);
 assert.equal(
   flagOnly.goal_terminal_state,
-  undefined,
+  "blocked_with_replayable_certificate",
   "Pi proof success requires explicit Lean Authority evidence, not only the authority flag"
 );
 

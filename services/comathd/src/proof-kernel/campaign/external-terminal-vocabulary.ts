@@ -75,7 +75,7 @@ export function hasFormalReplayAuthorityPassEvidence(input: {
   if (!packagingPath) {
     return false;
   }
-  return !evidence.artifact_hash || sha256File(packagingPath) === evidence.artifact_hash;
+  return isSha256(evidence.artifact_hash) && sha256File(packagingPath) === evidence.artifact_hash;
 }
 
 export function projectExternalV3TerminalState(
@@ -183,4 +183,8 @@ function readJsonInsideProjectOrNull(projectRoot: string, relativePath: string):
 
 function sha256File(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function isSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 }
