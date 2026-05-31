@@ -1,3 +1,25 @@
+# Goal 3 Task 97 / Legacy Final Replay Promotion-Gate Hardening
+
+Scope: prevent old `finalLeanReplaySchema` artifacts from authorizing `formally_checked` promotion. Legacy final replay material remains historical/diagnostic schema compatibility only; promotion authority is now Lean Authority v3 final replay packaging with registry provenance, derived binding, report checks, and replay-pack binding.
+
+Work performed:
+
+- Added `goal3-task97-legacy-final-replay-promotion-gate.test.mjs`. RED showed a fresh hash-bound legacy final replay manifest could still promote a claim through the old OR branch.
+- Hardened `services/comathd/src/verification/gate.ts` so `formally_checked` passed-replay and promotion-grade authority checks require `hasVerifiedFinalAuthorityPackagingV3()`.
+- Added explicit veto text: `formally_checked requires Lean Authority v3 final replay packaging`.
+- Removed the dead legacy `hasPassedProofKernelReplay()`, `hasHashBoundFreshProofKernelReplay()`, and `finalReplayArtifactsAreFresh()` helper path from the promotion gate.
+
+Verification evidence:
+
+- TDD RED: `node services/comathd/tests/unit/goal3-task97-legacy-final-replay-promotion-gate.test.mjs` failed because `promotion.gate.ok` was `true`.
+- GREEN focused tests: Task97, Phase64 Lean authority v2 negative fixtures, Phase18 proof-kernel gates, Phase18 campaign vertical slice, Task45/62/64/66 final-authority v3 regressions.
+- `corepack pnpm --filter @comath/comathd build`, `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test` exited 0.
+- Static scan confirmed `gate.ts` no longer references `finalLeanReplaySchema` or the legacy proof-kernel replay helper names. `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task97 is final-authority/no-cheat gate hardening only. It does not install Lean, fetch mathlib, execute fresh clean replay, promote any positive-matrix task, broaden theorem coverage, or complete Goal 3 GA.
+
+Residual risks: broader live Lean/mathlib positive-matrix replay, production Pi/Codex lifecycle validation, OS-level sandboxing, and final GA audit remain open. Local `lean` and `lake` still resolve to elan shims but fail because no default Lean toolchain is configured.
+
 # Goal 3 Task 96 / Positive-Matrix Batch Consumer Semantics Hardening
 
 Scope: prevent batch positive-matrix consumers from presenting PM-001 representative fixture or aggregate harness evidence as per-task `lean_kernel_clean_replay`, without claiming live Lean replay or GA completion.

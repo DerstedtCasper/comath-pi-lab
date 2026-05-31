@@ -10,7 +10,6 @@ import { hasSuccessfulCitationConditionMatch } from "../literature/store.js";
 import { assertPathAllowed } from "../security/path-policy.js";
 import {
   claimSchema,
-  finalLeanReplaySchema,
   finalReplayManifestV3Schema,
   gateResultSchema,
   type ArtifactRef,
@@ -202,64 +201,6 @@ function runnerReportsForEvidence(
     }
   }
   return reports;
-}
-
-function hasPassedProofKernelReplay(
-  projectRoot: string,
-  request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
-  artifacts: ArtifactRef[]
-): boolean {
-  for (const artifact of artifacts) {
-    if (artifact.kind !== "runner_output") {
-      continue;
-    }
-    try {
-      const path = assertPathAllowed(projectRoot, artifact.path, { purpose: "read", resolveRealpath: true });
-      const replay = finalLeanReplaySchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
-      if (
-        replay.success &&
-        replay.data.claim_id === request.claim_id &&
-        replay.data.locked_statement_hash === request.locked_statement_hash &&
-        replay.data.result === "pass" &&
-        replay.data.exit_code === 0
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
-    }
-  }
-  return false;
-}
-
-function finalReplayArtifactsAreFresh(projectRoot: string, replay: unknown): boolean {
-  const parsed = finalLeanReplaySchema.safeParse(replay);
-  if (!parsed.success) {
-    return false;
-  }
-  const data = parsed.data;
-  const expected = [
-    ["stdout", data.stdout_path],
-    ["stderr", data.stderr_path],
-    ["static_audit", data.static_audit_path],
-    ["axiom_profile", data.axiom_profile_path],
-    ["dependency_closure", data.dependency_closure_path],
-    ["statement_equivalence", data.statement_equivalence_path]
-  ] as const;
-
-  for (const [key, relativePath] of expected) {
-    try {
-      const path = assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true });
-      const actual = sha256FileSync(path);
-      const bound = data.artifact_hashes[key];
-      if (actual.sha256 !== bound.sha256 || actual.size_bytes !== bound.size_bytes) {
-        return false;
-      }
-    } catch {
-      return false;
-    }
-  }
-  return true;
 }
 
 function readJsonArtifact(projectRoot: string, artifact: ArtifactRef): unknown | null {
@@ -741,44 +682,12 @@ function hasFinalReplayRegistryProvenance(projectRoot: string, finalReplay: unkn
   });
 }
 
-function hasHashBoundFreshProofKernelReplay(
-  projectRoot: string,
-  request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
-  artifacts: ArtifactRef[]
-): boolean {
-  for (const artifact of artifacts) {
-    if (artifact.kind !== "runner_output") {
-      continue;
-    }
-    try {
-      const path = assertPathAllowed(projectRoot, artifact.path, { purpose: "read", resolveRealpath: true });
-      const replay = finalLeanReplaySchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
-      if (
-        replay.success &&
-        replay.data.claim_id === request.claim_id &&
-        replay.data.locked_statement_hash === request.locked_statement_hash &&
-        replay.data.result === "pass" &&
-        replay.data.exit_code === 0 &&
-        finalReplayArtifactsAreFresh(projectRoot, replay.data)
-      ) {
-        return true;
-      }
-    } catch {
-      continue;
-    }
-  }
-  return false;
-}
-
 function hasPromotionGradeLeanAuthorityEvidence(
   projectRoot: string,
   request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
   artifacts: ArtifactRef[]
 ): boolean {
-  return (
-    hasHashBoundFreshProofKernelReplay(projectRoot, request, artifacts) ||
-    hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts)
-  );
+  return hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts);
 }
 
 function finalAuthorityDerivedBindingVetoes(
@@ -859,10 +768,7 @@ function hasPassedLeanAuthorityReplayEvidence(
   request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
   artifacts: ArtifactRef[]
 ): boolean {
-  return (
-    hasPassedProofKernelReplay(projectRoot, request, artifacts) ||
-    hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts)
-  );
+  return hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts);
 }
 
 function evidenceBindingVetoes(projectRoot: string, request: ClaimPromotionRequest): string[] {
@@ -985,19 +891,23 @@ function statusEvidenceVetoes(projectRoot: string, claim: Claim, request: ClaimP
   }
 
   if (request.target_status === "formally_checked") {
+    const authorityRequest = { ...request, locked_statement_hash: claim.statement_hash };
     if (!kinds.has("lean")) {
       vetoes.push("formally_checked requires lean evidence");
     }
     if (!artifactKinds.has("code") && !artifactKinds.has("runner_output")) {
       vetoes.push("formally_checked requires proof artifact");
     }
-    if (!hasPassedLeanAuthorityReplayEvidence(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts)) {
+    if (!hasPassedLeanAuthorityReplayEvidence(projectRoot, authorityRequest, artifacts)) {
       vetoes.push("formally_checked requires passed proof-kernel final replay manifest");
     }
-    if (!hasPromotionGradeLeanAuthorityEvidence(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts)) {
+    if (!hasPromotionGradeLeanAuthorityEvidence(projectRoot, authorityRequest, artifacts)) {
       vetoes.push("formally_checked requires hash-bound fresh final replay artifacts");
     }
-    vetoes.push(...finalAuthorityDerivedBindingVetoes(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts));
+    if (!hasVerifiedFinalAuthorityPackagingV3(projectRoot, authorityRequest, artifacts)) {
+      vetoes.push("formally_checked requires Lean Authority v3 final replay packaging");
+    }
+    vetoes.push(...finalAuthorityDerivedBindingVetoes(projectRoot, authorityRequest, artifacts));
     vetoes.push(...finalAuthorityProvenanceVetoes(projectRoot, artifacts));
     vetoes.push(...finalReplayManifestArtifactKindVetoes(projectRoot, artifacts));
   }
