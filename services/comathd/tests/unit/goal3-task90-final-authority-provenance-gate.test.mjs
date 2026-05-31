@@ -4,10 +4,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  appendLeanRunManifestProvenanceIndexV1,
   applyGatePromotedClaim,
   createFinalReplayManifestV3,
   createServiceOwnedLeanRunManifestV3,
   initProject,
+  packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3,
   promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3,
   registerClaim,
   statementHash,
@@ -95,6 +97,8 @@ try {
   );
   const toolchain = writeProjectFile(`${cleanRootRel}/lean-toolchain`, "leanprover/lean4:v4.23.0\n");
   const lakeManifest = writeProjectFile(`${cleanRootRel}/lake-manifest.json`, `${JSON.stringify({ version: 7, packages: [] }, null, 2)}\n`);
+  const leanBinary = writeProjectFile(`${cleanRootRel}/bin/lean`, "dummy lean\n");
+  const lakeBinary = writeProjectFile(`${cleanRootRel}/bin/lake`, "dummy lake\n");
   const stdout = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stdout.log`, "Goal3Positive090 checked\n");
   const stderr = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stderr.log`, "");
 
@@ -112,6 +116,8 @@ try {
     elan_toolchain: "leanprover/lean4:v4.23.0",
     lean_toolchain_file: toolchain,
     lake_manifest_file: lakeManifest,
+    lean_binary_file: leanBinary,
+    lake_binary_file: lakeBinary,
     network_policy: "disabled",
     sandbox: "none",
     exit_code: 0,
@@ -123,6 +129,13 @@ try {
   });
   const leanRunManifestRel = `.comath/evidence/${claim.id}/lean/${runId}.manifest.json`;
   writeProjectFile(leanRunManifestRel, `${JSON.stringify(leanRunManifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: project.project_id,
+    actor: "goal3-task90",
+    manifest: leanRunManifest,
+    manifest_path: leanRunManifestRel
+  });
 
   const structuredAuditRel = `.comath/evidence/${claim.id}/lean/structured_audit.json`;
   const dependencyClosureRel = `.comath/evidence/${claim.id}/lean/dependency_closure.json`;
@@ -151,7 +164,9 @@ try {
       "FormalSpec/assumption_ledger.json": hashRef(assumptionLedger),
       "lakefile.lean": hashRef(lakefile),
       "lean-toolchain": hashRef(toolchain),
-      "lake-manifest.json": hashRef(lakeManifest)
+      "lake-manifest.json": hashRef(lakeManifest),
+      "bin/lean": hashRef(leanBinary),
+      "bin/lake": hashRef(lakeBinary)
     },
     stdout_path: stdout,
     stderr_path: stderr,
@@ -170,7 +185,8 @@ try {
     },
     network_policy: "disabled",
     sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" },
-    resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 }
+    resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 },
+    binary_hashes: { lean: sha256(leanBinary), lake: sha256(lakeBinary) }
   });
   const finalReplayManifestRel = `.comath/evidence/${claim.id}/lean/final_replay_manifest_v3.json`;
   writeProjectFile(finalReplayManifestRel, `${JSON.stringify(finalReplayManifest, null, 2)}\n`);
@@ -185,30 +201,38 @@ try {
     updated_at: new Date().toISOString()
   });
 
-  const promotion = await promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
+  const evidence = {
+    lean_run_manifest_paths: [leanRunManifestRel],
+    final_replay_manifest_v3_path: finalReplayManifestRel,
+    structured_audit_path: structuredAuditRel,
+    dependency_closure_path: dependencyClosureRel,
+    axiom_profile_path: axiomProfileRel,
+    statement_check_path: statementCheckRel,
+    third_party_replay_pack_path: replayPack.pack_path,
+    formal_spec_lock_path: formalSpecRel,
+    assumption_ledger_path: assumptionLedgerRel
+  };
+  const report = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
     projectRoot,
-    projectId: project.project_id,
     taskId,
     claimId: claim.id,
-    evidence: {
-      lean_run_manifest_paths: [leanRunManifestRel],
-      final_replay_manifest_v3_path: finalReplayManifestRel,
-      structured_audit_path: structuredAuditRel,
-      dependency_closure_path: dependencyClosureRel,
-      axiom_profile_path: axiomProfileRel,
-      statement_check_path: statementCheckRel,
-      third_party_replay_pack_path: replayPack.pack_path,
-      formal_spec_lock_path: formalSpecRel,
-      assumption_ledger_path: assumptionLedgerRel
-    },
-    actor: "goal3-task90"
+    evidence
   });
+  assert.equal(report.final_evidence_status, "blocked_missing_final_evidence");
+  assert.ok(report.missing_final_evidence_classes.includes("final_replay_manifest_v3"));
 
-  assert.equal(promotion.gate.ok, false, "helper-created authority-shaped artifacts must not promote without replay registry provenance");
-  assert.equal(promotion.claim.status, "conjectural");
-  assert.equal(promotion.proof_authority, "none");
-  assert.equal(promotion.promoted_by_ordinary_gate, false);
-  assert.ok(promotion.gate.vetoes.includes("formally_checked requires service-owned clean replay provenance"));
+  await assert.rejects(
+    () => promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
+      projectRoot,
+      projectId: project.project_id,
+      taskId,
+      claimId: claim.id,
+      evidence,
+      actor: "goal3-task90"
+    }),
+    /positive_matrix_final_authority_evidence_not_verified/,
+    "helper-created authority-shaped artifacts must not promote without replay registry provenance"
+  );
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }

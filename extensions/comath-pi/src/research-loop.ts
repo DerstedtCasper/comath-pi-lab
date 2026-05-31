@@ -242,8 +242,8 @@ function assertCapability(input: ResearchCampaignLoopInput): CampaignLoopCapabil
   return capability;
 }
 
-function mapGoalTerminalState(campaign: any): GoalModeTerminalState | undefined {
-  const hasFormalReplayAuthorityEvidence =
+function hasFormalReplayAuthorityEvidenceShape(campaign: any): boolean {
+  return (
     campaign?.formal_replay_authority_passed === true &&
     campaign?.formal_replay_authority_evidence?.schema_version === "comath.formal_replay_authority_evidence.v1" &&
     campaign.formal_replay_authority_evidence.proof_authority === "lean_kernel_clean_replay" &&
@@ -251,7 +251,13 @@ function mapGoalTerminalState(campaign: any): GoalModeTerminalState | undefined 
     typeof campaign.formal_replay_authority_evidence.final_replay_manifest_v3_path === "string" &&
     campaign.formal_replay_authority_evidence.final_replay_manifest_v3_path.length > 0 &&
     typeof campaign.formal_replay_authority_evidence.final_authority_packaging_path === "string" &&
-    campaign.formal_replay_authority_evidence.final_authority_packaging_path.length > 0;
+    campaign.formal_replay_authority_evidence.final_authority_packaging_path.length > 0
+  );
+}
+
+function mapGoalTerminalState(campaign: any, proofAuthorityVerified = false): GoalModeTerminalState | undefined {
+  const hasFormalReplayAuthorityEvidence =
+    hasFormalReplayAuthorityEvidenceShape(campaign) && proofAuthorityVerified;
   if (goalModeTerminalStates.includes(campaign?.goal_mode_terminal_state)) {
     if (campaign.goal_mode_terminal_state === "formal_replay_passed" && !hasFormalReplayAuthorityEvidence) {
       return undefined;
@@ -286,6 +292,25 @@ function mapGoalTerminalState(campaign: any): GoalModeTerminalState | undefined 
     return "blocked_with_replayable_certificate";
   }
   return undefined;
+}
+
+async function readCampaignExportProofAuthority(
+  client: CampaignLoopClient,
+  input: ResearchCampaignLoopInput,
+  campaign: any
+): Promise<boolean> {
+  if (!campaign?.campaign_id || !hasFormalReplayAuthorityEvidenceShape(campaign)) {
+    return false;
+  }
+  try {
+    const exportResult = await client.get(
+      `/campaign/${encodeURIComponent(campaign.campaign_id)}/export?project_root=${encodeURIComponent(input.project_root)}&actor=${encodeURIComponent(input.actor)}`
+    );
+    const manifest = exportResult?.export_manifest;
+    return manifest?.evidence_pack_ready === true && manifest?.proof_authority === "lean_kernel_clean_replay";
+  } catch {
+    return false;
+  }
 }
 
 function isTerminal(campaign: any, mode: "goal" | "bounded" = "bounded"): boolean {
@@ -375,7 +400,8 @@ export async function runResearchCampaignLoop(
     project_id: campaign.project_id
   });
   const exhausted = !isTerminal(campaign, mode) && ticks.length >= maxTicks;
-  const mappedGoalTerminalState = mapGoalTerminalState(campaign);
+  const proofAuthorityVerified = await readCampaignExportProofAuthority(client, input, campaign);
+  const mappedGoalTerminalState = mapGoalTerminalState(campaign, proofAuthorityVerified);
   const goalTerminalState =
     exhausted && mode === "goal" && !mappedGoalTerminalState
       ? "budget_exhausted_with_resume_state"
@@ -388,7 +414,11 @@ export async function runResearchCampaignLoop(
     dashboard,
     mode,
     external_v3_terminal_state:
-      typeof campaign?.external_v3_terminal_state === "string" ? campaign.external_v3_terminal_state : undefined,
+      campaign?.external_v3_terminal_state === "formal_proof_verified" && !proofAuthorityVerified
+        ? undefined
+        : typeof campaign?.external_v3_terminal_state === "string"
+          ? campaign.external_v3_terminal_state
+          : undefined,
     goal_terminal_state: goalTerminalState,
     next_actions: nextActions,
     blocker_certificate: firstBlocker(campaign),

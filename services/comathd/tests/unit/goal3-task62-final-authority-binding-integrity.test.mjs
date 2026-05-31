@@ -4,6 +4,8 @@ import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  appendFinalReplayRegistryEntryV3,
+  appendLeanRunManifestProvenanceIndexV1,
   createFinalReplayManifestV3,
   createServiceOwnedLeanRunManifestV3,
   packageGoal3GaPositiveMatrixFinalAuthorityEvidenceFromEvidenceV3,
@@ -91,6 +93,8 @@ const assumptionLedgerPath = writeProjectFile(`.comath/evidence/${claimId}/assum
 const lakefile = writeProjectFile(`${cleanRootRel}/lakefile.lean`, "import Lake\nopen Lake DSL\npackage MathResearch where\nlean_lib MathResearch where\n  roots := #[`MathResearch.Target]\n");
 const toolchain = writeProjectFile(`${cleanRootRel}/lean-toolchain`, "leanprover/lean4:v4.23.0\n");
 const lakeManifest = writeProjectFile(`${cleanRootRel}/lake-manifest.json`, `${JSON.stringify({ version: 7, packages: [] }, null, 2)}\n`);
+const leanBinary = writeProjectFile(`${cleanRootRel}/bin/lean`, "dummy lean\n");
+const lakeBinary = writeProjectFile(`${cleanRootRel}/bin/lake`, "dummy lake\n");
 
 const stdout = writeProjectFile(`.comath/evidence/${claimId}/lean/LRUN-0062.stdout.log`, "Goal3Positive062 checked\n");
 const stderr = writeProjectFile(`.comath/evidence/${claimId}/lean/LRUN-0062.stderr.log`, "");
@@ -108,6 +112,8 @@ const leanRunManifest = createServiceOwnedLeanRunManifestV3({
   elan_toolchain: "leanprover/lean4:v4.23.0",
   lean_toolchain_file: toolchain,
   lake_manifest_file: lakeManifest,
+  lean_binary_file: leanBinary,
+  lake_binary_file: lakeBinary,
   network_policy: "disabled",
   sandbox: "none",
   exit_code: 0,
@@ -119,6 +125,13 @@ const leanRunManifest = createServiceOwnedLeanRunManifestV3({
 });
 const leanRunManifestRel = `.comath/evidence/${claimId}/lean/LRUN-0062.manifest.json`;
 writeProjectFile(leanRunManifestRel, `${JSON.stringify(leanRunManifest, null, 2)}\n`);
+appendLeanRunManifestProvenanceIndexV1({
+  projectRoot,
+  project_id: "PRJ-0062",
+  actor: "goal3-task62",
+  manifest: leanRunManifest,
+  manifest_path: leanRunManifestRel
+});
 
 const staticAudit = writeProjectFile(`.comath/evidence/${claimId}/lean/final_static_audit.json`, `${JSON.stringify({ result: "pass", hard_vetoes: [] })}\n`);
 const structuredAuditRel = `.comath/evidence/${claimId}/lean/structured_audit.json`;
@@ -160,7 +173,9 @@ const finalReplayManifest = createFinalReplayManifestV3({
     "FormalSpec/target.json": hashRef(formalSpec),
     "lakefile.lean": hashRef(lakefile),
     "lean-toolchain": hashRef(toolchain),
-    "lake-manifest.json": hashRef(lakeManifest)
+    "lake-manifest.json": hashRef(lakeManifest),
+    "bin/lean": hashRef(leanBinary),
+    "bin/lake": hashRef(lakeBinary)
   },
   stdout_path: stdout,
   stderr_path: stderr,
@@ -179,10 +194,12 @@ const finalReplayManifest = createFinalReplayManifestV3({
   },
   network_policy: "disabled",
   sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" },
-  resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 }
+  resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 },
+  binary_hashes: { lean: sha256(leanBinary), lake: sha256(lakeBinary) }
 });
 const finalReplayManifestRel = `.comath/evidence/${claimId}/lean/final_replay_manifest_v3.json`;
 writeProjectFile(finalReplayManifestRel, `${JSON.stringify(finalReplayManifest, null, 2)}\n`);
+appendFinalReplayRegistryEntryV3(projectRoot, finalReplayManifest, { project_id: "PRJ-0062", actor: "goal3-task62" });
 const replayPack = writeThirdPartyReplayPackV3(projectRoot, finalReplayManifest);
 
 const forgedBindingEvidence = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceFromEvidenceV3({

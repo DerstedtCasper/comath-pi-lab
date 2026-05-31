@@ -266,8 +266,39 @@ function replayPackMatchesFinalReplay(
   const packExpectedHashes = readJsonInsideProject(projectRoot, join(relativePath, "expected_hashes.json"));
   return (
     canonicalBindingJson(packManifest) === canonicalBindingJson(finalReplayManifest) &&
-    canonicalBindingJson(packExpectedHashes) === canonicalBindingJson(expectedReplayPackHashes(finalReplayManifest))
+    canonicalBindingJson(packExpectedHashes) === canonicalBindingJson(expectedReplayPackHashes(finalReplayManifest)) &&
+    replayPackCleanFilesMatchFinalReplay(projectRoot, relativePath, finalReplayManifest)
   );
+}
+
+function replayPackCleanFilesMatchFinalReplay(
+  projectRoot: string,
+  relativePath: string,
+  finalReplayManifest: Record<string, unknown>
+): boolean {
+  const sourceHashes = finalReplayManifest.source_hashes_after;
+  if (!sourceHashes || typeof sourceHashes !== "object" || Array.isArray(sourceHashes)) {
+    return false;
+  }
+  for (const [sourcePath, expected] of Object.entries(sourceHashes as Record<string, unknown>)) {
+    if (!expected || typeof expected !== "object") {
+      return false;
+    }
+    const expectedRecord = expected as Record<string, unknown>;
+    try {
+      const cleanPath = assertPathAllowed(projectRoot, join(relativePath, "clean", sourcePath), {
+        purpose: "read",
+        resolveRealpath: true
+      });
+      const actual = sha256FileSync(cleanPath);
+      if (actual.sha256 !== expectedRecord.sha256 || actual.size_bytes !== expectedRecord.size_bytes) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 function stringArray(value: unknown): string[] {

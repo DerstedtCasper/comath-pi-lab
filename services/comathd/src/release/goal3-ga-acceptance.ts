@@ -19,6 +19,7 @@ import { promoteClaim } from "../verification/gate.js";
 import { evaluateStatementDiffGate } from "../proof-kernel/lean/statement-diff-gate.js";
 import {
   createServiceOwnedLeanRunManifestV3,
+  hasLeanRunManifestProvenanceIndexV1,
   parseLeanToolchainMetadata,
   runServiceOwnedLeanCommandV3,
   verifyLeanRunManifestV3Evidence
@@ -3422,8 +3423,35 @@ function replayPackMatchesFinalReplay(projectRoot: string, path: string, finalRe
   const finalReplayRecord = finalReplayManifest as Record<string, unknown>;
   return (
     canonicalJson(packManifest) === canonicalJson(finalReplayManifest) &&
-    canonicalJson(packExpectedHashes) === canonicalJson(expectedReplayPackHashes(finalReplayRecord))
+    canonicalJson(packExpectedHashes) === canonicalJson(expectedReplayPackHashes(finalReplayRecord)) &&
+    replayPackCleanFilesMatchFinalReplay(projectRoot, path, finalReplayRecord)
   );
+}
+
+function replayPackCleanFilesMatchFinalReplay(projectRoot: string, path: string, finalReplayManifest: Record<string, unknown>): boolean {
+  const sourceHashes = finalReplayManifest.source_hashes_after;
+  if (!sourceHashes || typeof sourceHashes !== "object" || Array.isArray(sourceHashes)) {
+    return false;
+  }
+  for (const [sourcePath, expected] of Object.entries(sourceHashes as Record<string, unknown>)) {
+    if (!expected || typeof expected !== "object") {
+      return false;
+    }
+    const expectedRecord = expected as Record<string, unknown>;
+    try {
+      const cleanPath = join(projectRoot, path, "clean", sourcePath);
+      if (!evidencePathExistsInsideProject(projectRoot, `${path}/clean/${sourcePath}`)) {
+        return false;
+      }
+      const actual = sha256File(cleanPath);
+      if (actual !== expectedRecord.sha256 || statSync(cleanPath).size !== expectedRecord.size_bytes) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 function pm002FinalPackagingReportPath(kind: "blocker" | "report"): string {
@@ -3737,7 +3765,10 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
   for (const manifestPath of leanRunManifestPaths) {
     const manifest = readJsonInsideProject(input.projectRoot, manifestPath);
     const verification = verifyLeanRunManifestV3Evidence(input.projectRoot, manifest);
-    if (!verification.ok) {
+    if (
+      !verification.ok ||
+      !hasLeanRunManifestProvenanceIndexV1({ projectRoot: input.projectRoot, manifest, manifest_path: manifestPath })
+    ) {
       missing.add("lean_run_manifest_v3");
     }
   }
@@ -3751,6 +3782,12 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
     finalReplayRecord.proof_authority === "lean_kernel_clean_replay";
   if (!finalReplayManifestPath || !finalReplayVerification.ok || !finalReplayPassed) {
     missing.add("final_replay_manifest_v3");
+  }
+  if (finalReplayPassed && !hasFinalReplayRegistryProvenanceV3(input.projectRoot, finalReplayManifest)) {
+    missing.add("final_replay_manifest_v3");
+  }
+  if (finalReplayPassed && !hasLeanLakeBinaryHashProvenanceV3(input.projectRoot, finalReplayManifest)) {
+    missing.add("lean_run_manifest_v3");
   }
   const finalReplayLeanRunManifestPaths = Array.isArray(finalReplayRecord.lean_run_manifest_paths)
     ? finalReplayRecord.lean_run_manifest_paths.filter((path): path is string => typeof path === "string" && path.length > 0)

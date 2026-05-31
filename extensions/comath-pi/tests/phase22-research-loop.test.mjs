@@ -188,6 +188,15 @@ function createLoopClient(stages = ["context_built", "planning", "completed_form
       if (path.startsWith("/gate/list")) {
         return { gates: [{ id: "GR-0001", claim_id: "C-0001", ok: true, vetoes: [], warnings: [] }] };
       }
+      if (path.startsWith("/campaign/CAM-0001/export")) {
+        return {
+          export_manifest: {
+            evidence_pack_ready: options.exportAuthorityPassed === true,
+            proof_authority: options.exportAuthorityPassed === true ? "lean_kernel_clean_replay" : "none",
+            can_promote_claim: false
+          }
+        };
+      }
       if (path.startsWith("/paper/state")) {
         return { margin_notes: [] };
       }
@@ -255,7 +264,7 @@ const result = await runResearchCampaignLoop(directHarness.client, loopInput);
 assert.equal(result.campaign.campaign_id, "CAM-0001");
 assert.equal(result.campaign.current_stage, "completed_formal_proof");
 assert.equal(result.campaign.external_v3_terminal_state, "formal_proof_verified");
-assert.equal(result.external_v3_terminal_state, "formal_proof_verified");
+assert.equal(result.external_v3_terminal_state, undefined, "stale external proof state must not be surfaced without export authority");
 assert.equal(result.goal_terminal_state, undefined, "stale external proof state must not map to goal proof success without authority flag");
 assert.equal(result.terminal, true);
 assert.equal(result.stopped_reason, "terminal");
@@ -280,10 +289,12 @@ assert.equal(
 const authorityGoalModeHarness = createLoopClient(["completed_formal_proof"], [], {
   goalModeTerminalState: "formal_replay_passed",
   formalReplayAuthorityPassed: true,
-  formalReplayAuthorityEvidence: true
+  formalReplayAuthorityEvidence: true,
+  exportAuthorityPassed: true
 });
 const authorityGoalMode = await runResearchCampaignLoop(authorityGoalModeHarness.client, loopInput);
 assert.equal(authorityGoalMode.goal_terminal_state, "formal_replay_passed");
+assert.equal(authorityGoalMode.external_v3_terminal_state, "formal_proof_verified");
 
 const flagOnlyHarness = createLoopClient(["completed_formal_proof"], [], {
   goalModeTerminalState: "formal_replay_passed",
