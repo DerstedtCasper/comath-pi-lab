@@ -71,6 +71,7 @@ const audit = writeProjectFile(`${cleanRootRel}/Audit/TargetAudit.lean`, "import
 const formalSpecLock = {
   schema_version: "comath.formal_spec_lock.v2",
   task_id: taskId,
+  claim_id: claimId,
   namespace: "MathResearch",
   theorem_name: "Goal3Positive062",
   theorem_header: "theorem Goal3Positive062 : True",
@@ -78,8 +79,10 @@ const formalSpecLock = {
   proof_authority: "none"
 };
 const assumptionLedger = {
-  schema_version: "comath.assumption_ledger.v2",
+  schema_version: "comath.assumption_ledger.v1",
   task_id: taskId,
+  claim_id: claimId,
+  formal_spec_lock_hash: formalSpecLock.statement_hash,
   entries: [],
   proof_authority: "none"
 };

@@ -1,3 +1,26 @@
+# Goal 3 Task 94 / Final-Authority Binding Schema And Matrix Consumer Semantics
+
+Scope: close the Task91-93 check-debug gap where final-authority derived binding material could omit explicit claim-bound FormalSpecLock / AssumptionLedger fields while still verifying, and prevent the GA acceptance positive matrix from inheriting proof authority from a separate representative fixture.
+
+Work performed:
+
+- Added `goal3-task94-final-authority-formal-spec-schema-gate.test.mjs`. RED showed malformed FormalSpecLock / AssumptionLedger material still returned `verified_final_authority_evidence`; GREEN now requires explicit `schema_version`, `task_id`, `claim_id`, `statement_hash` / `formal_spec_lock_hash`, theorem identity, and `proof_authority: "none"` in both packaging and ordinary promotion-gate derived binding checks.
+- Added `goal3-task94-positive-matrix-consumer-semantics.test.mjs`. RED showed `runGoal3GaAcceptanceWorkflow()` rewrote the first positive-matrix seed into `representative_verified_fixture` with `lean_kernel_clean_replay`; GREEN now leaves the 100-task positive matrix as replayable blockers and keeps the representative proof workflow separate.
+- Reworked default `@comath/comathd` test execution through `scripts/run-default-tests.mjs` after Windows rejected the previous long package test command line.
+- Updated final-authority positive fixtures to carry explicit claim-bound FormalSpecLock / AssumptionLedger binding fields.
+- Added a Goal 3 supersession note to `docs/progress/product-readiness-matrix.md`; also corrected the external agent prompt source so only Lean4/mathlib clean replay is proof authority, with computation/literature/search/votes remaining evidence or hints only.
+
+Verification evidence:
+
+- TDD RED: `node services/comathd/tests/unit/goal3-task94-final-authority-formal-spec-schema-gate.test.mjs` initially failed because malformed bindings verified.
+- TDD RED: `node services/comathd/tests/unit/goal3-task94-positive-matrix-consumer-semantics.test.mjs` initially failed because the positive matrix rewrote `PM-001` as proof-authority fixture evidence.
+- GREEN focused tests: Task94 schema gate, Task94 consumer semantics, Task17 acceptance workflow, Task62/64/70/90/91 final-authority regressions.
+- `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and full `corepack pnpm --filter @comath/comathd test` exited 0.
+- Static scans over `services/comathd/src` and `extensions/comath-pi/src` found no direct claim-status mutation writes, no `can_promote_claim: true`, no `direct_claim_mutation: true`, no non-Lean proof-authority assignment, and no restored `Lean Nat notation` / `Lean Nat syntax` production wording. Remaining `n : Nat` hits are documented historical/negative fixtures.
+- `where.exe lean` and `where.exe lake` resolve to elan shims, but `lean --version` and `lake --version` still fail with no default toolchain configured; Task94 did not install or configure Lean.
+
+Boundary notes: Task94 is still not live Lean/mathlib proof execution. It hardens evidence binding and consumer semantics while preserving fail-closed behavior on this workstation's missing Lean toolchain. Broader live replay, real Pi/Codex lifecycle validation, OS-level sandboxing, and complete GA release validation remain open.
+
 # Goal 3 Task 92 / Dashboard Audit Evidence Semantics
 
 Scope: fix Pi dashboard read-model wording so `audit` evidence from real replay attempt archives is not rendered as generic `runner` evidence.

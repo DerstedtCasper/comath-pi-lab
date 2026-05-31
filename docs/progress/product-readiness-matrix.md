@@ -9,6 +9,8 @@ The current product claim is bounded: CoMath Pi Lab is a local auditable researc
 
 For Goal 2, "current product output" means the implemented v3 slices are real `comathd` / Pi product surfaces with tests and release evidence, while remaining global-GA blockers stay explicit. The Phase 67 positive slice and Phase 68 negative slice runner are implementation evidence, not a license to overclaim arbitrary theorem synthesis.
 
+Goal 3 supersession note: this matrix is retained as historical Goal 2/Phase evidence. Current Goal 3 acceptance treats registered theorem-family and controlled Nat-linear slices as quarantined historical fixtures unless a current claim is bound to FormalSpecLock, AssumptionLedger, dependency lock, LeanRunManifest v3, FinalReplayManifest v3, append-only replay registry provenance, and ordinary promotion-gate review. Positive-matrix representative seeds remain replayable blockers until each seed has its own clean Lean/mathlib replay evidence.
+
 ## Requirement Matrix
 
 | Requirement | Current evidence | Classification | Task follow-up |

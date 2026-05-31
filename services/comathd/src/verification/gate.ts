@@ -367,15 +367,6 @@ function hashJsonInsideProject(projectRoot: string, relativePath: string): strin
   return value === null ? null : sha256Text(canonicalBindingJson(value));
 }
 
-function projectJsonTaskId(projectRoot: string, relativePath: string): string | null {
-  const value = readJsonInsideProject(projectRoot, relativePath);
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-  const taskId = (value as Record<string, unknown>).task_id;
-  return typeof taskId === "string" ? taskId : null;
-}
-
 function projectJsonStringField(projectRoot: string, relativePath: string, field: string): string | null {
   const value = readJsonInsideProject(projectRoot, relativePath);
   if (!value || typeof value !== "object") {
@@ -385,9 +376,44 @@ function projectJsonStringField(projectRoot: string, relativePath: string, field
   return typeof fieldValue === "string" ? fieldValue : null;
 }
 
-function projectJsonOptionalStringFieldMatches(projectRoot: string, relativePath: string, field: string, expected: string): boolean {
-  const value = projectJsonStringField(projectRoot, relativePath, field);
-  return value === null || value === expected;
+function projectFormalSpecLockBindingValid(input: {
+  projectRoot: string;
+  relativePath: string;
+  taskId: unknown;
+  claimId: string;
+  lockedStatementHash: string;
+  finalReplayManifest: Record<string, unknown>;
+  statementCheckPath: string;
+}): boolean {
+  const value = readJsonInsideProject(input.projectRoot, input.relativePath);
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return (
+    record.schema_version === "comath.formal_spec_lock.v2" &&
+    record.proof_authority === "none" &&
+    record.task_id === input.taskId &&
+    record.claim_id === input.claimId &&
+    formalSpecTheoremIdentityMatches(input.projectRoot, input.relativePath, input.finalReplayManifest) &&
+    record.statement_hash === input.lockedStatementHash &&
+    record.statement_hash === projectJsonStringField(input.projectRoot, input.statementCheckPath, "locked_statement_hash")
+  );
+}
+
+function projectAssumptionLedgerBindingValid(input: {
+  projectRoot: string;
+  relativePath: string;
+  taskId: unknown;
+  claimId: string;
+  lockedStatementHash: string;
+}): boolean {
+  const value = readJsonInsideProject(input.projectRoot, input.relativePath);
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return (
+    record.schema_version === "comath.assumption_ledger.v1" &&
+    record.proof_authority === "none" &&
+    record.task_id === input.taskId &&
+    record.claim_id === input.claimId &&
+    record.formal_spec_lock_hash === input.lockedStatementHash
+  );
 }
 
 function shortLeanDeclarationName(name: string): string {
@@ -541,22 +567,24 @@ function hasVerifiedDerivedBindingManifest(
   return (
     typeof bindingRecord.formal_spec_lock_path === "string" &&
     hashJsonInsideProject(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.formal_spec_lock_sha256 &&
-    projectJsonTaskId(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.task_id &&
-    projectJsonOptionalStringFieldMatches(projectRoot, bindingRecord.formal_spec_lock_path, "claim_id", bindingRecord.claim_id as string) &&
-    formalSpecTheoremIdentityMatches(projectRoot, bindingRecord.formal_spec_lock_path, finalReplayManifest) &&
-    projectJsonStringField(projectRoot, bindingRecord.formal_spec_lock_path, "statement_hash") === request.locked_statement_hash &&
-    projectJsonStringField(projectRoot, bindingRecord.formal_spec_lock_path, "statement_hash") ===
-      projectJsonStringField(projectRoot, report.statement_check_path as string, "locked_statement_hash") &&
+    projectFormalSpecLockBindingValid({
+      projectRoot,
+      relativePath: bindingRecord.formal_spec_lock_path,
+      taskId: bindingRecord.task_id,
+      claimId: bindingRecord.claim_id as string,
+      lockedStatementHash: request.locked_statement_hash,
+      finalReplayManifest,
+      statementCheckPath: report.statement_check_path as string
+    }) &&
     typeof bindingRecord.assumption_ledger_path === "string" &&
     hashJsonInsideProject(projectRoot, bindingRecord.assumption_ledger_path) === bindingRecord.assumption_ledger_sha256 &&
-    projectJsonTaskId(projectRoot, bindingRecord.assumption_ledger_path) === bindingRecord.task_id &&
-    projectJsonOptionalStringFieldMatches(projectRoot, bindingRecord.assumption_ledger_path, "claim_id", bindingRecord.claim_id as string) &&
-    projectJsonOptionalStringFieldMatches(
+    projectAssumptionLedgerBindingValid({
       projectRoot,
-      bindingRecord.assumption_ledger_path,
-      "formal_spec_lock_hash",
-      request.locked_statement_hash
-    ) &&
+      relativePath: bindingRecord.assumption_ledger_path,
+      taskId: bindingRecord.task_id,
+      claimId: bindingRecord.claim_id as string,
+      lockedStatementHash: request.locked_statement_hash
+    }) &&
     dependencyLockHash === bindingRecord.dependency_lock_sha256 &&
     artifactHashesHash === bindingRecord.artifact_hashes_sha256 &&
     dependencyLock.lean_toolchain_sha256 === bindingRecord.toolchain_sha256 &&

@@ -115,7 +115,7 @@ function createPm084DeclaredReplayMaterial(claim) {
     proof_authority: "none"
   });
   writeJsonProjectFile(source.assumption_ledger_path, {
-    schema_version: "comath.assumption_ledger.v2",
+    schema_version: "comath.assumption_ledger.v1",
     task_id: taskId,
     claim_id: claim.id,
     formal_spec_lock_hash: claim.statement_hash,

@@ -3241,11 +3241,6 @@ function jsonStringField(value: unknown, field: string): string | null {
   return typeof fieldValue === "string" ? fieldValue : null;
 }
 
-function optionalStringFieldMatches(value: unknown, field: string, expected: string): boolean {
-  const actual = jsonStringField(value, field);
-  return actual === null || actual === expected;
-}
-
 function shortLeanDeclarationName(name: string): string {
   return name.split(".").filter(Boolean).at(-1) ?? name;
 }
@@ -3336,10 +3331,12 @@ function verifyOptionalFinalAuthorityBindings(input: {
       ? hashProjectJsonFile(input.projectRoot, evidence.formal_spec_lock_path)
       : null;
     if (
+      formalSpecLockRecord.schema_version !== "comath.formal_spec_lock.v2" ||
+      formalSpecLockRecord.proof_authority !== "none" ||
       !validSha256(evidence.formal_spec_lock_sha256) ||
       actualHash !== evidence.formal_spec_lock_sha256 ||
       formalSpecLockRecord.task_id !== input.taskId ||
-      !optionalStringFieldMatches(formalSpecLock, "claim_id", input.claimId) ||
+      formalSpecLockRecord.claim_id !== input.claimId ||
       !formalSpecTheoremIdentityMatches(formalSpecLock, finalReplayRecord) ||
       lockedStatementHash === null ||
       formalSpecLockRecord.statement_hash !== lockedStatementHash
@@ -3360,15 +3357,14 @@ function verifyOptionalFinalAuthorityBindings(input: {
       ? hashProjectJsonFile(input.projectRoot, evidence.assumption_ledger_path)
       : null;
     if (
+      assumptionLedgerRecord.schema_version !== "comath.assumption_ledger.v1" ||
+      assumptionLedgerRecord.proof_authority !== "none" ||
       !validSha256(evidence.assumption_ledger_sha256) ||
       actualHash !== evidence.assumption_ledger_sha256 ||
       assumptionLedgerRecord.task_id !== input.taskId ||
-      !optionalStringFieldMatches(assumptionLedger, "claim_id", input.claimId) ||
-      (
-        lockedStatementHash !== null &&
-        jsonStringField(assumptionLedger, "formal_spec_lock_hash") !== null &&
-        assumptionLedgerRecord.formal_spec_lock_hash !== lockedStatementHash
-      )
+      assumptionLedgerRecord.claim_id !== input.claimId ||
+      lockedStatementHash === null ||
+      assumptionLedgerRecord.formal_spec_lock_hash !== lockedStatementHash
     ) {
       input.missing.add("assumption_ledger_binding");
     }
@@ -4298,13 +4294,6 @@ export function runGoal3GaAcceptanceWorkflow(input: {
       all_required_cases_fail_closed: missingRequiredCases.length === 0 && cases.every((item) => item.result === "blocked" && !item.can_promote_claim)
     },
     positive_workflow: positiveWorkflow,
-    positive_matrix: {
-      ...matrix,
-      representative_seeds: matrix.representative_seeds.map((seed, index) =>
-        index === 0
-          ? { ...seed, status: "representative_verified_fixture", proof_authority: "lean_kernel_clean_replay" }
-          : seed
-      )
-    }
+    positive_matrix: matrix
   };
 }

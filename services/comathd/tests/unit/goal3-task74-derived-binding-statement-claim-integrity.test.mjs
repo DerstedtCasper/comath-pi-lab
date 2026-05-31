@@ -84,7 +84,7 @@ try {
     proof_authority: "none"
   }, null, 2)}\n`);
   const assumptionLedger = writeProjectFile(assumptionLedgerRel, `${JSON.stringify({
-    schema_version: "comath.assumption_ledger.v2",
+    schema_version: "comath.assumption_ledger.v1",
     task_id: taskId,
     claim_id: claim.id,
     formal_spec_lock_hash: driftedStatementHash,

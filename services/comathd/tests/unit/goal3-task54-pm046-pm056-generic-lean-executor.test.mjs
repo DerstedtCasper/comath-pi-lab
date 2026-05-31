@@ -19,7 +19,7 @@ function writeJsonProjectFile(projectRoot, relativePath, value) {
   writeProjectFile(projectRoot, relativePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function createDeclaredReplayMaterial(projectRoot, taskId) {
+function createDeclaredReplayMaterial(projectRoot, taskId, claimId = `C-${taskId}`) {
   const materialRoot = `.comath/release/positive_matrix/${taskId}`;
   const theoremName = `Goal3Positive${taskId.slice(3)}`;
   const source = {
@@ -81,13 +81,16 @@ function createDeclaredReplayMaterial(projectRoot, taskId) {
   writeJsonProjectFile(projectRoot, source.formal_spec_lock_path, {
     schema_version: "comath.formal_spec_lock.v2",
     task_id: taskId,
+    claim_id: claimId,
     theorem_name: theoremName,
     statement_hash: `${taskId}-statement-hash`,
     proof_authority: "none"
   });
   writeJsonProjectFile(projectRoot, source.assumption_ledger_path, {
-    schema_version: "comath.assumption_ledger.v2",
+    schema_version: "comath.assumption_ledger.v1",
     task_id: taskId,
+    claim_id: claimId,
+    formal_spec_lock_hash: `${taskId}-statement-hash`,
     entries: [],
     proof_authority: "none"
   });
@@ -123,7 +126,7 @@ const selected = manifest.tasks.filter((task) => task.task_id >= "PM-046" && tas
 assert.equal(selected.length, 11, "PM-046 through PM-056 must form an 11-task bounded tranche");
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task54-generic-executor-"));
-const pm046Source = createDeclaredReplayMaterial(projectRoot, "PM-046");
+const pm046Source = createDeclaredReplayMaterial(projectRoot, "PM-046", "C-0046");
 const failingReplayCommands = [];
 const failedReplayReport = executeGoal3GaPositiveMatrixLeanAuthorityReplay({
   projectRoot,
