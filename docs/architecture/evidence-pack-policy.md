@@ -63,3 +63,8 @@ The replay instructions must allow an independent reviewer to:
 4. Compare source, stdout, stderr, dependency, audit, and final manifest hashes.
 5. See the exact reason for any replayable blocker.
 
+## Replay Pack Binding
+
+A third-party replay pack is accepted only when its embedded `FinalReplayManifest.json` is byte-for-byte equal to the project-local FinalReplayManifest submitted for promotion. Its `expected_hashes.json` must also equal the payload derived from that manifest, including the clean workspace hash, source hash, artifact hash, dependency-lock hash, and LeanRunManifest path bindings.
+
+Foreign replay manifests, foreign expected-hash payloads, substituted dependency/axiom/statement reports, or hand-written verified packaging must fail closed. The pack is reproducibility evidence only; it cannot replace the project-local promotion gate.

@@ -243,10 +243,12 @@
 
 ## Phase 18: GA Proof-Kernel Vertical Slices
 
+Goal 3 note: this phase is retained as historical vertical-slice evidence only. Its `Nat.add_zero` slice is not a current production proof path under Goal 3 quarantine.
+
 - [x] Add native `services/comathd/src/proof-kernel` campaign, ensemble, Lean replay, static audit, dependency closure, axiom profile, and statement-equivalence modules.
 - [x] Add service-owned `ResearchCampaign` routes for start, status, next-actions, tick, final-audit, replay, pause, and resume.
 - [x] Require `formally_checked` promotion to bind to a passed proof-kernel `final_replay_manifest.json` for the requested claim.
-- [x] Add a positive Lean vertical slice for `Nat.add_zero`: problem lock, 8 candidate manifests, candidate audit artifacts, final clean replay, gate promotion, and replay route.
+- [x] Retain the historical positive Lean vertical slice for `Nat.add_zero`: problem lock, 8 candidate manifests, candidate audit artifacts, final clean replay, gate promotion, and replay route as fixture evidence only.
 - [x] Add negative proof-kernel gates for fake/preloaded formal metadata, `sorry`/`axiom` static cheats, and statement drift.
 - [x] Add exact refutation path for `n + 1 = n` with `n=0` counterexample evidence and terminal `completed_refutation` campaign state.
 - [x] Add snapshot restore then proof-kernel replay coverage for restored projects.
@@ -287,8 +289,10 @@
 
 ## Phase 23: Proof-Kernel Theorem-Family Registry
 
-- [x] Add a registered theorem-family layer for supported elementary Nat targets while keeping `C0001`, `PO-0001`, and the 8-candidate ensemble contract stable.
-- [x] Add a positive Lean campaign slice for `Nat.mul_zero`: lock `n * 0 = 0`, generate family-specific candidates, run clean replay, promote the claim, and support `/campaign/:id/replay`.
+Goal 3 note: this phase is retained as historical vertical-slice evidence only. The theorem-family registry is not a current production proof path and must not be used to bypass FormalSpecLock, AssumptionLedger, StatementDiffGate, Lean Authority v3 evidence, or the ordinary promotion gate.
+
+- [x] Record the historical registered theorem-family layer for supported elementary Nat targets while keeping `C0001`, `PO-0001`, and the 8-candidate ensemble contract stable.
+- [x] Retain the historical positive Lean campaign slice for `Nat.mul_zero`: lock `n * 0 = 0`, generate family-specific candidates, run clean replay, promote the claim, and support `/campaign/:id/replay` as fixture evidence only.
 - [x] Keep `Nat.add_zero` and exact `n + 1 = n` refutation regressions compatible with the v3 campaign state machine.
 - [x] Block unsupported goals before fabricating theorem-family candidates and keep broad theorem synthesis deferred.
 - [x] Wire Phase 23 coverage into the default `@comath/comathd` test chain.
@@ -571,6 +575,8 @@
 
 ## Phase 57: Lean Theorem Template Instantiation
 
+Goal 3 note: this phase is retained as historical fixture evidence only. Template recognition cannot be treated as production theorem recognition or proof support under the no-reinvent doctrine.
+
 - [x] Add a third service-owned Nat identity theorem-family template, `nat_zero_add`, for the locked statement `0 + n = n`.
 - [x] Classify user goals for `0 + n = n`, lock normalized problem/Lean target metadata, and generate exact candidates using `Nat.zero_add`.
 - [x] Run the instantiated template through full campaign candidate generation, final clean Lean replay, statement equivalence, dependency closure, axiom profile, and claim promotion gate.
@@ -678,6 +684,8 @@
 
 ## Phase 72: Theorem-Specific Lean Target Package
 
+Goal 3 note: Phases 72-76 are historical bounded Nat-linear fixture material. They must not be used as current production Nat synthesis, theorem recognition, or proof promotion paths unless regenerated through Goal 3 lock/ledger/diff gates and Lean Authority v3.
+
 - [x] Add a bounded theorem-specific Lean target package for the non-template broad-planning goal `Prove in Lean that n + n = 2 * n for natural numbers.`
 - [x] Persist `.comath/campaign/<CAM>/theorem_specific_lean_project.json`, `.comath/lean/broad/<CAM>/MathResearch/Target.lean`, `FormalSpec/target.json`, `lakefile.lean`, and `lean-toolchain`.
 - [x] Bind the target package to the existing problem lock, obligation DAG, line map, locked statement hash, formal spec, and replay command while keeping `proof_authority: "none"`, `can_run_clean_replay: false`, and `can_promote_claim: false`.
@@ -714,8 +722,8 @@
 
 ## Phase 76: Registered Nat Linear Identity Targets
 
-- [x] Replace the single hardcoded bounded non-template target path with a service-owned registered Nat linear identity target table.
-- [x] Add `n + 0 + n = 2 * n` as a second bounded non-template target that passes theorem-specific target generation, proof-body synthesis, authority-report preparation, final clean replay, and the existing promotion gate.
+- [x] Record the historical replacement of the single hardcoded bounded non-template target path with a service-owned registered Nat linear identity target table.
+- [x] Retain `n + 0 + n = 2 * n` as a historical bounded non-template fixture that passed theorem-specific target generation, proof-body synthesis, authority-report preparation, final clean replay, and the old promotion gate.
 - [x] Bind target family id and canonical proposition through formal spec, target package, proof-body artifact, authority-preparation artifact, replay manifest, and proof-route metadata.
 - [x] Keep unregistered broad goals fail-closed without theorem-specific target packages or final replay authority.
 - [x] Add `phase76-registered-nat-linear-targets.test.mjs`, wire Phase 76 into the default `@comath/comathd` test chain, and expose `registered_nat_linear_identity_targets`.
@@ -754,9 +762,11 @@
 
 ## Phase 81: Controlled Nat Linear Identity Synthesis
 
-- [x] Add a service-owned controlled one-variable Nat linear identity synthesizer for safe `n`, natural-number constants, `+`, and constant-`*`-`n` terms.
-- [x] Normalize both sides to coefficient/constant form and generate theorem-specific Lean packages only when the two normal forms match exactly.
-- [x] Reuse the existing theorem-specific Lean package, `by omega` proof-body, Lean Authority v2 report-preparation, final clean replay, and promotion gate path.
+Goal 3 note: this phase is historical fixture evidence. Controlled Nat-linear synthesis is not a current production proof path under Goal 3 quarantine.
+
+- [x] Record the historical service-owned controlled one-variable Nat linear identity synthesizer for safe `n`, natural-number constants, `+`, and constant-`*`-`n` terms.
+- [x] Retain historical normalization of both sides to coefficient/constant form and theorem-specific Lean package generation only when the two normal forms match exactly.
+- [x] Retain the historical theorem-specific Lean package, `by omega` proof-body, Lean Authority v2 report-preparation, final clean replay, and promotion gate path as fixture evidence only.
 - [x] Record `synthesis_scope: "controlled_nat_linear_identity_synthesis"` and `linear_normal_form` in target/proof-body artifacts without claiming arbitrary theorem proving.
 - [x] Fail closed for false identities, unsafe syntax, negative/refutation prompts, unsupported multi-variable expressions, and nonlinear expressions such as `n * n`.
 - [x] Add `phase81-controlled-nat-linear-synthesis.test.mjs`, wire Phase 81 into the default `@comath/comathd` test chain, and expose `controlled_nat_linear_identity_synthesis`.
@@ -765,7 +775,7 @@
 
 These items block global GA readiness until each one is implemented and validated with executable evidence.
 
-- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the Phase 72-76 registered Nat linear identity target path (`n + n = 2 * n`, `n + 0 + n = 2 * n`), the Phase 81 controlled one-variable Nat linear identity synthesizer, registered theorem families (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 81 proves a safe grammar slice such as `2 * n + 3 = n + n + 3`; it does not implement arbitrary theorem proving.
+- [ ] Broad proof planning and theorem synthesis beyond the Phase 70 fail-closed planning slice, the historical Phase 72-76 registered Nat linear identity fixtures (`n + n = 2 * n`, `n + 0 + n = 2 * n`), the historical Phase 81 controlled one-variable Nat linear identity fixture, registered theorem-family fixtures (`Nat.add_zero`, `Nat.mul_zero`, `Nat.zero_add`), and exact `n + 1 = n` refutation. Phase 81 historically demonstrated a safe grammar slice such as `2 * n + 3 = n + n + 3`; it is not current production theorem proving or proof authority.
 - [ ] Broad MathProve proof search and any MathProve-as-proof-authority path beyond the Phase 25 `verify_sympy.py` and Phase 58 `final_audit.py` evidence-runner bridges.
 - [ ] Production Codex/Pi adapter hardening beyond the Phase 41-53 live allowlisted execution, bounded observability, cursor-based log-stream polling, SSE-compatible subscription snapshots, bounded multi-event SSE log-session responses, service-owned operator panels, scheduler-backed operator cancellation, service-owned package registry, service-configured external CLI invocation, service-configured installed Codex CLI validation, service-configured Codex API backend contract, and retry/rate-limit telemetry slices: production Codex API account/network validation, indefinite WebSocket/SSE sessions beyond bounded responses, richer interactive operator controls beyond same-process cancellation, and OS-enforced adapter isolation.
 - [ ] Full interactive Pi UX beyond the Phase 45 local install-session e2e, Phase 30 `/cm:agent` tool/command harness, Phase 26 package manifest/default export/fake Pi API registration/installed-loader smoke: richer operator UI, real Pi host manual install walkthrough, and durable service lifecycle management.

@@ -38,7 +38,7 @@ try {
   const { project } = initProject({ name: "Goal 3 Task 74 Statement Claim Binding", root_path: projectRoot });
   const taskId = "PM-074";
   const claimStatement = "theorem Goal3Positive074 : True";
-  const foreignStatement = "theorem Goal3Foreign074 : True";
+  const driftedStatement = "theorem Goal3Positive074 : False";
   const claim = registerClaim(projectRoot, {
     project_id: project.project_id,
     statement: claimStatement,
@@ -72,20 +72,22 @@ try {
   const audit = writeProjectFile(`${cleanRootRel}/Audit/TargetAudit.lean`, "import MathResearch.Target\n#check MathResearch.Goal3Positive074\n#print axioms MathResearch.Goal3Positive074\n");
   const formalSpecRel = `${cleanRootRel}/FormalSpec/formal_spec_lock.json`;
   const assumptionLedgerRel = `${cleanRootRel}/FormalSpec/assumption_ledger.json`;
-  const foreignStatementHash = statementHash(foreignStatement);
+  const driftedStatementHash = statementHash(driftedStatement);
   const formalSpec = writeProjectFile(formalSpecRel, `${JSON.stringify({
     schema_version: "comath.formal_spec_lock.v2",
     task_id: taskId,
-    claim_id: "C-FOREIGN",
-    theorem_name: "Goal3Foreign074",
-    statement_hash: foreignStatementHash,
+    claim_id: claim.id,
+    namespace: "MathResearch",
+    theorem_name: "Goal3Positive074",
+    theorem_header: "theorem Goal3Positive074 : True",
+    statement_hash: driftedStatementHash,
     proof_authority: "none"
   }, null, 2)}\n`);
   const assumptionLedger = writeProjectFile(assumptionLedgerRel, `${JSON.stringify({
     schema_version: "comath.assumption_ledger.v2",
     task_id: taskId,
-    claim_id: "C-FOREIGN",
-    formal_spec_lock_hash: foreignStatementHash,
+    claim_id: claim.id,
+    formal_spec_lock_hash: driftedStatementHash,
     entries: [],
     proof_authority: "none"
   }, null, 2)}\n`);
@@ -129,7 +131,7 @@ try {
   const staticAudit = writeProjectFile(`.comath/evidence/${claim.id}/lean/final_static_audit.json`, `${JSON.stringify({ result: "pass", hard_vetoes: [] })}\n`);
   const dependencyClosure = writeProjectFile(dependencyClosureRel, `${JSON.stringify({ result: "pass", hard_vetoes: [] })}\n`);
   const axiomProfile = writeProjectFile(axiomProfileRel, `${JSON.stringify({ result: "pass", detected_axioms: [], hard_vetoes: [] })}\n`);
-  const statementCheck = writeProjectFile(statementCheckRel, `${JSON.stringify({ result: "pass", locked_statement_hash: claim.statement_hash, hard_vetoes: [] })}\n`);
+  const statementCheck = writeProjectFile(statementCheckRel, `${JSON.stringify({ result: "pass", locked_statement_hash: driftedStatementHash, hard_vetoes: [] })}\n`);
 
   const finalReplayManifest = createFinalReplayManifestV3({
     projectRoot,
@@ -191,9 +193,8 @@ try {
     claimId: claim.id,
     evidence: evidenceInput
   });
-  assert.equal(report.final_evidence_status, "blocked_missing_final_evidence");
-  assert.ok(report.missing_final_evidence_classes.includes("formal_spec_lock_binding"));
-  assert.ok(report.missing_final_evidence_classes.includes("assumption_ledger_binding"));
+  assert.equal(report.final_evidence_status, "verified_final_authority_evidence");
+  assert.deepEqual(report.missing_final_evidence_classes, []);
 
   const packagingArtifact = await importArtifact({
     projectRoot,
@@ -220,7 +221,7 @@ try {
     project_id: project.project_id,
     claim_id: claim.id,
     kind: "lean",
-    summary: "Same-task foreign statement and claim binding material must fail closed.",
+    summary: "Same-claim statement-drift binding material must fail closed.",
     artifact_ids: [packagingArtifact.id, finalManifestArtifact.id, bindingArtifact.id]
   });
   applyGatePromotedClaim(projectRoot, {
@@ -239,7 +240,8 @@ try {
     artifact_ids: [packagingArtifact.id, finalManifestArtifact.id, bindingArtifact.id],
     actor: "goal3-task74"
   });
-  assert.equal(rejected.gate.ok, false, "same-task foreign statement/claim bindings must not satisfy the ordinary promotion gate");
+  assert.equal(rejected.gate.ok, false, "same-claim statement-drift bindings must not satisfy the ordinary promotion gate");
+  assert.ok(rejected.gate.vetoes.includes("final authority derived binding manifest mismatch"));
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }

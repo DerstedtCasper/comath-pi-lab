@@ -3014,28 +3014,83 @@ export function packageFinalAuthorityEvidenceV3(input: {
     throw new Error("invalid_final_authority_packaging_task_id");
   }
 
+  const derivedBinding = input.sourceReport.packaging_report_path.endsWith("/derived_final_authority_bindings_v3.json")
+    ? readJsonInsideProject(input.projectRoot, input.sourceReport.packaging_report_path)
+    : null;
+  const derivedBindingRecord = derivedBinding && typeof derivedBinding === "object"
+    ? (derivedBinding as Record<string, unknown>)
+    : {};
+  const derivedString = (field: string): string | undefined => {
+    const value = derivedBindingRecord[field];
+    return typeof value === "string" ? value : undefined;
+  };
+  const reverifiedSourceReport = verifyFinalAuthorityEvidenceSourceReportV3({
+    projectRoot: input.projectRoot,
+    taskId: input.taskId,
+    claimId: input.claimId,
+    evidence: {
+      lean_run_manifest_paths: input.sourceReport.lean_run_manifest_paths,
+      final_replay_manifest_v3_path: input.sourceReport.final_replay_manifest_v3_path,
+      structured_audit_path: input.sourceReport.structured_audit_path,
+      dependency_closure_path: input.sourceReport.dependency_closure_path,
+      axiom_profile_path: input.sourceReport.axiom_profile_path,
+      statement_check_path: input.sourceReport.statement_check_path,
+      third_party_replay_pack_path: input.sourceReport.third_party_replay_pack_path,
+      packaging_report_path: input.sourceReport.packaging_report_path,
+      formal_spec_lock_path: derivedString("formal_spec_lock_path"),
+      formal_spec_lock_sha256: derivedString("formal_spec_lock_sha256"),
+      assumption_ledger_path: derivedString("assumption_ledger_path"),
+      assumption_ledger_sha256: derivedString("assumption_ledger_sha256"),
+      dependency_lock_sha256: derivedString("dependency_lock_sha256"),
+      artifact_hashes_sha256: derivedString("artifact_hashes_sha256"),
+      toolchain_sha256: derivedString("toolchain_sha256"),
+      replay_manifest_sha256: derivedString("replay_manifest_sha256")
+    }
+  });
+  const mergedMissing = orderedMissingFinalEvidenceClasses(new Set([
+    ...input.sourceReport.missing_final_evidence_classes,
+    ...reverifiedSourceReport.missing_final_evidence_classes
+  ]));
+  const sourceReport: FinalAuthorityPackagingV3SourceReport = {
+    ...reverifiedSourceReport,
+    final_evidence_status: mergedMissing.length === 0 ? "verified_final_authority_evidence" : "blocked_missing_final_evidence",
+    blocker_code: mergedMissing.length === 0 ? "" : "final_authority_evidence_incomplete",
+    blocker_detail:
+      mergedMissing.length === 0
+        ? reverifiedSourceReport.blocker_detail
+        : `${input.taskId} final Lean Authority v3 evidence is missing or unverifiable after project-local re-verification.`,
+    missing_final_evidence_classes: mergedMissing,
+    source_verification: {
+      ...reverifiedSourceReport.source_verification,
+      verified_final_evidence_classes: reverifiedSourceReport.source_verification.verified_final_evidence_classes.filter(
+        (evidenceClass) => !mergedMissing.includes(evidenceClass)
+      ),
+      missing_final_evidence_classes: mergedMissing
+    },
+    proof_authority: mergedMissing.length === 0 ? reverifiedSourceReport.proof_authority : "none"
+  };
   const blockerPath = genericFinalPackagingReportPath(input.taskId, "blocker");
   const packagingReportPath = genericFinalPackagingReportPath(input.taskId, "report");
   const report: FinalAuthorityPackagingV3Report = {
     schema_version: "comath.final_authority_packaging.v3",
     task_id: input.taskId,
     claim_id: input.claimId,
-    final_evidence_status: input.sourceReport.final_evidence_status,
-    blocker_code: input.sourceReport.blocker_code,
-    blocker_detail: input.sourceReport.blocker_detail,
-    missing_final_evidence_classes: [...input.sourceReport.missing_final_evidence_classes],
-    lean_run_manifest_paths: [...input.sourceReport.lean_run_manifest_paths],
-    final_replay_manifest_v3_path: input.sourceReport.final_replay_manifest_v3_path,
-    structured_audit_path: input.sourceReport.structured_audit_path,
-    dependency_closure_path: input.sourceReport.dependency_closure_path,
-    axiom_profile_path: input.sourceReport.axiom_profile_path,
-    statement_check_path: input.sourceReport.statement_check_path,
-    third_party_replay_pack_path: input.sourceReport.third_party_replay_pack_path,
-    source_verification: input.sourceReport.source_verification,
-    blocker_path: input.sourceReport.missing_final_evidence_classes.length === 0 ? "" : blockerPath,
+    final_evidence_status: sourceReport.final_evidence_status,
+    blocker_code: sourceReport.blocker_code,
+    blocker_detail: sourceReport.blocker_detail,
+    missing_final_evidence_classes: [...sourceReport.missing_final_evidence_classes],
+    lean_run_manifest_paths: [...sourceReport.lean_run_manifest_paths],
+    final_replay_manifest_v3_path: sourceReport.final_replay_manifest_v3_path,
+    structured_audit_path: sourceReport.structured_audit_path,
+    dependency_closure_path: sourceReport.dependency_closure_path,
+    axiom_profile_path: sourceReport.axiom_profile_path,
+    statement_check_path: sourceReport.statement_check_path,
+    third_party_replay_pack_path: sourceReport.third_party_replay_pack_path,
+    source_verification: sourceReport.source_verification,
+    blocker_path: sourceReport.missing_final_evidence_classes.length === 0 ? "" : blockerPath,
     packaging_report_path: packagingReportPath,
-    source_packaging_report_path: input.sourceReport.packaging_report_path,
-    proof_authority: input.sourceReport.proof_authority,
+    source_packaging_report_path: sourceReport.packaging_report_path,
+    proof_authority: sourceReport.proof_authority,
     can_promote_claim: false,
     promotion_requires_gate: true
   };

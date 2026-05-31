@@ -21,6 +21,7 @@ import {
 } from "../types/schemas.js";
 import { nextSequentialId } from "../utils/id.js";
 import { verifyFinalReplayManifestV3 } from "../proof-kernel/lean/final-replay-manifest-v3.js";
+import { verifyLeanRunManifestV3Evidence } from "../proof-kernel/lean/lean-run-manifest-v3.js";
 import { runnerResultSha256, sha256Text } from "./runner-contracts.js";
 
 export type ClaimPromotionRequest = {
@@ -307,6 +308,33 @@ function replayPackMatchesFinalReplay(
   );
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0) : [];
+}
+
+function normalizedStoredPath(value: string): string {
+  return value.replace(/\\/g, "/");
+}
+
+function leanRunManifestPathsMatchAndVerify(
+  projectRoot: string,
+  report: Record<string, unknown>,
+  finalReplayManifest: Record<string, unknown>
+): boolean {
+  const reportPaths = stringArray(report.lean_run_manifest_paths).map(normalizedStoredPath);
+  const replayPaths = stringArray(finalReplayManifest.lean_run_manifest_paths).map(normalizedStoredPath);
+  if (reportPaths.length === 0 || reportPaths.length !== replayPaths.length) {
+    return false;
+  }
+  if (canonicalBindingJson(reportPaths) !== canonicalBindingJson(replayPaths)) {
+    return false;
+  }
+  return replayPaths.every((manifestPath) => {
+    const manifest = readJsonInsideProject(projectRoot, manifestPath);
+    return verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok;
+  });
+}
+
 function canonicalBindingJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
@@ -435,6 +463,7 @@ function requestedJsonArtifactByPath(projectRoot: string, artifacts: ArtifactRef
 
 function hasVerifiedDerivedBindingManifest(
   projectRoot: string,
+  request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
   report: Record<string, unknown>,
   finalReplayManifest: Record<string, unknown>,
   artifacts: ArtifactRef[]
@@ -455,6 +484,7 @@ function hasVerifiedDerivedBindingManifest(
     bindingRecord.schema_version !== "comath.final_authority_derived_bindings.v3" ||
     bindingRecord.task_id !== report.task_id ||
     bindingRecord.claim_id !== report.claim_id ||
+    bindingRecord.claim_id !== request.claim_id ||
     bindingRecord.binding_manifest_path !== report.source_packaging_report_path ||
     bindingRecord.final_replay_manifest_v3_path !== report.final_replay_manifest_v3_path ||
     bindingRecord.proof_authority !== "none" ||
@@ -501,6 +531,7 @@ function hasVerifiedDerivedBindingManifest(
     projectJsonTaskId(projectRoot, bindingRecord.formal_spec_lock_path) === bindingRecord.task_id &&
     projectJsonOptionalStringFieldMatches(projectRoot, bindingRecord.formal_spec_lock_path, "claim_id", bindingRecord.claim_id as string) &&
     formalSpecTheoremIdentityMatches(projectRoot, bindingRecord.formal_spec_lock_path, finalReplayManifest) &&
+    projectJsonStringField(projectRoot, bindingRecord.formal_spec_lock_path, "statement_hash") === request.locked_statement_hash &&
     projectJsonStringField(projectRoot, bindingRecord.formal_spec_lock_path, "statement_hash") ===
       projectJsonStringField(projectRoot, report.statement_check_path as string, "locked_statement_hash") &&
     typeof bindingRecord.assumption_ledger_path === "string" &&
@@ -511,7 +542,7 @@ function hasVerifiedDerivedBindingManifest(
       projectRoot,
       bindingRecord.assumption_ledger_path,
       "formal_spec_lock_hash",
-      projectJsonStringField(projectRoot, report.statement_check_path as string, "locked_statement_hash") ?? ""
+      request.locked_statement_hash
     ) &&
     dependencyLockHash === bindingRecord.dependency_lock_sha256 &&
     artifactHashesHash === bindingRecord.artifact_hashes_sha256 &&
@@ -529,7 +560,7 @@ function hasVerifiedDerivedBindingManifest(
 
 function hasVerifiedFinalAuthorityPackagingV3(
   projectRoot: string,
-  request: Pick<ClaimPromotionRequest, "claim_id">,
+  request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
   artifacts: ArtifactRef[]
 ): boolean {
   for (const packagingArtifact of artifacts) {
@@ -580,7 +611,10 @@ function hasVerifiedFinalAuthorityPackagingV3(
     if (!finalReplayVerification.ok) {
       continue;
     }
-    if (!hasVerifiedDerivedBindingManifest(projectRoot, report, finalReplay as Record<string, unknown>, artifacts)) {
+    if (!leanRunManifestPathsMatchAndVerify(projectRoot, report, finalReplay as Record<string, unknown>)) {
+      continue;
+    }
+    if (!hasVerifiedDerivedBindingManifest(projectRoot, request, report, finalReplay as Record<string, unknown>, artifacts)) {
       continue;
     }
     if (typeof report.structured_audit_path !== "string" || !reportPasses(projectRoot, report.structured_audit_path)) {
@@ -593,6 +627,9 @@ function hasVerifiedFinalAuthorityPackagingV3(
       continue;
     }
     if (typeof report.statement_check_path !== "string" || !reportPasses(projectRoot, report.statement_check_path)) {
+      continue;
+    }
+    if (projectJsonStringField(projectRoot, report.statement_check_path, "locked_statement_hash") !== request.locked_statement_hash) {
       continue;
     }
     if (
@@ -646,7 +683,11 @@ function hasPromotionGradeLeanAuthorityEvidence(
   );
 }
 
-function finalAuthorityDerivedBindingVetoes(projectRoot: string, artifacts: ArtifactRef[]): string[] {
+function finalAuthorityDerivedBindingVetoes(
+  projectRoot: string,
+  request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
+  artifacts: ArtifactRef[]
+): string[] {
   const vetoes: string[] = [];
   for (const artifact of artifacts) {
     const packaging = readJsonArtifact(projectRoot, artifact);
@@ -667,7 +708,7 @@ function finalAuthorityDerivedBindingVetoes(projectRoot: string, artifacts: Arti
     }
     const manifestPath = typeof report.final_replay_manifest_v3_path === "string" ? report.final_replay_manifest_v3_path : "";
     const finalReplay = readJsonInsideProject(projectRoot, manifestPath);
-    if (!finalReplay || typeof finalReplay !== "object" || !hasVerifiedDerivedBindingManifest(projectRoot, report, finalReplay as Record<string, unknown>, artifacts)) {
+    if (!finalReplay || typeof finalReplay !== "object" || !hasVerifiedDerivedBindingManifest(projectRoot, request, report, finalReplay as Record<string, unknown>, artifacts)) {
       vetoes.push("final authority derived binding manifest mismatch");
     }
   }
@@ -817,7 +858,7 @@ function statusEvidenceVetoes(projectRoot: string, claim: Claim, request: ClaimP
     if (!hasPromotionGradeLeanAuthorityEvidence(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts)) {
       vetoes.push("formally_checked requires hash-bound fresh final replay artifacts");
     }
-    vetoes.push(...finalAuthorityDerivedBindingVetoes(projectRoot, artifacts));
+    vetoes.push(...finalAuthorityDerivedBindingVetoes(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts));
   }
 
   return vetoes;

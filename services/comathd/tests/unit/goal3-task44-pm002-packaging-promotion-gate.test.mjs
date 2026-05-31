@@ -45,6 +45,9 @@ try {
     probeLakeVersion: () => ({ exit_code: 0, stdout: "Lake version 5.0.0", stderr: "" }),
     runReplayCommand: (command) => ({ exit_code: 0, stdout: `${command.join(" ")} ok`, stderr: "" })
   });
+  const commandBlocker = JSON.parse(readFileSync(join(projectRoot, commandReport.executor_blocker_path), "utf8"));
+  const leanRunManifestPaths = commandBlocker.lean_run_manifest_paths;
+  assert.ok(leanRunManifestPaths.length > 0);
 
   const claimStatement = "theorem Goal3Positive002 (M : Type) [Monoid M] (x : M) : 1 * x = x";
   const claim = registerClaim(projectRoot, {
@@ -117,7 +120,7 @@ try {
       dependency_closure: dependencyClosure,
       statement_equivalence: statementEquivalence
     },
-    lean_run_manifest_paths: [join(projectRoot, ".comath/evidence/C-0002/lean/LRUN-0003.manifest.json")],
+    lean_run_manifest_paths: leanRunManifestPaths.map((manifestPath) => join(projectRoot, manifestPath)),
     dependency_lock: {
       lean_toolchain_path: toolchain,
       lake_manifest_path: lakeManifest,

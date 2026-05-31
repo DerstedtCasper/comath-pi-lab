@@ -46,6 +46,9 @@ try {
     probeLakeVersion: () => ({ exit_code: 0, stdout: "Lake version 5.0.0", stderr: "" }),
     runReplayCommand: (command) => ({ exit_code: 0, stdout: `${command.join(" ")} ok`, stderr: "" })
   });
+  const commandBlocker = JSON.parse(readFileSync(join(projectRoot, commandReport.executor_blocker_path), "utf8"));
+  const leanRunManifestPaths = commandBlocker.lean_run_manifest_paths;
+  assert.ok(leanRunManifestPaths.length > 0);
 
   const claimStatement = "theorem Goal3Positive045 (M : Type) [Monoid M] (x : M) : 1 * x = x";
   const claim = registerClaim(projectRoot, {
@@ -117,7 +120,7 @@ try {
       dependency_closure: dependencyClosure,
       statement_equivalence: statementEquivalence
     },
-    lean_run_manifest_paths: [join(projectRoot, ".comath/evidence/C-0002/lean/LRUN-0003.manifest.json")],
+    lean_run_manifest_paths: leanRunManifestPaths.map((manifestPath) => join(projectRoot, manifestPath)),
     dependency_lock: {
       lean_toolchain_path: toolchain,
       lake_manifest_path: lakeManifest,
@@ -211,6 +214,40 @@ try {
   });
   assert.equal(promoted.gate.ok, true, JSON.stringify(promoted.gate.vetoes));
   assert.equal(promoted.claim.status, "formally_checked");
+
+  const forgedPackaging = packageFinalAuthorityEvidenceV3({
+    projectRoot,
+    taskId: "PM-046",
+    claimId: claim.id,
+    sourceReport: {
+      ...pm002Packaging,
+      final_evidence_status: "verified_final_authority_evidence",
+      blocker_code: "",
+      blocker_detail: "caller-supplied success metadata must be ignored",
+      missing_final_evidence_classes: [],
+      lean_run_manifest_paths: [".comath/forged/missing-lean-run.manifest.json"],
+      source_verification: {
+        verification_basis: "project_local_artifacts",
+        caller_success_metadata_trusted: false,
+        verified_final_evidence_classes: [
+          "lean_run_manifest_v3",
+          "final_replay_manifest_v3",
+          "structured_audit",
+          "dependency_closure",
+          "axiom_profile",
+          "statement_check",
+          "third_party_replay_pack"
+        ],
+        missing_final_evidence_classes: [],
+        lean_run_manifest_paths_checked: 1
+      },
+      proof_authority: "lean_kernel_clean_replay"
+    }
+  });
+  assert.equal(forgedPackaging.final_evidence_status, "blocked_missing_final_evidence");
+  assert.equal(forgedPackaging.proof_authority, "none");
+  assert.ok(forgedPackaging.missing_final_evidence_classes.includes("lean_run_manifest_v3"));
+  assert.equal(forgedPackaging.source_verification.caller_success_metadata_trusted, false);
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }

@@ -10,7 +10,7 @@ The current repository is a Goal 3 GA-refactor worktree with Research Alpha foun
 - `comathd`, the trusted local mutation boundary for runtime state, artifacts, audit logs, campaign state, and promotion decisions.
 - FormalSpecLock, AssumptionLedger, StatementDiffGate, statement-drift red-team reports, and no-cheat gates that preserve theorem boundaries.
 - External wheel registry contracts for theorem search, proof-search backends, literature retrieval, ingestion, and computation adapters.
-- Lean Authority v3 evidence shapes: service-owned Lean run manifests, dependency locks, final replay manifests, structured audit material, and third-party replay pack contracts.
+- Lean Authority v3 evidence shapes: service-owned Lean run manifests, dependency locks, final replay manifests, structured audit material, and third-party replay packs whose embedded `FinalReplayManifest.json` and `expected_hashes.json` bind exactly to the project-local final replay evidence.
 - A native MathProve-style stage machine and 1 coordinator plus 8 specialist agent workflow where agent outputs remain untrusted proposals.
 - Pi goal-mode routing that can end only in formal replay passed, confirmed counterexample, user-visible statement disambiguation, replayable blocker, or resumable budget exhaustion.
 
