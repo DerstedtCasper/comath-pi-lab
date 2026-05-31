@@ -369,6 +369,34 @@ export type Goal3GaPositiveMatrixLeanAuthorityExecutorReport = {
   can_promote_claim: false;
 };
 
+export type Goal3GaRealReplayEnvironmentDiagnostic = {
+  schema_version: "comath.goal3_real_replay_environment_diagnostic.v1";
+  diagnostic_id: string;
+  task_id: string;
+  claim_id: string;
+  created_at: string;
+  probe_source: "service_owned_process" | "injected_non_authoritative" | "not_run";
+  probed_commands: string[][];
+  lean_version_probe: {
+    command: ["lean", "--version"];
+    exit_code: number | null;
+    stdout_excerpt: string;
+    stderr_excerpt: string;
+  };
+  lake_version_probe: {
+    command: ["lake", "--version"];
+    exit_code: number | null;
+    stdout_excerpt: string;
+    stderr_excerpt: string;
+  };
+  can_run_clean_replay: boolean;
+  blocker_code: Goal3GaPositiveMatrixLeanAuthorityExecutorBlockerCode | "";
+  blocker_detail: string;
+  proof_authority: "none";
+  can_promote_claim: false;
+  diagnostic_is_proof_authority: false;
+};
+
 export type Goal3GaPositiveMatrixRealReplayAttemptArchive = {
   schema_version: "comath.goal3_positive_matrix_real_replay_attempt_archive.v1";
   archive_id: string;
@@ -387,6 +415,7 @@ export type Goal3GaPositiveMatrixRealReplayAttemptArchive = {
   material_source_path: string;
   material_status: Goal3GaDeclaredReplayMaterialCheck["status"];
   material_missing_paths: string[];
+  environment_diagnostic: Goal3GaRealReplayEnvironmentDiagnostic;
   executor_status: Goal3GaPositiveMatrixLeanAuthorityExecutorReport["executor_status"];
   attempt_status: "replayable_environment_blocker" | "real_replay_completed_archived";
   terminal_classification: "replayable_blocker" | "clean_replay_passed";
@@ -1855,6 +1884,46 @@ function summarizeCommandFailure(command: string[], result: Goal3GaPm002LeanAuth
   return output ? `${label} failed: ${output}` : `${label} failed with exit code ${result.exit_code}`;
 }
 
+function diagnosticExcerpt(text: string): string {
+  return text.trim().slice(0, 2048);
+}
+
+function emptyLeanProbeRecord() {
+  return {
+    command: ["lean", "--version"] as ["lean", "--version"],
+    exit_code: null,
+    stdout_excerpt: "",
+    stderr_excerpt: ""
+  };
+}
+
+function emptyLakeProbeRecord() {
+  return {
+    command: ["lake", "--version"] as ["lake", "--version"],
+    exit_code: null,
+    stdout_excerpt: "",
+    stderr_excerpt: ""
+  };
+}
+
+function leanProbeRecord(result: Goal3GaPm002LeanAuthorityProbeResult) {
+  return {
+    command: ["lean", "--version"] as ["lean", "--version"],
+    exit_code: result.exit_code,
+    stdout_excerpt: diagnosticExcerpt(result.stdout),
+    stderr_excerpt: diagnosticExcerpt(result.stderr)
+  };
+}
+
+function lakeProbeRecord(result: Goal3GaPm002LeanAuthorityProbeResult) {
+  return {
+    command: ["lake", "--version"] as ["lake", "--version"],
+    exit_code: result.exit_code,
+    stdout_excerpt: diagnosticExcerpt(result.stdout),
+    stderr_excerpt: diagnosticExcerpt(result.stderr)
+  };
+}
+
 function pm002RunManifestPath(projectRoot: string, runId: string): string {
   return relative(projectRoot, join(projectRoot, ".comath", "evidence", "C-0002", "lean", `${runId}.manifest.json`)).replace(/\\/g, "/");
 }
@@ -2344,6 +2413,22 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplay(input: {
     });
   }
 
+  if (input.completeFinalAuthorityEvidence === true && (input.probeLeanVersion || input.probeLakeVersion) && !input.runReplayCommand) {
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "lean_authority_evidence_incomplete",
+      blocker_detail: `${task.task_id} Injected version probes cannot produce final Lean Authority evidence. Final replay authority requires service-owned lean/lake version provenance from the same real process-execution path.`,
+      attempted_commands: [
+        ["lean", "--version"],
+        ["lake", "--version"]
+      ]
+    });
+  }
+
   const leanToolchain = readFileSync(join(input.projectRoot, input.materialSource.lean_toolchain_path), "utf8").trim();
   const inputFiles = [
     join(input.projectRoot, input.materialSource.lean_source_path),
@@ -2452,6 +2537,8 @@ export function executeGoal3GaPositiveMatrixRealLeanReplaySlice(input: {
   claimId: string;
   materialSource: Goal3GaDeclaredReplayMaterialSource;
   realReplayEnabled?: boolean;
+  probeLeanVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+  probeLakeVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
 }): Goal3GaPositiveMatrixLeanAuthorityExecutorReport {
   const task = taskByIdOrThrow(input.taskId);
   if (task.task_id === "PM-001") {
@@ -2498,8 +2585,72 @@ export function executeGoal3GaPositiveMatrixRealLeanReplaySlice(input: {
     taskId: input.taskId,
     claimId: input.claimId,
     materialSource: input.materialSource,
-    completeFinalAuthorityEvidence: true
+    completeFinalAuthorityEvidence: true,
+    probeLeanVersion: input.probeLeanVersion,
+    probeLakeVersion: input.probeLakeVersion
   });
+}
+
+function createRealReplayEnvironmentDiagnostic(input: {
+  projectRoot: string;
+  task: Goal3GaPositiveMatrixTask;
+  claimId: string;
+  materialCheck: Goal3GaDeclaredReplayMaterialCheck;
+  realReplayEnabled: boolean;
+  report: Goal3GaPositiveMatrixLeanAuthorityExecutorReport;
+  probeLeanVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+  probeLakeVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+}): Goal3GaRealReplayEnvironmentDiagnostic {
+  const leanCommand: ["lean", "--version"] = ["lean", "--version"];
+  const lakeCommand: ["lake", "--version"] = ["lake", "--version"];
+  if (!input.realReplayEnabled || input.materialCheck.status !== "ready_for_live_executor") {
+    return {
+      schema_version: "comath.goal3_real_replay_environment_diagnostic.v1",
+      diagnostic_id: `DIAG-${input.task.task_id}-${input.claimId}`,
+      task_id: input.task.task_id,
+      claim_id: input.claimId,
+      created_at: new Date().toISOString(),
+      probe_source: "not_run",
+      probed_commands: [],
+      lean_version_probe: emptyLeanProbeRecord(),
+      lake_version_probe: emptyLakeProbeRecord(),
+      can_run_clean_replay: false,
+      blocker_code: input.report.blocker_code,
+      blocker_detail: input.report.blocker_detail,
+      proof_authority: "none",
+      can_promote_claim: false,
+      diagnostic_is_proof_authority: false
+    };
+  }
+
+  const materialRoot = join(input.projectRoot, materialPath(input.task, ""));
+  const probeSource = input.probeLeanVersion || input.probeLakeVersion
+    ? "injected_non_authoritative"
+    : "service_owned_process";
+  const leanProbe = input.probeLeanVersion ? input.probeLeanVersion() : runVersionProbe(leanCommand, materialRoot);
+  const lakeProbe = input.probeLakeVersion ? input.probeLakeVersion() : runVersionProbe(lakeCommand, materialRoot);
+  const canRunCleanReplay =
+    input.report.executor_status === "live_replay_conversion_completed" &&
+    leanProbe.exit_code === 0 &&
+    lakeProbe.exit_code === 0;
+
+  return {
+    schema_version: "comath.goal3_real_replay_environment_diagnostic.v1",
+    diagnostic_id: `DIAG-${input.task.task_id}-${input.claimId}`,
+    task_id: input.task.task_id,
+    claim_id: input.claimId,
+    created_at: new Date().toISOString(),
+    probe_source: probeSource,
+    probed_commands: [leanCommand, lakeCommand],
+    lean_version_probe: leanProbeRecord(leanProbe),
+    lake_version_probe: lakeProbeRecord(lakeProbe),
+    can_run_clean_replay: canRunCleanReplay,
+    blocker_code: canRunCleanReplay ? "" : input.report.blocker_code || "lean_toolchain_unavailable_for_live_replay",
+    blocker_detail: canRunCleanReplay ? "" : input.report.blocker_detail,
+    proof_authority: "none",
+    can_promote_claim: false,
+    diagnostic_is_proof_authority: false
+  };
 }
 
 function stringCommandList(value: unknown): string[][] {
@@ -2533,6 +2684,8 @@ export async function archiveGoal3GaPositiveMatrixRealReplayAttemptEvidence(inpu
   claimId: string;
   materialSource: Goal3GaDeclaredReplayMaterialSource;
   realReplayEnabled?: boolean;
+  probeLeanVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
+  probeLakeVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
   actor: string;
 }): Promise<Goal3GaPositiveMatrixRealReplayAttemptArchive> {
   const task = taskByIdOrThrow(input.taskId);
@@ -2550,7 +2703,19 @@ export async function archiveGoal3GaPositiveMatrixRealReplayAttemptEvidence(inpu
     taskId: input.taskId,
     claimId: input.claimId,
     materialSource: input.materialSource,
-    realReplayEnabled
+    realReplayEnabled,
+    probeLeanVersion: input.probeLeanVersion,
+    probeLakeVersion: input.probeLakeVersion
+  });
+  const environmentDiagnostic = createRealReplayEnvironmentDiagnostic({
+    projectRoot: input.projectRoot,
+    task,
+    claimId: input.claimId,
+    materialCheck,
+    realReplayEnabled,
+    report,
+    probeLeanVersion: input.probeLeanVersion,
+    probeLakeVersion: input.probeLakeVersion
   });
   const blocker = readJsonInsideProject(input.projectRoot, report.executor_blocker_path);
   const blockerRecord = blocker && typeof blocker === "object" ? (blocker as Record<string, unknown>) : {};
@@ -2596,6 +2761,7 @@ export async function archiveGoal3GaPositiveMatrixRealReplayAttemptEvidence(inpu
     material_source_path: materialCheck.source_path,
     material_status: materialCheck.status,
     material_missing_paths: [...materialCheck.missing_paths],
+    environment_diagnostic: environmentDiagnostic,
     executor_status: report.executor_status,
     attempt_status: report.executor_status === "live_replay_conversion_completed"
       ? "real_replay_completed_archived"

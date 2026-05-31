@@ -1,3 +1,40 @@
+## Goal 3 Task 89 / Real Replay Environment Diagnostic Archive
+
+Scope: bind real Lean/Lake replay-readiness diagnostics into the Task88 archive path without making environment probes or archives proof authority.
+
+Changes:
+
+- Added `Goal3GaRealReplayEnvironmentDiagnostic` and embedded `environment_diagnostic` in `Goal3GaPositiveMatrixRealReplayAttemptArchive`.
+- The diagnostic records `lean --version` and `lake --version` probe results, probe source, `can_run_clean_replay`, blocker details, and explicit non-authority fields.
+- Hardened `executeGoal3GaPositiveMatrixLeanAuthorityReplay()` so final-authority completion with injected version probes and no real service-owned replay command fails closed before authority evidence is produced.
+- Added `goal3-task89-real-replay-environment-diagnostic.test.mjs` and wired it into the default `@comath/comathd` test chain.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/goal3-task89-real-replay-environment-diagnostic.test.mjs
+Initial RED result: exit 1; archived.environment_diagnostic was undefined.
+```
+
+Verification:
+
+- `node services/comathd/tests/unit/goal3-task89-real-replay-environment-diagnostic.test.mjs`
+- `node services/comathd/tests/unit/goal3-task86-real-lean-replay-slice-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task87-injected-final-replay-authority-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task88-real-replay-attempt-archive.test.mjs`
+- `node services/comathd/tests/unit/goal3-task40-pm002-lean-authority-executor.test.mjs`
+- `node services/comathd/tests/unit/goal3-task58-pm079-pm089-generic-lean-executor.test.mjs`
+- `corepack pnpm --filter @comath/comathd build`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+- `corepack pnpm build`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+
+Boundary notes: Task89 does not install Lean, configure elan, download mathlib, restore injected final replay authority, or add theorem recognition/Nat-linear/default-assumption paths. On this workstation `lean` and `lake` resolve to elan shims, but both version commands fail because no default toolchain is configured; Task89 records that as `lean_toolchain_unavailable_for_live_replay` with `proof_authority: none`.
+
+Residual risks: real PM-084 Lean/mathlib execution still requires a prepared Lean toolchain and declared replay material in runtime state. Broader positive-matrix live replay, production Pi/Codex lifecycle validation, and comprehensive GA release validation remain open.
+
 ## Goal 3 Task 88 / Real Replay Attempt Archive Evidence Layer
 
 Scope: add a service-owned archive/evidence layer for Task86 real Lean replay attempts without turning replay blockers into proof authority.
