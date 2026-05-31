@@ -4297,26 +4297,13 @@ export function runGoal3GaPositiveMatrixBatch(input: {
 }): Goal3GaPositiveMatrixBatchReport {
   const manifest = createGoal3GaPositiveTaskManifest();
   const requestedBatchSize = Math.max(0, Math.min(input.batchSize ?? 10, manifest.tasks.length));
-  const positiveWorkflow = requestedBatchSize > 0 ? createPositiveWorkflow(input.projectRoot) : null;
   const executedTaskIds = new Set(manifest.tasks.slice(0, requestedBatchSize).map((task) => task.task_id));
   const results: Goal3GaPositiveMatrixBatchResult[] = manifest.tasks.map((task, index) => {
-    if (index === 0 && positiveWorkflow) {
-      return {
-        task_id: task.task_id,
-        category: task.category,
-        terminal_classification: "clean_replay_passed",
-        proof_authority: "lean_kernel_clean_replay",
-        can_promote_claim: false,
-        evidence_binding: {
-          formal_spec_lock_hash: positiveWorkflow.formal_spec_lock_hash,
-          assumption_ledger_hash: positiveWorkflow.assumption_ledger_hash,
-          dependency_lock_hash: positiveWorkflow.dependency_lock_hash,
-          artifact_hashes_sha256: positiveWorkflow.artifact_hashes_sha256,
-          lean_run_manifest_id: positiveWorkflow.lean_run_manifest_id,
-          final_replay_manifest_id: positiveWorkflow.final_replay_manifest_id
-        },
-        blockers: []
-      };
+    const blockers = executedTaskIds.has(task.task_id)
+      ? ["positive_matrix_task_clean_replay_not_executed"]
+      : ["positive_matrix_task_not_in_bounded_batch", "positive_matrix_task_clean_replay_not_executed"];
+    if (index === 0) {
+      blockers.push("positive_matrix_representative_fixture_not_task_local_clean_replay");
     }
     return {
       task_id: task.task_id,
@@ -4325,9 +4312,7 @@ export function runGoal3GaPositiveMatrixBatch(input: {
       proof_authority: "none",
       can_promote_claim: false,
       evidence_binding: emptyMatrixEvidenceBinding(),
-      blockers: executedTaskIds.has(task.task_id)
-        ? ["positive_matrix_task_clean_replay_not_executed"]
-        : ["positive_matrix_task_not_in_bounded_batch", "positive_matrix_task_clean_replay_not_executed"]
+      blockers
     };
   });
   const startAfterTaskId = requestedBatchSize > 0 ? manifest.tasks[requestedBatchSize - 1]?.task_id ?? null : null;

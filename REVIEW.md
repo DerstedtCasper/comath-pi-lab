@@ -1,3 +1,24 @@
+# Goal 3 Task 96 / Positive-Matrix Batch Consumer Semantics Hardening
+
+Scope: prevent batch positive-matrix consumers from presenting PM-001 representative fixture or aggregate harness evidence as per-task `lean_kernel_clean_replay`, without claiming live Lean replay or GA completion.
+
+Work performed:
+
+- Added `goal3-task96-positive-batch-consumer-semantics.test.mjs`, proving the separate representative proof workflow remains available while `runGoal3GaPositiveMatrixBatch()` keeps PM-001 and all other batch tasks non-authoritative unless each task has its own clean Lean/mathlib replay evidence.
+- Hardened `runGoal3GaPositiveMatrixBatch()` so it no longer calls the representative proof workflow or copies its replay IDs into PM-001 batch output.
+- Updated the older Task21 matrix-runner regression to require `proof_authority: "none"`, empty evidence binding, and `replayable_blocker` classification for PM-001 batch output.
+
+Verification evidence:
+
+- TDD RED: `node services/comathd/tests/unit/goal3-task96-positive-batch-consumer-semantics.test.mjs` failed with `batch matrix consumers cannot inherit the representative fixture clean replay` because `summary.clean_replay_passed` was `1`.
+- GREEN focused tests: Task96, Task21, Task94 positive-matrix consumer semantics, Task17 GA acceptance workflow, Task95 real replay toolchain mismatch blocker, Task86 real Lean replay slice gate, Task90 final authority provenance gate, Task91 final replay artifact kind gate, and Task94 final-authority FormalSpec schema gate.
+- `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, full `corepack pnpm --filter @comath/comathd test`, root `corepack pnpm build`, root `corepack pnpm typecheck`, and root `corepack pnpm test` exited 0.
+- Static scans found no direct privileged claim-status writes outside read-only paper checks, no `can_promote_claim: true`, no `direct_claim_mutation: true`, no non-Lean `proof_authority` assignment, and no restored theorem-family/Nat-linear/default-assumption production path. `Test-Path -LiteralPath .comath` returned `False`, and no `.comath`, `.tmp`, `dist`, `node_modules`, or package `dist` paths are tracked by Git.
+
+Boundary notes: Task96 is consumer-semantics hardening only. It does not install Lean, fetch mathlib, execute fresh clean replay, promote any positive-matrix task, broaden theorem coverage, or complete Goal 3 GA.
+
+Residual risks: a read-only subagent flagged the legacy `hasHashBoundFreshProofKernelReplay()` promotion-gate OR branch as a higher-risk remaining final replay binding audit target. Broader live Lean/mathlib positive-matrix replay, production Pi/Codex lifecycle validation, OS-level sandboxing, and final GA audit remain open.
+
 # Goal 3 Task 95 / Real Replay Toolchain Mismatch Blocker Contract
 
 Scope: make the real positive-matrix Lean replay path fail closed when the declared `lean-toolchain` does not match the probed Lean version, without throwing out of the workflow or producing authority-shaped replay evidence.
