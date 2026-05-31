@@ -1757,3 +1757,22 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. Task97 closes the legacy final replay promotion-gate bypass, but it does not install Lean, configure elan, fetch mathlib, execute fresh live Lean/mathlib replay, promote any positive-matrix task, broaden theorem coverage, validate production Pi/Codex lifecycle behavior, provide OS-level sandboxing, or complete final GA audit.
 - Next step: Task 98 should continue the next highest final-authority/no-cheat or live-replay readiness gap without weakening Lean Authority v3, likely preparing a real Lean/mathlib replay environment or another promotion/consumer boundary audit.
 - Commit: `49c532e` (`Harden goal3 legacy final replay gate`)
+
+## Task 98: Legacy PM-002 Packaging Promotion-Gate Hardening
+
+- [x] Confirm no earlier `[ ]`, `[~]`, or `Commit: pending` task item remained before opening Task 98.
+- [x] Re-read Goal 3 required context and confirm the current repository state instead of relying on prior memory.
+- [x] Use high-concurrency read-only subagents to inspect final-authority/no-cheat risks, Pi terminal read-model risks, and real Lean replay readiness gaps.
+- [x] Add a failing regression proving legacy `comath.goal3_pm002_final_authority_packaging.v1` reports cannot promote a claim to `formally_checked`.
+- [x] Require generic Lean Authority v3 final authority packaging for `formally_checked`, while preserving PM-002 v1 packaging as historical compatibility material only.
+- [x] Update the older PM-002 packaging promotion regression to assert the new non-authoritative v1 semantics.
+- [x] Run focused Task98/Task44/Task45/Task97 regressions plus applicable build/default-test gates.
+- [x] Record remaining higher-risk follow-up gaps from concurrent review.
+
+Completion record:
+
+- Work done: re-read the Goal 3 required context set and confirmed `main` was clean before Task98. Used three concurrent read-only subagents after rpm limits were lifted: one found the highest immediate promotion-gate risk in `hasVerifiedFinalAuthorityPackagingV3()`, where legacy `comath.goal3_pm002_final_authority_packaging.v1` PM-002 reports were still accepted; one flagged campaign/Pi terminal read-model overclaim risk for legacy `completed_formal_proof`; one flagged missing Lean/Lake executable binary hash provenance in FinalReplayManifest v3. Added `goal3-task98-legacy-pm002-packaging-v1-gate.test.mjs`; RED showed a PM-002 v1 packaging report plus FinalReplayManifest v3 promoted a claim to `formally_checked`. Hardened `services/comathd/src/verification/gate.ts` so promotion-grade final authority packaging accepts only `comath.final_authority_packaging.v3` with the requested claim id, and updated the older Task44 PM-002 packaging regression to treat v1 packaging as non-authoritative.
+- Verification evidence: TDD RED was observed before implementation: `node services/comathd/tests/unit/goal3-task98-legacy-pm002-packaging-v1-gate.test.mjs` failed with `legacy PM-002 v1 packaging must not be promotion-grade final authority evidence` because `promotion.gate.ok` was `true`. After implementation and `corepack pnpm --filter @comath/comathd build`, focused regressions exited 0: `node services/comathd/tests/unit/goal3-task98-legacy-pm002-packaging-v1-gate.test.mjs`, `node services/comathd/tests/unit/goal3-task44-pm002-packaging-promotion-gate.test.mjs`, `node services/comathd/tests/unit/goal3-task45-generic-final-authority-packaging-gate.test.mjs`, and `node services/comathd/tests/unit/goal3-task97-legacy-final-replay-promotion-gate.test.mjs`. `node services/comathd/scripts/run-default-tests.mjs` exited 0.
+- Residual risk: Goal 3 remains incomplete. Task98 closes the legacy PM-002 v1 packaging promotion path, but it does not install Lean, configure elan, fetch mathlib, execute fresh live Lean/mathlib replay, promote any positive-matrix task, require Lean/Lake executable binary hashes in FinalReplayManifest v3, harden campaign/Pi terminal read-model proof-success projection, broaden theorem coverage, validate production Pi/Codex lifecycle behavior, provide OS-level sandboxing, or complete final GA audit.
+- Next step: Task 99 should continue one of the two concrete high-risk gaps found by concurrent review: require Lean/Lake executable binary hash provenance for promotion-grade FinalReplayManifest v3, or bind campaign/Pi `formal_proof_verified` / `formal_replay_passed` terminal projections to explicit current Lean Authority pass evidence.
+- Commit: pending

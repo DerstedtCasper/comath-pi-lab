@@ -1,3 +1,25 @@
+# Goal 3 Task 98 / Legacy PM-002 Packaging Promotion-Gate Hardening
+
+Scope: prevent legacy `comath.goal3_pm002_final_authority_packaging.v1` reports from authorizing `formally_checked` promotion. PM-002 v1 packaging remains historical compatibility material; promotion-grade proof authority now requires generic `comath.final_authority_packaging.v3`.
+
+Work performed:
+
+- Used high-concurrency read-only subagents to inspect final-authority/no-cheat risks, Pi goal-mode terminal read-model risks, and real Lean replay readiness gaps.
+- Added `goal3-task98-legacy-pm002-packaging-v1-gate.test.mjs`. RED showed a PM-002 v1 packaging report plus FinalReplayManifest v3 could still promote a claim to `formally_checked`.
+- Hardened `services/comathd/src/verification/gate.ts` so `hasVerifiedFinalAuthorityPackagingV3()` accepts only `comath.final_authority_packaging.v3` with the requested claim id.
+- Updated the older Task44 PM-002 regression to assert v1 packaging cannot satisfy promotion-grade authority, while Task45 continues to cover the generic v3 positive path.
+
+Verification evidence:
+
+- TDD RED: `node services/comathd/tests/unit/goal3-task98-legacy-pm002-packaging-v1-gate.test.mjs` failed because `promotion.gate.ok` was `true`.
+- GREEN focused tests: Task98, Task44, Task45, and Task97.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `node services/comathd/scripts/run-default-tests.mjs` exited 0.
+
+Boundary notes: Task98 is final-authority/no-cheat gate hardening only. It does not install Lean, fetch mathlib, execute fresh clean replay, promote any positive-matrix task, broaden theorem coverage, harden Pi terminal read-model wording, or complete Goal 3 GA.
+
+Residual risks: concurrent read-only review flagged two high-value next targets: FinalReplayManifest v3 does not yet require Lean/Lake executable binary hash provenance, and campaign/Pi terminal read-model projection can still overstate legacy `completed_formal_proof` records as proof success unless bound to an explicit current authority pass.
+
 # Goal 3 Task 97 / Legacy Final Replay Promotion-Gate Hardening
 
 Scope: prevent old `finalLeanReplaySchema` artifacts from authorizing `formally_checked` promotion. Legacy final replay material remains historical/diagnostic schema compatibility only; promotion authority is now Lean Authority v3 final replay packaging with registry provenance, derived binding, report checks, and replay-pack binding.

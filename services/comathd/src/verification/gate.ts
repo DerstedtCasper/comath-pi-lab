@@ -555,13 +555,10 @@ function hasVerifiedFinalAuthorityPackagingV3(
     }
     const report = packaging as Record<string, unknown>;
     const schemaVersion = report.schema_version;
-    if (schemaVersion !== "comath.final_authority_packaging.v3" && schemaVersion !== "comath.goal3_pm002_final_authority_packaging.v1") {
+    if (schemaVersion !== "comath.final_authority_packaging.v3") {
       continue;
     }
-    if (schemaVersion === "comath.goal3_pm002_final_authority_packaging.v1" && report.task_id !== "PM-002") {
-      continue;
-    }
-    if (schemaVersion === "comath.final_authority_packaging.v3" && report.claim_id !== request.claim_id) {
+    if (report.claim_id !== request.claim_id) {
       continue;
     }
     if (

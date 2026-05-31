@@ -38,7 +38,7 @@ Implemented Goal 3 trust-core evidence includes:
 - Pi goal-mode route and extension tests.
 - Goal 3 GA negative and representative positive proof-workflow harnesses.
 
-Task 17's positive matrix is a harness with representative seeds and a replayable blocker for the unexecuted 100-task breadth. Task96 hardens batch consumers so representative fixture or aggregate harness evidence is not displayed as per-task clean replay. Task97 hardens the promotion gate so legacy final replay manifests cannot substitute for Lean Authority v3 final replay packaging. Do not claim that all 100 positive proof tasks have been clean-replayed.
+Task 17's positive matrix is a harness with representative seeds and a replayable blocker for the unexecuted 100-task breadth. Task96 hardens batch consumers so representative fixture or aggregate harness evidence is not displayed as per-task clean replay. Task97 hardens the promotion gate so legacy final replay manifests cannot substitute for Lean Authority v3 final replay packaging. Task98 also blocks legacy PM-002 v1 final-authority packaging reports from satisfying `formally_checked`; only generic Lean Authority v3 packaging is promotion-grade. Do not claim that all 100 positive proof tasks have been clean-replayed.
 
 ## Runtime Baseline
 
