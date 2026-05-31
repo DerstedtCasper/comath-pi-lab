@@ -67,6 +67,8 @@ function write(path: string, content: string): void {
 
 export function runCleanLeanReplay(input: {
   projectRoot: string;
+  project_id?: string;
+  actor?: string;
   campaign_id: string;
   claim_id: string;
   leanProject: LeanProjectFiles;
@@ -310,7 +312,11 @@ export function runCleanLeanReplay(input: {
       assertPathAllowed(input.projectRoot, manifestV3PathRel, { purpose: "runtime-write" }),
       `${JSON.stringify(final_replay_v3, null, 2)}\n`
     );
-    appendFinalReplayRegistryEntryV3(input.projectRoot, final_replay_v3);
+    appendFinalReplayRegistryEntryV3(input.projectRoot, final_replay_v3, input.project_id && input.actor ? {
+      project_id: input.project_id,
+      actor: input.actor,
+      source: "clean_replay"
+    } : undefined);
     writeThirdPartyReplayPackV3(input.projectRoot, final_replay_v3);
   }
   return {

@@ -1,3 +1,49 @@
+# Goal 3 Task 91 / Final Replay Artifact Provenance Gate
+
+Scope: harden the ordinary promotion gate so FinalReplayManifest v3 evidence must have both runner-output artifact provenance and service-owned append-only registry audit provenance.
+
+Changes:
+
+- Added `goal3-task91-final-replay-artifact-kind-gate.test.mjs`.
+- Extended `appendFinalReplayRegistryEntryV3()` with optional audit provenance emission via `lean.final_replay_registry_appended`.
+- Hardened `hasFinalReplayRegistryProvenance()` so JSONL equality alone is insufficient; the gate now also requires the matching audit event with replay id, manifest hash, runner, proof authority, and service-owned provenance flag.
+- Hardened `hasVerifiedFinalAuthorityPackagingV3()` so the submitted FinalReplayManifest v3 artifact itself must be `runner_output`.
+- Added explicit veto `formally_checked requires final replay manifest runner_output artifact provenance`.
+- Updated positive final-authority fixtures to append registry entries with audit provenance.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/goal3-task91-final-replay-artifact-kind-gate.test.mjs
+Initial RED result: exit 1; registry JSONL equality alone promoted helper-created final-authority evidence.
+
+Earlier RED variant: exit 1; FinalReplayManifest v3 submitted as artifact kind "other" still promoted.
+```
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/unit/goal3-task91-final-replay-artifact-kind-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task44-pm002-packaging-promotion-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task45-generic-final-authority-packaging-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task66-derived-binding-promotion-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task68-derived-report-binding-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task70-derived-binding-promotion-bundle.test.mjs`
+- `node services/comathd/tests/unit/goal3-task8-lean-authority-v3-final-replay.test.mjs`
+- `node services/comathd/tests/unit/goal3-task87-injected-final-replay-authority-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task88-real-replay-attempt-archive.test.mjs`
+- `node services/comathd/tests/unit/goal3-task89-real-replay-environment-diagnostic.test.mjs`
+- `node services/comathd/tests/unit/goal3-task90-final-authority-provenance-gate.test.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+- `corepack pnpm build`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+
+Boundary notes: Task91 does not install Lean, configure elan, download mathlib, add theorem recognition, add Nat-linear synthesis, add default assumptions, or turn archive/diagnostic/UI evidence into proof authority. On this workstation `lean` and `lake` still resolve to elan shims but fail with no default toolchain configured.
+
+Residual risks: the Pi dashboard currently renders `audit` evidence with a generic runner label in read-only UI text; this is a consumer-semantics issue rather than a promotion-gate bypass and should be handled in a later task. Real PM-084 Lean/mathlib execution still requires a prepared Lean toolchain and declared replay material.
+
 ## Goal 3 Task 90 / Final Authority Provenance Check-Debug Loop
 
 Scope: comprehensive check-debug loop over Tasks 87-89, closing helper-created final-authority artifact promotion and clarifying real replay archive non-authority semantics.

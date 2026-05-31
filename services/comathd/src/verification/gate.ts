@@ -617,6 +617,9 @@ function hasVerifiedFinalAuthorityPackagingV3(
       continue;
     }
     const requestedManifestArtifact = artifacts.some((artifact) => {
+      if (artifact.kind !== "runner_output") {
+        return false;
+      }
       const artifactManifest = finalReplayManifestV3Schema.safeParse(readJsonArtifact(projectRoot, artifact));
       return artifactManifest.success && artifactManifest.data.claim_id === parsed.data.claim_id && artifactManifest.data.replay_id === parsed.data.replay_id;
     });
@@ -678,7 +681,8 @@ function hasFinalReplayRegistryProvenance(projectRoot: string, finalReplay: unkn
     return false;
   }
   const expected = canonicalJson(parsed.data);
-  return readFileSync(registryPath, "utf8")
+  const expectedSha256 = sha256Text(expected);
+  const hasRegistryLine = readFileSync(registryPath, "utf8")
     .split(/\r?\n/)
     .filter(Boolean)
     .some((line) => {
@@ -689,6 +693,24 @@ function hasFinalReplayRegistryProvenance(projectRoot: string, finalReplay: unkn
         return false;
       }
     });
+  if (!hasRegistryLine) {
+    return false;
+  }
+  return readAuditEvents(projectRoot).some((event) => {
+    const payload = event.payload as Record<string, unknown>;
+    return (
+      event.event_type === "lean.final_replay_registry_appended" &&
+      event.target_id === parsed.data.claim_id &&
+      payload.claim_id === parsed.data.claim_id &&
+      payload.replay_id === parsed.data.replay_id &&
+      payload.registry_path === registryRel.replace(/\\/g, "/") &&
+      payload.entry_sha256 === expectedSha256 &&
+      payload.manifest_sha256 === expectedSha256 &&
+      payload.runner === "comathd.LeanAuthority" &&
+      payload.proof_authority === "lean_kernel_clean_replay" &&
+      payload.service_owned_clean_replay_provenance === true
+    );
+  });
 }
 
 function hasHashBoundFreshProofKernelReplay(
@@ -785,6 +807,20 @@ function finalAuthorityProvenanceVetoes(projectRoot: string, artifacts: Artifact
     const verification = verifyFinalReplayManifestV3(projectRoot, finalReplay);
     if (verification.ok && !hasFinalReplayRegistryProvenance(projectRoot, finalReplay)) {
       vetoes.push("formally_checked requires service-owned clean replay provenance");
+    }
+  }
+  return [...new Set(vetoes)];
+}
+
+function finalReplayManifestArtifactKindVetoes(projectRoot: string, artifacts: ArtifactRef[]): string[] {
+  const vetoes: string[] = [];
+  for (const artifact of artifacts) {
+    if (artifact.kind === "runner_output") {
+      continue;
+    }
+    const artifactManifest = finalReplayManifestV3Schema.safeParse(readJsonArtifact(projectRoot, artifact));
+    if (artifactManifest.success) {
+      vetoes.push("formally_checked requires final replay manifest runner_output artifact provenance");
     }
   }
   return [...new Set(vetoes)];
@@ -935,6 +971,7 @@ function statusEvidenceVetoes(projectRoot: string, claim: Claim, request: ClaimP
     }
     vetoes.push(...finalAuthorityDerivedBindingVetoes(projectRoot, { ...request, locked_statement_hash: claim.statement_hash }, artifacts));
     vetoes.push(...finalAuthorityProvenanceVetoes(projectRoot, artifacts));
+    vetoes.push(...finalReplayManifestArtifactKindVetoes(projectRoot, artifacts));
   }
 
   return vetoes;

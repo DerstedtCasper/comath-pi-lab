@@ -170,7 +170,7 @@ try {
   });
   const finalReplayManifestRel = `.comath/evidence/${claim.id}/lean/final_replay_manifest_v3.json`;
   writeProjectFile(finalReplayManifestRel, `${JSON.stringify(finalReplayManifest, null, 2)}\n`);
-  appendFinalReplayRegistryEntryV3(projectRoot, finalReplayManifest);
+  appendFinalReplayRegistryEntryV3(projectRoot, finalReplayManifest, { project_id: project.project_id, actor: "goal3-task70" });
   const replayPack = writeThirdPartyReplayPackV3(projectRoot, finalReplayManifest);
 
   const evidenceInput = {

@@ -2258,7 +2258,11 @@ function completePositiveMatrixFinalAuthorityEvidence(input: {
     resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 }
   });
   writeJsonProjectFile(input.projectRoot, input.materialSource.final_replay_manifest_v3_path, finalReplayManifest);
-  appendFinalReplayRegistryEntryV3(input.projectRoot, finalReplayManifest);
+  appendFinalReplayRegistryEntryV3(input.projectRoot, finalReplayManifest, {
+    project_id: "P-0001",
+    actor: "comathd.LeanAuthority",
+    source: "goal3_positive_matrix_executor"
+  });
   const replayPack = writeThirdPartyReplayPackV3(input.projectRoot, finalReplayManifest);
 
   const finalAuthorityPackaging = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({

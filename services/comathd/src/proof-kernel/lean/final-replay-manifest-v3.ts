@@ -15,6 +15,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { finalReplayManifestV3Schema, type FinalReplayManifestV3 } from "../../types/schemas.js";
 import { sha256Buffer, sha256FileSync } from "./lean-project.js";
+import { appendAuditEvent } from "../../audit/jsonl-writer.js";
 
 type HashRef = { sha256: string; size_bytes: number };
 
@@ -212,7 +213,8 @@ export function createFinalReplayManifestV3(input: {
 
 export function appendFinalReplayRegistryEntryV3(
   projectRoot: string,
-  manifest: FinalReplayManifestV3
+  manifest: FinalReplayManifestV3,
+  provenance?: { project_id: string; actor: string; source?: string }
 ): { registry_path: string; entry_sha256: string } {
   const registryRel = join(".comath", "evidence", manifest.claim_id, "lean", "final_replay_registry.jsonl");
   const registryPath = assertPathAllowed(projectRoot, registryRel, { purpose: "runtime-write" });
@@ -226,9 +228,30 @@ export function appendFinalReplayRegistryEntryV3(
     throw new Error("final_replay_registry_append_only_violation");
   }
   const line = canonicalJson(manifest);
+  const entrySha256 = sha256Text(line);
   mkdirSync(dirname(registryPath), { recursive: true });
   appendFileSync(registryPath, `${line}\n`, "utf8");
-  return { registry_path: registryRel.replace(/\\/g, "/"), entry_sha256: sha256Text(line) };
+  const registry_path = registryRel.replace(/\\/g, "/");
+  if (provenance) {
+    appendAuditEvent(projectRoot, {
+      project_id: provenance.project_id,
+      event_type: "lean.final_replay_registry_appended",
+      actor: provenance.actor,
+      target_id: manifest.claim_id,
+      payload: {
+        claim_id: manifest.claim_id,
+        replay_id: manifest.replay_id,
+        registry_path,
+        entry_sha256: entrySha256,
+        manifest_sha256: entrySha256,
+        runner: manifest.runner,
+        proof_authority: manifest.proof_authority,
+        source: provenance.source ?? "comathd.LeanAuthority",
+        service_owned_clean_replay_provenance: true
+      }
+    });
+  }
+  return { registry_path, entry_sha256: entrySha256 };
 }
 
 export function verifyFinalReplayManifestV3(
