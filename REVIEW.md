@@ -1,3 +1,42 @@
+## Goal 3 Task 87 / Injected Final Replay Authority Gate
+
+Scope: close the no-cheat gap where the exported generic positive-matrix Lean Authority executor could use an injected `runReplayCommand` callback to fabricate final replay success.
+
+Changes:
+
+- Added `goal3-task87-injected-final-replay-authority-gate.test.mjs`.
+- Hardened `executeGoal3GaPositiveMatrixLeanAuthorityReplay()` so `completeFinalAuthorityEvidence: true` with an injected replay callback returns a replayable blocker before final replay generation.
+- Preserved non-authoritative injected check/build callback coverage for executor blocker tests, but final Lean Authority evidence now requires real service-owned `lean/lake` process execution.
+- Updated Task85 and Task86 regressions so mocked replay callbacks are no longer treated as verified final-authority evidence.
+- Wired Task87 into the default `@comath/comathd` test chain.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/goal3-task87-injected-final-replay-authority-gate.test.mjs
+Initial RED result: exit 1; the injected runner was called three times, including the final replay command.
+```
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/unit/goal3-task85-pm084-live-final-authority-completion.test.mjs`
+- `node services/comathd/tests/unit/goal3-task86-real-lean-replay-slice-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task87-injected-final-replay-authority-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task42-pm002-final-authority-packaging.test.mjs`
+- `node services/comathd/tests/unit/goal3-task44-pm002-packaging-promotion-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task45-generic-final-authority-packaging-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task58-pm079-pm089-generic-lean-executor.test.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+- `corepack pnpm build`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+
+Boundary notes: Task87 does not introduce theorem recognition, Nat-linear synthesis, default assumptions, a new proof authority, or claim promotion. It makes the final replay path stricter: injected callbacks can no longer produce `verified_final_authority_evidence`.
+
+Residual risks: real PM-084 Lean/mathlib execution remains environment-gated and was not run by default CI. A durable archive/evidence layer for real replay attempts remains the next useful frontier.
+
 ## Goal 3 Task 86 / Environment-Gated Real Lean Replay Slice
 
 Scope: make the PM-084 real Lean/mathlib replay path explicit and fail-closed by default, and harden final-authority packaging against same-path LeanRunManifest semantic drift.

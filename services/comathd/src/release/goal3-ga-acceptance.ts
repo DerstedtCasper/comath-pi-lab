@@ -2355,6 +2355,20 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplay(input: {
     }
   }
 
+  if (input.completeFinalAuthorityEvidence === true && input.runReplayCommand) {
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "lean_authority_evidence_incomplete",
+      blocker_detail: `${task.task_id} Injected replay callbacks cannot produce final Lean Authority evidence. Final replay authority requires service-owned lean/lake process execution without replay stubs.`,
+      attempted_commands: attemptedCommands,
+      lean_run_manifest_paths: manifestPaths
+    });
+  }
+
   if (input.completeFinalAuthorityEvidence === true) {
     return completePositiveMatrixFinalAuthorityEvidence({
       projectRoot: input.projectRoot,

@@ -5,13 +5,14 @@ import { dirname, join } from "node:path";
 import {
   createGoal3GaPositiveTaskManifest,
   executeGoal3GaPositiveMatrixLeanAuthorityReplay,
+  getClaim,
   initProject,
   promoteClaim,
   registerClaim,
   statementHash
 } from "../../dist/index.js";
 
-const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task85-pm084-live-authority-"));
+const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task87-injected-final-replay-"));
 
 function writeProjectFile(relativePath, text) {
   const absolute = join(projectRoot, relativePath);
@@ -114,6 +115,7 @@ function createPm084DeclaredReplayMaterial(claim) {
   });
   writeJsonProjectFile(source.final_replay_manifest_v3_path, {
     schema_version: "comath.final_replay_manifest.v3.preflight",
+    result: "blocked",
     material_status: "preflight_only_not_final_replayed",
     proof_authority: "none",
     promotion_allowed: false
@@ -128,7 +130,7 @@ function createPm084DeclaredReplayMaterial(claim) {
 }
 
 try {
-  const { project } = initProject({ name: "Goal 3 Task 85 PM084 Live Final Authority", root_path: projectRoot });
+  const { project } = initProject({ name: "Goal 3 Task 87 Injected Final Replay Gate", root_path: projectRoot });
   const task = createGoal3GaPositiveTaskManifest().tasks.find((item) => item.task_id === "PM-084");
   assert.equal(task?.category, "theorem-search-assisted");
 
@@ -139,7 +141,7 @@ try {
     assumptions: [],
     domain: "logic",
     status: "conjectural",
-    actor: "goal3-task85"
+    actor: "goal3-task87"
   });
   assert.equal(claim.statement_hash, statementHash(claimStatement));
 
@@ -155,10 +157,11 @@ try {
     probeLakeVersion: () => ({ exit_code: 0, stdout: "Lake version 5.0.0", stderr: "" }),
     runReplayCommand: (command, cwd) => {
       replayCalls.push({ command, cwd });
-      return { exit_code: 0, stdout: `${command.join(" ")} ok`, stderr: "" };
+      return { exit_code: 0, stdout: `${command.join(" ")} injected success`, stderr: "" };
     }
   });
 
+  assert.equal(replayCalls.length, 2, "injected runner may exercise non-authoritative check/build only");
   assert.equal(report.schema_version, "comath.goal3_positive_matrix_lean_authority_executor.v1");
   assert.equal(report.task_id, "PM-084");
   assert.equal(report.claim_id, claim.id);
@@ -170,15 +173,17 @@ try {
   assert.equal(report.final_authority_packaging.final_evidence_status, "blocked_missing_final_evidence");
   assert.equal(report.final_authority_packaging.proof_authority, "none");
   assert.equal(report.final_authority_packaging.can_promote_claim, false);
-  assert.equal(report.final_authority_packaging.promotion_requires_gate, true);
-  assert.equal(report.final_authority_packaging.source_verification.verification_basis, "project_local_artifacts");
-  assert.equal(report.final_authority_packaging.source_verification.caller_success_metadata_trusted, false);
   assert.ok(report.final_authority_packaging.missing_final_evidence_classes.includes("final_replay_manifest_v3"));
-  assert.equal(replayCalls.length, 2, "PM-084 injected callback must not be used for final clean replay authority");
+  assert.equal(
+    report.final_authority_packaging.source_verification.verified_final_evidence_classes.includes("final_replay_manifest_v3"),
+    false,
+    "injected check/build manifests must not satisfy final replay verification"
+  );
 
-  const finalReplayManifest = JSON.parse(readFileSync(join(projectRoot, materialSource.final_replay_manifest_v3_path), "utf8"));
-  assert.equal(finalReplayManifest.proof_authority, "none");
-  assert.equal(finalReplayManifest.promotion_allowed, false);
+  const finalReplayMaterial = JSON.parse(readFileSync(join(projectRoot, materialSource.final_replay_manifest_v3_path), "utf8"));
+  assert.equal(finalReplayMaterial.result, "blocked", "injected final replay must not overwrite preflight manifest with pass");
+  assert.equal(finalReplayMaterial.proof_authority, "none");
+  assert.equal(finalReplayMaterial.promotion_allowed, false);
 
   const rejected = promoteClaim(projectRoot, {
     project_id: project.project_id,
@@ -186,12 +191,12 @@ try {
     target_status: "formally_checked",
     evidence_ids: [],
     artifact_ids: [],
-    actor: "goal3-task85"
+    actor: "goal3-task87"
   });
-  assert.equal(rejected.gate.ok, false, "injected live replay stubs must not bypass ordinary claim gate prerequisites");
-  assert.equal(rejected.claim.status, "conjectural");
+  assert.equal(rejected.gate.ok, false);
+  assert.equal(getClaim(projectRoot, project.project_id, claim.id)?.status, "conjectural");
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }
 
-console.log("Goal 3 Task 85 PM-084 live final-authority completion test passed.");
+console.log("Goal 3 Task 87 injected final replay authority gate test passed.");

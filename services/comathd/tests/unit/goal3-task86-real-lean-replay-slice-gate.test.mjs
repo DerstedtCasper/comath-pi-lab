@@ -7,7 +7,6 @@ import {
   executeGoal3GaPositiveMatrixLeanAuthorityReplay,
   executeGoal3GaPositiveMatrixRealLeanReplaySlice,
   initProject,
-  packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3,
   registerClaim,
   statementHash
 } from "../../dist/index.js";
@@ -187,35 +186,12 @@ try {
     probeLakeVersion: () => ({ exit_code: 0, stdout: "Lake version 5.0.0", stderr: "" }),
     runReplayCommand: (command) => ({ exit_code: 0, stdout: `${command.join(" ")} ok`, stderr: "" })
   });
-  assert.equal(completed.final_authority_packaging.final_evidence_status, "verified_final_authority_evidence");
-
-  const finalRunManifestPath = completed.final_authority_packaging.lean_run_manifest_paths.at(-1);
-  assert.ok(finalRunManifestPath, "completed report should bind a final LeanRunManifest path");
-  const finalRunManifest = JSON.parse(readFileSync(join(projectRoot, finalRunManifestPath), "utf8"));
-  finalRunManifest.purpose = "build";
-  finalRunManifest.proof_authority = "none";
-  finalRunManifest.command = ["echo", "not-a-final-replay"];
-  writeFileSync(join(projectRoot, finalRunManifestPath), `${JSON.stringify(finalRunManifest, null, 2)}\n`, "utf8");
-
-  const repackaged = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
-    projectRoot,
-    taskId: "PM-084",
-    claimId: claim.id,
-    evidence: {
-      lean_run_manifest_paths: completed.final_authority_packaging.lean_run_manifest_paths,
-      final_replay_manifest_v3_path: completed.final_authority_packaging.final_replay_manifest_v3_path,
-      structured_audit_path: completed.final_authority_packaging.structured_audit_path,
-      dependency_closure_path: completed.final_authority_packaging.dependency_closure_path,
-      axiom_profile_path: completed.final_authority_packaging.axiom_profile_path,
-      statement_check_path: completed.final_authority_packaging.statement_check_path,
-      third_party_replay_pack_path: completed.final_authority_packaging.third_party_replay_pack_path,
-      formal_spec_lock_path: materialSource.formal_spec_lock_path,
-      assumption_ledger_path: materialSource.assumption_ledger_path
-    }
-  });
-  assert.equal(repackaged.final_evidence_status, "blocked_missing_final_evidence");
-  assert.equal(repackaged.proof_authority, "none");
-  assert.ok(repackaged.missing_final_evidence_classes.includes("lean_run_manifest_v3"));
+  assert.equal(completed.executor_status, "blocked_before_replay");
+  assert.equal(completed.blocker_code, "lean_authority_evidence_incomplete");
+  assert.match(completed.blocker_detail, /Injected replay callbacks cannot produce final Lean Authority evidence/);
+  assert.equal(completed.final_authority_packaging.final_evidence_status, "blocked_missing_final_evidence");
+  assert.equal(completed.final_authority_packaging.proof_authority, "none");
+  assert.ok(completed.final_authority_packaging.missing_final_evidence_classes.includes("final_replay_manifest_v3"));
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }
