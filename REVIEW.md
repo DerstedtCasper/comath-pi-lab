@@ -1,3 +1,25 @@
+# Goal 3 Task 100 / Terminal Read-Model Authority-Evidence Gate
+
+Scope: prevent campaign/Pi proof-success read models from treating legacy or imported `completed_formal_proof` campaign records as `formal_proof_verified`, `formal_replay_passed`, or export-ready proof evidence unless explicit current Lean Authority pass evidence is bound.
+
+Work performed:
+
+- Used high-concurrency read-only subagents to inspect service terminal projections, Pi goal-mode mapping, tests, and documentation targets.
+- Added `goal3-task100-terminal-read-model-authority-gate.test.mjs`. RED showed legacy `completed_formal_proof` records projected to proof success before the authority gate.
+- Added `formalReplayAuthorityEvidenceSchema` and persisted optional `formal_replay_authority_evidence` on campaigns; `formal_replay_authority_passed: true` now requires that evidence envelope.
+- Hardened service terminal projections and goal-mode export readiness so proof-success aliases require both `completed_formal_proof` and a valid `comath.formal_replay_authority_evidence.v1` envelope.
+- Hardened Pi `mapGoalTerminalState()` so stale `goal_mode_terminal_state: formal_replay_passed` or `external_v3_terminal_state: formal_proof_verified` cannot bypass the evidence envelope.
+
+Verification evidence:
+
+- TDD RED: Task100 service test initially failed because legacy `completed_formal_proof` projected to `formal_proof_verified`; Phase22 Pi test initially failed because stale external proof state mapped to `formal_replay_passed`.
+- GREEN focused tests: Task100 service gate, Phase22 Pi loop, Phase69 v3 terminal vocabulary, Task16 service goal-mode routes, and Task16 Pi goal-mode.
+- `corepack pnpm --filter @comath/comathd test`, `corepack pnpm build`, and `corepack pnpm typecheck` exited 0 after the evidence-envelope hardening.
+
+Boundary notes: Task100 is read-model/export semantic hardening only. It does not install Lean, fetch mathlib, execute fresh live Lean/mathlib replay, promote any positive-matrix task, broaden theorem coverage, validate production Pi/Codex lifecycle behavior, provide OS-level sandboxing, or complete Goal 3 GA.
+
+Residual risks: the real campaign final replay path still blocks before producing live `formal_replay_authority_evidence`; future live authority production must set that envelope only from promotion-grade Lean Authority v3 artifacts after clean replay.
+
 # Goal 3 Task 99 / Lean-Lake Binary Provenance Gate Hardening
 
 Scope: require promotion-grade FinalReplayManifest v3 evidence to bind Lean/Lake executable binary hashes to a passing final-replay LeanRunManifest. This closes the gap where a replay bundle could bind toolchain files and registry provenance while omitting the actual executed `lean` / `lake` binary provenance.

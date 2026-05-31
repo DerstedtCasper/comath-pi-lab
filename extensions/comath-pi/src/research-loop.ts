@@ -243,11 +243,23 @@ function assertCapability(input: ResearchCampaignLoopInput): CampaignLoopCapabil
 }
 
 function mapGoalTerminalState(campaign: any): GoalModeTerminalState | undefined {
+  const hasFormalReplayAuthorityEvidence =
+    campaign?.formal_replay_authority_passed === true &&
+    campaign?.formal_replay_authority_evidence?.schema_version === "comath.formal_replay_authority_evidence.v1" &&
+    campaign.formal_replay_authority_evidence.proof_authority === "lean_kernel_clean_replay" &&
+    campaign.formal_replay_authority_evidence.final_evidence_status === "verified_final_authority_evidence" &&
+    typeof campaign.formal_replay_authority_evidence.final_replay_manifest_v3_path === "string" &&
+    campaign.formal_replay_authority_evidence.final_replay_manifest_v3_path.length > 0 &&
+    typeof campaign.formal_replay_authority_evidence.final_authority_packaging_path === "string" &&
+    campaign.formal_replay_authority_evidence.final_authority_packaging_path.length > 0;
   if (goalModeTerminalStates.includes(campaign?.goal_mode_terminal_state)) {
+    if (campaign.goal_mode_terminal_state === "formal_replay_passed" && !hasFormalReplayAuthorityEvidence) {
+      return undefined;
+    }
     return campaign.goal_mode_terminal_state;
   }
   const external = campaign?.external_v3_terminal_state;
-  if (external === "formal_proof_verified") {
+  if (external === "formal_proof_verified" && hasFormalReplayAuthorityEvidence) {
     return "formal_replay_passed";
   }
   if (external === "verified_counterexample") {

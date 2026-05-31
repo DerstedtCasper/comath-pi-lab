@@ -734,6 +734,20 @@ export const finalReplayManifestV3Schema = z
   })
   .strict();
 
+export const formalReplayAuthorityEvidenceSchema = z
+  .object({
+    schema_version: z.literal("comath.formal_replay_authority_evidence.v1"),
+    proof_authority: z.literal("lean_kernel_clean_replay"),
+    final_evidence_status: z.literal("verified_final_authority_evidence"),
+    final_replay_manifest_v3_path: z.string().min(1),
+    final_authority_packaging_path: z.string().min(1),
+    replay_id: stableId.optional(),
+    gate_result_id: stableId.optional(),
+    artifact_hash: sha256.optional(),
+    recorded_at: isoTimestamp
+  })
+  .strict();
+
 export const stageRunRefSchema = z
   .object({
     id: stableId,
@@ -759,6 +773,8 @@ export const researchCampaignSchema = z
     accepted_artifacts: z.array(artifactRefSchema).default([]),
     blockers: z.array(z.record(z.string(), z.unknown())).default([]),
     next_actions: z.array(z.string()).default([]),
+    formal_replay_authority_passed: z.boolean().default(false),
+    formal_replay_authority_evidence: formalReplayAuthorityEvidenceSchema.optional(),
     created_at: isoTimestamp,
     updated_at: isoTimestamp
   })
@@ -783,6 +799,13 @@ export const researchCampaignSchema = z
         code: z.ZodIssueCode.custom,
         message: "completed_formal_proof terminal state requires completed_formal_proof current_stage",
         path: ["current_stage"]
+      });
+    }
+    if (campaign.formal_replay_authority_passed && !campaign.formal_replay_authority_evidence) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "formal_replay_authority_passed requires explicit formal_replay_authority_evidence",
+        path: ["formal_replay_authority_evidence"]
       });
     }
     if (campaign.terminal_state === "completed_refutation" && campaign.current_stage !== "completed_refutation") {
@@ -933,6 +956,7 @@ export type GateDecision = z.infer<typeof gateDecisionSchema>;
 export type FinalLeanReplay = z.infer<typeof finalLeanReplaySchema>;
 export type LeanRunManifestV3 = z.infer<typeof leanRunManifestV3Schema>;
 export type FinalReplayManifestV3 = z.infer<typeof finalReplayManifestV3Schema>;
+export type FormalReplayAuthorityEvidence = z.infer<typeof formalReplayAuthorityEvidenceSchema>;
 export type StageRunRef = z.infer<typeof stageRunRefSchema>;
 export type ResearchCampaign = z.infer<typeof researchCampaignSchema>;
 export type CitationRecord = z.infer<typeof citationRecordSchema>;

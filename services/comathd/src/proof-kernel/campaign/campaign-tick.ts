@@ -10,6 +10,7 @@ import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/fai
 import type { CleanReplayResult } from "../lean/clean-replay.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
 import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
+import { hasFormalReplayAuthorityPassEvidence } from "./external-terminal-vocabulary.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
 import {
   candidateRunSchema,
@@ -839,7 +840,8 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
       status: campaign.status,
       blocker_certificates: campaign.blockers,
       next_actions: campaign.next_actions,
-      evidence_pack_ready: campaign.terminal_state === "completed_formal_proof",
+      evidence_pack_ready:
+        campaign.terminal_state === "completed_formal_proof" && hasFormalReplayAuthorityPassEvidence(campaign),
       proof_authority: "none",
       can_promote_claim: false
     }

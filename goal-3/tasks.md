@@ -1795,3 +1795,21 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. Task99 closes the promotion-grade binary provenance gap, but it does not install Lean, configure elan, fetch mathlib, execute fresh live Lean/mathlib replay, promote any positive-matrix task, harden campaign/Pi terminal read-model proof-success projection, broaden theorem coverage, validate production Pi/Codex lifecycle behavior, provide OS-level sandboxing, or complete final GA audit.
 - Next step: Task 100 should bind campaign/Pi `formal_proof_verified` / `formal_replay_passed` terminal projections and `evidence_pack_ready` to explicit current Lean Authority pass evidence, so legacy `completed_formal_proof` records cannot be read as proof success.
 - Commit: `faf224d` (`Harden goal3 final replay binary provenance`)
+
+## Task 100: Terminal Read-Model Authority-Evidence Gate Hardening
+
+- [x] Confirm no earlier `[ ]`, `[~]`, or `Commit: pending` task item remained before opening Task 100.
+- [x] Re-read Goal 3 required context and confirm the current repository state instead of relying on prior memory.
+- [x] Use high-concurrency read-only subagents to inspect service terminal projections, Pi goal-mode mapping, tests, and docs.
+- [x] Add failing regressions proving legacy `completed_formal_proof` records cannot project to `formal_proof_verified`, `formal_replay_passed`, or export-ready proof evidence.
+- [x] Require explicit `formal_replay_authority_evidence` for `formal_replay_authority_passed`.
+- [x] Gate service external terminal projection, Pi goal-mode projection, and goal-mode export readiness on explicit Lean Authority evidence rather than raw terminal state.
+- [x] Run focused Task100/Phase22/Phase69/Task16 regressions plus package and workspace build/typecheck/test gates.
+
+Completion record:
+
+- Work done: re-read the Goal 3 required context set and confirmed `main` was clean before Task100. Reused existing subagents under the lifted RPM limit: one inspected service terminal read models, one inspected Pi goal-mode mapping, and one reviewed tests/docs. Added `goal3-task100-terminal-read-model-authority-gate.test.mjs`; RED showed legacy `completed_formal_proof` projected as proof success. Hardened `researchCampaignSchema` with `formalReplayAuthorityEvidenceSchema`, made bare `formal_replay_authority_passed: true` invalid without a `comath.formal_replay_authority_evidence.v1` envelope, and changed service/Pi proof-success read models plus `evidence_pack_ready` to require that envelope.
+- Verification evidence: TDD RED was observed before implementation: `node services/comathd/tests/unit/goal3-task100-terminal-read-model-authority-gate.test.mjs` failed because `projectExternalV3TerminalState()` returned `formal_proof_verified`; `node extensions/comath-pi/tests/phase22-research-loop.test.mjs` failed because stale external proof state mapped to `formal_replay_passed`. After implementation, focused regressions exited 0: Task100 service gate, Phase22 Pi loop, Phase69 v3 terminal vocabulary, Task16 service goal-mode routes, and Task16 Pi goal-mode. `corepack pnpm --filter @comath/comathd test`, `corepack pnpm build`, and `corepack pnpm typecheck` exited 0. `git diff --check` exited 0 with Windows LF-to-CRLF warnings only. `Test-Path -LiteralPath .comath` returned `False`.
+- Residual risk: Goal 3 remains incomplete. Task100 hardens terminal proof read-model/export semantics, but it does not install Lean, configure elan, fetch mathlib, execute fresh live Lean/mathlib replay, promote any positive-matrix task, broaden theorem coverage, validate production Pi/Codex lifecycle behavior, provide OS-level sandboxing, or complete final GA audit. The live campaign final replay path still needs a producer that writes `formal_replay_authority_evidence` only after promotion-grade Lean Authority v3 evidence passes.
+- Next step: Task 101 should continue from the live authority-production gap or another high-risk GA blocker without weakening the fail-closed proof-authority boundary.
+- Commit: pending

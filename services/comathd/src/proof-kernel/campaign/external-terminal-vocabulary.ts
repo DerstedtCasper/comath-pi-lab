@@ -1,4 +1,4 @@
-import type { CampaignTerminalState, ResearchCampaign } from "../../types/schemas.js";
+import type { CampaignTerminalState, FormalReplayAuthorityEvidence, ResearchCampaign } from "../../types/schemas.js";
 
 export type ExternalV3TerminalState =
   | "formal_proof_verified"
@@ -20,12 +20,31 @@ export type GoalModeTerminalState = (typeof goalModeTerminalStates)[number];
 export type ExternalV3TerminalProjectionInput = Pick<ResearchCampaign, "status" | "current_stage"> & {
   terminal_state?: CampaignTerminalState | null;
   gate_result?: "pass" | "fail" | "blocked" | "repair_required" | null;
+  formal_replay_authority_passed?: boolean;
+  formal_replay_authority_evidence?: Partial<FormalReplayAuthorityEvidence> | null;
 };
 
 export type ResearchCampaignWithExternalV3TerminalState = ResearchCampaign & {
   external_v3_terminal_state?: ExternalV3TerminalState;
   goal_mode_terminal_state?: GoalModeTerminalState;
 };
+
+export function hasFormalReplayAuthorityPassEvidence(input: {
+  formal_replay_authority_passed?: boolean;
+  formal_replay_authority_evidence?: Partial<FormalReplayAuthorityEvidence> | null;
+}): boolean {
+  const evidence = input.formal_replay_authority_evidence;
+  return (
+    input.formal_replay_authority_passed === true &&
+    evidence?.schema_version === "comath.formal_replay_authority_evidence.v1" &&
+    evidence.proof_authority === "lean_kernel_clean_replay" &&
+    evidence.final_evidence_status === "verified_final_authority_evidence" &&
+    typeof evidence.final_replay_manifest_v3_path === "string" &&
+    evidence.final_replay_manifest_v3_path.length > 0 &&
+    typeof evidence.final_authority_packaging_path === "string" &&
+    evidence.final_authority_packaging_path.length > 0
+  );
+}
 
 export function projectExternalV3TerminalState(
   input: ExternalV3TerminalProjectionInput
@@ -39,7 +58,7 @@ export function projectExternalV3TerminalState(
   if (input.status !== "terminal") {
     return undefined;
   }
-  if (input.terminal_state === "completed_formal_proof") {
+  if (input.terminal_state === "completed_formal_proof" && hasFormalReplayAuthorityPassEvidence(input)) {
     return "formal_proof_verified";
   }
   if (input.terminal_state === "completed_refutation") {
@@ -79,7 +98,9 @@ export function projectGoalModeTerminalState(input: ExternalV3TerminalProjection
   return undefined;
 }
 
-export function withExternalV3TerminalState(campaign: ResearchCampaign): ResearchCampaignWithExternalV3TerminalState {
+export function withExternalV3TerminalState(
+  campaign: ResearchCampaign
+): ResearchCampaignWithExternalV3TerminalState {
   const externalState = projectExternalV3TerminalState(campaign);
   const goalModeState = projectGoalModeTerminalState(campaign);
   return {
