@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { appendAuditEvent } from "../../audit/jsonl-writer.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { leanRunManifestV3Schema, type LeanRunManifestV3 } from "../../types/schemas.js";
 import { sha256Buffer, sha256FileSync } from "./lean-project.js";
@@ -32,6 +33,68 @@ function cwdDigest(cwd: string, inputFiles: string[]): string {
 function assertAppendOnlyEvidencePath(path: string): void {
   if (existsSync(path)) {
     throw new Error("lean_run_manifest_append_only_violation");
+  }
+}
+
+function appendLeanRunManifestProvenance(input: {
+  projectRoot: string;
+  project_id?: string;
+  actor?: string;
+  manifest: LeanRunManifestV3;
+  manifest_path: string;
+}): void {
+  const manifestRel = normalizeRel(input.projectRoot, input.manifest_path);
+  const manifestHash = sha256FileSync(input.manifest_path).sha256;
+  const row = {
+    schema_version: "comath.lean_run_manifest_index.v1",
+    claim_id: input.manifest.claim_id,
+    campaign_id: input.manifest.campaign_id,
+    candidate_id: input.manifest.candidate_id,
+    run_id: input.manifest.run_id,
+    purpose: input.manifest.purpose,
+    manifest_path: manifestRel,
+    manifest_sha256: manifestHash,
+    stdout_path: input.manifest.stdout_path,
+    stdout_sha256: input.manifest.stdout_sha256,
+    stderr_path: input.manifest.stderr_path,
+    stderr_sha256: input.manifest.stderr_sha256,
+    exit_code: input.manifest.exit_code,
+    runner: input.manifest.runner,
+    append_only: true,
+    proof_authority: input.manifest.proof_authority,
+    recorded_at: new Date().toISOString()
+  };
+  const indexPath = assertPathAllowed(
+    input.projectRoot,
+    join(".comath", "evidence", input.manifest.claim_id, "lean", "lean_run_manifest_index.jsonl"),
+    { purpose: "runtime-write" }
+  );
+  mkdirSync(dirname(indexPath), { recursive: true });
+  appendFileSync(indexPath, `${JSON.stringify(row)}\n`, "utf8");
+
+  if (input.project_id && input.actor) {
+    appendAuditEvent(input.projectRoot, {
+      project_id: input.project_id,
+      event_type: "lean_run_manifest.written",
+      actor: input.actor,
+      target_id: input.manifest.claim_id,
+      payload: {
+        run_id: input.manifest.run_id,
+        campaign_id: input.manifest.campaign_id,
+        candidate_id: input.manifest.candidate_id,
+        purpose: input.manifest.purpose,
+        manifest_path: manifestRel,
+        manifest_sha256: manifestHash,
+        stdout_path: input.manifest.stdout_path,
+        stdout_sha256: input.manifest.stdout_sha256,
+        stderr_path: input.manifest.stderr_path,
+        stderr_sha256: input.manifest.stderr_sha256,
+        exit_code: input.manifest.exit_code,
+        runner: input.manifest.runner,
+        append_only: true,
+        proof_authority: input.manifest.proof_authority
+      }
+    });
   }
 }
 
@@ -165,6 +228,8 @@ export function createServiceOwnedLeanRunManifestV3(input: {
 
 export function runServiceOwnedLeanCommandV3(input: {
   projectRoot: string;
+  project_id?: string;
+  actor?: string;
   run_id: string;
   claim_id: string;
   campaign_id: string;
@@ -259,6 +324,13 @@ export function runServiceOwnedLeanCommandV3(input: {
     proof_authority: result.exit_code === 0 ? input.proof_authority : "none"
   });
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  appendLeanRunManifestProvenance({
+    projectRoot: input.projectRoot,
+    project_id: input.project_id,
+    actor: input.actor,
+    manifest,
+    manifest_path: manifestPath
+  });
 
   return { manifest, stdout: result.stdout, stderr: result.stderr };
 }
