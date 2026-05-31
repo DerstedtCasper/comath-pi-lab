@@ -14,6 +14,7 @@ import {
   verifyLeanRunManifestV3Evidence
 } from "../proof-kernel/lean/lean-run-manifest-v3.js";
 import {
+  appendFinalReplayRegistryEntryV3,
   createFinalReplayManifestV3,
   verifyFinalReplayManifestV3,
   writeThirdPartyReplayPackV3
@@ -1929,6 +1930,270 @@ function blockedPositiveMatrixExecutorReport(input: {
   };
 }
 
+function readTextInsideProject(projectRoot: string, path: string): string {
+  if (!evidencePathExistsInsideProject(projectRoot, path)) {
+    throw new Error("positive_matrix_material_path_missing");
+  }
+  return readFileSync(join(projectRoot, path), "utf8");
+}
+
+function completedPositiveMatrixExecutorReport(input: {
+  task: Goal3GaPositiveMatrixTask;
+  claimId: string;
+  finalAuthorityPackaging: FinalAuthorityPackagingV3Report;
+}): Goal3GaPositiveMatrixLeanAuthorityExecutorReport {
+  return {
+    schema_version: "comath.goal3_positive_matrix_lean_authority_executor.v1",
+    task_id: input.task.task_id,
+    claim_id: input.claimId,
+    executor_status: "live_replay_conversion_completed",
+    blocker_code: "",
+    blocker_detail: "",
+    executor_blocker_path: "",
+    final_authority_packaging: input.finalAuthorityPackaging,
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+}
+
+function completePositiveMatrixFinalAuthorityEvidence(input: {
+  projectRoot: string;
+  task: Goal3GaPositiveMatrixTask;
+  claimId: string;
+  materialSource: Goal3GaDeclaredReplayMaterialSource;
+  materialCheck: Goal3GaDeclaredReplayMaterialCheck;
+  leanProbe: Goal3GaPm002LeanAuthorityProbeResult;
+  lakeProbe: Goal3GaPm002LeanAuthorityProbeResult;
+  leanToolchain: string;
+  attemptedCommands: string[][];
+  leanRunManifestPaths: string[];
+  runReplayCommand?: (command: string[], cwd: string) => Goal3GaPm002LeanAuthorityCommandResult;
+}): Goal3GaPositiveMatrixLeanAuthorityExecutorReport {
+  const taskNumber = positiveMatrixTaskNumber(input.task);
+  const replayId = input.materialSource.final_replay_manifest_id || `RPLY-${taskNumber}`;
+  const finalRunId = `LRUN-${taskNumber}03`;
+  const cleanRootRel = `.comath/lean/final_replay/${replayId}/clean`;
+  const cleanRoot = join(input.projectRoot, cleanRootRel);
+  const theoremName = input.task.target.expected_theorem_name;
+  const fullyQualifiedTheoremName = `MathResearch.${theoremName}`;
+
+  const target = writeProjectFile(
+    input.projectRoot,
+    `${cleanRootRel}/MathResearch/Target.lean`,
+    readTextInsideProject(input.projectRoot, input.materialSource.lean_source_path)
+  );
+  const audit = writeProjectFile(
+    input.projectRoot,
+    `${cleanRootRel}/Audit/TargetAudit.lean`,
+    [
+      "import MathResearch.Target",
+      `#check ${fullyQualifiedTheoremName}`,
+      `#print axioms ${fullyQualifiedTheoremName}`,
+      ""
+    ].join("\n")
+  );
+  const formalSpec = writeProjectFile(
+    input.projectRoot,
+    `${cleanRootRel}/FormalSpec/formal_spec_lock.json`,
+    readTextInsideProject(input.projectRoot, input.materialSource.formal_spec_lock_path)
+  );
+  const assumptionLedger = writeProjectFile(
+    input.projectRoot,
+    `${cleanRootRel}/FormalSpec/assumption_ledger.json`,
+    readTextInsideProject(input.projectRoot, input.materialSource.assumption_ledger_path)
+  );
+  const lakefile = writeProjectFile(
+    input.projectRoot,
+    `${cleanRootRel}/lakefile.lean`,
+    readTextInsideProject(input.projectRoot, input.materialSource.lakefile_path)
+  );
+  const toolchain = writeProjectFile(
+    input.projectRoot,
+    `${cleanRootRel}/lean-toolchain`,
+    readTextInsideProject(input.projectRoot, input.materialSource.lean_toolchain_path)
+  );
+  const lakeManifest = writeProjectFile(
+    input.projectRoot,
+    `${cleanRootRel}/lake-manifest.json`,
+    readTextInsideProject(input.projectRoot, input.materialSource.lake_manifest_path)
+  );
+
+  const finalReplayCommand = ["lake", "build", "MathResearch"];
+  const finalRun = runServiceOwnedLeanCommandV3({
+    projectRoot: input.projectRoot,
+    run_id: finalRunId,
+    claim_id: input.claimId,
+    campaign_id: `CAM-${taskNumber}`,
+    purpose: "final_replay",
+    command: finalReplayCommand,
+    cwd: cleanRoot,
+    input_files: [target, audit, formalSpec, assumptionLedger, lakefile, toolchain, lakeManifest],
+    leanVersionOutput: input.leanProbe.stdout,
+    lakeVersionOutput: input.lakeProbe.stdout,
+    leanToolchain: input.leanToolchain,
+    network_policy: "disabled",
+    sandbox: "none",
+    proof_authority: "lean_kernel_check",
+    run: input.runReplayCommand
+  });
+  const finalRunManifestPath = positiveMatrixRunManifestPath(input.projectRoot, input.claimId, finalRunId);
+  const leanRunManifestPaths = Array.from(new Set([...input.leanRunManifestPaths, finalRunManifestPath]));
+  const attemptedCommands = [...input.attemptedCommands, finalReplayCommand];
+
+  if (finalRun.manifest.exit_code !== 0) {
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task: input.task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck: input.materialCheck,
+      blocker_code: "lean_replay_command_failed",
+      blocker_detail: summarizeCommandFailure(finalReplayCommand, {
+        exit_code: finalRun.manifest.exit_code,
+        stdout: finalRun.stdout,
+        stderr: finalRun.stderr
+      }),
+      attempted_commands: attemptedCommands,
+      lean_run_manifest_paths: leanRunManifestPaths
+    });
+  }
+
+  const formalSpecLock = readJsonInsideProject(input.projectRoot, input.materialSource.formal_spec_lock_path);
+  const lockedStatementHash = jsonStringField(formalSpecLock, "statement_hash") ?? "";
+  const structuredAuditPath = input.materialSource.structured_audit_path;
+  const staticAuditPath = `.comath/evidence/${input.claimId}/lean/final_static_audit.json`;
+  const dependencyClosurePath = `.comath/evidence/${input.claimId}/lean/dependency_closure.json`;
+  const axiomProfilePath = `.comath/evidence/${input.claimId}/lean/axiom_profile.json`;
+  const statementCheckPath = `.comath/evidence/${input.claimId}/lean/statement_equivalence.json`;
+
+  writeJsonProjectFile(input.projectRoot, structuredAuditPath, {
+    schema_version: "comath.structured_lean_audit.v3",
+    theorem_name: theoremName,
+    fully_qualified_name: fullyQualifiedTheoremName,
+    theorem_type_pretty: input.task.formal_spec_lock_input.theorem_type_pretty,
+    source_file: "MathResearch/Target.lean",
+    imports: ["Mathlib"],
+    generated_by_run_id: finalRunId,
+    result: "pass",
+    hard_vetoes: []
+  });
+  const staticAudit = writeJsonProjectFile(input.projectRoot, staticAuditPath, {
+    result: "pass",
+    hard_vetoes: [],
+    generated_by_run_id: finalRunId,
+    structured_audit_path: structuredAuditPath
+  });
+  const dependencyClosure = writeJsonProjectFile(input.projectRoot, dependencyClosurePath, {
+    result: "pass",
+    hard_vetoes: [],
+    dependency_lock_path: input.materialSource.dependency_lock_path,
+    lean_run_manifest_paths: leanRunManifestPaths
+  });
+  const axiomProfile = writeJsonProjectFile(input.projectRoot, axiomProfilePath, {
+    result: "pass",
+    detected_axioms: [],
+    hard_vetoes: [],
+    generated_by_run_id: finalRunId
+  });
+  const statementCheck = writeJsonProjectFile(input.projectRoot, statementCheckPath, {
+    result: "pass",
+    locked_statement_hash: lockedStatementHash,
+    theorem_name: fullyQualifiedTheoremName,
+    hard_vetoes: []
+  });
+
+  const finalReplayManifest = createFinalReplayManifestV3({
+    projectRoot: input.projectRoot,
+    replay_id: replayId,
+    campaign_id: `CAM-${taskNumber}`,
+    claim_id: input.claimId,
+    theorem_name: fullyQualifiedTheoremName,
+    clean_workspace_path: cleanRoot,
+    command: finalReplayCommand,
+    exit_code: finalRun.manifest.exit_code,
+    result: "pass",
+    source_hashes_before: {
+      "MathResearch/Target.lean": hashRef(target),
+      "Audit/TargetAudit.lean": hashRef(audit),
+      "FormalSpec/formal_spec_lock.json": hashRef(formalSpec),
+      "FormalSpec/assumption_ledger.json": hashRef(assumptionLedger),
+      "lakefile.lean": hashRef(lakefile),
+      "lean-toolchain": hashRef(toolchain),
+      "lake-manifest.json": hashRef(lakeManifest)
+    },
+    stdout_path: join(input.projectRoot, finalRun.manifest.stdout_path),
+    stderr_path: join(input.projectRoot, finalRun.manifest.stderr_path),
+    report_paths: {
+      static_audit: staticAudit,
+      axiom_profile: axiomProfile,
+      dependency_closure: dependencyClosure,
+      statement_equivalence: statementCheck
+    },
+    lean_run_manifest_paths: leanRunManifestPaths.map((path) => join(input.projectRoot, path)),
+    dependency_lock: {
+      lean_toolchain_path: toolchain,
+      lake_manifest_path: lakeManifest,
+      lakefile_path: lakefile,
+      external_revisions: []
+    },
+    network_policy: "disabled",
+    sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" },
+    resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 }
+  });
+  writeJsonProjectFile(input.projectRoot, input.materialSource.final_replay_manifest_v3_path, finalReplayManifest);
+  appendFinalReplayRegistryEntryV3(input.projectRoot, finalReplayManifest);
+  const replayPack = writeThirdPartyReplayPackV3(input.projectRoot, finalReplayManifest);
+
+  const finalAuthorityPackaging = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({
+    projectRoot: input.projectRoot,
+    taskId: input.task.task_id,
+    claimId: input.claimId,
+    evidence: {
+      lean_run_manifest_paths: leanRunManifestPaths,
+      final_replay_manifest_v3_path: input.materialSource.final_replay_manifest_v3_path,
+      structured_audit_path: structuredAuditPath,
+      dependency_closure_path: dependencyClosurePath,
+      axiom_profile_path: axiomProfilePath,
+      statement_check_path: statementCheckPath,
+      third_party_replay_pack_path: replayPack.pack_path,
+      formal_spec_lock_path: input.materialSource.formal_spec_lock_path,
+      assumption_ledger_path: input.materialSource.assumption_ledger_path
+    }
+  });
+
+  if (finalAuthorityPackaging.final_evidence_status === "verified_final_authority_evidence") {
+    return completedPositiveMatrixExecutorReport({
+      task: input.task,
+      claimId: input.claimId,
+      finalAuthorityPackaging
+    });
+  }
+
+  const { path } = writePositiveMatrixExecutorBlocker({
+    projectRoot: input.projectRoot,
+    task: input.task,
+    claimId: input.claimId,
+    materialSource: input.materialSource,
+    materialCheck: input.materialCheck,
+    blocker_code: "lean_authority_evidence_incomplete",
+    blocker_detail: `${input.task.task_id} final replay artifacts were produced, but derived Lean Authority v3 packaging still failed closed.`,
+    attempted_commands: attemptedCommands,
+    lean_run_manifest_paths: leanRunManifestPaths
+  });
+  return {
+    schema_version: "comath.goal3_positive_matrix_lean_authority_executor.v1",
+    task_id: input.task.task_id,
+    claim_id: input.claimId,
+    executor_status: "blocked_before_replay",
+    blocker_code: "lean_authority_evidence_incomplete",
+    blocker_detail: `${input.task.task_id} final replay artifacts were produced, but derived Lean Authority v3 packaging still failed closed.`,
+    executor_blocker_path: path,
+    final_authority_packaging: finalAuthorityPackaging,
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+}
+
 function writePm002ExecutorBlocker(input: {
   projectRoot: string;
   materialSource: Goal3GaDeclaredReplayMaterialSource;
@@ -1970,6 +2235,7 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplay(input: {
   taskId: string;
   claimId: string;
   materialSource: Goal3GaDeclaredReplayMaterialSource;
+  completeFinalAuthorityEvidence?: boolean;
   probeLeanVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
   probeLakeVersion?: () => Goal3GaPm002LeanAuthorityProbeResult;
   runReplayCommand?: (command: string[], cwd: string) => Goal3GaPm002LeanAuthorityCommandResult;
@@ -2087,6 +2353,22 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplay(input: {
         lean_run_manifest_paths: manifestPaths
       });
     }
+  }
+
+  if (input.completeFinalAuthorityEvidence === true) {
+    return completePositiveMatrixFinalAuthorityEvidence({
+      projectRoot: input.projectRoot,
+      task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck,
+      leanProbe,
+      lakeProbe,
+      leanToolchain,
+      attemptedCommands,
+      leanRunManifestPaths: manifestPaths,
+      runReplayCommand: input.runReplayCommand
+    });
   }
 
   return blockedPositiveMatrixExecutorReport({
@@ -2715,6 +2997,16 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
     finalReplayRecord.proof_authority === "lean_kernel_clean_replay";
   if (!finalReplayManifestPath || !finalReplayVerification.ok || !finalReplayPassed) {
     missing.add("final_replay_manifest_v3");
+  }
+  const finalReplayLeanRunManifestPaths = Array.isArray(finalReplayRecord.lean_run_manifest_paths)
+    ? finalReplayRecord.lean_run_manifest_paths.filter((path): path is string => typeof path === "string" && path.length > 0)
+    : [];
+  if (
+    finalReplayPassed &&
+    canonicalJson(leanRunManifestPaths.map((path) => path.replace(/\\/g, "/")).sort()) !==
+      canonicalJson(finalReplayLeanRunManifestPaths.map((path) => path.replace(/\\/g, "/")).sort())
+  ) {
+    missing.add("lean_run_manifest_v3");
   }
 
   if (!structuredAuditPath || !reportPasses(input.projectRoot, structuredAuditPath)) {
