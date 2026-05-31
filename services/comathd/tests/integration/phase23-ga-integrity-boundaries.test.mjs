@@ -55,8 +55,12 @@ function writeCampaignStatus(campaignId, campaign) {
 try {
   const supported = await startCampaign("Prove in Lean that n + 0 = n for natural numbers.", "phase23-integrity-supported");
   const supportedFinal = await tickToTerminal(supported.campaign.campaign_id, "phase23-integrity-supported");
-  assert.equal(supportedFinal.campaign.terminal_state, "completed_formal_proof");
-  assert.equal(supportedFinal.ensemble?.decision.selected_candidate_id, "CAND-0001");
+  assert.equal(supportedFinal.campaign.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(supportedFinal.campaign.stage_runs.at(-1).stage, "candidate_generation");
+  assert.equal(supportedFinal.final_replay, undefined);
+  assert.equal(supportedFinal.gate, undefined);
+  const supportedClaim = getClaim(projectRoot, supportedFinal.campaign.project_id, supportedFinal.campaign.root_claim_id);
+  assert.equal(supportedClaim.status, "conjectural");
 
   const unsupported = await startCampaign("Prove that every prime number has a twin prime.", "phase23-integrity-unsupported");
   const unsupportedFinal = await tickToTerminal(unsupported.campaign.campaign_id, "phase23-integrity-unsupported");
@@ -78,7 +82,7 @@ try {
 
   const refutation = await startCampaign("Prove in Lean that n + 1 = n for natural numbers.", "phase23-integrity-refute");
   const refutationFinal = await tickToTerminal(refutation.campaign.campaign_id, "phase23-integrity-refute");
-  assert.equal(refutationFinal.campaign.terminal_state, "completed_refutation");
+  assert.equal(refutationFinal.campaign.terminal_state, "blocked_with_replayable_reason");
   const replay = await server.inject({
     method: "POST",
     path: `/campaign/${encodeURIComponent(refutation.campaign.campaign_id)}/replay`,
@@ -88,12 +92,12 @@ try {
     }
   });
   assert.equal(replay.status, 200);
-  assert.equal(replay.body.campaign.terminal_state, "completed_refutation");
+  assert.equal(replay.body.campaign.terminal_state, "blocked_with_replayable_reason");
   assert.equal(replay.body.final_replay, undefined);
-  assert.equal(replay.body.blocker, "completed refutation campaigns do not have a proof replay");
+  assert.equal(replay.body.blocker, "broad theorem synthesis requires checked replay target");
   const persistedRefutation = getCampaign(projectRoot, refutation.campaign.campaign_id);
-  assert.equal(persistedRefutation.terminal_state, "completed_refutation");
-  assert.equal(persistedRefutation.current_stage, "completed_refutation");
+  assert.equal(persistedRefutation.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(persistedRefutation.current_stage, "blocked");
 } finally {
   await server.close();
   rmSync(projectRoot, { recursive: true, force: true });

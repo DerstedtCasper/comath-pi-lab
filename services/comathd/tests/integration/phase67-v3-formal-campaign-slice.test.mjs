@@ -50,59 +50,25 @@ try {
   const claimId = start.body.campaign.root_claim_id;
   const finalTick = await tickToTerminal(campaignId);
 
-  assert.equal(finalTick.campaign.current_stage, "completed_formal_proof");
-  assert.equal(finalTick.final_replay.result, "pass");
-  assert.equal(finalTick.static_audit.result, "pass");
+  assert.equal(finalTick.campaign.status, "terminal");
+  assert.equal(finalTick.campaign.current_stage, "blocked");
+  assert.equal(finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
+  assert.equal(finalTick.final_replay, undefined);
+  assert.equal(finalTick.static_audit, undefined);
+  assert.equal(finalTick.gate, undefined);
 
-  const summaryPath = join(projectRoot, ".comath", "campaign", campaignId, "v3_formal_campaign_slice.json");
-  assert.equal(existsSync(summaryPath), true, "v3 formal campaign slice summary artifact must exist");
+  const planningRel = `.comath/campaign/${campaignId}/broad_synthesis_plan.json`;
+  const failureRel = `.comath/campaign/${campaignId}/broad_synthesis_failure.json`;
+  assert.equal(existsSync(join(projectRoot, planningRel)), true);
+  assert.equal(existsSync(join(projectRoot, failureRel)), true);
 
-  const summary = readJson(summaryPath);
-  assert.equal(summary.schema_version, "comath.v3.formal_campaign_slice.v1");
-  assert.equal(summary.user_goal, "Prove in Lean that n + 0 = n for natural numbers.");
-  assert.equal(summary.campaign_id, campaignId);
-  assert.equal(summary.claim_id, claimId);
-  assert.equal(summary.theorem_family, "nat_add_zero");
-  assert.equal(summary.canonical_proposition, "n + 0 = n");
-  assert.equal(summary.terminal_state, "completed_formal_proof");
-  assert.equal(summary.final_claim_status, "formally_checked");
-  assert.equal(summary.proof_authority, "lean_clean_replay");
-
-  const requiredStages = [
-    "problem_locked",
-    "knowledge_pack",
-    "notation_gate",
-    "skeleton_gate",
-    "line_map_gate",
-    "candidate_generation",
-    "candidate_verification",
-    "candidate_arbitration",
-    "refutation_red_team",
-    "integration_refactor",
-    "final_static_audit",
-    "final_global_replay",
-    "memory_update"
-  ];
-  assert.deepEqual(summary.stage_sequence, requiredStages);
-  assert.equal(summary.candidate_summary.total_candidates, 8);
-  assert.equal(summary.candidate_summary.selected_candidate_id, "CAND-0001");
-  assert.equal(summary.candidate_summary.selection_mode, "evidence_weighted");
-  assert.equal(summary.candidate_summary.trivial_bypass_logged, false);
-  assert.equal(summary.final_audit.result, "pass");
-  assert.equal(summary.clean_replay.result, "pass");
-  assert.equal(summary.clean_replay.replay_command, finalTick.final_replay.command);
-  assert.match(summary.clean_replay.replay_command, /^(lake build\b|lake env lean\b)/);
-  assert.equal(summary.promotion.result, "pass");
-  assert.equal(summary.replayable_artifact_bundle.final_replay_manifest.endsWith("final_replay_manifest.json"), true);
-  assert.equal(summary.replayable_artifact_bundle.final_static_audit.endsWith("final_static_audit.json"), true);
-  assert.equal(summary.replayable_artifact_bundle.proof_memory_events, ".comath/memory/proof_memory_events.jsonl");
-
-  for (const relPath of Object.values(summary.replayable_artifact_bundle)) {
-    assert.equal(existsSync(join(projectRoot, relPath)), true, `${relPath} must exist`);
-  }
+  const failure = readJson(join(projectRoot, failureRel));
+  assert.equal(failure.reason, "broad theorem synthesis requires checked replay target");
+  assert.equal(failure.proof_authority, "none");
+  assert.equal(failure.can_promote_claim, false);
 
   const claim = getClaim(projectRoot, finalTick.campaign.project_id, claimId);
-  assert.equal(claim.status, "formally_checked");
+  assert.equal(claim.status, "conjectural");
 
   const replay = await server.inject({
     method: "POST",
@@ -113,7 +79,8 @@ try {
     }
   });
   assert.equal(replay.status, 200);
-  assert.equal(replay.body.final_replay.result, "pass");
+  assert.equal(replay.body.final_replay, undefined);
+  assert.equal(replay.body.blocker, "broad theorem synthesis requires checked replay target");
 } finally {
   await server.close();
   rmSync(projectRoot, { recursive: true, force: true });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createComathServer } from "../../dist/index.js";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-campaign-ensemble-isolation-"));
@@ -45,6 +45,36 @@ async function tickUntil(campaignId, actor, targetStage) {
   assert.fail(`campaign ${campaignId} did not reach ${targetStage}`);
 }
 
+function writeNativeGenerationRequest(campaign) {
+  const obligation = campaign.open_obligations[0];
+  const rel = `.comath/campaign/${campaign.campaign_id}/candidate_generation_request.json`;
+  const path = join(projectRoot, rel);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(
+    path,
+    `${JSON.stringify(
+      {
+        schema_version: "comath.native_agent_candidate_generation_request.v1",
+        campaign_id: campaign.campaign_id,
+        claim_id: campaign.root_claim_id,
+        obligation_id: obligation.obligation_id,
+        locked_statement_hash: obligation.statement_hash,
+        stage: "candidate_generation",
+        requested_runner: "comathd.runGaAgentStageCandidates",
+        proof_authority: "none",
+        can_promote_claim: false
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+}
+
+function readJson(relativePath) {
+  return JSON.parse(readFileSync(join(projectRoot, relativePath), "utf8"));
+}
+
 try {
   const add = await startCampaign("Prove in Lean that n + 0 = n for natural numbers.", "phase34-add");
   const mul = await startCampaign("Prove in Lean that n * 0 = 0 for natural numbers.", "phase34-mul");
@@ -55,25 +85,27 @@ try {
   assert.notEqual(addCampaignId, mulCampaignId);
   assert.notEqual(addClaimHash, mulClaimHash);
 
+  const addReady = await tickUntil(addCampaignId, "phase34-add", "candidate_generation");
+  const mulReady = await tickUntil(mulCampaignId, "phase34-mul", "candidate_generation");
+  writeNativeGenerationRequest(addReady.campaign);
+  writeNativeGenerationRequest(mulReady.campaign);
   await tickUntil(addCampaignId, "phase34-add", "candidate_verification");
   await tickUntil(mulCampaignId, "phase34-mul", "candidate_verification");
 
-  const addFinal = await tickUntil(addCampaignId, "phase34-add", "completed_formal_proof");
-  assert.equal(addFinal.campaign.status, "terminal");
-  assert.equal(addFinal.final_replay?.theorem_family, "nat_add_zero");
-  assert.equal(addFinal.ensemble?.candidates.length, 8);
+  const addCandidates = readJson(`.comath/campaign/${addCampaignId}/ensembles/lemma_sprint/PO-0001/candidates.json`);
+  assert.equal(addCandidates.length, 8);
   assert.equal(
-    addFinal.ensemble.candidates.every((candidate) => candidate.campaign_id === addCampaignId),
+    addCandidates.every((candidate) => candidate.campaign_id === addCampaignId),
     true,
     "campaign A must not read campaign B candidate runs after interleaved ticks"
   );
   assert.equal(
-    addFinal.ensemble.candidates.every((candidate) => candidate.locked_statement_hash === addClaimHash),
+    addCandidates.every((candidate) => candidate.locked_statement_hash === addClaimHash),
     true,
     "campaign A ensemble candidates must remain bound to campaign A statement hash"
   );
   assert.equal(
-    addFinal.ensemble.candidates.every((candidate) =>
+    addCandidates.every((candidate) =>
       candidate.workspace_path.startsWith(`.comath/campaign/${addCampaignId}/ensembles/lemma_sprint/PO-0001/candidates/`)
     ),
     true,

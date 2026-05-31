@@ -15,6 +15,7 @@ import {
 } from "../../types/schemas.js";
 import { decideCandidate, type EnsembleDecision } from "./decision-forest.js";
 import { recordFailedRoutes } from "./failure-aggregator.js";
+import { candidateWorkspaceRel } from "./paths.js";
 import { defaultVariants } from "./variant-registry.js";
 
 export type GaAgentId = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "A7" | "A8";
@@ -324,7 +325,7 @@ function createCandidateReplayProjectDescriptor(input: {
 }
 
 function workspaceRel(campaign: ResearchCampaign, obligation: ProofObligation, variantSlug: string): string {
-  return normalizedRel(join(".comath", "campaign", campaign.campaign_id, "ensembles", "lemma_sprint", obligation.obligation_id, "agents", variantSlug));
+  return normalizedRel(candidateWorkspaceRel(campaign, obligation.obligation_id, variantSlug));
 }
 
 function writeJson(projectRoot: string, relativePath: string, value: unknown): string {

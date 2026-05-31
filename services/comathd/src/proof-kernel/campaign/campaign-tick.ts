@@ -9,6 +9,8 @@ import { initProject } from "../../project/project-store.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
+import { runGaAgentStageCandidates } from "../ensemble/ga-agent-stage-runner.js";
+import { defaultVariants } from "../ensemble/variant-registry.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
 import type { LeanProjectFiles } from "../lean/lean-project.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
@@ -661,6 +663,12 @@ function readStoredCandidates(projectRoot: string, campaign: ResearchCampaign, o
   return candidateRunSchema.array().parse(JSON.parse(readFileSync(candidatesPath, "utf8")));
 }
 
+function writeStoredCandidates(projectRoot: string, campaign: ResearchCampaign, obligationId: string, candidates: CandidateRun[]): string {
+  const candidatesRel = ensembleCandidatesRel(campaign, obligationId);
+  writeRuntimeFile(projectRoot, candidatesRel, `${JSON.stringify(candidateRunSchema.array().parse(candidates), null, 2)}\n`);
+  return candidatesRel;
+}
+
 function readCandidateManifestForCampaign(projectRoot: string, candidate: CandidateRun): CandidateManifest {
   if (!candidate.manifest_path) {
     throw new Error("selected_candidate_manifest_missing");
@@ -849,6 +857,32 @@ function blockForBroadSynthesisPlanning(input: {
     obligation: { ...input.obligation, status: "blocked" },
     blocker: broadSynthesisBlockedReason
   };
+}
+
+function readNativeAgentCandidateGenerationRequest(
+  projectRoot: string,
+  campaign: ResearchCampaign,
+  obligation: ProofObligation
+): { path: string } | undefined {
+  const requestRel = campaignRel(campaign, "candidate_generation_request.json");
+  if (!artifactExists(projectRoot, requestRel)) {
+    return undefined;
+  }
+  const request = objectRecord(readJsonArtifact(projectRoot, requestRel), "native_agent_candidate_generation_request");
+  if (
+    request.schema_version !== "comath.native_agent_candidate_generation_request.v1" ||
+    request.campaign_id !== campaign.campaign_id ||
+    request.claim_id !== campaign.root_claim_id ||
+    request.obligation_id !== obligation.obligation_id ||
+    request.locked_statement_hash !== obligation.statement_hash ||
+    request.stage !== "candidate_generation" ||
+    request.requested_runner !== "comathd.runGaAgentStageCandidates" ||
+    request.proof_authority !== "none" ||
+    request.can_promote_claim !== false
+  ) {
+    throw new Error("native_agent_candidate_generation_request_invalid");
+  }
+  return { path: requestRel };
 }
 
 export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
@@ -2066,27 +2100,115 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "candidate_generation") {
-    return blockForBroadSynthesisPlanning({
+    let nativeGenerationRequest: { path: string } | undefined;
+    try {
+      nativeGenerationRequest = readNativeAgentCandidateGenerationRequest(input.project_root, campaign, obligation);
+    } catch (error) {
+      return blockCampaignAtFinalReplay({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor,
+        stage: "candidate_generation",
+        reason: `service-owned native candidate generation request failed: ${error instanceof Error ? error.message : "unknown_error"}`
+      });
+    }
+    if (!nativeGenerationRequest) {
+      return blockForBroadSynthesisPlanning({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor
+      });
+    }
+    const batch = runGaAgentStageCandidates({
       projectRoot: input.project_root,
       campaign,
       obligation,
-      actor
+      stage: "lemma_sprint",
+      locked_statement_hash: obligation.statement_hash
     });
+    const candidatesRel = writeStoredCandidates(input.project_root, campaign, obligation.obligation_id, batch.candidates);
+    const generationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_generation.json", {
+      schema_version: "comath.live_candidate_generation.v1",
+      campaign_id: campaign.campaign_id,
+      project_id: campaign.project_id,
+      claim_id: campaign.root_claim_id,
+      obligation_id: obligation.obligation_id,
+      total_candidates: batch.candidates.length,
+      kernel_checked_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_kernel_checked").length,
+      failed_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_failed").length,
+      blocked_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_blocked").length,
+      plausible_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_plausible_only").length,
+      source_request_path: nativeGenerationRequest.path,
+      candidate_index_path: candidatesRel,
+      candidate_manifest_paths: batch.candidates
+        .map((candidate) => candidate.manifest_path)
+        .filter((path): path is string => typeof path === "string" && path.length > 0),
+      task_card_paths: batch.task_cards.map((taskCard) => normalizeRelPath(join(taskCard.workspace_path, "task_card.json"))),
+      agent_output_paths: batch.task_cards.map((taskCard) => normalizeRelPath(join(taskCard.workspace_path, "agent_output.json"))),
+      proof_authority: "none",
+      can_promote_claim: false,
+      next_stage: "candidate_verification",
+      created_at: now()
+    });
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        current_stage: "candidate_verification",
+        open_obligations: [{ ...obligation, status: "candidate_search" }],
+        stage_runs: [
+          ...campaign.stage_runs,
+          completedStageRun(campaign, "candidate_generation", [generationRel, candidatesRel])
+        ],
+        next_actions: ["verify native 8-way candidate manifests before arbitration"]
+      }),
+      actor
+    );
+    return { campaign: next, obligation, ensemble: { candidates: batch.candidates, decision: { selected_candidate_id: null, selection_mode: "recovery_required", proof_authority: "none", rejected_candidates: [], hard_vetoes: [], recovery_plan: ["candidate generation requires verification before arbitration"] } } };
   }
 
   if (campaign.current_stage === "candidate_verification") {
     const candidates = readStoredCandidates(input.project_root, campaign, obligation.obligation_id);
+    const variantIds = new Set(candidates.map((candidate) => candidate.variant_id));
+    const allRequiredVariantsPresent = defaultVariants.every((variant) => variantIds.has(variant.variant_id));
+    const allManifestPathsPresent = candidates.every(
+      (candidate) => typeof candidate.manifest_path === "string" && artifactExists(input.project_root, candidate.manifest_path)
+    );
+    const allStatementHashesMatch = candidates.every(
+      (candidate) => candidate.candidate_statement_hash === candidate.locked_statement_hash
+    );
     const verificationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_verification.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
       total_candidates: candidates.length,
+      unique_variant_count: variantIds.size,
+      all_required_variants_present: allRequiredVariantsPresent,
+      all_manifest_paths_present: allManifestPathsPresent,
       kernel_checked_candidates: candidates.filter((candidate) => candidate.state === "candidate_kernel_checked").length,
       failed_candidates: candidates.filter((candidate) => candidate.state === "candidate_failed").length,
-      all_statement_hashes_match: candidates.every(
-        (candidate) => candidate.candidate_statement_hash === candidate.locked_statement_hash
-      ),
+      all_statement_hashes_match: allStatementHashesMatch,
+      proof_authority: "none",
+      can_promote_claim: false,
       created_at: now()
     });
+    if (
+      candidates.length !== defaultVariants.length ||
+      variantIds.size !== defaultVariants.length ||
+      !allRequiredVariantsPresent ||
+      !allManifestPathsPresent ||
+      !allStatementHashesMatch
+    ) {
+      return blockCampaignAtFinalReplay({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor,
+        stage: "candidate_verification",
+        reason: `native candidate verification failed: see ${verificationRel}`
+      });
+    }
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
