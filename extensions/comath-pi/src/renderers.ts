@@ -72,7 +72,10 @@ function evidenceSource(kind: string | undefined): EvidenceBoardItem["source"] {
   if (kind === "literature") {
     return "literature";
   }
-  if (kind === "lean" || kind === "symbolic" || kind === "computation" || kind === "counterexample" || kind === "audit") {
+  if (kind === "audit") {
+    return "audit";
+  }
+  if (kind === "lean" || kind === "symbolic" || kind === "computation" || kind === "counterexample") {
     return "runner";
   }
   return "unknown";

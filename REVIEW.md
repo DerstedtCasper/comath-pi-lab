@@ -1,3 +1,40 @@
+# Goal 3 Task 92 / Dashboard Audit Evidence Semantics
+
+Scope: fix Pi dashboard read-model wording so `audit` evidence from real replay attempt archives is not rendered as generic `runner` evidence.
+
+Changes:
+
+- Added `goal3-task92-dashboard-audit-evidence-semantics.test.mjs`.
+- Extended `EvidenceBoardItem.source` with `audit`.
+- Updated Pi dashboard evidence normalization so `kind: "audit"` renders as `audit`, while Lean/symbolic/computation/counterexample evidence still renders as `runner`.
+- Wired the Task92 regression into the default `@comath/pi-extension` test chain.
+
+TDD evidence:
+
+```text
+node tests/goal3-task92-dashboard-audit-evidence-semantics.test.mjs
+Initial RED result: exit 1; `kind: "audit"` rendered as `runner`.
+```
+
+Verification:
+
+- `corepack pnpm --filter @comath/pi-extension build`
+- `node tests/goal3-task92-dashboard-audit-evidence-semantics.test.mjs`
+- `corepack pnpm --filter @comath/pi-extension typecheck`
+- `node tests/phase15-dashboard.test.mjs`
+- `node tests/goal3-task16-pi-goal-mode.test.mjs`
+- `corepack pnpm --filter @comath/pi-extension test`
+- `node services/comathd/tests/unit/goal3-task88-real-replay-attempt-archive.test.mjs`
+- `node services/comathd/tests/unit/goal3-task89-real-replay-environment-diagnostic.test.mjs`
+- `node services/comathd/tests/unit/goal3-task91-final-replay-artifact-kind-gate.test.mjs`
+- `corepack pnpm build`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+
+Boundary notes: Task92 is a Pi read-model/UI semantics fix only. It does not alter service-side promotion gates, artifact kinds, audit evidence records, final replay manifests, replay registry provenance, Lean environment probing, theorem recognition, Nat-linear synthesis, default assumptions, or proof authority. Archive and diagnostic evidence remain non-authoritative unless an ordinary `comathd` final Lean Authority promotion gate passes.
+
+Residual risks: this workstation still has elan shims without an active/default Lean toolchain, so real Lean/mathlib clean replay remains blocked. A read-only no-reinvent scan also flagged a `notation_gate` wording risk in `campaign-tick.ts` that mentions Lean Nat notation; it did not inject `n : Nat` in this task, but should be reviewed as a later formal-spec-derived notation cleanup.
+
 # Goal 3 Task 91 / Final Replay Artifact Provenance Gate
 
 Scope: harden the ordinary promotion gate so FinalReplayManifest v3 evidence must have both runner-output artifact provenance and service-owned append-only registry audit provenance.

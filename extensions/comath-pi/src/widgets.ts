@@ -24,7 +24,7 @@ export type WorkstreamBoardItem = {
 export type EvidenceBoardItem = {
   id: string;
   claim_id?: string;
-  source: "margin_note" | "artifact" | "runner" | "literature" | "unknown";
+  source: "margin_note" | "artifact" | "runner" | "literature" | "audit" | "unknown";
 };
 
 export type GateBoardItem = {
