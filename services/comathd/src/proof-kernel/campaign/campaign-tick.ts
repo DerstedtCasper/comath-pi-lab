@@ -23,9 +23,11 @@ import {
 } from "../../release/goal3-ga-acceptance.js";
 import {
   candidateRunSchema,
+  candidateManifestSchema,
   proofObligationSchema,
   researchCampaignSchema,
   type ArtifactRef,
+  type CandidateManifest,
   type CandidateRun,
   type GateDecision,
   type ProofObligation,
@@ -659,6 +661,36 @@ function readStoredCandidates(projectRoot: string, campaign: ResearchCampaign, o
   return candidateRunSchema.array().parse(JSON.parse(readFileSync(candidatesPath, "utf8")));
 }
 
+function readCandidateManifestForCampaign(projectRoot: string, candidate: CandidateRun): CandidateManifest {
+  if (!candidate.manifest_path) {
+    throw new Error("selected_candidate_manifest_missing");
+  }
+  const manifestPath = assertPathAllowed(projectRoot, candidate.manifest_path, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  const manifest = candidateManifestSchema.parse(JSON.parse(readFileSync(manifestPath, "utf8")));
+  const mismatches: string[] = [];
+  for (const key of ["candidate_id", "campaign_id", "stage", "obligation_id", "variant_id", "locked_statement_hash", "state"] as const) {
+    if (manifest[key] !== candidate[key]) {
+      mismatches.push(key);
+    }
+  }
+  if (manifest.workspace_path !== candidate.workspace_path) {
+    mismatches.push("workspace_path");
+  }
+  if (manifest.candidate_statement_hash !== candidate.candidate_statement_hash) {
+    mismatches.push("candidate_statement_hash");
+  }
+  if ((manifest.replay_command || undefined) !== candidate.replay_command) {
+    mismatches.push("replay_command");
+  }
+  if (mismatches.length > 0) {
+    throw new Error(`selected_candidate_manifest_mismatch:${mismatches.join(",")}`);
+  }
+  return manifest;
+}
+
 function writeSimpleStageArtifact(projectRoot: string, campaign: ResearchCampaign, filename: string, payload: unknown): string {
   const rel = join(".comath", "campaign", campaign.campaign_id, filename);
   writeRuntimeFile(projectRoot, rel, `${JSON.stringify(payload, null, 2)}\n`);
@@ -1065,6 +1097,120 @@ function readAcceptedArtifactJson(projectRoot: string, artifact: ArtifactRef): u
   } catch {
     return undefined;
   }
+}
+
+async function produceFinalReplayMaterialFromSelectedIntegrationArtifacts(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  decision: { candidates: CandidateRun[]; decision: EnsembleDecision } | undefined;
+  integrationRel: string;
+  actor: string;
+}): Promise<
+  | {
+      materialPath: string;
+      materialArtifact: ArtifactRef;
+      sourceCandidate: CandidateRun;
+    }
+  | undefined
+> {
+  const decision = input.decision;
+  const selectedCandidateId = decision?.decision.selected_candidate_id;
+  if (!selectedCandidateId) {
+    return undefined;
+  }
+  const selected = decision.candidates.find((candidate) => candidate.candidate_id === selectedCandidateId);
+  if (!selected) {
+    throw new Error("selected_candidate_missing");
+  }
+  if (selected.state !== "candidate_kernel_checked") {
+    throw new Error("selected_candidate_not_kernel_checked");
+  }
+  if (
+    selected.campaign_id !== input.campaign.campaign_id ||
+    selected.obligation_id !== input.obligation.obligation_id ||
+    selected.locked_statement_hash !== input.obligation.statement_hash ||
+    selected.candidate_statement_hash !== input.obligation.statement_hash ||
+    selected.hard_vetoes.length > 0
+  ) {
+    throw new Error("selected_candidate_identity_mismatch");
+  }
+  const manifest = readCandidateManifestForCampaign(input.projectRoot, selected);
+  if (
+    manifest.statement_equivalence_claim !== "exact" ||
+    manifest.hard_vetoes.length > 0 ||
+    manifest.introduced_assumptions.length > 0 ||
+    manifest.candidate_statement_hash !== input.obligation.statement_hash ||
+    !manifest.replay_command ||
+    !manifest.evidence.some((evidence) => /lean_run_manifest|final_replay_manifest|service_owned_lean_replay/i.test(evidence))
+  ) {
+    throw new Error("selected_candidate_not_material_grade");
+  }
+  const materialSourceArtifacts = manifest.artifacts.filter(
+    (artifact) =>
+      artifact.kind === "final_replay_material_source" ||
+      artifact.required_for.includes("final_replay_material")
+  );
+  if (materialSourceArtifacts.length === 0) {
+    return undefined;
+  }
+  if (materialSourceArtifacts.length > 1) {
+    throw new Error("selected_candidate_final_replay_material_source_ambiguous");
+  }
+  const sourceRel = normalizeRelPath(join(manifest.workspace_path, materialSourceArtifacts[0]!.path));
+  const sourcePath = assertPathAllowed(input.projectRoot, sourceRel, { purpose: "read", resolveRealpath: true });
+  const sourceText = readFileSync(sourcePath, "utf8");
+  const sourceHash = sha256Text(sourceText);
+  const source = objectRecord(JSON.parse(sourceText), "selected_candidate_final_replay_material_source");
+  if (
+    source.schema_version !== "comath.selected_candidate_final_replay_material_source.v1" ||
+    source.campaign_id !== input.campaign.campaign_id ||
+    source.claim_id !== input.campaign.root_claim_id ||
+    source.obligation_id !== input.obligation.obligation_id ||
+    source.candidate_id !== selected.candidate_id ||
+    source.artifact_role !== "selected_candidate_final_replay_material_source" ||
+    source.proof_authority !== "none" ||
+    source.can_promote_claim !== false
+  ) {
+    throw new Error("selected_candidate_final_replay_material_source_identity_mismatch");
+  }
+  const replayRequest = {
+    schema_version: "comath.campaign_final_global_replay_request.v1",
+    claim_id: input.campaign.root_claim_id,
+    packaging_scope: "campaign",
+    lean_project: objectRecord(source.lean_project, "selected_candidate_final_replay_material_source.lean_project")
+  };
+  parseFinalGlobalReplayRequestPayload({
+    projectRoot: input.projectRoot,
+    campaign: input.campaign,
+    raw: replayRequest,
+    expectedObligation: input.obligation
+  });
+  const materialPath = writeSimpleStageArtifact(input.projectRoot, input.campaign, "generated_final_replay_material.json", {
+    schema_version: "comath.campaign_final_replay_material.v1",
+    campaign_id: input.campaign.campaign_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    artifact_role: "final_replay_material_source",
+    source_candidate_id: selected.candidate_id,
+    source_candidate_manifest_path: normalizeRelPath(selected.manifest_path ?? ""),
+    source_material_path: sourceRel,
+    source_material_sha256: sourceHash,
+    integration_artifact_path: input.integrationRel,
+    produced_by: "comathd.integration_final_replay_material_producer",
+    lean_project: replayRequest.lean_project,
+    proof_authority: "none",
+    can_promote_claim: false,
+    created_at: now()
+  });
+  const materialArtifact = await importArtifact({
+    projectRoot: input.projectRoot,
+    project_id: input.campaign.project_id,
+    source_path: materialPath,
+    kind: "code",
+    actor: input.actor
+  });
+  return { materialPath, materialArtifact, sourceCandidate: selected };
 }
 
 function assembleFinalGlobalReplayRequestFromAcceptedArtifacts(
@@ -1866,19 +2012,45 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       ],
       created_at: now()
     });
+    let producedMaterial: Awaited<ReturnType<typeof produceFinalReplayMaterialFromSelectedIntegrationArtifacts>>;
+    try {
+      producedMaterial = await produceFinalReplayMaterialFromSelectedIntegrationArtifacts({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        decision,
+        integrationRel,
+        actor
+      });
+    } catch (error) {
+      return blockCampaignAtFinalReplay({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor,
+        stage: "integration_refactor",
+        reason: `service-owned Lean Authority v3 replay material production failed: ${error instanceof Error ? error.message : "unknown_error"}`
+      });
+    }
+    const integrationArtifacts = [
+      integrationRel,
+      ".comath/lean/MathResearch/Integrated.lean",
+      ".comath/proof/import_profile.json",
+      ".comath/proof/integration_report.md",
+      producedMaterial?.materialPath,
+      producedMaterial?.materialArtifact.path
+    ].filter((path): path is string => typeof path === "string" && path.length > 0);
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "final_static_audit",
+        accepted_artifacts: producedMaterial
+          ? [...campaign.accepted_artifacts, producedMaterial.materialArtifact]
+          : campaign.accepted_artifacts,
         stage_runs: [
           ...campaign.stage_runs,
-          completedStageRun(campaign, "integration_refactor", [
-            integrationRel,
-            ".comath/lean/MathResearch/Integrated.lean",
-            ".comath/proof/import_profile.json",
-            ".comath/proof/integration_report.md"
-          ])
+          completedStageRun(campaign, "integration_refactor", integrationArtifacts)
         ],
         next_actions: ["prepare final static audit before global replay"]
       }),
