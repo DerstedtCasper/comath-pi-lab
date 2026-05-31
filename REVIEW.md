@@ -4859,6 +4859,49 @@ corepack pnpm test
 Result: exit 0; Phase 0/design smoke, workspace package tests, Phase 21 read-model routes, dashboard tests, and Phase 17 integrity evaluation passed.
 ```
 
+## Goal 3 Task 93 Notation Gate Formal-Spec-Derived Review Log
+
+### Scope
+
+Removed the remaining Nat-specific notation wording from the native campaign `notation_gate` artifacts. The change does not add theorem synthesis or proof authority; it makes notation provenance explicit and non-promotional.
+
+### TDD Evidence
+
+```text
+corepack pnpm --filter @comath/comathd build
+Result: exit 0.
+
+node services/comathd/tests/unit/goal3-task93-notation-gate-formal-spec-derived.test.mjs
+Initial RED result: exit 1; `Definitions.lean` contained `Lean Nat notation`.
+
+node services/comathd/tests/unit/goal3-task93-notation-gate-formal-spec-derived.test.mjs
+Second RED result: exit 1; `createProofObligationFromFormalSpecLock()` dropped `notation_conventions`.
+
+node services/comathd/tests/unit/goal3-task93-notation-gate-formal-spec-derived.test.mjs
+Result: exit 0; notation gate no longer emits default Nat wording, records non-authoritative provenance, and preserves FormalSpecLock notation conventions.
+
+corepack pnpm --filter @comath/comathd typecheck
+Result: exit 0.
+
+corepack pnpm --filter @comath/comathd test
+Result: exit 0; full comathd chain passed with Task93 wired into the default script.
+```
+
+### Changed Surfaces
+
+- `services/comathd/src/proof-kernel/campaign/formal-spec-lock.ts` now carries `FormalSpecLock.notation_conventions` into `ProofObligation.locked_statement_structured`.
+- `services/comathd/src/proof-kernel/campaign/campaign-tick.ts` now renders notation from FormalSpecLock conventions when present and otherwise falls back to `.comath/lock/notation.md`.
+- `notation_gate.json` now records `notation_source`, `notation_lock_path`, `notation_conventions`, `locked_statement_hash`, `default_notation_injected: false`, `proof_authority: "none"`, and `can_promote_claim: false`.
+- Added `services/comathd/tests/unit/goal3-task93-notation-gate-formal-spec-derived.test.mjs` and wired it into the default `@comath/comathd` test chain.
+
+### Boundary And Integrity Notes
+
+The notation gate remains a stage artifact, not proof authority. It does not infer theorem-domain notation, inject `n : Nat`, or promote claims. The only promotion-grade mathematical authority remains final Lean/mathlib clean replay plus the existing integrity gates.
+
+### Residual Risks
+
+Task93 does not execute a real Lean/mathlib clean replay and does not broaden proof synthesis. Generic campaigns still fail closed at broad theorem planning/final replay boundaries. The workstation still needs a configured Lean toolchain before live replay blockers can be retired.
+
 ## Phase 20 GA Campaign State-Machine Vertical-Slice Review Log
 
 ### Scope

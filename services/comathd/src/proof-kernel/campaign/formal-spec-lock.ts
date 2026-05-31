@@ -39,6 +39,7 @@ export function createProofObligationFromFormalSpecLock(input: {
       variables: lock.variables,
       assumptions: lock.assumptions,
       conclusion: lock.conclusion,
+      notation_conventions: lock.notation_conventions,
       trust_profile_id: lock.trust_profile_id
     },
     lean_target: `${lock.namespace}.${lock.theorem_name}`,

@@ -142,6 +142,36 @@ function readJsonArtifact(projectRoot: string, rel: string): unknown {
   }
 }
 
+function readTextArtifact(projectRoot: string, rel: string): string {
+  return readFileSync(assertPathAllowed(projectRoot, rel, { purpose: "read", resolveRealpath: true }), "utf8");
+}
+
+type NotationConvention = {
+  symbol: string;
+  meaning: string;
+  source: string;
+  evidence_anchor?: string;
+};
+
+function notationConventionsFromObligation(obligation: ProofObligation): NotationConvention[] {
+  const raw = obligation.locked_statement_structured.notation_conventions;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((item): item is NotationConvention => {
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+    const convention = item as Record<string, unknown>;
+    return (
+      typeof convention.symbol === "string" &&
+      typeof convention.meaning === "string" &&
+      typeof convention.source === "string" &&
+      (convention.evidence_anchor === undefined || typeof convention.evidence_anchor === "string")
+    );
+  });
+}
+
 function knowledgePackArtifacts(campaign: ResearchCampaign): string[] {
   return [
     `.comath/context_lake/shards/knowledge-${campaign.campaign_id}.md`,
@@ -1022,6 +1052,23 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "notation_gate") {
+    const notationLockRel = ".comath/lock/notation.md";
+    const notationLockText = readTextArtifact(input.project_root, notationLockRel).trim();
+    const notationConventions = notationConventionsFromObligation(obligation);
+    const notationSource = notationConventions.length > 0 ? "formal_spec_lock" : "problem_lock_notation";
+    const notationDetailLines =
+      notationConventions.length > 0
+        ? [
+            "FormalSpecLock notation conventions:",
+            "",
+            ...notationConventions.map(
+              (convention) =>
+                `- ${convention.symbol}: ${convention.meaning} (source: ${convention.source}${
+                  convention.evidence_anchor ? `, evidence: ${convention.evidence_anchor}` : ""
+                })`
+            )
+          ]
+        : ["Problem-lock notation excerpt:", "", "```text", notationLockText, "```"];
     writeRuntimeFile(
       input.project_root,
       ".comath/lean/MathResearch/Definitions.lean",
@@ -1029,7 +1076,8 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         "-- CoMath notation gate definitions; not proof authority.",
         "namespace MathResearch",
         "",
-        "-- The current elementary campaign uses Lean Nat notation directly.",
+        "-- No theorem-domain notation is injected here.",
+        "-- Conventions must come from the problem lock or an approved FormalSpecLock.",
         "",
         "end MathResearch",
         ""
@@ -1045,7 +1093,11 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         `campaign_id: ${campaign.campaign_id}`,
         `obligation_id: ${obligation.obligation_id}`,
         "",
-        "Notation is locked to Lean Nat syntax and the problem-lock notation file.",
+        `Notation source: ${notationSource}`,
+        "",
+        "No default theorem-domain notation was injected by CoMath.",
+        "",
+        ...notationDetailLines,
         ""
       ].join("\n")
     );
@@ -1054,8 +1106,15 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       obligation_id: obligation.obligation_id,
       definitions_path: ".comath/lean/MathResearch/Definitions.lean",
       notation_shard_path: notationRel,
+      notation_source: notationSource,
+      notation_lock_path: notationLockRel,
+      notation_conventions: notationConventions,
+      locked_statement_hash: obligation.statement_hash,
+      default_notation_injected: false,
       unresolved_symbols: [],
       bypass_reason: null,
+      proof_authority: "none",
+      can_promote_claim: false,
       created_at: now()
     });
     const next = writeCampaign(
