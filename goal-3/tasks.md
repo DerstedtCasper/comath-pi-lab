@@ -2121,3 +2121,20 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. Task116 prevents read-model/stage-summary overclaiming from raw candidate state, but it does not enforce append-only manifest storage at the filesystem layer, implement OS-level sandboxing, complete richer Lean/mathlib dependency fetching, synthesize nontrivial theorem proofs, validate the full Pi/Codex lifecycle, or finish final GA audit.
 - Next step: Task117 should continue hardening Lean Authority v3 provenance, with the best next slice being append-only/provenance checks around service-owned LeanRunManifest storage or explicit promotion-visible summary guards that reject stale final evidence after manifest files are rewritten.
 - Commit: `6390e20` (`Expose proof-grade candidate counts`)
+
+## Task 117: Append-Only Service-Owned LeanRunManifest Storage
+
+- [x] Confirm no earlier `[ ]`, `[~]`, or `Commit: pending` task item remained before opening Task 117.
+- [x] Treat Task116's tracker next step as authoritative and keep the Task117 slice scoped to Lean Authority v3 provenance hardening.
+- [x] Add a failing regression proving a duplicate service-owned Lean `run_id` cannot overwrite existing stdout/stderr/manifest evidence.
+- [x] Reject duplicate service-owned Lean evidence paths before invoking the Lean command or fake runner.
+- [x] Preserve existing LeanRunManifest v3 verification, input-file binding, and proof-grade candidate count behavior.
+- [x] Run focused Task7/Task41/Task115/Task116 regressions plus package/root verification gates.
+
+Completion record:
+
+- Work done: extended the LeanRunManifest v3 unit coverage so a second `runServiceOwnedLeanCommandV3()` call with the same `claim_id` and `run_id` must throw `lean_run_manifest_append_only_violation` and leave the original stderr log intact. Hardened `runServiceOwnedLeanCommandV3()` to compute the stdout, stderr, and manifest evidence paths before executing the runner, assert that none already exists, and only then run Lean/fake Lean and write service-owned artifacts. This prevents silent overwrite of prior service-owned Lean evidence for a reused run id. The new gate exposed a live-adapter run-id collision where two campaigns under the same claim could reuse the same `LRUN-*`; `stableRunId()` now binds the run id to campaign, obligation, and candidate identity.
+- Verification evidence: TDD RED was observed before implementation: `node services/comathd/tests/unit/goal3-task7-lean-run-manifest-v3.test.mjs` failed with `AssertionError [ERR_ASSERTION]: Missing expected exception` because duplicate `LRUN-0002` overwrote existing evidence instead of throwing. After implementation, `corepack pnpm --dir services/comathd build` exited 0. Focused regressions exited 0: Task7, Task41, Task113, Task114, Task115, and Task116. The first full `corepack pnpm --filter @comath/comathd test` run exposed the live-adapter run-id collision in Task113 (`candidate_blocked` instead of `candidate_failed`); after binding `stableRunId()` to campaign/obligation/candidate identity, Task113 and the full default chain exited 0. Package/root verification gates exited 0: `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, `corepack pnpm build`, `corepack pnpm typecheck`, `corepack pnpm test`, and `git diff --check` with Windows LF-to-CRLF warnings only.
+- Residual risk: Goal 3 remains incomplete. Task117 enforces append-only behavior at the service-owned LeanRunManifest writer path, but it does not provide OS-level immutable storage, external tamper-evident audit logs, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, full Pi/Codex lifecycle validation, or final GA audit.
+- Next step: Task118 should continue Lean Authority v3 provenance hardening, preferably by adding a service-owned provenance audit event / manifest index for every LeanRunManifest write or by making promotion-visible final evidence reject stale final replay manifests after artifact rewrite attempts.
+- Commit: `d0a3888` (`Make Lean run evidence append-only`)
