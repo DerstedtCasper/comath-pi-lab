@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import {
   appendEvidenceRecord,
   applyGatePromotedClaim,
+  appendFinalReplayRegistryEntryV3,
   createFinalReplayManifestV3,
   createServiceOwnedLeanRunManifestV3,
   importArtifact,
@@ -187,6 +188,7 @@ try {
   });
   const finalReplayManifestRel = `.comath/evidence/${claim.id}/lean/final_replay_manifest_v3.json`;
   writeProjectFile(finalReplayManifestRel, `${JSON.stringify(finalReplayManifest, null, 2)}\n`);
+  appendFinalReplayRegistryEntryV3(projectRoot, finalReplayManifest);
   const replayPack = writeThirdPartyReplayPackV3(projectRoot, finalReplayManifest);
 
   const report = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3({

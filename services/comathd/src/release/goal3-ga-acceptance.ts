@@ -6,6 +6,7 @@ import { assumptionLedgerSchema, formalSpecLockSchema, type Claim, type GateResu
 import { statementHash } from "../utils/statement.js";
 import { importArtifact, listArtifactRefs } from "../artifacts/store.js";
 import { appendEvidenceRecord, readEvidenceRecords } from "../evidence/store.js";
+import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { nextSequentialId } from "../utils/id.js";
 import { promoteClaim } from "../verification/gate.js";
 import { evaluateStatementDiffGate } from "../proof-kernel/lean/statement-diff-gate.js";
@@ -419,6 +420,8 @@ export type Goal3GaPositiveMatrixRealReplayAttemptArchive = {
   executor_status: Goal3GaPositiveMatrixLeanAuthorityExecutorReport["executor_status"];
   attempt_status: "replayable_environment_blocker" | "real_replay_completed_archived";
   terminal_classification: "replayable_blocker" | "clean_replay_passed";
+  terminal_classification_scope: "attempt_archive_only";
+  terminal_classification_is_proof_authority: false;
   blocker_code: Goal3GaPositiveMatrixLeanAuthorityExecutorReport["blocker_code"];
   blocker_detail: string;
   attempted_commands: string[][];
@@ -429,6 +432,7 @@ export type Goal3GaPositiveMatrixRealReplayAttemptArchive = {
   final_authority_packaging_report_path: string;
   final_authority_packaging_status: FinalAuthorityPackagingV3Report["final_evidence_status"];
   final_authority_packaging_proof_authority: FinalAuthorityPackagingV3Report["proof_authority"];
+  packaging_report_is_not_archive_authority: true;
   missing_final_evidence_classes: Goal3GaPm002FinalEvidenceClass[];
   artifact_ids: string[];
   evidence_id: string;
@@ -605,8 +609,8 @@ export type Goal3GaPositiveMatrixFinalAuthorityPromotionBundle = {
   artifact_ids: string[];
   gate: GateResult;
   claim: Claim;
-  proof_authority: "lean_kernel_clean_replay";
-  promoted_by_ordinary_gate: true;
+  proof_authority: "none" | "lean_kernel_clean_replay";
+  promoted_by_ordinary_gate: boolean;
   promotion_requires_gate: true;
   direct_claim_mutation: false;
 };
@@ -2767,6 +2771,8 @@ export async function archiveGoal3GaPositiveMatrixRealReplayAttemptEvidence(inpu
       ? "real_replay_completed_archived"
       : "replayable_environment_blocker",
     terminal_classification: report.executor_status === "live_replay_conversion_completed" ? "clean_replay_passed" : "replayable_blocker",
+    terminal_classification_scope: "attempt_archive_only",
+    terminal_classification_is_proof_authority: false,
     blocker_code: report.blocker_code,
     blocker_detail: report.blocker_detail,
     attempted_commands: attemptedCommands,
@@ -2777,6 +2783,7 @@ export async function archiveGoal3GaPositiveMatrixRealReplayAttemptEvidence(inpu
     final_authority_packaging_report_path: report.final_authority_packaging.packaging_report_path,
     final_authority_packaging_status: report.final_authority_packaging.final_evidence_status,
     final_authority_packaging_proof_authority: report.final_authority_packaging.proof_authority,
+    packaging_report_is_not_archive_authority: true,
     missing_final_evidence_classes: [...report.final_authority_packaging.missing_final_evidence_classes],
     artifact_ids: artifactIds,
     evidence_id: evidenceId,
@@ -2810,6 +2817,25 @@ export async function archiveGoal3GaPositiveMatrixRealReplayAttemptEvidence(inpu
   if (evidence.id !== evidenceId) {
     throw new Error("real_replay_attempt_archive_evidence_id_drift");
   }
+  appendAuditEvent(input.projectRoot, {
+    project_id: input.projectId,
+    event_type: "goal3.real_replay_attempt_archived",
+    actor: input.actor,
+    target_id: input.claimId,
+    payload: {
+      archive_id: archive.archive_id,
+      archive_path: archive.archive_path,
+      evidence_id: archive.evidence_id,
+      artifact_ids: archive.artifact_ids,
+      terminal_classification: archive.terminal_classification,
+      terminal_classification_scope: archive.terminal_classification_scope,
+      proof_authority: archive.proof_authority,
+      can_promote_claim: archive.can_promote_claim,
+      archive_is_proof_authority: archive.archive_is_proof_authority,
+      diagnostic_is_proof_authority: archive.environment_diagnostic.diagnostic_is_proof_authority,
+      packaging_report_is_not_archive_authority: archive.packaging_report_is_not_archive_authority
+    }
+  });
   return archive;
 }
 
@@ -3722,8 +3748,8 @@ export async function promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDeri
     artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id],
     gate: promotion.gate,
     claim: promotion.claim,
-    proof_authority: "lean_kernel_clean_replay",
-    promoted_by_ordinary_gate: true,
+    proof_authority: promotion.gate.ok ? "lean_kernel_clean_replay" : "none",
+    promoted_by_ordinary_gate: promotion.gate.ok,
     promotion_requires_gate: true,
     direct_claim_mutation: false
   };

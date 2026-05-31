@@ -1,3 +1,46 @@
+## Goal 3 Task 90 / Final Authority Provenance Check-Debug Loop
+
+Scope: comprehensive check-debug loop over Tasks 87-89, closing helper-created final-authority artifact promotion and clarifying real replay archive non-authority semantics.
+
+Changes:
+
+- Added `goal3-task90-final-authority-provenance-gate.test.mjs`.
+- Hardened final-authority promotion gating so FinalReplayManifest v3 packaging must be submitted as `runner_output` and must match an exact append-only `final_replay_registry.jsonl` entry before it can satisfy Lean authority evidence.
+- Added the explicit veto `formally_checked requires service-owned clean replay provenance`.
+- Updated positive final-authority fixtures to append registry entries before promotion.
+- Made final-authority promotion bundles report `proof_authority: none` and `promoted_by_ordinary_gate: false` when the ordinary gate rejects.
+- Added archive-only semantics and a dedicated `goal3.real_replay_attempt_archived` audit event for Task88/89 replay attempt archives.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/goal3-task90-final-authority-provenance-gate.test.mjs
+Initial RED result: exit 1; helper-created authority-shaped artifacts promoted without replay registry provenance.
+```
+
+Verification:
+
+- `node services/comathd/tests/unit/goal3-task90-final-authority-provenance-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task88-real-replay-attempt-archive.test.mjs`
+- `node services/comathd/tests/unit/goal3-task89-real-replay-environment-diagnostic.test.mjs`
+- `node services/comathd/tests/unit/goal3-task86-real-lean-replay-slice-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task87-injected-final-replay-authority-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task44-pm002-packaging-promotion-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task45-generic-final-authority-packaging-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task66-derived-binding-promotion-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task68-derived-report-binding-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task70-derived-binding-promotion-bundle.test.mjs`
+- `corepack pnpm --filter @comath/comathd build`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+- `corepack pnpm build`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+
+Boundary notes: Task90 does not install Lean, configure elan, download mathlib, add theorem recognition, add Nat-linear synthesis, add default assumptions, or turn archives/diagnostics into proof authority. On this workstation `lean` and `lake` still resolve to elan shims but fail with no default toolchain configured.
+
+Residual risks: real PM-084 Lean/mathlib execution still requires a prepared Lean toolchain and declared replay material. Broader positive-matrix live replay, production Pi/Codex lifecycle validation, OS-level sandboxing, and comprehensive GA release validation remain open.
+
 ## Goal 3 Task 89 / Real Replay Environment Diagnostic Archive
 
 Scope: bind real Lean/Lake replay-readiness diagnostics into the Task88 archive path without making environment probes or archives proof authority.

@@ -9,6 +9,7 @@ import {
   initProject,
   listArtifactRefs,
   promoteClaim,
+  readAuditEvents,
   readEvidenceRecords,
   registerClaim,
   statementHash
@@ -196,11 +197,14 @@ try {
   assert.equal(archived.claim_id, claim.id);
   assert.equal(archived.attempt_status, "replayable_environment_blocker");
   assert.equal(archived.terminal_classification, "replayable_blocker");
+  assert.equal(archived.terminal_classification_scope, "attempt_archive_only");
+  assert.equal(archived.terminal_classification_is_proof_authority, false);
   assert.equal(archived.executor_status, "blocked_before_replay");
   assert.equal(archived.blocker_code, "live_replay_executor_not_configured");
   assert.deepEqual(archived.attempted_commands, []);
   assert.deepEqual(archived.lean_run_manifest_paths, []);
   assert.equal(archived.final_authority_packaging_status, "blocked_missing_final_evidence");
+  assert.equal(archived.packaging_report_is_not_archive_authority, true);
   assert.equal(archived.proof_authority, "none");
   assert.equal(archived.can_promote_claim, false);
   assert.equal(archived.promotion_requires_gate, true);
@@ -221,6 +225,15 @@ try {
   assert.equal(evidenceRecords[0].kind, "audit");
   assert.equal(evidenceRecords[0].claim_id, claim.id);
   assert.deepEqual(evidenceRecords[0].artifact_ids.sort(), archived.artifact_ids.sort());
+
+  const archiveAudit = readAuditEvents(projectRoot).find((event) => event.event_type === "goal3.real_replay_attempt_archived");
+  assert.ok(archiveAudit);
+  assert.equal(archiveAudit.target_id, claim.id);
+  assert.equal(archiveAudit.payload.archive_id, archived.archive_id);
+  assert.equal(archiveAudit.payload.evidence_id, archived.evidence_id);
+  assert.equal(archiveAudit.payload.proof_authority, "none");
+  assert.equal(archiveAudit.payload.can_promote_claim, false);
+  assert.equal(archiveAudit.payload.diagnostic_is_proof_authority, false);
 
   markClaimPrerequisitesAsSatisfied(project.project_id, claim.id);
   const rejected = promoteClaim(projectRoot, {
