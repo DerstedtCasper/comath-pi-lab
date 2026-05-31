@@ -977,9 +977,11 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
       blocker_certificates: campaign.blockers,
       next_actions: campaign.next_actions,
       evidence_pack_ready:
-        campaign.terminal_state === "completed_formal_proof" && hasFormalReplayAuthorityPassEvidence(campaign),
+        campaign.terminal_state === "completed_formal_proof" &&
+        hasFormalReplayAuthorityPassEvidence({ ...campaign, projectRoot: input.project_root }),
       proof_authority:
-        campaign.terminal_state === "completed_formal_proof" && hasFormalReplayAuthorityPassEvidence(campaign)
+        campaign.terminal_state === "completed_formal_proof" &&
+        hasFormalReplayAuthorityPassEvidence({ ...campaign, projectRoot: input.project_root })
           ? "lean_kernel_clean_replay"
           : "none",
       can_promote_claim: false

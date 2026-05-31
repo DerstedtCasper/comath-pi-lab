@@ -209,7 +209,7 @@ try {
   assert.equal(result.campaign.status, "terminal");
   assert.equal(result.campaign.terminal_state, "completed_formal_proof");
   assert.equal(result.campaign.formal_replay_authority_passed, true);
-  assert.equal(projectExternalV3TerminalState(result.campaign), "formal_proof_verified");
+  assert.equal(projectExternalV3TerminalState(result.campaign, { projectRoot }), "formal_proof_verified");
 
   const finalStage = result.campaign.stage_runs.at(-1);
   const packagingPath = finalStage.artifact_paths.find((path) => path.endsWith("final_authority_packaging_report_v3.json"));

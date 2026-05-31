@@ -210,9 +210,9 @@ try {
     "comath.formal_replay_authority_evidence.v1"
   );
   assert.equal(result.campaign.formal_replay_authority_evidence?.proof_authority, "lean_kernel_clean_replay");
-  assert.equal(projectExternalV3TerminalState(result.campaign), "formal_proof_verified");
-  assert.equal(projectGoalModeTerminalState(result.campaign), "formal_replay_passed");
-  assert.equal(withExternalV3TerminalState(result.campaign).external_v3_terminal_state, "formal_proof_verified");
+  assert.equal(projectExternalV3TerminalState(result.campaign, { projectRoot }), "formal_proof_verified");
+  assert.equal(projectGoalModeTerminalState(result.campaign, { projectRoot }), "formal_replay_passed");
+  assert.equal(withExternalV3TerminalState(result.campaign, { projectRoot }).external_v3_terminal_state, "formal_proof_verified");
 
   const promotedClaim = getClaim(projectRoot, project.project_id, claim.id);
   assert.equal(promotedClaim?.status, "formally_checked");

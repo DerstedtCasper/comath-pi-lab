@@ -272,7 +272,7 @@ try {
   assert.equal(result.campaign.status, "terminal");
   assert.equal(result.campaign.terminal_state, "completed_formal_proof");
   assert.equal(result.campaign.formal_replay_authority_passed, true);
-  assert.equal(projectExternalV3TerminalState(result.campaign), "formal_proof_verified");
+  assert.equal(projectExternalV3TerminalState(result.campaign, { projectRoot }), "formal_proof_verified");
   assert.ok(result.campaign.stage_runs.at(-1).artifact_paths.includes(`.comath/campaign/${campaignId}/assembled_final_replay_request.json`));
 
   const assembled = readJsonProjectFile(`.comath/campaign/${campaignId}/assembled_final_replay_request.json`);

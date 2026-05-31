@@ -20,6 +20,7 @@ import {
 } from "../types/schemas.js";
 import { nextSequentialId } from "../utils/id.js";
 import {
+  finalReplayLeanRunManifestSemanticallyBoundV3,
   hasFinalReplayRegistryProvenanceV3,
   hasLeanLakeBinaryHashProvenanceV3,
   verifyFinalReplayManifestV3
@@ -290,13 +291,20 @@ function leanRunManifestPathsMatchAndVerify(
   if (canonicalBindingJson(reportPaths) !== canonicalBindingJson(replayPaths)) {
     return false;
   }
-  return replayPaths.every((manifestPath) => {
+  let hasSemanticallyBoundFinalReplayRun = false;
+  for (const manifestPath of replayPaths) {
     const manifest = readJsonInsideProject(projectRoot, manifestPath);
-    return (
-      verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok &&
-      hasLeanRunManifestProvenanceIndexV1({ projectRoot, manifest, manifest_path: manifestPath })
-    );
-  });
+    if (!verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok) {
+      return false;
+    }
+    if (!hasLeanRunManifestProvenanceIndexV1({ projectRoot, manifest, manifest_path: manifestPath })) {
+      return false;
+    }
+    if (finalReplayLeanRunManifestSemanticallyBoundV3(finalReplayManifest, manifest)) {
+      hasSemanticallyBoundFinalReplayRun = true;
+    }
+  }
+  return hasSemanticallyBoundFinalReplayRun;
 }
 
 function canonicalBindingJson(value: unknown): string {

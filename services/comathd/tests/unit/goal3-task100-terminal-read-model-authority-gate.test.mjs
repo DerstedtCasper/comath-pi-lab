@@ -77,8 +77,12 @@ try {
     formal_replay_authority_passed: true,
     formal_replay_authority_evidence: formalReplayAuthorityEvidence()
   });
-  assert.equal(projectExternalV3TerminalState(authorityBound), "formal_proof_verified");
-  assert.equal(projectGoalModeTerminalState(authorityBound), "formal_replay_passed");
+  assert.equal(
+    projectExternalV3TerminalState(authorityBound),
+    undefined,
+    "shape-correct authority evidence is insufficient without verified final replay provenance"
+  );
+  assert.equal(projectGoalModeTerminalState(authorityBound), undefined);
 
   const persisted = writeCampaign(projectRoot, legacyCompleted, "goal3-task100");
   assert.equal(persisted.formal_replay_authority_passed, false);
@@ -109,10 +113,10 @@ try {
     campaign_id: authorityPersisted.campaign_id,
     actor: "goal3-task100-authority"
   });
-  assert.equal(authorityExported.export_manifest.evidence_pack_ready, true);
+  assert.equal(authorityExported.export_manifest.evidence_pack_ready, false);
   const authorityProjected = withExternalV3TerminalState(authorityPersisted);
-  assert.equal(authorityProjected.external_v3_terminal_state, "formal_proof_verified");
-  assert.equal(authorityProjected.goal_mode_terminal_state, "formal_replay_passed");
+  assert.equal(authorityProjected.external_v3_terminal_state, undefined);
+  assert.equal(authorityProjected.goal_mode_terminal_state, undefined);
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }

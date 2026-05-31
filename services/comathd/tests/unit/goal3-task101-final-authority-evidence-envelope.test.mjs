@@ -298,9 +298,9 @@ try {
     }),
     "goal3-task101"
   );
-  assert.equal(projectExternalV3TerminalState(persisted), "formal_proof_verified");
-  assert.equal(projectGoalModeTerminalState(persisted), "formal_replay_passed");
-  const projected = withExternalV3TerminalState(persisted);
+  assert.equal(projectExternalV3TerminalState(persisted, { projectRoot }), "formal_proof_verified");
+  assert.equal(projectGoalModeTerminalState(persisted, { projectRoot }), "formal_replay_passed");
+  const projected = withExternalV3TerminalState(persisted, { projectRoot });
   assert.equal(projected.external_v3_terminal_state, "formal_proof_verified");
   assert.equal(projected.goal_mode_terminal_state, "formal_replay_passed");
   const exported = exportCampaignGoalModeEvidence({

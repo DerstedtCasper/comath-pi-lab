@@ -200,13 +200,14 @@ export function runCleanLeanReplay(input: {
     proof_authority: "lean_kernel_check",
     run: (command) => runCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
   });
+  const finalReplayCommand = ["lake", "build", ...input.leanProject.buildTargets];
   const build = runServiceOwnedLeanCommandV3({
     projectRoot: input.projectRoot,
     run_id: "LRUN-0002",
     claim_id: input.claim_id,
     campaign_id: input.campaign_id,
     purpose: "final_replay",
-    command: ["lake", "build", ...input.leanProject.buildTargets],
+    command: finalReplayCommand,
     cwd: cleanRoot,
     input_files: cleanInputs,
     leanVersionOutput,
@@ -323,7 +324,7 @@ export function runCleanLeanReplay(input: {
       claim_id: input.claim_id,
       theorem_name: input.leanProject.theoremName,
       clean_workspace_path: cleanRoot,
-      command: input.leanProject.replayCommand.split(/\s+/).filter(Boolean),
+      command: finalReplayCommand,
       exit_code,
       result: allGatesPassed ? "pass" : "fail",
       source_hashes_before,

@@ -58,6 +58,31 @@ function normalizedStoredPath(path: string): string {
   return path.replace(/\\/g, "/");
 }
 
+export function finalReplayLeanRunManifestSemanticallyBoundV3(
+  finalReplayManifest: unknown,
+  leanRunManifest: unknown
+): boolean {
+  const finalReplay = finalReplayManifest && typeof finalReplayManifest === "object"
+    ? (finalReplayManifest as Record<string, unknown>)
+    : {};
+  const record = leanRunManifest && typeof leanRunManifest === "object" ? (leanRunManifest as Record<string, unknown>) : {};
+  const finalReplayCommand = stringArray(finalReplay.command);
+  const leanRunCommand = stringArray(record.command);
+  return (
+    finalReplay.schema_version === "comath.final_replay_manifest.v3" &&
+    record.schema_version === "comath.lean_run_manifest.v3" &&
+    record.runner === "comathd.LeanRunner" &&
+    record.claim_id === finalReplay.claim_id &&
+    record.campaign_id === finalReplay.campaign_id &&
+    record.purpose === "final_replay" &&
+    record.exit_code === 0 &&
+    record.proof_authority === "lean_kernel_check" &&
+    record.network_policy === "disabled" &&
+    normalizedStoredPath(String(record.cwd ?? "")) === normalizedStoredPath(String(finalReplay.clean_workspace_path ?? "")) &&
+    canonicalJson(leanRunCommand) === canonicalJson(finalReplayCommand)
+  );
+}
+
 function assertInside(root: string, candidate: string): void {
   const rootReal = realpathSync.native(root);
   const candidateReal = realpathSync.native(candidate);
@@ -346,11 +371,7 @@ export function hasLeanLakeBinaryHashProvenanceV3(projectRoot: string, candidate
     }
     const record = manifest as Record<string, unknown>;
     return (
-      record.schema_version === "comath.lean_run_manifest.v3" &&
-      record.purpose === "final_replay" &&
-      record.runner === "comathd.LeanRunner" &&
-      record.proof_authority === "lean_kernel_check" &&
-      record.exit_code === 0 &&
+      finalReplayLeanRunManifestSemanticallyBoundV3(parsed.data, manifest) &&
       record.lean_binary_sha256 === leanHash &&
       record.lake_binary_sha256 === lakeHash &&
       verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok &&

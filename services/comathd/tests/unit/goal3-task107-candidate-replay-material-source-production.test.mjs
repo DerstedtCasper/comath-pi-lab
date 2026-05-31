@@ -379,7 +379,7 @@ try {
 
   assert.equal(result.campaign.current_stage, "completed_formal_proof", JSON.stringify(result.campaign.blockers, null, 2));
   assert.equal(result.campaign.formal_replay_authority_passed, true);
-  assert.equal(projectExternalV3TerminalState(result.campaign), "formal_proof_verified");
+  assert.equal(projectExternalV3TerminalState(result.campaign, { projectRoot }), "formal_proof_verified");
   assert.equal(getClaim(projectRoot, project.project_id, claim.id)?.status, "formally_checked");
 } finally {
   process.env.PATH = oldPath;

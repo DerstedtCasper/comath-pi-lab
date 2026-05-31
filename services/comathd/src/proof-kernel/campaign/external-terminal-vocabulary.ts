@@ -1,4 +1,12 @@
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import type { CampaignTerminalState, FormalReplayAuthorityEvidence, ResearchCampaign } from "../../types/schemas.js";
+import { assertPathAllowed } from "../../security/path-policy.js";
+import {
+  hasFinalReplayRegistryProvenanceV3,
+  hasLeanLakeBinaryHashProvenanceV3,
+  verifyFinalReplayManifestV3
+} from "../lean/final-replay-manifest-v3.js";
 
 export type ExternalV3TerminalState =
   | "formal_proof_verified"
@@ -24,17 +32,22 @@ export type ExternalV3TerminalProjectionInput = Pick<ResearchCampaign, "status" 
   formal_replay_authority_evidence?: Partial<FormalReplayAuthorityEvidence> | null;
 };
 
+export type TerminalProjectionOptions = {
+  projectRoot?: string;
+};
+
 export type ResearchCampaignWithExternalV3TerminalState = ResearchCampaign & {
   external_v3_terminal_state?: ExternalV3TerminalState;
   goal_mode_terminal_state?: GoalModeTerminalState;
 };
 
 export function hasFormalReplayAuthorityPassEvidence(input: {
+  projectRoot?: string;
   formal_replay_authority_passed?: boolean;
   formal_replay_authority_evidence?: Partial<FormalReplayAuthorityEvidence> | null;
 }): boolean {
   const evidence = input.formal_replay_authority_evidence;
-  return (
+  const envelopeOk =
     input.formal_replay_authority_passed === true &&
     evidence?.schema_version === "comath.formal_replay_authority_evidence.v1" &&
     evidence.proof_authority === "lean_kernel_clean_replay" &&
@@ -42,12 +55,32 @@ export function hasFormalReplayAuthorityPassEvidence(input: {
     typeof evidence.final_replay_manifest_v3_path === "string" &&
     evidence.final_replay_manifest_v3_path.length > 0 &&
     typeof evidence.final_authority_packaging_path === "string" &&
-    evidence.final_authority_packaging_path.length > 0
-  );
+    evidence.final_authority_packaging_path.length > 0;
+  if (!envelopeOk || !input.projectRoot) {
+    return false;
+  }
+  const finalReplayManifestPath = evidence.final_replay_manifest_v3_path as string;
+  const finalAuthorityPackagingPath = evidence.final_authority_packaging_path as string;
+
+  const finalReplayManifest = readJsonInsideProjectOrNull(input.projectRoot, finalReplayManifestPath);
+  if (
+    !verifyFinalReplayManifestV3(input.projectRoot, finalReplayManifest).ok ||
+    !hasFinalReplayRegistryProvenanceV3(input.projectRoot, finalReplayManifest) ||
+    !hasLeanLakeBinaryHashProvenanceV3(input.projectRoot, finalReplayManifest)
+  ) {
+    return false;
+  }
+
+  const packagingPath = readablePathInsideProject(input.projectRoot, finalAuthorityPackagingPath);
+  if (!packagingPath) {
+    return false;
+  }
+  return !evidence.artifact_hash || sha256File(packagingPath) === evidence.artifact_hash;
 }
 
 export function projectExternalV3TerminalState(
-  input: ExternalV3TerminalProjectionInput
+  input: ExternalV3TerminalProjectionInput,
+  options: TerminalProjectionOptions = {}
 ): ExternalV3TerminalState | undefined {
   if (input.current_stage === "cancelled" || input.terminal_state === "cancelled_by_user") {
     return "user_cancelled";
@@ -58,7 +91,7 @@ export function projectExternalV3TerminalState(
   if (input.status !== "terminal") {
     return undefined;
   }
-  if (input.terminal_state === "completed_formal_proof" && hasFormalReplayAuthorityPassEvidence(input)) {
+  if (input.terminal_state === "completed_formal_proof" && hasFormalReplayAuthorityPassEvidence({ ...input, projectRoot: options.projectRoot })) {
     return "formal_proof_verified";
   }
   if (input.terminal_state === "completed_refutation") {
@@ -70,7 +103,10 @@ export function projectExternalV3TerminalState(
   return undefined;
 }
 
-export function projectGoalModeTerminalState(input: ExternalV3TerminalProjectionInput & { blockers?: Array<Record<string, unknown>> }): GoalModeTerminalState | undefined {
+export function projectGoalModeTerminalState(
+  input: ExternalV3TerminalProjectionInput & { blockers?: Array<Record<string, unknown>> },
+  options: TerminalProjectionOptions = {}
+): GoalModeTerminalState | undefined {
   const blockers = Array.isArray(input.blockers) ? input.blockers : [];
   if (
     blockers.some(
@@ -82,7 +118,7 @@ export function projectGoalModeTerminalState(input: ExternalV3TerminalProjection
   ) {
     return "needs_user_statement_disambiguation";
   }
-  const external = projectExternalV3TerminalState(input);
+  const external = projectExternalV3TerminalState(input, options);
   if (external === "formal_proof_verified") {
     return "formal_replay_passed";
   }
@@ -99,10 +135,11 @@ export function projectGoalModeTerminalState(input: ExternalV3TerminalProjection
 }
 
 export function withExternalV3TerminalState(
-  campaign: ResearchCampaign
+  campaign: ResearchCampaign,
+  options: TerminalProjectionOptions = {}
 ): ResearchCampaignWithExternalV3TerminalState {
-  const externalState = projectExternalV3TerminalState(campaign);
-  const goalModeState = projectGoalModeTerminalState(campaign);
+  const externalState = projectExternalV3TerminalState(campaign, options);
+  const goalModeState = projectGoalModeTerminalState(campaign, options);
   return {
     ...campaign,
     ...(externalState ? { external_v3_terminal_state: externalState } : {}),
@@ -111,13 +148,39 @@ export function withExternalV3TerminalState(
 }
 
 export function withExternalV3CampaignResult<T extends { campaign?: ResearchCampaign }>(
-  result: T
+  result: T,
+  options: TerminalProjectionOptions = {}
 ): Omit<T, "campaign"> & { campaign?: ResearchCampaignWithExternalV3TerminalState } {
   if (!result.campaign) {
     return result;
   }
   return {
     ...result,
-    campaign: withExternalV3TerminalState(result.campaign)
+    campaign: withExternalV3TerminalState(result.campaign, options)
   };
+}
+
+function readablePathInsideProject(projectRoot: string, relativePath: string): string | null {
+  try {
+    const path = assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true });
+    return existsSync(path) ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+function readJsonInsideProjectOrNull(projectRoot: string, relativePath: string): unknown | null {
+  const path = readablePathInsideProject(projectRoot, relativePath);
+  if (!path) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function sha256File(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
