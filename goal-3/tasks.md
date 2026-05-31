@@ -2138,3 +2138,20 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. Task117 enforces append-only behavior at the service-owned LeanRunManifest writer path, but it does not provide OS-level immutable storage, external tamper-evident audit logs, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, full Pi/Codex lifecycle validation, or final GA audit.
 - Next step: Task118 should continue Lean Authority v3 provenance hardening, preferably by adding a service-owned provenance audit event / manifest index for every LeanRunManifest write or by making promotion-visible final evidence reject stale final replay manifests after artifact rewrite attempts.
 - Commit: `d0a3888` (`Make Lean run evidence append-only`)
+
+## Task 118: Service-Owned LeanRunManifest Provenance Index
+
+- [x] Confirm no earlier `[ ]`, `[~]`, or `Commit: pending` task item remained before opening Task 118.
+- [x] Re-read the Goal 3 required context set and confirm the current repository state instead of relying on prior memory.
+- [x] Add a failing regression proving every service-owned LeanRunManifest write records claim-scoped provenance index material.
+- [x] Add optional audit-event emission for service-owned LeanRunManifest writes when `project_id` and `actor` are provided by the caller.
+- [x] Preserve append-only duplicate-run rejection so rejected duplicate runs do not append provenance rows.
+- [x] Run focused Task118/Task7/Task41/Task113/Task115/Task116/Phase3 regressions plus package/root verification gates.
+
+Completion record:
+
+- Work done: added `goal3-task118-lean-manifest-provenance-index.test.mjs`; RED showed `runServiceOwnedLeanCommandV3()` wrote the manifest/log files but did not create `.comath/evidence/<CLAIM>/lean/lean_run_manifest_index.jsonl`. Added a claim-scoped append-only index row for every successful service-owned LeanRunManifest write, binding run id, claim/campaign/candidate ids, purpose, manifest/stdout/stderr paths and hashes, exit code, runner, append-only semantics, and proof authority. When callers provide `project_id` and `actor`, the writer also appends a `lean_run_manifest.written` audit event with the same manifest hash/path binding. Duplicate run-id attempts still fail before runner execution and do not append new provenance rows.
+- Verification evidence: TDD RED was observed before implementation: `node services/comathd/tests/unit/goal3-task118-lean-manifest-provenance-index.test.mjs` failed with `ENOENT` for the missing `lean_run_manifest_index.jsonl`. After implementation, `corepack pnpm --dir services/comathd build` exited 0. Focused regressions exited 0: Task118, Task7, Task41, Task113, Task115, Task116, and Phase3 artifact/audit. Package/root verification gates exited 0: `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, `corepack pnpm build`, `corepack pnpm typecheck`, `corepack pnpm test`, and `git diff --check` with Windows LF-to-CRLF warnings only.
+- Residual risk: Goal 3 remains incomplete. Task118 adds service-owned manifest provenance index and optional audit events, but it does not provide OS-level immutable logs, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, full Pi/Codex lifecycle validation, or final GA audit.
+- Next step: Task119 should continue Lean Authority v3 provenance hardening, preferably by making promotion-visible final evidence reject stale FinalReplayManifest v3 material after manifest/index/hash rewrite attempts or by binding final replay promotion to the new LeanRunManifest provenance index.
+- Commit: `3ec1b2a` (`Index Lean run manifest provenance`)
