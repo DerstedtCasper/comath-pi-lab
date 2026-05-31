@@ -1,3 +1,25 @@
+# Goal 3 Task 110 / Line-Map-Owned Native Candidate Generation Request
+
+Scope: move production of the native `candidate_generation_request.json` into the live campaign line-map gate, so Task109 native candidate generation no longer depends on hand-authored request artifacts.
+
+Work performed:
+
+- Used two read-only subagents to inspect the safest insertion point and request/manifest no-cheat risks.
+- Added `goal3-task110-planning-native-generation-request.test.mjs`. RED showed `line_map_gate` did not produce the request; strengthened REDs exposed missing line-map hash binding and candidate-verification drift.
+- Added a line-map-owned request writer that records the request in the completed `line_map_gate` stage run.
+- Hardened request consumption with project/campaign/claim/obligation/statement identity, stage-run provenance, line-map and obligation hashes, V1-V8 variant requirements, and non-authority statement-boundary metadata.
+- Hardened `candidate_verification` to parse candidate manifests and require candidate records plus manifests to bind the current obligation statement hash.
+- Converted proof-grade-empty native arbitration to `blocked_with_replayable_reason` instead of unsupported `repair`.
+
+Verification evidence:
+
+- Focused GREEN tests: Task110, Task109, Task108 production/fail-closed, Task107 production/fail-closed, Task106 production/fail-closed, Task14, Phase20, Phase61, Phase62, Phase70, and Phase71.
+- Package-level build/typecheck/test evidence is recorded in `goal-3/tasks.md` for this task.
+
+Boundary notes: Task110 does not make agent output proof authority. Generated requests, candidates, manifests, and arbitration blockers remain `proof_authority: none` / non-promotional until downstream service-owned Lean Authority evidence and final replay pass.
+
+Residual risks: live adapter evidence for replay-project descriptors still needs stronger artifact-backed LeanRunManifest/FinalReplayManifest validation; default live candidates remain plausible-only.
+
 # Goal 3 Task 100 / Terminal Read-Model Authority-Evidence Gate
 
 Scope: prevent campaign/Pi proof-success read models from treating legacy or imported `completed_formal_proof` campaign records as `formal_proof_verified`, `formal_replay_passed`, or export-ready proof evidence unless explicit current Lean Authority pass evidence is bound.

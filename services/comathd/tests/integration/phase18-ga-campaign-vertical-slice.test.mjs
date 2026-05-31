@@ -69,13 +69,15 @@ try {
   assert.equal(finalTick.campaign.status, "terminal");
   assert.equal(finalTick.campaign.current_stage, "blocked");
   assert.equal(finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
-  assert.equal(finalTick.gate, undefined);
+  assert.equal(finalTick.blocker, "native candidate arbitration requires proof-grade candidate evidence");
+  assert.equal(finalTick.gate.result, "blocked");
+  assert.equal(finalTick.gate.stage, "lemma_sprint");
   assert.equal(finalTick.final_replay, undefined);
   assert.equal(finalTick.static_audit, undefined);
-  assert.equal(finalTick.ensemble, undefined);
+  assert.equal(finalTick.ensemble.decision.proof_authority, "none");
   assert.equal(seenStages.has("candidate_generation"), true);
-  assert.equal(seenStages.has("candidate_verification"), false);
-  assert.equal(seenStages.has("candidate_arbitration"), false);
+  assert.equal(seenStages.has("candidate_verification"), true);
+  assert.equal(seenStages.has("candidate_arbitration"), true);
   assert.equal(seenStages.has("final_global_replay"), false);
 
   const claim = getClaim(projectRoot, finalTick.campaign.project_id, claimId);
@@ -105,7 +107,7 @@ try {
   });
   assert.equal(replay.status, 200);
   assert.equal(replay.body.final_replay, undefined);
-  assert.equal(replay.body.blocker, "broad theorem synthesis requires checked replay target");
+  assert.equal(replay.body.blocker, "native candidate arbitration requires proof-grade candidate evidence");
 } finally {
   await server.close();
   rmSync(projectRoot, { recursive: true, force: true });

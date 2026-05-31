@@ -11,7 +11,7 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
-async function tickToTerminal(campaignId, maxTicks = 12) {
+async function tickUntil(campaignId, predicate, maxTicks = 12) {
   let last = null;
   for (let index = 0; index < maxTicks; index += 1) {
     const tick = await server.inject({
@@ -24,11 +24,11 @@ async function tickToTerminal(campaignId, maxTicks = 12) {
     });
     assert.equal(tick.status, 200);
     last = tick.body;
-    if (tick.body.campaign.status === "terminal") {
+    if (predicate(tick.body.campaign)) {
       return last;
     }
   }
-  assert.fail("broad theorem planning campaign did not reach terminal state");
+  assert.fail("broad theorem planning campaign did not reach expected state");
 }
 
 try {
@@ -48,7 +48,11 @@ try {
 
   const campaignId = start.body.campaign.campaign_id;
   const claimId = start.body.campaign.root_claim_id;
-  const finalTick = await tickToTerminal(campaignId);
+  const candidateGeneration = await tickUntil(campaignId, (campaign) => campaign.current_stage === "candidate_generation");
+  const requestRel = `.comath/campaign/${campaignId}/candidate_generation_request.json`;
+  assert.equal(existsSync(join(projectRoot, requestRel)), true);
+  rmSync(join(projectRoot, requestRel), { force: true });
+  const finalTick = await tickUntil(campaignId, (campaign) => campaign.status === "terminal");
 
   assert.equal(finalTick.campaign.status, "terminal");
   assert.equal(finalTick.campaign.terminal_state, "blocked_with_replayable_reason");

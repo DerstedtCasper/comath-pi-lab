@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { createComathServer, getClaim } from "../../dist/index.js";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task109-live-agent-candidates-"));
@@ -53,27 +53,7 @@ try {
   assert.equal(body.campaign.current_stage, "candidate_generation");
 
   const requestRel = `.comath/campaign/${campaignId}/candidate_generation_request.json`;
-  const requestPath = join(projectRoot, requestRel);
-  mkdirSync(dirname(requestPath), { recursive: true });
-  writeFileSync(
-    requestPath,
-    `${JSON.stringify(
-      {
-        schema_version: "comath.native_agent_candidate_generation_request.v1",
-        campaign_id: campaignId,
-        claim_id: claimId,
-        obligation_id: "PO-0001",
-        locked_statement_hash: statementHash,
-        stage: "candidate_generation",
-        requested_runner: "comathd.runGaAgentStageCandidates",
-        proof_authority: "none",
-        can_promote_claim: false
-      },
-      null,
-      2
-    )}\n`,
-    "utf8"
-  );
+  assert.equal(existsSync(join(projectRoot, requestRel)), true);
 
   const generated = await tick(campaignId);
   assert.equal(generated.campaign.status, "running");
@@ -166,27 +146,7 @@ try {
   assert.equal(tampered.campaign.current_stage, "candidate_generation");
   const tamperedObligation = tampered.campaign.open_obligations[0];
   const tamperedRequestRel = `.comath/campaign/${tamperedCampaignId}/candidate_generation_request.json`;
-  const tamperedRequestPath = join(projectRoot, tamperedRequestRel);
-  mkdirSync(dirname(tamperedRequestPath), { recursive: true });
-  writeFileSync(
-    tamperedRequestPath,
-    `${JSON.stringify(
-      {
-        schema_version: "comath.native_agent_candidate_generation_request.v1",
-        campaign_id: tamperedCampaignId,
-        claim_id: tampered.campaign.root_claim_id,
-        obligation_id: tamperedObligation.obligation_id,
-        locked_statement_hash: tamperedObligation.statement_hash,
-        stage: "candidate_generation",
-        requested_runner: "comathd.runGaAgentStageCandidates",
-        proof_authority: "none",
-        can_promote_claim: false
-      },
-      null,
-      2
-    )}\n`,
-    "utf8"
-  );
+  assert.equal(existsSync(join(projectRoot, tamperedRequestRel)), true);
   const tamperedGenerated = await tick(tamperedCampaignId);
   assert.equal(tamperedGenerated.campaign.current_stage, "candidate_verification");
   const tamperedCandidatesRel = `.comath/campaign/${tamperedCampaignId}/ensembles/lemma_sprint/PO-0001/candidates.json`;
@@ -214,10 +174,13 @@ try {
   let broad = broadStart.body;
   for (let index = 0; index < 8; index += 1) {
     broad = await tick(broadCampaignId);
-    if (broad.campaign.status === "terminal") {
+    if (broad.campaign.current_stage === "candidate_generation") {
       break;
     }
   }
+  assert.equal(broad.campaign.current_stage, "candidate_generation");
+  rmSync(join(projectRoot, `.comath/campaign/${broadCampaignId}/candidate_generation_request.json`), { force: true });
+  broad = await tick(broadCampaignId);
   assert.equal(broad.campaign.status, "terminal");
   assert.equal(broad.campaign.terminal_state, "blocked_with_replayable_reason");
   assert.equal(broad.campaign.blockers[0].reason, "broad theorem synthesis requires checked replay target");

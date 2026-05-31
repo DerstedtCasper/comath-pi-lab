@@ -54,20 +54,21 @@ try {
   assert.equal(finalTick.campaign.current_stage, "blocked");
   assert.equal(finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
   assert.equal(finalTick.counterexample, undefined);
-  assert.equal(finalTick.gate, undefined);
-  assert.equal(finalTick.campaign.blockers[0].hard_vetoes.includes("business_layer_theorem_prover_forbidden"), true);
+  assert.equal(finalTick.blocker, "native candidate arbitration requires proof-grade candidate evidence");
+  assert.equal(finalTick.gate.result, "blocked");
+  assert.equal(finalTick.gate.stage, "lemma_sprint");
 
   const claim = getClaim(projectRoot, finalTick.campaign.project_id, claimId);
   assert.equal(claim.status, "conjectural");
 
   const counterexamplePath = join(projectRoot, ".comath", "evidence", claimId, "counterexample", "CE-0001.json");
   assert.equal(existsSync(counterexamplePath), false);
-  const failurePath = join(projectRoot, ".comath", "campaign", campaignId, "broad_synthesis_failure.json");
+  const failurePath = join(projectRoot, ".comath", "campaign", campaignId, "candidate_arbitration_blocker.json");
   assert.equal(existsSync(failurePath), true);
   const failure = readJson(failurePath);
   assert.equal(failure.proof_authority, "none");
   assert.equal(failure.can_promote_claim, false);
-  assert.equal(failure.hard_vetoes.includes("business_layer_theorem_prover_forbidden"), true);
+  assert.equal(failure.reason, "native candidate arbitration requires proof-grade candidate evidence");
 } finally {
   await server.close();
   rmSync(projectRoot, { recursive: true, force: true });

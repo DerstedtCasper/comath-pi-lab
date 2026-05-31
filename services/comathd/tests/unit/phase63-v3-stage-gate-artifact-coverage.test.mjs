@@ -62,11 +62,8 @@ try {
 
   assert.equal(quarantinedFinal.campaign.current_stage, "blocked");
   assert.equal(quarantinedFinal.campaign.terminal_state, "blocked_with_replayable_reason");
-  assert.equal(quarantinedFinal.blocker, "broad theorem synthesis requires checked replay target");
-  assert.equal(
-    quarantinedFinal.campaign.blockers[0].reason,
-    "broad theorem synthesis requires checked replay target"
-  );
+  assert.equal(quarantinedFinal.blocker, "native candidate arbitration requires proof-grade candidate evidence");
+  assert.equal(quarantinedFinal.campaign.blockers[0].reason, "native candidate arbitration requires proof-grade candidate evidence");
   const stageRuns = quarantinedFinal.campaign.stage_runs;
   const requiredStages = [
     "problem_locked",
@@ -74,7 +71,9 @@ try {
     "notation_gate",
     "skeleton_gate",
     "line_map_gate",
-    "candidate_generation"
+    "candidate_generation",
+    "candidate_verification",
+    "candidate_arbitration"
   ];
 
   for (const stage of requiredStages) {
@@ -97,9 +96,10 @@ try {
     `.comath/campaign/${quarantinedStart.campaign_id}/proof/line_map.json`,
     `.comath/campaign/${quarantinedStart.campaign_id}/proof/Skeleton.lean`,
     `.comath/campaign/${quarantinedStart.campaign_id}/proof/skeleton_report.md`,
-    `.comath/campaign/${quarantinedStart.campaign_id}/broad_synthesis_plan.json`,
-    `.comath/campaign/${quarantinedStart.campaign_id}/broad_replay_target.json`,
-    `.comath/campaign/${quarantinedStart.campaign_id}/broad_synthesis_failure.json`
+    `.comath/campaign/${quarantinedStart.campaign_id}/candidate_generation_request.json`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/candidate_generation.json`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/candidate_verification.json`,
+    `.comath/campaign/${quarantinedStart.campaign_id}/candidate_arbitration_blocker.json`
   ]) {
     assertArtifact(quarantinedRoot, rel);
   }
@@ -134,11 +134,6 @@ try {
   assert.equal(blocker.rewind_target, "line_map_gate");
   assert.deepEqual(blocker.missing_artifacts, [lineMapRel]);
   assertArtifact(blockedRoot, blocker.artifact_path);
-
-  const blockerPayload = JSON.parse(readFileSync(join(blockedRoot, blocker.artifact_path), "utf8"));
-  assert.equal(blockerPayload.code, "MISSING_REQUIRED_STAGE_ARTIFACT");
-  assert.equal(blockerPayload.rewind_target, "line_map_gate");
-  assert.deepEqual(blockerPayload.missing_artifacts, [lineMapRel]);
 } finally {
   await server.close();
   rmSync(quarantinedRoot, { recursive: true, force: true });

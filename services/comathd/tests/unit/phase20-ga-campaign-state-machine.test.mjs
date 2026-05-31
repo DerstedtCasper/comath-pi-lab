@@ -153,6 +153,18 @@ const quarantinedProofRoot = mkdtempSync(join(tmpdir(), "comath-ga-state-proof-q
 const refutationRoot = mkdtempSync(join(tmpdir(), "comath-ga-state-refute-"));
 const unsupportedRoot = mkdtempSync(join(tmpdir(), "comath-ga-state-unsupported-"));
 const server = createComathServer();
+const nativeBlockedStages = [
+  "problem_locked",
+  "knowledge_pack",
+  "notation_gate",
+  "skeleton_gate",
+  "line_map_gate",
+  "candidate_generation",
+  "candidate_verification",
+  "candidate_arbitration",
+  "blocked"
+];
+const nativeCandidateBlocker = "native candidate arbitration requires proof-grade candidate evidence";
 
 try {
   const quarantinedProof = await runCampaign(
@@ -164,27 +176,16 @@ try {
   assert.equal(quarantinedProof.finalTick.campaign.status, "terminal");
   assert.equal(quarantinedProof.finalTick.campaign.current_stage, "blocked");
   assert.equal(quarantinedProof.finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
-  assert.equal(quarantinedProof.finalTick.blocker, "broad theorem synthesis requires checked replay target");
-  assert.equal(
-    quarantinedProof.finalTick.campaign.blockers[0].reason,
-    "broad theorem synthesis requires checked replay target"
-  );
-  assert.deepEqual(quarantinedProof.seenStages, [
-    "problem_locked",
-    "knowledge_pack",
-    "notation_gate",
-    "skeleton_gate",
-    "line_map_gate",
-    "candidate_generation",
-    "blocked"
-  ]);
+  assert.equal(quarantinedProof.finalTick.blocker, nativeCandidateBlocker);
+  assert.equal(quarantinedProof.finalTick.campaign.blockers[0].reason, nativeCandidateBlocker);
+  assert.deepEqual(quarantinedProof.seenStages, nativeBlockedStages);
   assert.equal(quarantinedProof.finalTick.final_replay, undefined);
   assert.equal(
     quarantinedProof.finalTick.campaign.stage_runs.some(
-      (run) => run.stage === "candidate_verification" || run.stage === "final_global_replay"
+      (run) => run.stage === "final_global_replay"
     ),
     false,
-    "quarantined theorem-family goals must not fabricate candidate verification or final replay stages"
+    "quarantined theorem-family goals must not fabricate final replay stages"
   );
 
   const refutation = await runCampaign(
@@ -197,16 +198,8 @@ try {
   assert.equal(refutation.finalTick.campaign.current_stage, "blocked");
   assert.equal(refutation.finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
   assert.equal(refutation.finalTick.counterexample, undefined);
-  assert.equal(refutation.finalTick.campaign.blockers[0].hard_vetoes.includes("business_layer_theorem_prover_forbidden"), true);
-  assert.deepEqual(refutation.seenStages, [
-    "problem_locked",
-    "knowledge_pack",
-    "notation_gate",
-    "skeleton_gate",
-    "line_map_gate",
-    "candidate_generation",
-    "blocked"
-  ]);
+  assert.equal(refutation.finalTick.blocker, nativeCandidateBlocker);
+  assert.deepEqual(refutation.seenStages, nativeBlockedStages);
   assert.equal(refutation.finalTick.final_replay, undefined);
   assert.equal(
     refutation.finalTick.campaign.stage_runs.some(
@@ -225,22 +218,22 @@ try {
   assert.equal(unsupported.finalTick.campaign.status, "terminal");
   assert.equal(unsupported.finalTick.campaign.current_stage, "blocked");
   assert.equal(unsupported.finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
-  assert.equal(unsupported.finalTick.blocker, "broad theorem synthesis requires checked replay target");
-  assert.equal(unsupported.finalTick.campaign.blockers[0].reason, "broad theorem synthesis requires checked replay target");
+  assert.equal(unsupported.finalTick.blocker, nativeCandidateBlocker);
+  assert.equal(unsupported.finalTick.campaign.blockers[0].reason, nativeCandidateBlocker);
   assert.equal(
     unsupported.finalTick.campaign.stage_runs.at(-1).status,
     "blocked",
-    "blocked broad-planning attempts must not be recorded as completed stage runs"
+    "blocked native candidate attempts must not be recorded as completed stage runs"
   );
   assert.equal(
     unsupported.finalTick.campaign.stage_runs.at(-1).stage,
-    "candidate_generation",
-    "unsupported goals must fail closed before fabricating theorem-family candidates"
+    "candidate_arbitration",
+    "unsupported goals must fail closed before final replay or promotion"
   );
   assert.equal(
-    existsSync(join(unsupportedRoot, ".comath", "campaign", unsupported.finalTick.campaign.campaign_id, "broad_synthesis_plan.json")),
+    existsSync(join(unsupportedRoot, ".comath", "campaign", unsupported.finalTick.campaign.campaign_id, "candidate_generation_request.json")),
     true,
-    "unsupported goals should preserve broad theorem planning evidence"
+    "unsupported goals should preserve service-owned native generation request evidence"
   );
 } finally {
   await server.close();

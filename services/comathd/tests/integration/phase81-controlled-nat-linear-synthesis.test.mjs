@@ -61,7 +61,8 @@ try {
   assert.equal(finalTick.campaign.current_stage, "blocked");
   assert.equal(finalTick.campaign.terminal_state, "blocked_with_replayable_reason");
   assert.equal(finalTick.final_replay, undefined);
-  assert.equal(finalTick.gate, undefined);
+  assert.equal(finalTick.blocker, "native candidate arbitration requires proof-grade candidate evidence");
+  assert.equal(finalTick.gate.result, "blocked");
 
   const campaignId = finalTick.campaign.campaign_id;
   const claimId = finalTick.campaign.root_claim_id;

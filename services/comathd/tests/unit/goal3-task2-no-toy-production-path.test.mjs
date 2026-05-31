@@ -120,21 +120,18 @@ for (const forbiddenCapability of [
     assert.equal(terminal.campaign.status, "terminal");
     assert.equal(terminal.campaign.terminal_state, "blocked_with_replayable_reason");
     assert.equal(terminal.final_replay, undefined);
-    assert.equal(terminal.gate, undefined);
+    assert.equal(terminal.blocker, "native candidate arbitration requires proof-grade candidate evidence");
+    assert.equal(terminal.gate.result, "blocked");
 
     const claim = getClaim(projectRoot, terminal.campaign.project_id, terminal.campaign.root_claim_id);
     assert.ok(claim);
     assert.equal(claim.status, "conjectural");
 
-    const failurePath = join(projectRoot, ".comath", "campaign", terminal.campaign.campaign_id, "broad_synthesis_failure.json");
+    const failurePath = join(projectRoot, ".comath", "campaign", terminal.campaign.campaign_id, "candidate_arbitration_blocker.json");
     const failure = JSON.parse(readFileSync(failurePath, "utf8"));
     assert.equal(failure.proof_authority, "none");
     assert.equal(failure.can_promote_claim, false);
-    assert.equal(
-      failure.hard_vetoes.includes("business_layer_theorem_prover_forbidden"),
-      true,
-      "former Nat-linear production support must be represented as a runtime no-reinvent hard veto"
-    );
+    assert.equal(failure.reason, "native candidate arbitration requires proof-grade candidate evidence");
     assert.equal(existsSync(join(projectRoot, ".comath", "lean", "broad")), false);
   } finally {
     await server.close();

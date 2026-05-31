@@ -869,20 +869,77 @@ function readNativeAgentCandidateGenerationRequest(
     return undefined;
   }
   const request = objectRecord(readJsonArtifact(projectRoot, requestRel), "native_agent_candidate_generation_request");
+  const requiredVariants = Array.isArray(request.required_variants) ? request.required_variants : [];
+  const expectedVariants = defaultVariants.map((variant) => variant.variant_id);
+  const lineMapPath = campaignProofRel(campaign, "line_map.json");
+  const obligationPath = campaignProofRel(campaign, join("obligations", `${obligation.obligation_id}.yaml`));
+  const producedByLineMapGate = campaign.stage_runs.some(
+    (run) => run.stage === "line_map_gate" && run.status === "completed" && run.artifact_paths.includes(requestRel)
+  );
   if (
     request.schema_version !== "comath.native_agent_candidate_generation_request.v1" ||
     request.campaign_id !== campaign.campaign_id ||
+    request.project_id !== campaign.project_id ||
     request.claim_id !== campaign.root_claim_id ||
     request.obligation_id !== obligation.obligation_id ||
     request.locked_statement_hash !== obligation.statement_hash ||
     request.stage !== "candidate_generation" ||
+    request.generated_by_stage !== "line_map_gate" ||
+    request.line_map_path !== lineMapPath ||
+    request.line_map_sha256 !== sha256RuntimeFile(projectRoot, lineMapPath) ||
+    request.obligation_path !== obligationPath ||
+    request.obligation_sha256 !== sha256RuntimeFile(projectRoot, obligationPath) ||
+    request.required_variants_count !== expectedVariants.length ||
+    requiredVariants.length !== expectedVariants.length ||
+    expectedVariants.some((variantId, index) => requiredVariants[index] !== variantId) ||
     request.requested_runner !== "comathd.runGaAgentStageCandidates" ||
+    !producedByLineMapGate ||
+    !request.statement_boundary ||
+    typeof request.statement_boundary !== "object" ||
+    Array.isArray(request.statement_boundary) ||
+    (request.statement_boundary as Record<string, unknown>).statement_hash !== obligation.statement_hash ||
+    (request.statement_boundary as Record<string, unknown>).candidate_statement_must_match_locked_hash !== true ||
+    (request.statement_boundary as Record<string, unknown>).hidden_assumptions_allowed !== false ||
     request.proof_authority !== "none" ||
     request.can_promote_claim !== false
   ) {
     throw new Error("native_agent_candidate_generation_request_invalid");
   }
   return { path: requestRel };
+}
+
+function writeNativeAgentCandidateGenerationRequest(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+}): string {
+  const lineMapPath = campaignProofRel(input.campaign, "line_map.json");
+  const obligationPath = campaignProofRel(input.campaign, join("obligations", `${input.obligation.obligation_id}.yaml`));
+  return writeSimpleStageArtifact(input.projectRoot, input.campaign, "candidate_generation_request.json", {
+    schema_version: "comath.native_agent_candidate_generation_request.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.campaign.project_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    locked_statement_hash: input.obligation.statement_hash,
+    stage: "candidate_generation",
+    generated_by_stage: "line_map_gate",
+    line_map_path: lineMapPath,
+    line_map_sha256: sha256RuntimeFile(input.projectRoot, lineMapPath),
+    obligation_path: obligationPath,
+    obligation_sha256: sha256RuntimeFile(input.projectRoot, obligationPath),
+    requested_runner: "comathd.runGaAgentStageCandidates",
+    required_variants: defaultVariants.map((variant) => variant.variant_id),
+    required_variants_count: defaultVariants.length,
+    statement_boundary: {
+      statement_hash: input.obligation.statement_hash,
+      candidate_statement_must_match_locked_hash: true,
+      hidden_assumptions_allowed: false
+    },
+    proof_authority: "none",
+    can_promote_claim: false,
+    created_at: now()
+  });
 }
 
 export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
@@ -1118,6 +1175,10 @@ function parseFinalGlobalReplayRequestPayload(input: {
 
 function sha256Text(text: string): string {
   return createHash("sha256").update(text).digest("hex");
+}
+
+function sha256RuntimeFile(projectRoot: string, rel: string): string {
+  return sha256Text(readFileSync(assertPathAllowed(projectRoot, rel, { purpose: "read", resolveRealpath: true }), "utf8"));
 }
 
 function readAcceptedArtifactJson(projectRoot: string, artifact: ArtifactRef): unknown | undefined {
@@ -2084,14 +2145,20 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       obligation_paths: [campaignProofRel(campaign, join("obligations", `${obligation.obligation_id}.yaml`))],
       unmapped_informal_leaps: [],
       bypass_reason: null,
+      generated_candidate_generation_request: true,
       created_at: now()
+    });
+    const generationRequestRel = writeNativeAgentCandidateGenerationRequest({
+      projectRoot: input.project_root,
+      campaign,
+      obligation
     });
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "candidate_generation",
-        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "line_map_gate", [gateRel, ...lineMapArtifacts])],
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "line_map_gate", [gateRel, ...lineMapArtifacts, generationRequestRel])],
         next_actions: ["run bounded 8-way candidate generation or exact refutation search"]
       }),
       actor
@@ -2172,12 +2239,34 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   if (campaign.current_stage === "candidate_verification") {
     const candidates = readStoredCandidates(input.project_root, campaign, obligation.obligation_id);
     const variantIds = new Set(candidates.map((candidate) => candidate.variant_id));
+    let manifestBindingsValid = true;
+    try {
+      for (const candidate of candidates) {
+        const manifest = readCandidateManifestForCampaign(input.project_root, candidate);
+        if (
+          candidate.campaign_id !== campaign.campaign_id ||
+          candidate.obligation_id !== obligation.obligation_id ||
+          candidate.locked_statement_hash !== obligation.statement_hash ||
+          candidate.candidate_statement_hash !== obligation.statement_hash ||
+          manifest.campaign_id !== campaign.campaign_id ||
+          manifest.obligation_id !== obligation.obligation_id ||
+          manifest.locked_statement_hash !== obligation.statement_hash ||
+          manifest.candidate_statement_hash !== obligation.statement_hash
+        ) {
+          manifestBindingsValid = false;
+        }
+      }
+    } catch {
+      manifestBindingsValid = false;
+    }
     const allRequiredVariantsPresent = defaultVariants.every((variant) => variantIds.has(variant.variant_id));
     const allManifestPathsPresent = candidates.every(
       (candidate) => typeof candidate.manifest_path === "string" && artifactExists(input.project_root, candidate.manifest_path)
     );
     const allStatementHashesMatch = candidates.every(
-      (candidate) => candidate.candidate_statement_hash === candidate.locked_statement_hash
+      (candidate) =>
+        candidate.locked_statement_hash === obligation.statement_hash &&
+        candidate.candidate_statement_hash === obligation.statement_hash
     );
     const verificationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_verification.json", {
       campaign_id: campaign.campaign_id,
@@ -2189,6 +2278,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       kernel_checked_candidates: candidates.filter((candidate) => candidate.state === "candidate_kernel_checked").length,
       failed_candidates: candidates.filter((candidate) => candidate.state === "candidate_failed").length,
       all_statement_hashes_match: allStatementHashesMatch,
+      all_manifest_bindings_match_obligation: manifestBindingsValid,
       proof_authority: "none",
       can_promote_claim: false,
       created_at: now()
@@ -2198,7 +2288,8 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       variantIds.size !== defaultVariants.length ||
       !allRequiredVariantsPresent ||
       !allManifestPathsPresent ||
-      !allStatementHashesMatch
+      !allStatementHashesMatch ||
+      !manifestBindingsValid
     ) {
       return blockCampaignAtFinalReplay({
         projectRoot: input.project_root,
@@ -2247,12 +2338,57 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         });
       }
     }
+    if (gate.result !== "pass") {
+      const blockerRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_arbitration_blocker.json", {
+        schema_version: "comath.native_candidate_arbitration_blocker.v1",
+        campaign_id: campaign.campaign_id,
+        claim_id: campaign.root_claim_id,
+        obligation_id: obligation.obligation_id,
+        decision_path: decisionRel,
+        reason: "native candidate arbitration requires proof-grade candidate evidence",
+        gate_result: gate.result,
+        proof_authority: "none",
+        can_promote_claim: false,
+        hard_vetoes: gate.hard_vetoes,
+        recovery_plan: decision.recovery_plan,
+        created_at: now()
+      });
+      const next = writeCampaign(
+        input.project_root,
+        researchCampaignSchema.parse({
+          ...campaign,
+          current_stage: "blocked",
+          status: "terminal",
+          terminal_state: "blocked_with_replayable_reason",
+          open_obligations: [{ ...obligation, status: "blocked" }],
+          blockers: [
+            {
+              reason: "native candidate arbitration requires proof-grade candidate evidence",
+              obligation_id: obligation.obligation_id,
+              artifact_path: blockerRel,
+              decision_path: decisionRel,
+              hard_vetoes: gate.hard_vetoes
+            }
+          ],
+          stage_runs: [...campaign.stage_runs, stageRun(campaign, "candidate_arbitration", "blocked", [decisionRel, blockerRel])],
+          next_actions: decision.recovery_plan
+        }),
+        actor
+      );
+      return {
+        campaign: next,
+        obligation: { ...obligation, status: "blocked" },
+        ensemble: { candidates, decision },
+        gate,
+        blocker: "native candidate arbitration requires proof-grade candidate evidence"
+      };
+    }
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
-        current_stage: gate.result === "pass" ? "refutation_red_team" : "repair",
-        open_obligations: [{ ...obligation, status: gate.result === "pass" ? "candidate_selected" : "blocked" }],
+        current_stage: "refutation_red_team",
+        open_obligations: [{ ...obligation, status: "candidate_selected" }],
         stage_runs: [
           ...campaign.stage_runs,
           completedStageRun(
@@ -2263,10 +2399,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
             )
           )
         ],
-        next_actions:
-          gate.result === "pass"
-            ? ["run mandatory refutation red-team before integration"]
-            : ["repair blocked candidate search before retrying arbitration"]
+        next_actions: ["run mandatory refutation red-team before integration"]
       }),
       actor
     );
