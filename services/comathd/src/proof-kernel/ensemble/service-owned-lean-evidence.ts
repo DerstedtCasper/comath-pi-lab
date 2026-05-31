@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import {
   hasFinalReplayRegistryProvenanceV3,
+  hasLeanLakeBinaryHashProvenanceV3,
   verifyFinalReplayManifestV3
 } from "../lean/final-replay-manifest-v3.js";
 import { hasLeanRunManifestProvenanceIndexV1, verifyLeanRunManifestV3Evidence } from "../lean/lean-run-manifest-v3.js";
@@ -138,7 +139,8 @@ function isVerifiedFinalReplayManifest(input: {
   }
   return (
     verifyFinalReplayManifestV3(input.projectRoot, input.manifest).ok &&
-    hasFinalReplayRegistryProvenanceV3(input.projectRoot, input.manifest)
+    hasFinalReplayRegistryProvenanceV3(input.projectRoot, input.manifest) &&
+    hasLeanLakeBinaryHashProvenanceV3(input.projectRoot, input.manifest)
   );
 }
 

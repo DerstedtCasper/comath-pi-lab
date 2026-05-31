@@ -14,7 +14,7 @@ import {
   statementHash
 } from "../../dist/index.js";
 
-const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task121-final-replay-evidence-registry-"));
+const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task122-final-replay-binary-provenance-"));
 
 function writeProjectFile(relativePath, content) {
   const absolute = join(projectRoot, relativePath);
@@ -59,7 +59,7 @@ function writeCandidateManifest(candidate, evidence) {
         hard_vetoes: [],
         failures: [],
         replay_command: candidate.replay_command,
-        summary: "Task121 FinalReplayManifest v3 evidence must be registry-provenance-bound.",
+        summary: "Task122 FinalReplayManifest local evidence must bind Lean/Lake binary provenance.",
         maintainability_notes: "Small exact candidate with service-owned final replay evidence."
       },
       null,
@@ -69,9 +69,7 @@ function writeCandidateManifest(candidate, evidence) {
   return manifestRel;
 }
 
-function writeFinalReplayManifest({ claim, campaignId }) {
-  const replayId = "RPLY-0121";
-  const runId = "LRUN-0121";
+function writeFinalReplayFixture({ claim, campaignId, replayId, runId, theoremName, includeBinaryProvenance }) {
   const cleanRootRel = `.comath/lean/final_replay/${replayId}/clean`;
   const target = writeProjectFile(
     `${cleanRootRel}/MathResearch/Target.lean`,
@@ -80,11 +78,11 @@ function writeFinalReplayManifest({ claim, campaignId }) {
       "",
       "namespace MathResearch",
       "",
-      "theorem Goal3Task121 : True := by",
+      `theorem ${theoremName} : True := by`,
       "  trivial",
       "",
-      "#check Goal3Task121",
-      "#print axioms Goal3Task121",
+      `#check ${theoremName}`,
+      `#print axioms ${theoremName}`,
       "",
       "end MathResearch",
       ""
@@ -92,17 +90,17 @@ function writeFinalReplayManifest({ claim, campaignId }) {
   );
   const audit = writeProjectFile(
     `${cleanRootRel}/Audit/TargetAudit.lean`,
-    "import MathResearch.Target\n#check MathResearch.Goal3Task121\n#print axioms MathResearch.Goal3Task121\n"
+    `import MathResearch.Target\n#check MathResearch.${theoremName}\n#print axioms MathResearch.${theoremName}\n`
   );
   const formalSpec = writeProjectFile(
     `${cleanRootRel}/FormalSpec/formal_spec_lock.json`,
     `${JSON.stringify(
       {
         schema_version: "comath.formal_spec_lock.v2",
-        task_id: "PM-121",
+        task_id: "PM-122",
         claim_id: claim.id,
         namespace: "MathResearch",
-        theorem_name: "Goal3Task121",
+        theorem_name: theoremName,
         theorem_header: claim.statement,
         statement_hash: claim.statement_hash,
         proof_authority: "none"
@@ -116,7 +114,7 @@ function writeFinalReplayManifest({ claim, campaignId }) {
     `${JSON.stringify(
       {
         schema_version: "comath.assumption_ledger.v1",
-        task_id: "PM-121",
+        task_id: "PM-122",
         claim_id: claim.id,
         formal_spec_lock_hash: claim.statement_hash,
         entries: [],
@@ -132,17 +130,18 @@ function writeFinalReplayManifest({ claim, campaignId }) {
   );
   const toolchain = writeProjectFile(`${cleanRootRel}/lean-toolchain`, "leanprover/lean4:v4.23.0\n");
   const lakeManifest = writeProjectFile(`${cleanRootRel}/lake-manifest.json`, `${JSON.stringify({ version: 7, packages: [] }, null, 2)}\n`);
-  const leanBinary = writeProjectFile(`${cleanRootRel}/bin/lean`, "dummy lean executable for Task121 binary provenance\n");
-  const lakeBinary = writeProjectFile(`${cleanRootRel}/bin/lake`, "dummy lake executable for Task121 binary provenance\n");
-  const stdout = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stdout.log`, "Goal3Task121 checked\n");
+  const stdout = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stdout.log`, `${theoremName} checked\n`);
   const stderr = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.stderr.log`, "");
-  const staticAudit = writeProjectFile(`.comath/evidence/${claim.id}/lean/final_static_audit.json`, `${JSON.stringify({ result: "pass", hard_vetoes: [] })}\n`);
-  const dependencyClosure = writeProjectFile(`.comath/evidence/${claim.id}/lean/dependency_closure.json`, `${JSON.stringify({ result: "pass", hard_vetoes: [] })}\n`);
-  const axiomProfile = writeProjectFile(`.comath/evidence/${claim.id}/lean/axiom_profile.json`, `${JSON.stringify({ result: "pass", detected_axioms: [], hard_vetoes: [] })}\n`);
+  const staticAudit = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.final_static_audit.json`, `${JSON.stringify({ result: "pass", hard_vetoes: [] })}\n`);
+  const dependencyClosure = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.dependency_closure.json`, `${JSON.stringify({ result: "pass", hard_vetoes: [] })}\n`);
+  const axiomProfile = writeProjectFile(`.comath/evidence/${claim.id}/lean/${runId}.axiom_profile.json`, `${JSON.stringify({ result: "pass", detected_axioms: [], hard_vetoes: [] })}\n`);
   const statementCheck = writeProjectFile(
-    `.comath/evidence/${claim.id}/lean/statement_equivalence.json`,
+    `.comath/evidence/${claim.id}/lean/${runId}.statement_equivalence.json`,
     `${JSON.stringify({ result: "pass", locked_statement_hash: claim.statement_hash, hard_vetoes: [] })}\n`
   );
+
+  const leanBinary = includeBinaryProvenance ? writeProjectFile(`${cleanRootRel}/bin/lean`, `dummy lean executable for ${runId}\n`) : undefined;
+  const lakeBinary = includeBinaryProvenance ? writeProjectFile(`${cleanRootRel}/bin/lake`, `dummy lake executable for ${runId}\n`) : undefined;
   const leanRunManifest = createServiceOwnedLeanRunManifestV3({
     projectRoot,
     run_id: runId,
@@ -173,17 +172,21 @@ function writeFinalReplayManifest({ claim, campaignId }) {
   appendLeanRunManifestProvenanceIndexV1({
     projectRoot,
     project_id: claim.project_id,
-    actor: "goal3-task121",
+    actor: "goal3-task122",
     manifest: leanRunManifest,
     manifest_path: leanRunManifestRel
   });
 
+  const binaryHashes =
+    includeBinaryProvenance && leanBinary && lakeBinary
+      ? { lean: sha256(leanBinary), lake: sha256(lakeBinary) }
+      : undefined;
   const manifest = createFinalReplayManifestV3({
     projectRoot,
     replay_id: replayId,
     campaign_id: campaignId,
     claim_id: claim.id,
-    theorem_name: "MathResearch.Goal3Task121",
+    theorem_name: `MathResearch.${theoremName}`,
     clean_workspace_path: join(projectRoot, cleanRootRel),
     command: ["lake", "build", "MathResearch"],
     exit_code: 0,
@@ -215,24 +218,25 @@ function writeFinalReplayManifest({ claim, campaignId }) {
     network_policy: "disabled",
     sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" },
     resource_budget: { timeout_ms: 30000, max_stdout_bytes: 65536, max_stderr_bytes: 65536 },
-    binary_hashes: { lean: sha256(leanBinary), lake: sha256(lakeBinary) }
+    binary_hashes: binaryHashes
   });
-  const manifestRel = `.comath/evidence/${claim.id}/lean/final_replay_manifest_v3.json`;
+  const manifestRel = `.comath/evidence/${claim.id}/lean/${runId}.final_replay_manifest_v3.json`;
   writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
-  return { manifest, manifestRel };
+  appendFinalReplayRegistryEntryV3(projectRoot, manifest, { project_id: claim.project_id, actor: "goal3-task122" });
+  return manifestRel;
 }
 
 try {
-  const { project } = initProject({ name: "Goal 3 Task 121 FinalReplay Evidence Registry Gate", root_path: projectRoot });
-  const campaignId = "CAM-0121";
-  const claimStatement = "theorem Goal3Task121 : True";
+  const { project } = initProject({ name: "Goal 3 Task 122 FinalReplay Binary Provenance", root_path: projectRoot });
+  const campaignId = "CAM-0122";
+  const claimStatement = "theorem Goal3Task122 : True";
   const claim = registerClaim(projectRoot, {
     project_id: project.project_id,
     statement: claimStatement,
     assumptions: [],
     domain: "logic",
     status: "conjectural",
-    actor: "goal3-task121"
+    actor: "goal3-task122"
   });
   assert.equal(claim.statement_hash, statementHash(claimStatement));
 
@@ -252,13 +256,21 @@ try {
     created_at: "2026-06-01T00:00:00.000Z",
     updated_at: "2026-06-01T00:00:00.000Z"
   };
-  const candidate = {
-    candidate_id: "CAND-0121",
+  const unboundManifestRel = writeFinalReplayFixture({
+    claim,
+    campaignId,
+    replayId: "RPLY-1221",
+    runId: "LRUN-1221",
+    theoremName: "Goal3Task122",
+    includeBinaryProvenance: false
+  });
+  const unboundCandidate = {
+    candidate_id: "CAND-1221",
     campaign_id: campaignId,
     stage: "lemma_sprint",
-    obligation_id: "PO-0121",
+    obligation_id: "PO-0122",
     variant_id: "V2",
-    workspace_path: ".comath/campaign/CAM-0121/ensembles/lemma_sprint/PO-0121/candidates/v2-final-replay",
+    workspace_path: ".comath/campaign/CAM-0122/ensembles/lemma_sprint/PO-0122/candidates/v2-final-replay-unbound",
     locked_statement_hash: claim.statement_hash,
     candidate_statement_hash: claim.statement_hash,
     state: "candidate_kernel_checked",
@@ -266,24 +278,30 @@ try {
     hard_vetoes: [],
     replay_command: "lake build MathResearch"
   };
-  const { manifest, manifestRel } = writeFinalReplayManifest({ claim, campaignId });
-  candidate.manifest_path = writeCandidateManifest(candidate, [`final_replay_manifest:${manifestRel}`]);
+  unboundCandidate.manifest_path = writeCandidateManifest(unboundCandidate, [`final_replay_manifest:${unboundManifestRel}`]);
+  const unboundDecision = decideCandidate({ projectRoot, campaign, candidates: [unboundCandidate] });
+  assert.equal(unboundDecision.decision.selected_candidate_id, null);
+  assert.equal(unboundDecision.gate.result, "blocked");
 
-  const missingRegistryDecision = decideCandidate({ projectRoot, campaign, candidates: [candidate] });
-  assert.equal(missingRegistryDecision.decision.selected_candidate_id, null);
-  assert.equal(missingRegistryDecision.gate.result, "blocked");
-  assert.ok(
-    missingRegistryDecision.decision.rejected_candidates.some(
-      (item) => item.candidate_id === candidate.candidate_id && /missing service-owned Lean replay evidence/.test(item.reason)
-    )
-  );
-
-  appendFinalReplayRegistryEntryV3(projectRoot, manifest, { project_id: project.project_id, actor: "goal3-task121" });
-  const registryBoundDecision = decideCandidate({ projectRoot, campaign, candidates: [candidate] });
-  assert.equal(registryBoundDecision.decision.selected_candidate_id, candidate.candidate_id);
-  assert.equal(registryBoundDecision.gate.result, "pass");
+  const boundManifestRel = writeFinalReplayFixture({
+    claim,
+    campaignId,
+    replayId: "RPLY-1222",
+    runId: "LRUN-1222",
+    theoremName: "Goal3Task122",
+    includeBinaryProvenance: true
+  });
+  const boundCandidate = {
+    ...unboundCandidate,
+    candidate_id: "CAND-1222",
+    workspace_path: ".comath/campaign/CAM-0122/ensembles/lemma_sprint/PO-0122/candidates/v2-final-replay-bound"
+  };
+  boundCandidate.manifest_path = writeCandidateManifest(boundCandidate, [`final_replay_manifest:${boundManifestRel}`]);
+  const boundDecision = decideCandidate({ projectRoot, campaign, candidates: [boundCandidate] });
+  assert.equal(boundDecision.decision.selected_candidate_id, boundCandidate.candidate_id);
+  assert.equal(boundDecision.gate.result, "pass");
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }
 
-console.log("Goal 3 Task 121 final replay service-owned evidence registry gate test passed.");
+console.log("Goal 3 Task 122 final replay local evidence binary provenance test passed.");
