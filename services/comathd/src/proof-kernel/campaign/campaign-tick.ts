@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { appendAuditEvent } from "../../audit/jsonl-writer.js";
@@ -23,6 +24,7 @@ import {
   candidateRunSchema,
   proofObligationSchema,
   researchCampaignSchema,
+  type ArtifactRef,
   type CandidateRun,
   type GateDecision,
   type ProofObligation,
@@ -909,6 +911,7 @@ type FinalGlobalReplayRequest = {
   leanProject: LeanProjectFiles;
   formalSpecLockPath: string;
   assumptionLedgerPath: string;
+  assembledRequestPath?: string;
 };
 
 function requireString(value: unknown, field: string): string {
@@ -948,20 +951,26 @@ function objectRecord(value: unknown, field: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function readFinalGlobalReplayRequest(projectRoot: string, campaign: ResearchCampaign): FinalGlobalReplayRequest | undefined {
-  const requestRel = campaignRel(campaign, "final_replay_request.json");
-  if (!artifactExists(projectRoot, requestRel)) {
-    return undefined;
-  }
-  const raw = JSON.parse(readFileSync(assertPathAllowed(projectRoot, requestRel, { purpose: "read", resolveRealpath: true }), "utf8")) as unknown;
-  const request = objectRecord(raw, "final_replay_request");
+function usesPositiveMatrixReleasePath(path: string): boolean {
+  const normalized = normalizeRelPath(path);
+  return normalized === ".comath/release/positive_matrix" || normalized.startsWith(".comath/release/positive_matrix/");
+}
+
+function parseFinalGlobalReplayRequestPayload(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  raw: unknown;
+  assembledRequestPath?: string;
+  expectedObligation?: ProofObligation;
+}): FinalGlobalReplayRequest {
+  const request = objectRecord(input.raw, "final_replay_request");
   if (request.schema_version !== "comath.campaign_final_global_replay_request.v1") {
     throw new Error("final_replay_request_schema_version_invalid");
   }
   const claimId = requireString(request.claim_id, "claim_id");
   const taskId = typeof request.task_id === "string" && request.task_id.trim().length > 0 ? request.task_id : undefined;
   const packagingScope = request.packaging_scope === "campaign" || taskId === undefined ? "campaign" : "positive_matrix";
-  if (claimId !== campaign.root_claim_id) {
+  if (claimId !== input.campaign.root_claim_id) {
     throw new Error("final_replay_request_claim_mismatch");
   }
 
@@ -974,11 +983,25 @@ function readFinalGlobalReplayRequest(projectRoot: string, campaign: ResearchCam
   const assumptionLedgerFileRel = requireLeanRootRelPath(leanProjectRaw.assumption_ledger_file, "lean_project.assumption_ledger_file");
   const lakefileRel = requireLeanRootRelPath(leanProjectRaw.lakefile, "lean_project.lakefile");
   const toolchainRel = requireLeanRootRelPath(leanProjectRaw.toolchain_file, "lean_project.toolchain_file");
-  const leanRoot = assertPathAllowed(projectRoot, leanRootRel, { purpose: "read", resolveRealpath: true });
-  const leanPath = (rel: string) => assertPathAllowed(projectRoot, join(leanRootRel, rel), { purpose: "read", resolveRealpath: true });
+  if (
+    packagingScope === "campaign" &&
+    [
+      leanRootRel,
+      join(leanRootRel, theoremFileRel),
+      join(leanRootRel, auditFileRel),
+      join(leanRootRel, formalSpecFileRel),
+      join(leanRootRel, assumptionLedgerFileRel),
+      join(leanRootRel, lakefileRel),
+      join(leanRootRel, toolchainRel)
+    ].some((path) => usesPositiveMatrixReleasePath(path))
+  ) {
+    throw new Error("final_replay_request_positive_matrix_path_forbidden");
+  }
+  const leanRoot = assertPathAllowed(input.projectRoot, leanRootRel, { purpose: "read", resolveRealpath: true });
+  const leanPath = (rel: string) => assertPathAllowed(input.projectRoot, join(leanRootRel, rel), { purpose: "read", resolveRealpath: true });
 
   const leanProject: LeanProjectFiles = {
-    projectRoot,
+    projectRoot: input.projectRoot,
     leanRoot,
     theoremFile: leanPath(theoremFileRel),
     theoremFileRel,
@@ -1001,8 +1024,18 @@ function readFinalGlobalReplayRequest(projectRoot: string, campaign: ResearchCam
       locked_statement_hash: requireString(formalSpecRaw.locked_statement_hash, "lean_project.formal_spec.locked_statement_hash")
     }
   };
-  if (leanProject.formalSpec.claim_id !== campaign.root_claim_id) {
+  if (leanProject.formalSpec.claim_id !== input.campaign.root_claim_id) {
     throw new Error("final_replay_request_formal_spec_claim_mismatch");
+  }
+  const obligation = input.expectedObligation ?? input.campaign.open_obligations.find((item) => item.claim_id === input.campaign.root_claim_id);
+  if (!obligation) {
+    throw new Error("final_replay_request_obligation_missing");
+  }
+  if (obligation.claim_id !== input.campaign.root_claim_id) {
+    throw new Error("final_replay_request_obligation_claim_mismatch");
+  }
+  if (leanProject.formalSpec.locked_statement_hash !== obligation.statement_hash) {
+    throw new Error("final_replay_request_statement_hash_drift");
   }
 
   return {
@@ -1011,8 +1044,94 @@ function readFinalGlobalReplayRequest(projectRoot: string, campaign: ResearchCam
     claimId,
     leanProject,
     formalSpecLockPath: normalizeRelPath(join(leanRootRel, formalSpecFileRel)),
-    assumptionLedgerPath: normalizeRelPath(join(leanRootRel, assumptionLedgerFileRel))
+    assumptionLedgerPath: normalizeRelPath(join(leanRootRel, assumptionLedgerFileRel)),
+    assembledRequestPath: input.assembledRequestPath
   };
+}
+
+function sha256Text(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+function readAcceptedArtifactJson(projectRoot: string, artifact: ArtifactRef): unknown | undefined {
+  const path = assertPathAllowed(projectRoot, artifact.path, { purpose: "read", resolveRealpath: true });
+  const text = readFileSync(path, "utf8");
+  if (sha256Text(text) !== artifact.sha256) {
+    throw new Error("accepted_artifact_hash_mismatch");
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function assembleFinalGlobalReplayRequestFromAcceptedArtifacts(
+  projectRoot: string,
+  campaign: ResearchCampaign
+): FinalGlobalReplayRequest | undefined {
+  for (const artifact of campaign.accepted_artifacts) {
+    if (artifact.project_id !== campaign.project_id) {
+      continue;
+    }
+    const payload = readAcceptedArtifactJson(projectRoot, artifact);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      continue;
+    }
+    const record = payload as Record<string, unknown>;
+    if (record.schema_version !== "comath.campaign_final_replay_target.v1") {
+      continue;
+    }
+    if (
+      record.campaign_id !== campaign.campaign_id ||
+      record.claim_id !== campaign.root_claim_id ||
+      record.artifact_role !== "final_replay_request_source" ||
+      record.proof_authority !== "none" ||
+      record.can_promote_claim !== false
+    ) {
+      throw new Error("accepted_final_replay_target_identity_mismatch");
+    }
+    const obligationId = requireString(record.obligation_id, "accepted_final_replay_target.obligation_id");
+    const obligation = campaign.open_obligations.find(
+      (item) => item.obligation_id === obligationId && item.claim_id === campaign.root_claim_id
+    );
+    if (!obligation) {
+      throw new Error("accepted_final_replay_target_obligation_mismatch");
+    }
+    const replayRequest = objectRecord(record.replay_request, "accepted_final_replay_target.replay_request");
+    if (replayRequest.packaging_scope !== "campaign" || replayRequest.task_id !== undefined) {
+      throw new Error("accepted_final_replay_target_must_be_campaign_native");
+    }
+    const parsed = parseFinalGlobalReplayRequestPayload({
+      projectRoot,
+      campaign,
+      raw: replayRequest,
+      expectedObligation: obligation
+    });
+    const assemblyPath = writeSimpleStageArtifact(projectRoot, campaign, "assembled_final_replay_request.json", {
+      schema_version: "comath.campaign_final_replay_request_assembly.v1",
+      campaign_id: campaign.campaign_id,
+      claim_id: campaign.root_claim_id,
+      source_artifact_id: artifact.id,
+      source_artifact_sha256: artifact.sha256,
+      source_artifact_path: normalizeRelPath(artifact.path),
+      replay_request: replayRequest,
+      proof_authority: "none",
+      can_promote_claim: false,
+      created_at: now()
+    });
+    return { ...parsed, assembledRequestPath: assemblyPath };
+  }
+  return undefined;
+}
+
+function readFinalGlobalReplayRequest(projectRoot: string, campaign: ResearchCampaign): FinalGlobalReplayRequest | undefined {
+  const requestRel = campaignRel(campaign, "final_replay_request.json");
+  if (artifactExists(projectRoot, requestRel)) {
+    const raw = JSON.parse(readFileSync(assertPathAllowed(projectRoot, requestRel, { purpose: "read", resolveRealpath: true }), "utf8")) as unknown;
+    return parseFinalGlobalReplayRequestPayload({ projectRoot, campaign, raw });
+  }
+  return assembleFinalGlobalReplayRequestFromAcceptedArtifacts(projectRoot, campaign);
 }
 
 async function completeCampaignAtFinalGlobalReplay(input: {
@@ -1138,6 +1257,7 @@ async function completeCampaignAtFinalGlobalReplay(input: {
   }
 
   const artifactPaths = [
+    request.assembledRequestPath,
     replay.final_replay_manifest_v3_path,
     packaging.packaging_report_path,
     packaging.source_packaging_report_path,
