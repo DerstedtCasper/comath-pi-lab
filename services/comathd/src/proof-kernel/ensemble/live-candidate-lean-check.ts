@@ -51,9 +51,13 @@ function commandOutput(command: string, args: string[]): string {
   return result.stdout || result.stderr || "";
 }
 
-function stableRunId(candidateId: string): string {
-  const digits = (candidateId.match(/\d+/g)?.join("") ?? "0").slice(-4).padStart(4, "0");
-  return `LRUN-${digits}`;
+function stableRunId(input: { campaignId: string; obligationId: string; candidateId: string }): string {
+  const seed = `${input.campaignId}:${input.obligationId}:${input.candidateId}`;
+  let hash = 2_166_136_261;
+  for (const char of seed) {
+    hash = Math.imul(hash ^ char.charCodeAt(0), 16_777_619) >>> 0;
+  }
+  return `LRUN-${String(hash).padStart(10, "0")}`;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -419,7 +423,11 @@ export function createServiceOwnedNativeCandidateLeanAdapter(input: ServiceOwned
       parsed,
       leanToolchain
     });
-    const runId = stableRunId(candidateId);
+    const runId = stableRunId({
+      campaignId: input.campaign.campaign_id,
+      obligationId: input.obligation.obligation_id,
+      candidateId
+    });
     const command = ["lake", "build", "MathResearch"];
     const cwd = assertPathAllowed(input.projectRoot, leanRootRel, { purpose: "read" });
 

@@ -161,6 +161,29 @@ try {
   assert.equal(serviceRun.manifest.exit_code, 1);
   assert.equal(readFileSync(join(projectRoot, serviceRun.manifest.stderr_path), "utf8"), "synthetic command failed before Lean authority");
   assert.equal(verifyLeanRunManifestV3Evidence(projectRoot, serviceRun.manifest).ok, true);
+
+  assert.throws(
+    () =>
+      runServiceOwnedLeanCommandV3({
+        projectRoot,
+        run_id: "LRUN-0002",
+        claim_id: "CLM-0001",
+        campaign_id: "CAM-0001",
+        purpose: "audit",
+        command: ["lake", "env", "lean", "LeanSmoke.lean"],
+        cwd: projectRoot,
+        input_files: [leanRoot, toolchain, lakefile],
+        leanVersionOutput: "Lean (version 4.23.0, x86_64-unknown-linux-gnu)",
+        lakeVersionOutput: "Lake version 5.0.0-src+abcdef (Lean version 4.23.0)",
+        leanToolchain: "leanprover/lean4:v4.23.0",
+        network_policy: "disabled",
+        sandbox: "none",
+        proof_authority: "none",
+        run: () => ({ exit_code: 0, stdout: "second run must not overwrite", stderr: "overwritten" })
+      }),
+    /lean_run_manifest_append_only_violation/
+  );
+  assert.equal(readFileSync(join(projectRoot, serviceRun.manifest.stderr_path), "utf8"), "synthetic command failed before Lean authority");
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }

@@ -29,6 +29,12 @@ function cwdDigest(cwd: string, inputFiles: string[]): string {
   return sha256Buffer(rows.join("\n"));
 }
 
+function assertAppendOnlyEvidencePath(path: string): void {
+  if (existsSync(path)) {
+    throw new Error("lean_run_manifest_append_only_violation");
+  }
+}
+
 function parseLeanVersion(output: string): string | undefined {
   return /version\s+([0-9]+\.[0-9]+\.[0-9]+)/i.exec(output)?.[1];
 }
@@ -186,6 +192,16 @@ export function runServiceOwnedLeanCommandV3(input: {
     leanToolchain: input.leanToolchain
   });
 
+  const stdoutRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.stdout.log`);
+  const stderrRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.stderr.log`);
+  const manifestRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.manifest.json`);
+  const stdoutPath = assertPathAllowed(input.projectRoot, stdoutRel, { purpose: "runtime-write" });
+  const stderrPath = assertPathAllowed(input.projectRoot, stderrRel, { purpose: "runtime-write" });
+  const manifestPath = assertPathAllowed(input.projectRoot, manifestRel, { purpose: "runtime-write" });
+  assertAppendOnlyEvidencePath(stdoutPath);
+  assertAppendOnlyEvidencePath(stderrPath);
+  assertAppendOnlyEvidencePath(manifestPath);
+
   const startedAt = new Date().toISOString();
   const result = input.run
     ? input.run(input.command, input.cwd)
@@ -205,10 +221,6 @@ export function runServiceOwnedLeanCommandV3(input: {
       })();
   const endedAt = new Date().toISOString();
 
-  const stdoutRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.stdout.log`);
-  const stderrRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.stderr.log`);
-  const stdoutPath = assertPathAllowed(input.projectRoot, stdoutRel, { purpose: "runtime-write" });
-  const stderrPath = assertPathAllowed(input.projectRoot, stderrRel, { purpose: "runtime-write" });
   mkdirSync(dirname(stdoutPath), { recursive: true });
   writeFileSync(stdoutPath, result.stdout, "utf8");
   writeFileSync(stderrPath, result.stderr, "utf8");
@@ -246,8 +258,6 @@ export function runServiceOwnedLeanCommandV3(input: {
     ended_at: endedAt,
     proof_authority: result.exit_code === 0 ? input.proof_authority : "none"
   });
-  const manifestRel = join(".comath", "evidence", input.claim_id, "lean", `${input.run_id}.manifest.json`);
-  const manifestPath = assertPathAllowed(input.projectRoot, manifestRel, { purpose: "runtime-write" });
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
   return { manifest, stdout: result.stdout, stderr: result.stderr };
