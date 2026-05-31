@@ -11,6 +11,7 @@ import {
   type ResearchCampaign
 } from "../../types/schemas.js";
 import { ensembleDecisionRel } from "./paths.js";
+import { hasVerifiedServiceOwnedLeanManifestEvidence } from "./service-owned-lean-evidence.js";
 
 export type EnsembleDecision = {
   selected_candidate_id: string | null;
@@ -101,12 +102,18 @@ function hasHardVeto(candidate: CandidateRun, manifest?: CandidateManifest): boo
   return candidate.hard_vetoes.length > 0 || (manifest?.hard_vetoes.length ?? 0) > 0;
 }
 
-function hasTrustedReplayEvidence(candidate: CandidateRun, manifest: CandidateManifest): boolean {
-  const hasReplayCommand = Boolean(candidate.replay_command || manifest.replay_command);
-  const hasLeanRunManifestEvidence = manifest.evidence.some((evidence) =>
-    /lean_run_manifest|final_replay_manifest|service_owned_lean_replay/i.test(evidence)
+function hasTrustedReplayEvidence(input: { projectRoot: string; campaign: ResearchCampaign; candidate: CandidateRun; manifest: CandidateManifest }): boolean {
+  const hasReplayCommand = Boolean(input.candidate.replay_command || input.manifest.replay_command);
+  return (
+    hasReplayCommand &&
+    hasVerifiedServiceOwnedLeanManifestEvidence({
+      projectRoot: input.projectRoot,
+      campaignId: input.campaign.campaign_id,
+      claimId: input.campaign.root_claim_id,
+      candidateId: input.candidate.candidate_id,
+      evidence: input.manifest.evidence
+    })
   );
-  return hasReplayCommand && hasLeanRunManifestEvidence;
 }
 
 function evidenceScore(candidate: CandidateRun, manifest: CandidateManifest): number {
@@ -146,7 +153,14 @@ function evidenceScore(candidate: CandidateRun, manifest: CandidateManifest): nu
   return score + Math.min(candidate.score ?? 0, 100);
 }
 
-function rejectionReason(candidate: CandidateRun, selected: CandidateRun | null, manifest?: CandidateManifest): string {
+function rejectionReason(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  candidate: CandidateRun;
+  selected: CandidateRun | null;
+  manifest?: CandidateManifest;
+}): string {
+  const { candidate, selected, manifest } = input;
   if (hasStatementDrift(candidate)) {
     return "statement drift from locked obligation";
   }
@@ -162,7 +176,11 @@ function rejectionReason(candidate: CandidateRun, selected: CandidateRun | null,
     }
     return `statement equivalence ${manifest.statement_equivalence_claim} is not proof-grade`;
   }
-  if (candidate.state === "candidate_kernel_checked" && manifest && !hasTrustedReplayEvidence(candidate, manifest)) {
+  if (
+    candidate.state === "candidate_kernel_checked" &&
+    manifest &&
+    !hasTrustedReplayEvidence({ projectRoot: input.projectRoot, campaign: input.campaign, candidate, manifest })
+  ) {
     return "missing service-owned Lean replay evidence";
   }
   if (hasUnapprovedAssumptionDelta(manifest)) {
@@ -222,7 +240,12 @@ export function decideCandidate(input: {
         !hasHardVeto(candidate, manifestByCandidateId.get(candidate.candidate_id)) &&
         !hasUnapprovedAssumptionDelta(manifestByCandidateId.get(candidate.candidate_id)) &&
         hasProofGradeStatementEquivalence(manifestByCandidateId.get(candidate.candidate_id)!) &&
-        hasTrustedReplayEvidence(candidate, manifestByCandidateId.get(candidate.candidate_id)!)
+        hasTrustedReplayEvidence({
+          projectRoot: input.projectRoot,
+          campaign: input.campaign,
+          candidate,
+          manifest: manifestByCandidateId.get(candidate.candidate_id)!
+        })
     )
     .sort(
       (a, b) =>
@@ -252,7 +275,13 @@ export function decideCandidate(input: {
       .filter((candidate) => candidate.candidate_id !== selected?.candidate_id)
       .map((candidate) => ({
         candidate_id: candidate.candidate_id,
-        reason: rejectionReason(candidate, selected, manifestByCandidateId.get(candidate.candidate_id))
+        reason: rejectionReason({
+          projectRoot: input.projectRoot,
+          campaign: input.campaign,
+          candidate,
+          selected,
+          manifest: manifestByCandidateId.get(candidate.candidate_id)
+        })
       })),
     hard_vetoes: hardVetoes,
     recovery_plan: selected

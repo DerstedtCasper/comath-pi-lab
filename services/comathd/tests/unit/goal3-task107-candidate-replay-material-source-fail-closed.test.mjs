@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { getClaim, initProject, registerClaim, statementHash, tickCampaign, writeCampaign } from "../../dist/index.js";
+import {
+  createServiceOwnedLeanRunManifestV3,
+  getClaim,
+  initProject,
+  registerClaim,
+  statementHash,
+  tickCampaign,
+  writeCampaign
+} from "../../dist/index.js";
 
 function writeProjectFile(projectRoot, relativePath, text) {
   const absolute = join(projectRoot, relativePath);
@@ -12,6 +20,43 @@ function writeProjectFile(projectRoot, relativePath, text) {
 
 function writeJsonProjectFile(projectRoot, relativePath, value) {
   writeProjectFile(projectRoot, relativePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function writeVerifiedLeanRunManifest({ projectRoot, campaignId, claim, candidateId }) {
+  const inputRel = `.comath/evidence/${claim.id}/lean/${candidateId}/Target.lean`;
+  const toolchainRel = `.comath/evidence/${claim.id}/lean/${candidateId}/lean-toolchain`;
+  const stdoutRel = `.comath/evidence/${claim.id}/lean/${candidateId}/stdout.log`;
+  const stderrRel = `.comath/evidence/${claim.id}/lean/${candidateId}/stderr.log`;
+  const manifestRel = `.comath/evidence/${claim.id}/lean/${candidateId}/lean_run_manifest_v3.json`;
+  writeProjectFile(projectRoot, inputRel, "theorem Goal3CandidateReplaySourceFailClosed107 : True := by trivial\n");
+  writeProjectFile(projectRoot, toolchainRel, "leanprover/lean4:v4.23.0\n");
+  writeProjectFile(projectRoot, stdoutRel, "ok\n");
+  writeProjectFile(projectRoot, stderrRel, "");
+  const manifest = createServiceOwnedLeanRunManifestV3({
+    projectRoot,
+    run_id: "LRUN-0107",
+    claim_id: claim.id,
+    campaign_id: campaignId,
+    candidate_id: candidateId,
+    purpose: "check",
+    command: ["lake", "build", "MathResearch"],
+    cwd: join(projectRoot, `.comath/evidence/${claim.id}/lean/${candidateId}`),
+    input_files: [join(projectRoot, inputRel), join(projectRoot, toolchainRel)],
+    lean_version: "4.23.0",
+    lake_version: "5.0.0",
+    elan_toolchain: "leanprover/lean4:v4.23.0",
+    lean_toolchain_file: join(projectRoot, toolchainRel),
+    network_policy: "disabled",
+    sandbox: "none",
+    exit_code: 0,
+    stdout_path: join(projectRoot, stdoutRel),
+    stderr_path: join(projectRoot, stderrRel),
+    started_at: "2026-06-01T00:00:00.000Z",
+    ended_at: "2026-06-01T00:00:01.000Z",
+    proof_authority: "lean_kernel_check"
+  });
+  writeJsonProjectFile(projectRoot, manifestRel, manifest);
+  return manifestRel;
 }
 
 function campaignFixture(projectId, campaignId, claimId, statementHashValue) {
@@ -99,7 +144,7 @@ async function runBlockedScenario(name, mutateDescriptor, expectedReason) {
       ],
       lean_files: [],
       logs: [],
-      evidence: ["service_owned_lean_replay:CAND-0107"],
+      evidence: [writeVerifiedLeanRunManifest({ projectRoot, campaignId, claim, candidateId })],
       hard_vetoes: [],
       failures: [],
       replay_command: "lake build MathResearch",

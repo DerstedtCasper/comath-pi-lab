@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { decideCandidate, initProject, registerClaim } from "../../dist/index.js";
+import { createServiceOwnedLeanRunManifestV3, decideCandidate, initProject, registerClaim } from "../../dist/index.js";
 import { runTrivialNatAddZeroCandidates } from "../fixtures/proof-smoke/nat-add-zero-candidates.mjs";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-v3-decision-forest-"));
@@ -12,6 +12,43 @@ function writeProjectFile(relativePath, content) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content, "utf8");
   return path;
+}
+
+function writeVerifiedLeanRunManifest({ campaignId, claim, candidateId }) {
+  const inputRel = `.comath/evidence/${claim.id}/lean/${candidateId}/Target.lean`;
+  const toolchainRel = `.comath/evidence/${claim.id}/lean/${candidateId}/lean-toolchain`;
+  const stdoutRel = `.comath/evidence/${claim.id}/lean/${candidateId}/stdout.log`;
+  const stderrRel = `.comath/evidence/${claim.id}/lean/${candidateId}/stderr.log`;
+  const manifestRel = `.comath/evidence/${claim.id}/lean/${candidateId}/lean_run_manifest_v3.json`;
+  writeProjectFile(inputRel, "theorem C0001 : True := by trivial\n");
+  writeProjectFile(toolchainRel, "leanprover/lean4:v4.23.0\n");
+  writeProjectFile(stdoutRel, "ok\n");
+  writeProjectFile(stderrRel, "");
+  const manifest = createServiceOwnedLeanRunManifestV3({
+    projectRoot,
+    run_id: `LRUN-${candidateId.replace(/^[A-Z]+-/, "")}`,
+    claim_id: claim.id,
+    campaign_id: campaignId,
+    candidate_id: candidateId,
+    purpose: "check",
+    command: ["lake", "build", "MathResearch.C0001", "Audit.C0001"],
+    cwd: join(projectRoot, `.comath/evidence/${claim.id}/lean/${candidateId}`),
+    input_files: [join(projectRoot, inputRel), join(projectRoot, toolchainRel)],
+    lean_version: "4.23.0",
+    lake_version: "5.0.0",
+    elan_toolchain: "leanprover/lean4:v4.23.0",
+    lean_toolchain_file: join(projectRoot, toolchainRel),
+    network_policy: "disabled",
+    sandbox: "none",
+    exit_code: 0,
+    stdout_path: join(projectRoot, stdoutRel),
+    stderr_path: join(projectRoot, stderrRel),
+    started_at: "2026-06-01T00:00:00.000Z",
+    ended_at: "2026-06-01T00:00:01.000Z",
+    proof_authority: "lean_kernel_check"
+  });
+  writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifestRel;
 }
 
 function writeCandidateManifest(candidate, extra = {}) {
@@ -41,7 +78,7 @@ function writeCandidateManifest(candidate, extra = {}) {
         artifacts: [],
         lean_files: [],
         logs: [],
-        evidence: candidate.state === "candidate_kernel_checked" ? [".comath/evidence/candidate/lean_run_manifest.json"] : [],
+        evidence: candidate.state === "candidate_kernel_checked" ? extra.evidence ?? [".comath/evidence/candidate/lean_run_manifest.json"] : [],
         hard_vetoes: candidate.hard_vetoes,
         failures: candidate.state === "candidate_kernel_checked" ? [] : ["no proof-grade evidence"],
         replay_command: candidate.replay_command ?? "",
@@ -122,7 +159,7 @@ try {
     hard_vetoes: [],
     replay_command: "lake build MathResearch.C0001 Audit.C0001",
     score: 1
-  });
+  }, { evidence: [writeVerifiedLeanRunManifest({ campaignId: campaign.campaign_id, claim, candidateId: "CAND-1002" })] });
   const proofDecision = decideCandidate({ projectRoot, campaign, candidates: [highVotePlausible, kernelCandidate] });
   assert.equal(proofDecision.decision.selected_candidate_id, "CAND-1002");
   assert.equal(proofDecision.gate.result, "pass");
@@ -190,7 +227,10 @@ try {
       workspace_path: ".comath/ensembles/phase62/manifest-different",
       score: 99_999
     },
-    { statement_equivalence_claim: "different" }
+    {
+      statement_equivalence_claim: "different",
+      evidence: [writeVerifiedLeanRunManifest({ campaignId: campaign.campaign_id, claim, candidateId: "CAND-1006" })]
+    }
   );
   const manifestHardVetoKernel = cloneCandidate(
     kernelCandidate,
@@ -200,7 +240,10 @@ try {
       workspace_path: ".comath/ensembles/phase62/manifest-hard-veto",
       score: 99_999
     },
-    { hard_vetoes: ["manifest_axiom_profile_rejected"] }
+    {
+      hard_vetoes: ["manifest_axiom_profile_rejected"],
+      evidence: [writeVerifiedLeanRunManifest({ campaignId: campaign.campaign_id, claim, candidateId: "CAND-1007" })]
+    }
   );
   const missingStatementHashKernel = cloneCandidate(
     kernelCandidate,
@@ -211,7 +254,10 @@ try {
       candidate_statement_hash: undefined,
       score: 99_999
     },
-    { candidate_statement_hash: undefined }
+    {
+      candidate_statement_hash: undefined,
+      evidence: [writeVerifiedLeanRunManifest({ campaignId: campaign.campaign_id, claim, candidateId: "CAND-1008" })]
+    }
   );
   const newAssumptionKernel = cloneCandidate(
     kernelCandidate,
@@ -221,7 +267,10 @@ try {
       workspace_path: ".comath/ensembles/phase62/new-assumption",
       score: 99_999
     },
-    { introduced_assumptions: ["n > 0"] }
+    {
+      introduced_assumptions: ["n > 0"],
+      evidence: [writeVerifiedLeanRunManifest({ campaignId: campaign.campaign_id, claim, candidateId: "CAND-1009" })]
+    }
   );
   const manifestVetoDecision = decideCandidate({
     projectRoot,

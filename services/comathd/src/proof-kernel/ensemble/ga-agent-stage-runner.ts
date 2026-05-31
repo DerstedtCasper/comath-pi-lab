@@ -16,6 +16,7 @@ import {
 import { decideCandidate, type EnsembleDecision } from "./decision-forest.js";
 import { recordFailedRoutes } from "./failure-aggregator.js";
 import { candidateWorkspaceRel } from "./paths.js";
+import { hasVerifiedServiceOwnedLeanManifestEvidence } from "./service-owned-lean-evidence.js";
 import { defaultVariants } from "./variant-registry.js";
 
 export type GaAgentId = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "A7" | "A8";
@@ -265,6 +266,7 @@ function parseReplayProject(raw: unknown): GaAgentReplayProject {
 }
 
 function createCandidateReplayProjectDescriptor(input: {
+  projectRoot: string;
   campaign: ResearchCampaign;
   obligation: ProofObligation;
   candidateId: string;
@@ -295,8 +297,16 @@ function createCandidateReplayProjectDescriptor(input: {
   if (!input.adapterResult.replay_command) {
     throw new Error("candidate_replay_project_replay_command_missing");
   }
-  if (!input.adapterResult.evidence.some((evidence) => /lean_run_manifest|final_replay_manifest|service_owned_lean_replay/i.test(evidence))) {
-    throw new Error("candidate_replay_project_requires_service_owned_lean_evidence");
+  if (
+    !hasVerifiedServiceOwnedLeanManifestEvidence({
+      projectRoot: input.projectRoot,
+      campaignId: input.campaign.campaign_id,
+      claimId: input.campaign.root_claim_id,
+      candidateId: input.candidateId,
+      evidence: input.adapterResult.evidence
+    })
+  ) {
+    throw new Error("candidate_replay_project_requires_service_owned_lean_manifest_artifact");
   }
   const replayProject = parseReplayProject(input.adapterResult.replay_project);
   if (replayProject.formal_spec.claim_id !== input.campaign.root_claim_id) {
@@ -418,6 +428,7 @@ export function runGaAgentStageCandidates(input: {
 
     const candidateStatementHash = adapterResult.candidate_statement_hash || input.locked_statement_hash;
     const descriptor = createCandidateReplayProjectDescriptor({
+      projectRoot: input.projectRoot,
       campaign: input.campaign,
       obligation: input.obligation,
       candidateId,

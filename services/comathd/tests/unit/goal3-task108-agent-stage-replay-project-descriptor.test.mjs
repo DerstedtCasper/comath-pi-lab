@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
+  createServiceOwnedLeanRunManifestV3,
   initProject,
   registerClaim,
   runGaAgentStageCandidates,
@@ -13,6 +14,50 @@ const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task108-agent-stage
 
 function readJson(relativePath) {
   return JSON.parse(readFileSync(join(projectRoot, relativePath), "utf8"));
+}
+
+function writeProjectFile(relativePath, content) {
+  const path = join(projectRoot, relativePath);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content, "utf8");
+  return path;
+}
+
+function writeVerifiedLeanRunManifest({ campaignId, claim, candidateId }) {
+  const inputRel = `.comath/evidence/${claim.id}/lean/${candidateId}/Target.lean`;
+  const toolchainRel = `.comath/evidence/${claim.id}/lean/${candidateId}/lean-toolchain`;
+  const stdoutRel = `.comath/evidence/${claim.id}/lean/${candidateId}/stdout.log`;
+  const stderrRel = `.comath/evidence/${claim.id}/lean/${candidateId}/stderr.log`;
+  const manifestRel = `.comath/evidence/${claim.id}/lean/${candidateId}/lean_run_manifest_v3.json`;
+  writeProjectFile(inputRel, "theorem Goal3Task108 : True := by trivial\n");
+  writeProjectFile(toolchainRel, "leanprover/lean4:v4.23.0\n");
+  writeProjectFile(stdoutRel, "ok\n");
+  writeProjectFile(stderrRel, "");
+  const manifest = createServiceOwnedLeanRunManifestV3({
+    projectRoot,
+    run_id: "LRUN-0108",
+    claim_id: claim.id,
+    campaign_id: campaignId,
+    candidate_id: candidateId,
+    purpose: "check",
+    command: ["lake", "build", "MathResearch"],
+    cwd: join(projectRoot, `.comath/evidence/${claim.id}/lean/${candidateId}`),
+    input_files: [join(projectRoot, inputRel), join(projectRoot, toolchainRel)],
+    lean_version: "4.23.0",
+    lake_version: "5.0.0",
+    elan_toolchain: "leanprover/lean4:v4.23.0",
+    lean_toolchain_file: join(projectRoot, toolchainRel),
+    network_policy: "disabled",
+    sandbox: "none",
+    exit_code: 0,
+    stdout_path: join(projectRoot, stdoutRel),
+    stderr_path: join(projectRoot, stderrRel),
+    started_at: "2026-06-01T00:00:00.000Z",
+    ended_at: "2026-06-01T00:00:01.000Z",
+    proof_authority: "lean_kernel_check"
+  });
+  writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifestRel;
 }
 
 try {
@@ -59,6 +104,7 @@ try {
   };
 
   const leanRootRel = ".comath/lean/task108-native-candidate";
+  const evidenceRel = writeVerifiedLeanRunManifest({ campaignId, claim, candidateId: "CAND-010802" });
   const batch = runGaAgentStageCandidates({
     projectRoot,
     campaign,
@@ -77,7 +123,7 @@ try {
         dependencies: ["Mathlib"],
         introduced_assumptions: [],
         introduced_dependencies: [],
-        evidence: ["service_owned_lean_replay:CAND-010802"],
+        evidence: [evidenceRel],
         lean_files: [`${leanRootRel}/MathResearch/Target.lean`],
         replay_command: "lake build MathResearch",
         summary: "Native candidate stage emitted a replay project descriptor source.",

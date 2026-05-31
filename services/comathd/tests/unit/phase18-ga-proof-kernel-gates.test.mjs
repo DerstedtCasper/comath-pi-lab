@@ -6,6 +6,7 @@ import {
   appendEvidenceRecord,
   applyGatePromotedClaim,
   checkStatementEquivalence,
+  createServiceOwnedLeanRunManifestV3,
   decideCandidate,
   importArtifact,
   initProject,
@@ -21,6 +22,43 @@ function writeProjectFile(relativePath, content) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content, "utf8");
   return path;
+}
+
+function writeVerifiedLeanRunManifest({ campaignId, claim, candidateId }) {
+  const inputRel = `.comath/evidence/${claim.id}/lean/${candidateId}/Target.lean`;
+  const toolchainRel = `.comath/evidence/${claim.id}/lean/${candidateId}/lean-toolchain`;
+  const stdoutRel = `.comath/evidence/${claim.id}/lean/${candidateId}/stdout.log`;
+  const stderrRel = `.comath/evidence/${claim.id}/lean/${candidateId}/stderr.log`;
+  const manifestRel = `.comath/evidence/${claim.id}/lean/${candidateId}/lean_run_manifest_v3.json`;
+  writeProjectFile(inputRel, "theorem C0001 : True := by trivial\n");
+  writeProjectFile(toolchainRel, "leanprover/lean4:v4.23.0\n");
+  writeProjectFile(stdoutRel, "ok\n");
+  writeProjectFile(stderrRel, "");
+  const manifest = createServiceOwnedLeanRunManifestV3({
+    projectRoot,
+    run_id: "LRUN-0002",
+    claim_id: claim.id,
+    campaign_id: campaignId,
+    candidate_id: candidateId,
+    purpose: "check",
+    command: ["lake", "build", "MathResearch.C0001"],
+    cwd: join(projectRoot, `.comath/evidence/${claim.id}/lean/${candidateId}`),
+    input_files: [join(projectRoot, inputRel), join(projectRoot, toolchainRel)],
+    lean_version: "4.23.0",
+    lake_version: "5.0.0",
+    elan_toolchain: "leanprover/lean4:v4.23.0",
+    lean_toolchain_file: join(projectRoot, toolchainRel),
+    network_policy: "disabled",
+    sandbox: "none",
+    exit_code: 0,
+    stdout_path: join(projectRoot, stdoutRel),
+    stderr_path: join(projectRoot, stderrRel),
+    started_at: "2026-06-01T00:00:00.000Z",
+    ended_at: "2026-06-01T00:00:01.000Z",
+    proof_authority: "lean_kernel_check"
+  });
+  writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifestRel;
 }
 
 function writeCandidateManifest(candidate, extra = {}) {
@@ -192,7 +230,7 @@ try {
   );
 
   exactCandidate.manifest_path = writeCandidateManifest(exactCandidate, {
-    evidence: [".comath/evidence/C-0001/lean/lean_run_manifest.json"]
+    evidence: [writeVerifiedLeanRunManifest({ campaignId: campaign.campaign_id, claim, candidateId: exactCandidate.candidate_id })]
   });
   const { decision, gate } = decideCandidate({
     projectRoot,

@@ -1,3 +1,24 @@
+# Goal 3 Task 111 / Artifact-Backed Live Adapter Lean Evidence Gate
+
+Scope: prevent marker-only live adapter evidence strings from substituting for service-owned LeanRunManifest v3 or FinalReplayManifest v3 artifacts when candidates are marked `candidate_kernel_checked` or when replay-project descriptors/material sources are produced.
+
+Work performed:
+
+- Used two read-only subagents to inspect marker-string evidence risks in the agent-stage runner, decision forest, and Task106/107 material producers.
+- Added `goal3-task111-live-adapter-evidence-artifact-gate.test.mjs`. RED showed `service_owned_lean_replay:CAND-*` marker-only evidence could still satisfy replay-project descriptor emission.
+- Added a shared service-owned Lean evidence resolver requiring project-contained LeanRunManifest v3 or FinalReplayManifest v3 artifacts with matching campaign/claim/candidate identity and passing service-owned Lean authority fields.
+- Hardened agent-stage replay-project descriptor emission, decision-forest `candidate_kernel_checked` proof-grade evidence, candidate replay-material source production, and final replay material production to call the artifact-backed resolver.
+- Updated Task14/106/107/108 and Phase18/62 fixtures to use real service-owned LeanRunManifest v3 artifact paths instead of bare replay markers.
+
+Verification evidence:
+
+- Focused GREEN tests: Task111, Task110, Task109, Task108 production/fail-closed, Task107 production/fail-closed, Task106 production/fail-closed, Task14, Phase18 proof-kernel gates, and Phase62 decision forest.
+- Package/root gates passed: `corepack pnpm --dir services/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, `corepack pnpm build`, and `corepack pnpm typecheck`.
+
+Boundary notes: Task111 still does not make agent output proof authority. Adapter evidence can only satisfy these local gates when it points at verified service-owned Lean replay manifest artifacts; final proof authority still requires downstream Lean Authority packaging and clean replay gates.
+
+Residual risks: full live Lean/mathlib execution, OS-level isolation, production Pi/Codex lifecycle validation, and GA audit remain open. The older non-exact statement-equivalence replay marker surface is intentionally left for a separate targeted audit.
+
 # Goal 3 Task 110 / Line-Map-Owned Native Candidate Generation Request
 
 Scope: move production of the native `candidate_generation_request.json` into the live campaign line-map gate, so Task109 native candidate generation no longer depends on hand-authored request artifacts.

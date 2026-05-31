@@ -10,6 +10,7 @@ import { assertPathAllowed } from "../../security/path-policy.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
 import { runGaAgentStageCandidates } from "../ensemble/ga-agent-stage-runner.js";
+import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
 import { defaultVariants } from "../ensemble/variant-registry.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
 import type { LeanProjectFiles } from "../lean/lean-project.js";
@@ -1237,7 +1238,13 @@ async function produceFinalReplayMaterialFromSelectedIntegrationArtifacts(input:
     manifest.introduced_assumptions.length > 0 ||
     manifest.candidate_statement_hash !== input.obligation.statement_hash ||
     !manifest.replay_command ||
-    !manifest.evidence.some((evidence) => /lean_run_manifest|final_replay_manifest|service_owned_lean_replay/i.test(evidence))
+    !hasVerifiedServiceOwnedLeanManifestEvidence({
+      projectRoot: input.projectRoot,
+      campaignId: input.campaign.campaign_id,
+      claimId: input.campaign.root_claim_id,
+      candidateId: selected.candidate_id,
+      evidence: manifest.evidence
+    })
   ) {
     throw new Error("selected_candidate_not_material_grade");
   }
@@ -1388,7 +1395,15 @@ async function produceCandidateFinalReplayMaterialSourceFromSelectedDescriptor(i
   if (manifest.introduced_assumptions.length > 0 || manifest.assumptions.length > 0) {
     throw new Error("candidate_replay_material_hidden_assumption");
   }
-  if (!manifest.evidence.some((evidence) => /lean_run_manifest|final_replay_manifest|service_owned_lean_replay/i.test(evidence))) {
+  if (
+    !hasVerifiedServiceOwnedLeanManifestEvidence({
+      projectRoot: input.projectRoot,
+      campaignId: input.campaign.campaign_id,
+      claimId: input.campaign.root_claim_id,
+      candidateId: selected.candidate_id,
+      evidence: manifest.evidence
+    })
+  ) {
     throw new Error("candidate_replay_material_requires_service_owned_lean_evidence");
   }
 
