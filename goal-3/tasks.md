@@ -2085,3 +2085,21 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. Task114 connects FormalSpecLock-derived theorem headers to live replay project production, but it does not synthesize arbitrary theorem proof bodies, prove nontrivial math, install/fetch mathlib dependencies for rich imports, provide OS-level sandboxing, validate the full Pi/Codex lifecycle, or complete final GA audit. Candidate-level LeanRunManifest evidence still only supports proof-grade candidate routing; final proof authority remains hermetic Lean clean replay.
 - Next step: Task115 should harden LeanRunManifest v3 evidence verification by rehashing every recorded `input_files[]` path and rejecting stale/tampered Lean inputs before candidate arbitration or material routing can treat a manifest as service-owned Lean evidence.
 - Commit: `6f2e22e` (`Replay live candidates from FormalSpecLock`)
+
+## Task 115: LeanRunManifest Input-File Binding Gate
+
+- [x] Confirm no earlier `[ ]`, `[~]`, or `Commit: pending` task item remained before opening Task 115.
+- [x] Re-read Goal 3 required context and confirm the current repository state instead of relying on prior memory.
+- [x] Add a failing regression proving a stale/tampered Lean input listed in `LeanRunManifestV3.input_files[]` invalidates service-owned Lean evidence before candidate arbitration.
+- [x] Rehash every manifest `input_files[]` entry during `verifyLeanRunManifestV3Evidence()`, including size checks and project-contained path resolution.
+- [x] Recompute the manifest `cwd_sha256_before` input digest from the currently resolved input files so stale/missing input sets cannot keep proof-grade candidate evidence.
+- [x] Preserve existing stdout/stderr/toolchain checks and direct live adapter / statement-equivalence evidence compatibility.
+- [x] Run focused Task115/Task7/Task111/Task112/Task113 regressions plus package build/typecheck/default-test gates.
+
+Completion record:
+
+- Work done: confirmed `main` was clean after Task114 and treated the tracker next step as authoritative. Added `goal3-task115-lean-manifest-input-binding.test.mjs`; RED showed `verifyLeanRunManifestV3Evidence()` still returned `ok: true` after `Target.lean` was changed from a checked theorem to a stale `axiom`, and candidate arbitration could therefore still see the old manifest as service-owned Lean evidence. Hardened `verifyLeanRunManifestV3Evidence()` to resolve each recorded `input_files[]` path inside the project, compare current SHA-256 and size against the manifest entry, and recompute the `cwd_sha256_before` digest from the current input-file set. Stale/missing/tampered inputs now add explicit vetoes (`lean_input_file_hash_mismatch`, `lean_input_file_size_mismatch`, `lean_input_file_missing`, `lean_cwd_input_digest_mismatch`) and make the manifest unusable for proof-grade routing.
+- Verification evidence: TDD RED was observed before implementation: `node services/comathd/tests/unit/goal3-task115-lean-manifest-input-binding.test.mjs` failed with `true !== false` because the stale Lean input was still accepted. After implementation, `corepack pnpm --dir services/comathd build` exited 0, and focused regressions exited 0: Task115, Task7, Task111, Task112, and Task113. Package/root gates exited 0: `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, `corepack pnpm build`, `corepack pnpm typecheck`, `corepack pnpm test`, and `git diff --check` with Windows LF-to-CRLF warnings only.
+- Residual risk: Goal 3 remains incomplete. Task115 hardens LeanRunManifest evidence against post-run input mutation, but it does not implement OS-level sandboxing, append-only storage enforcement at the filesystem layer, richer Lean/mathlib dependency fetching, nontrivial theorem proof synthesis, full Pi/Codex lifecycle validation, or final GA audit.
+- Next step: Task116 should continue hardening the live proof-evidence chain, preferably by making the candidate/read-model counts distinguish manifest-verified kernel checks from raw `candidate_kernel_checked` state, or by adding append-only/provenance checks around service-owned LeanRunManifest storage before promotion-visible summaries consume them.
+- Commit: pending

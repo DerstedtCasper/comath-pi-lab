@@ -291,6 +291,33 @@ export function verifyLeanRunManifestV3Evidence(
   checkFileHash(manifest.stdout_path, manifest.stdout_sha256, "lean_stdout_hash_mismatch");
   checkFileHash(manifest.stderr_path, manifest.stderr_sha256, "lean_stderr_hash_mismatch");
 
+  const currentInputFiles: string[] = [];
+  for (const entry of manifest.input_files) {
+    try {
+      const path = assertPathAllowed(projectRoot, entry.path, { purpose: "read", resolveRealpath: true });
+      const stat = statSync(path);
+      const hash = sha256FileSync(path).sha256;
+      currentInputFiles.push(path);
+      if (hash !== entry.sha256) {
+        vetoes.push("lean_input_file_hash_mismatch");
+      }
+      if (stat.size !== entry.size_bytes) {
+        vetoes.push("lean_input_file_size_mismatch");
+      }
+    } catch {
+      vetoes.push("lean_input_file_missing");
+    }
+  }
+
+  try {
+    const cwd = assertPathAllowed(projectRoot, manifest.cwd, { purpose: "read", resolveRealpath: true });
+    if (currentInputFiles.length !== manifest.input_files.length || cwdDigest(cwd, currentInputFiles) !== manifest.cwd_sha256_before) {
+      vetoes.push("lean_cwd_input_digest_mismatch");
+    }
+  } catch {
+    vetoes.push("lean_cwd_input_digest_mismatch");
+  }
+
   const toolchainEntry = manifest.input_files.find((entry) => entry.path === "lean-toolchain" || entry.path.endsWith("/lean-toolchain"));
   if (!toolchainEntry) {
     vetoes.push("lean_toolchain_missing");
