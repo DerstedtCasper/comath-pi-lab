@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  appendLeanRunManifestProvenanceIndexV1,
   checkStatementEquivalence,
   createServiceOwnedLeanRunManifestV3,
   materializeStatementEquivalenceSearchPlan
@@ -56,6 +57,13 @@ function writeVerifiedLeanRunManifest(root, { campaignId = "CAM-0080", claimId =
     proof_authority: "lean_kernel_check"
   });
   writeProjectFile(root, manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot: root,
+    project_id: claimId,
+    actor: "phase80-equivalence-materialization",
+    manifest,
+    manifest_path: join(root, manifestRel)
+  });
   return manifestRel;
 }
 

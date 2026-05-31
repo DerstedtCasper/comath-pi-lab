@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { verifyFinalReplayManifestV3 } from "../lean/final-replay-manifest-v3.js";
-import { verifyLeanRunManifestV3Evidence } from "../lean/lean-run-manifest-v3.js";
+import { hasLeanRunManifestProvenanceIndexV1, verifyLeanRunManifestV3Evidence } from "../lean/lean-run-manifest-v3.js";
 
 export type ServiceOwnedLeanEvidenceContext = {
   projectRoot: string;
@@ -89,6 +89,7 @@ function isVerifiedLeanRunManifest(input: {
   claimId: string;
   candidateId?: string;
   manifest: unknown;
+  manifestPath: string;
 }): boolean {
   const manifest = record(input.manifest);
   if (!manifest || manifest.schema_version !== "comath.lean_run_manifest.v3") {
@@ -104,7 +105,14 @@ function isVerifiedLeanRunManifest(input: {
   ) {
     return false;
   }
-  return verifyLeanRunManifestV3Evidence(input.projectRoot, input.manifest).ok;
+  return (
+    verifyLeanRunManifestV3Evidence(input.projectRoot, input.manifest).ok &&
+    hasLeanRunManifestProvenanceIndexV1({
+      projectRoot: input.projectRoot,
+      manifest: input.manifest,
+      manifest_path: input.manifestPath
+    })
+  );
 }
 
 function isVerifiedFinalReplayManifest(input: {
@@ -142,7 +150,8 @@ export function hasVerifiedServiceOwnedLeanManifestEvidence(input: ServiceOwnedL
         campaignId: input.campaignId,
         claimId: input.claimId,
         candidateId: input.candidateId,
-        manifest
+        manifest,
+        manifestPath: ref.path
       }) ||
       isVerifiedFinalReplayManifest({
         projectRoot: input.projectRoot,
@@ -167,7 +176,8 @@ export function hasVerifiedServiceOwnedLeanEquivalenceEvidence(input: ServiceOwn
         campaignId: input.campaignId,
         claimId: input.claimId,
         candidateId: input.candidateId,
-        manifest
+        manifest,
+        manifestPath: ref.path
       }) ||
       isVerifiedFinalReplayManifest({
         projectRoot: input.projectRoot,

@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { checkStatementEquivalence, createServiceOwnedLeanRunManifestV3 } from "../../dist/index.js";
+import {
+  appendLeanRunManifestProvenanceIndexV1,
+  checkStatementEquivalence,
+  createServiceOwnedLeanRunManifestV3
+} from "../../dist/index.js";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-lean-equivalence-search-plan-"));
 const source = "MathResearch.C0001 (n : Nat) : n + 0 = n";
@@ -52,6 +56,13 @@ function writeVerifiedLeanRunManifest(root, { campaignId = "CAM-0079", claimId =
     proof_authority: "lean_kernel_check"
   });
   writeProjectFile(root, manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot: root,
+    project_id: claimId,
+    actor: "phase79-equivalence-search",
+    manifest,
+    manifest_path: join(root, manifestRel)
+  });
   return manifestRel;
 }
 

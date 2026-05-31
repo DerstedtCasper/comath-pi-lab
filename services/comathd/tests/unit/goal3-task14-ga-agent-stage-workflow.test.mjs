@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import {
   aggregateGaAgentStageCandidates,
+  appendLeanRunManifestProvenanceIndexV1,
   createServiceOwnedLeanRunManifestV3,
   createGaAgentStageTaskCards,
   initProject,
@@ -60,6 +61,13 @@ function writeVerifiedLeanRunManifest({ campaignId, claim, candidateId }) {
     proof_authority: "lean_kernel_check"
   });
   writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: claim.project_id,
+    actor: "goal3-task14",
+    manifest,
+    manifest_path: join(projectRoot, manifestRel)
+  });
   return manifestRel;
 }
 

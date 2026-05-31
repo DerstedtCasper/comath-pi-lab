@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  appendLeanRunManifestProvenanceIndexV1,
   createServiceOwnedLeanRunManifestV3,
   createStatementDriftRedTeamReport,
   decideCandidate,
@@ -82,6 +83,13 @@ function writeVerifiedLeanRunManifest({ campaignId = "CAM-0005", claimId = "C-00
     proof_authority: "lean_kernel_check"
   });
   writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: claimId,
+    actor: "goal3-task5",
+    manifest,
+    manifest_path: join(projectRoot, manifestRel)
+  });
   return manifestRel;
 }
 

@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  appendLeanRunManifestProvenanceIndexV1,
   createServiceOwnedLeanRunManifestV3,
   initProject,
   registerClaim,
@@ -55,6 +56,13 @@ function writeLeanRunManifest({ campaignId, claim, candidateId, tamperInput = fa
     proof_authority: "lean_kernel_check"
   });
   writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: claim.project_id,
+    actor: "goal3-task116",
+    manifest,
+    manifest_path: join(projectRoot, manifestRel)
+  });
   if (tamperInput) {
     writeProjectFile(inputRel, "axiom Goal3Task116 : False\n");
   }

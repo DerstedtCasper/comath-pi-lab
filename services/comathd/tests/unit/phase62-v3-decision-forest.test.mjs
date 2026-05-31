@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { createServiceOwnedLeanRunManifestV3, decideCandidate, initProject, registerClaim } from "../../dist/index.js";
+import {
+  appendLeanRunManifestProvenanceIndexV1,
+  createServiceOwnedLeanRunManifestV3,
+  decideCandidate,
+  initProject,
+  registerClaim
+} from "../../dist/index.js";
 import { runTrivialNatAddZeroCandidates } from "../fixtures/proof-smoke/nat-add-zero-candidates.mjs";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-v3-decision-forest-"));
@@ -48,6 +54,13 @@ function writeVerifiedLeanRunManifest({ campaignId, claim, candidateId }) {
     proof_authority: "lean_kernel_check"
   });
   writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: claim.project_id,
+    actor: "phase62-decision-forest",
+    manifest,
+    manifest_path: join(projectRoot, manifestRel)
+  });
   return manifestRel;
 }
 

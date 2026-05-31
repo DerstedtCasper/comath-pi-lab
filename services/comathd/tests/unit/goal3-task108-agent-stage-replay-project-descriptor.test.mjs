@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import {
+  appendLeanRunManifestProvenanceIndexV1,
   createServiceOwnedLeanRunManifestV3,
   initProject,
   registerClaim,
@@ -57,6 +58,13 @@ function writeVerifiedLeanRunManifest({ campaignId, claim, candidateId }) {
     proof_authority: "lean_kernel_check"
   });
   writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: claim.project_id,
+    actor: "goal3-task108",
+    manifest,
+    manifest_path: join(projectRoot, manifestRel)
+  });
   return manifestRel;
 }
 

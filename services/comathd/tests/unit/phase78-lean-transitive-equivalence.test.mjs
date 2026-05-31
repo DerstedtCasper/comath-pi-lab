@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { checkStatementEquivalence, createServiceOwnedLeanRunManifestV3 } from "../../dist/index.js";
+import {
+  appendLeanRunManifestProvenanceIndexV1,
+  checkStatementEquivalence,
+  createServiceOwnedLeanRunManifestV3
+} from "../../dist/index.js";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-lean-transitive-equivalence-"));
 const campaignId = "CAM-0078";
@@ -57,6 +61,13 @@ function writeVerifiedLeanRunManifest() {
     proof_authority: "lean_kernel_check"
   });
   writeProjectFile(manifestRel, `${JSON.stringify(manifest, null, 2)}\n`);
+  appendLeanRunManifestProvenanceIndexV1({
+    projectRoot,
+    project_id: claimId,
+    actor: "phase78-transitive-equivalence",
+    manifest,
+    manifest_path: join(projectRoot, manifestRel)
+  });
   return manifestRel;
 }
 
