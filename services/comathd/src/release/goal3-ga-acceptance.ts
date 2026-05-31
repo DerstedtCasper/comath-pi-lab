@@ -12,6 +12,7 @@ import { promoteClaim } from "../verification/gate.js";
 import { evaluateStatementDiffGate } from "../proof-kernel/lean/statement-diff-gate.js";
 import {
   createServiceOwnedLeanRunManifestV3,
+  parseLeanToolchainMetadata,
   runServiceOwnedLeanCommandV3,
   verifyLeanRunManifestV3Evidence
 } from "../proof-kernel/lean/lean-run-manifest-v3.js";
@@ -301,6 +302,7 @@ export type Goal3GaPm002LeanAuthorityExecutorBlocker = {
   blocker_code:
     | "declared_replay_material_missing"
     | "lean_toolchain_unavailable_for_live_replay"
+    | "lean_toolchain_mismatch_for_live_replay"
     | "lean_replay_command_failed"
     | "lean_authority_evidence_incomplete"
     | "live_replay_executor_not_configured";
@@ -333,6 +335,7 @@ export type Goal3GaPm002LeanAuthorityExecutorReport = {
 type Goal3GaPositiveMatrixLeanAuthorityExecutorBlockerCode =
   | "declared_replay_material_missing"
   | "lean_toolchain_unavailable_for_live_replay"
+  | "lean_toolchain_mismatch_for_live_replay"
   | "lean_replay_command_failed"
   | "lean_authority_evidence_incomplete"
   | "live_replay_executor_not_configured";
@@ -2073,6 +2076,57 @@ function completedPositiveMatrixExecutorReport(input: {
   };
 }
 
+function leanToolchainSetupBlocker(input: {
+  error: unknown;
+  declaredLeanToolchain: string;
+  leanProbe: Goal3GaPm002LeanAuthorityProbeResult;
+  lakeProbe: Goal3GaPm002LeanAuthorityProbeResult;
+}): { code: Goal3GaPositiveMatrixLeanAuthorityExecutorBlockerCode; detail: string } | null {
+  const reason = input.error instanceof Error ? input.error.message : String(input.error);
+  const leanVersion = /version\s+([0-9]+\.[0-9]+\.[0-9]+)/i.exec(input.leanProbe.stdout)?.[1] ?? "unknown";
+  const lakeVersion = /lake\s+version\s+([^\r\n]+)/i.exec(input.lakeProbe.stdout)?.[1]?.trim() ?? "unknown";
+  if (reason === "lean_toolchain_mismatch") {
+    return {
+      code: "lean_toolchain_mismatch_for_live_replay",
+      detail: `Declared lean-toolchain ${input.declaredLeanToolchain || "missing"} does not match Lean probe version ${leanVersion}; Lake probe version ${lakeVersion}. Real replay must fail closed before any LeanRunManifest or final authority evidence is produced.`
+    };
+  }
+  if (
+    reason === "lean_version_unknown" ||
+    reason === "lake_version_missing" ||
+    reason === "lean_toolchain_missing" ||
+    reason === "lean_toolchain_parse_failure"
+  ) {
+    return {
+      code: "lean_toolchain_unavailable_for_live_replay",
+      detail: `Lean/Lake toolchain metadata is incomplete or unparsable for live replay (${reason}); declared lean-toolchain ${input.declaredLeanToolchain || "missing"}, Lean probe version ${leanVersion}, Lake probe version ${lakeVersion}.`
+    };
+  }
+  return null;
+}
+
+function probeToolchainSetupBlocker(input: {
+  declaredLeanToolchain: string;
+  leanProbe: Goal3GaPm002LeanAuthorityProbeResult;
+  lakeProbe: Goal3GaPm002LeanAuthorityProbeResult;
+}): { code: Goal3GaPositiveMatrixLeanAuthorityExecutorBlockerCode; detail: string } | null {
+  try {
+    parseLeanToolchainMetadata({
+      leanVersionOutput: input.leanProbe.stdout,
+      lakeVersionOutput: input.lakeProbe.stdout,
+      leanToolchain: input.declaredLeanToolchain
+    });
+    return null;
+  } catch (error) {
+    return leanToolchainSetupBlocker({
+      error,
+      declaredLeanToolchain: input.declaredLeanToolchain,
+      leanProbe: input.leanProbe,
+      lakeProbe: input.lakeProbe
+    });
+  }
+}
+
 function completePositiveMatrixFinalAuthorityEvidence(input: {
   projectRoot: string;
   task: Goal3GaPositiveMatrixTask;
@@ -2136,23 +2190,47 @@ function completePositiveMatrixFinalAuthorityEvidence(input: {
   );
 
   const finalReplayCommand = ["lake", "build", "MathResearch"];
-  const finalRun = runServiceOwnedLeanCommandV3({
-    projectRoot: input.projectRoot,
-    run_id: finalRunId,
-    claim_id: input.claimId,
-    campaign_id: `CAM-${taskNumber}`,
-    purpose: "final_replay",
-    command: finalReplayCommand,
-    cwd: cleanRoot,
-    input_files: [target, audit, formalSpec, assumptionLedger, lakefile, toolchain, lakeManifest],
-    leanVersionOutput: input.leanProbe.stdout,
-    lakeVersionOutput: input.lakeProbe.stdout,
-    leanToolchain: input.leanToolchain,
-    network_policy: "disabled",
-    sandbox: "none",
-    proof_authority: "lean_kernel_check",
-    run: input.runReplayCommand
-  });
+  let finalRun: ReturnType<typeof runServiceOwnedLeanCommandV3>;
+  try {
+    finalRun = runServiceOwnedLeanCommandV3({
+      projectRoot: input.projectRoot,
+      run_id: finalRunId,
+      claim_id: input.claimId,
+      campaign_id: `CAM-${taskNumber}`,
+      purpose: "final_replay",
+      command: finalReplayCommand,
+      cwd: cleanRoot,
+      input_files: [target, audit, formalSpec, assumptionLedger, lakefile, toolchain, lakeManifest],
+      leanVersionOutput: input.leanProbe.stdout,
+      lakeVersionOutput: input.lakeProbe.stdout,
+      leanToolchain: input.leanToolchain,
+      network_policy: "disabled",
+      sandbox: "none",
+      proof_authority: "lean_kernel_check",
+      run: input.runReplayCommand
+    });
+  } catch (error) {
+    const setupBlocker = leanToolchainSetupBlocker({
+      error,
+      declaredLeanToolchain: input.leanToolchain,
+      leanProbe: input.leanProbe,
+      lakeProbe: input.lakeProbe
+    });
+    if (!setupBlocker) {
+      throw error;
+    }
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task: input.task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck: input.materialCheck,
+      blocker_code: setupBlocker.code,
+      blocker_detail: setupBlocker.detail,
+      attempted_commands: input.attemptedCommands,
+      lean_run_manifest_paths: input.leanRunManifestPaths
+    });
+  }
   const finalRunManifestPath = positiveMatrixRunManifestPath(input.projectRoot, input.claimId, finalRunId);
   const leanRunManifestPaths = Array.from(new Set([...input.leanRunManifestPaths, finalRunManifestPath]));
   const attemptedCommands = [...input.attemptedCommands, finalReplayCommand];
@@ -2421,6 +2499,28 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplay(input: {
     });
   }
 
+  const leanToolchain = readFileSync(join(input.projectRoot, input.materialSource.lean_toolchain_path), "utf8").trim();
+  const setupBlocker = probeToolchainSetupBlocker({
+    declaredLeanToolchain: leanToolchain,
+    leanProbe,
+    lakeProbe
+  });
+  if (setupBlocker) {
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: setupBlocker.code,
+      blocker_detail: setupBlocker.detail,
+      attempted_commands: [
+        ["lean", "--version"],
+        ["lake", "--version"]
+      ]
+    });
+  }
+
   if (input.completeFinalAuthorityEvidence === true && (input.probeLeanVersion || input.probeLakeVersion) && !input.runReplayCommand) {
     return blockedPositiveMatrixExecutorReport({
       projectRoot: input.projectRoot,
@@ -2437,7 +2537,6 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplay(input: {
     });
   }
 
-  const leanToolchain = readFileSync(join(input.projectRoot, input.materialSource.lean_toolchain_path), "utf8").trim();
   const inputFiles = [
     join(input.projectRoot, input.materialSource.lean_source_path),
     join(input.projectRoot, input.materialSource.lean_toolchain_path),
@@ -2456,24 +2555,48 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplay(input: {
   const manifestPaths: string[] = [];
 
   for (const replay of replayCommands) {
-    const run = runServiceOwnedLeanCommandV3({
-      projectRoot: input.projectRoot,
-      run_id: replay.runId,
-      claim_id: input.claimId,
-      campaign_id: `CAM-${positiveMatrixTaskNumber(task)}`,
-      candidate_id: `CAND-${positiveMatrixTaskNumber(task)}`,
-      purpose: replay.purpose,
-      command: replay.command,
-      cwd: materialRoot,
-      input_files: inputFiles,
-      leanVersionOutput: leanProbe.stdout,
-      lakeVersionOutput: lakeProbe.stdout,
-      leanToolchain,
-      network_policy: "disabled",
-      sandbox: "none",
-      proof_authority: "none",
-      run: input.runReplayCommand
-    });
+    let run: ReturnType<typeof runServiceOwnedLeanCommandV3>;
+    try {
+      run = runServiceOwnedLeanCommandV3({
+        projectRoot: input.projectRoot,
+        run_id: replay.runId,
+        claim_id: input.claimId,
+        campaign_id: `CAM-${positiveMatrixTaskNumber(task)}`,
+        candidate_id: `CAND-${positiveMatrixTaskNumber(task)}`,
+        purpose: replay.purpose,
+        command: replay.command,
+        cwd: materialRoot,
+        input_files: inputFiles,
+        leanVersionOutput: leanProbe.stdout,
+        lakeVersionOutput: lakeProbe.stdout,
+        leanToolchain,
+        network_policy: "disabled",
+        sandbox: "none",
+        proof_authority: "none",
+        run: input.runReplayCommand
+      });
+    } catch (error) {
+      const setupBlocker = leanToolchainSetupBlocker({
+        error,
+        declaredLeanToolchain: leanToolchain,
+        leanProbe,
+        lakeProbe
+      });
+      if (!setupBlocker) {
+        throw error;
+      }
+      return blockedPositiveMatrixExecutorReport({
+        projectRoot: input.projectRoot,
+        task,
+        claimId: input.claimId,
+        materialSource: input.materialSource,
+        materialCheck,
+        blocker_code: setupBlocker.code,
+        blocker_detail: setupBlocker.detail,
+        attempted_commands: attemptedCommands,
+        lean_run_manifest_paths: manifestPaths
+      });
+    }
     const manifestPath = positiveMatrixRunManifestPath(input.projectRoot, input.claimId, replay.runId);
     manifestPaths.push(manifestPath);
     attemptedCommands.push(replay.command);
@@ -3036,6 +3159,42 @@ export function executeGoal3GaPm002LeanAuthorityReplay(input: {
   }
 
   const leanToolchain = readFileSync(join(input.projectRoot, input.materialSource.lean_toolchain_path), "utf8").trim();
+  const setupBlocker = probeToolchainSetupBlocker({
+    declaredLeanToolchain: leanToolchain,
+    leanProbe,
+    lakeProbe
+  });
+  if (setupBlocker) {
+    const { path } = writePm002ExecutorBlocker({
+      projectRoot: input.projectRoot,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: setupBlocker.code,
+      blocker_detail: setupBlocker.detail,
+      attempted_commands: [
+        ["lean", "--version"],
+        ["lake", "--version"]
+      ],
+      lean_run_manifest_paths: []
+    });
+    const live_replay_conversion = runGoal3GaPositiveMatrixLiveReplayConversion({
+      projectRoot: input.projectRoot,
+      taskIds: ["PM-002"],
+      replayMaterialSource: () => input.materialSource,
+      liveReplay: () => ({ ok: false, blocker_code: setupBlocker.code, detail: setupBlocker.detail })
+    });
+    return {
+      schema_version: "comath.goal3_pm002_lean_authority_executor.v1",
+      task_id: "PM-002",
+      executor_status: "blocked_before_replay",
+      blocker_code: setupBlocker.code,
+      blocker_detail: setupBlocker.detail,
+      executor_blocker_path: path,
+      live_replay_conversion,
+      proof_authority: "none",
+      can_promote_claim: false
+    };
+  }
   const inputFiles = [
     join(input.projectRoot, input.materialSource.lean_source_path),
     join(input.projectRoot, input.materialSource.lean_toolchain_path),
@@ -3053,24 +3212,63 @@ export function executeGoal3GaPm002LeanAuthorityReplay(input: {
   const attemptedCommands = [["lean", "--version"], ["lake", "--version"]];
 
   for (const replay of replayCommands) {
-    const run = runServiceOwnedLeanCommandV3({
-      projectRoot: input.projectRoot,
-      run_id: replay.runId,
-      claim_id: "C-0002",
-      campaign_id: "CAM-0002",
-      candidate_id: "CAND-0002",
-      purpose: replay.purpose,
-      command: replay.command,
-      cwd: materialRoot,
-      input_files: inputFiles,
-      leanVersionOutput: leanProbe.stdout,
-      lakeVersionOutput: lakeProbe.stdout,
-      leanToolchain,
-      network_policy: "disabled",
-      sandbox: "none",
-      proof_authority: "none",
-      run: input.runReplayCommand
-    });
+    let run: ReturnType<typeof runServiceOwnedLeanCommandV3>;
+    try {
+      run = runServiceOwnedLeanCommandV3({
+        projectRoot: input.projectRoot,
+        run_id: replay.runId,
+        claim_id: "C-0002",
+        campaign_id: "CAM-0002",
+        candidate_id: "CAND-0002",
+        purpose: replay.purpose,
+        command: replay.command,
+        cwd: materialRoot,
+        input_files: inputFiles,
+        leanVersionOutput: leanProbe.stdout,
+        lakeVersionOutput: lakeProbe.stdout,
+        leanToolchain,
+        network_policy: "disabled",
+        sandbox: "none",
+        proof_authority: "none",
+        run: input.runReplayCommand
+      });
+    } catch (error) {
+      const setupBlocker = leanToolchainSetupBlocker({
+        error,
+        declaredLeanToolchain: leanToolchain,
+        leanProbe,
+        lakeProbe
+      });
+      if (!setupBlocker) {
+        throw error;
+      }
+      const { path } = writePm002ExecutorBlocker({
+        projectRoot: input.projectRoot,
+        materialSource: input.materialSource,
+        materialCheck,
+        blocker_code: setupBlocker.code,
+        blocker_detail: setupBlocker.detail,
+        attempted_commands: attemptedCommands,
+        lean_run_manifest_paths: manifestPaths
+      });
+      const live_replay_conversion = runGoal3GaPositiveMatrixLiveReplayConversion({
+        projectRoot: input.projectRoot,
+        taskIds: ["PM-002"],
+        replayMaterialSource: () => input.materialSource,
+        liveReplay: () => ({ ok: false, blocker_code: setupBlocker.code, detail: setupBlocker.detail })
+      });
+      return {
+        schema_version: "comath.goal3_pm002_lean_authority_executor.v1",
+        task_id: "PM-002",
+        executor_status: "blocked_before_replay",
+        blocker_code: setupBlocker.code,
+        blocker_detail: setupBlocker.detail,
+        executor_blocker_path: path,
+        live_replay_conversion,
+        proof_authority: "none",
+        can_promote_claim: false
+      };
+    }
     manifestPaths.push(pm002RunManifestPath(input.projectRoot, replay.runId));
     attemptedCommands.push(replay.command);
     if (run.manifest.exit_code !== 0) {

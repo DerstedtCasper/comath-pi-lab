@@ -1,3 +1,26 @@
+# Goal 3 Task 95 / Real Replay Toolchain Mismatch Blocker Contract
+
+Scope: make the real positive-matrix Lean replay path fail closed when the declared `lean-toolchain` does not match the probed Lean version, without throwing out of the workflow or producing authority-shaped replay evidence.
+
+Work performed:
+
+- Added `goal3-task95-real-replay-toolchain-mismatch-blocker.test.mjs`. RED showed `runServiceOwnedLeanCommandV3()` threw `lean_toolchain_mismatch` through the positive-matrix executor instead of returning a structured blocker.
+- Added a dedicated blocker code, `lean_toolchain_mismatch_for_live_replay`, for real replay setup mismatches.
+- Hardened the generic positive-matrix executor, PM-002 legacy executor, and final replay completion boundary so Lean/Lake/toolchain metadata failures are converted into non-authoritative replayable blockers before any replay command runs.
+- Preserved archive and environment diagnostic semantics: mismatch archives remain `proof_authority: none`, `can_promote_claim: false`, and diagnostic-only.
+
+Verification evidence:
+
+- TDD RED: `node services/comathd/tests/unit/goal3-task95-real-replay-toolchain-mismatch-blocker.test.mjs` initially failed with thrown `Error: lean_toolchain_mismatch`.
+- GREEN focused tests: Task95, Task86, Task89, Task90, Task91, Task94 schema gate, Task94 positive-matrix consumer semantics, and Task17 acceptance workflow.
+- `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, full `corepack pnpm --filter @comath/comathd test`, root `corepack pnpm build`, root `corepack pnpm typecheck`, and root `corepack pnpm test` exited 0.
+- Static scans found no direct claim-status mutation writes outside read-only paper checks, no `can_promote_claim: true`, no `direct_claim_mutation: true`, and no restored theorem-family/Nat-linear/default-assumption production path.
+- `lean` and `lake` still resolve to elan shims, but both fail with no default toolchain configured; Task95 records mismatch/unavailable states as blockers rather than proof authority.
+
+Boundary notes: Task95 does not install Lean, fetch mathlib, execute a fresh real clean replay, or broaden theorem coverage. It only hardens the live replay environment boundary.
+
+Residual risks: a read-only subagent flagged that PM-001 batch consumer semantics can still look like per-task `lean_kernel_clean_replay`, and another flagged the older final replay gate path as a future binding audit target. Those are left for Task96+.
+
 # Goal 3 Task 94 / Final-Authority Binding Schema And Matrix Consumer Semantics
 
 Scope: close the Task91-93 check-debug gap where final-authority derived binding material could omit explicit claim-bound FormalSpecLock / AssumptionLedger fields while still verifying, and prevent the GA acceptance positive matrix from inheriting proof authority from a separate representative fixture.
