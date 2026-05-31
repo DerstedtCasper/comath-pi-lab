@@ -2,7 +2,14 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { assumptionLedgerSchema, formalSpecLockSchema, type Claim, type GateResult } from "../types/schemas.js";
+import {
+  assumptionLedgerSchema,
+  formalReplayAuthorityEvidenceSchema,
+  formalSpecLockSchema,
+  type Claim,
+  type FormalReplayAuthorityEvidence,
+  type GateResult
+} from "../types/schemas.js";
 import { statementHash } from "../utils/statement.js";
 import { importArtifact, listArtifactRefs } from "../artifacts/store.js";
 import { appendEvidenceRecord, readEvidenceRecords } from "../evidence/store.js";
@@ -19,6 +26,8 @@ import {
 import {
   appendFinalReplayRegistryEntryV3,
   createFinalReplayManifestV3,
+  hasFinalReplayRegistryProvenanceV3,
+  hasLeanLakeBinaryHashProvenanceV3,
   verifyFinalReplayManifestV3,
   writeThirdPartyReplayPackV3
 } from "../proof-kernel/lean/final-replay-manifest-v3.js";
@@ -535,6 +544,15 @@ export type FinalAuthorityPackagingV3Report = {
   promotion_requires_gate: true;
 };
 
+export type FormalReplayAuthorityEvidenceBindingResult = {
+  schema_version: "comath.formal_replay_authority_evidence_binding.v1";
+  ok: boolean;
+  evidence?: FormalReplayAuthorityEvidence;
+  vetoes: string[];
+  proof_authority: "none" | "lean_kernel_clean_replay";
+  can_promote_claim: false;
+};
+
 export type FinalAuthorityPackagingV3SourceReport = {
   final_evidence_status: "blocked_missing_final_evidence" | "verified_final_authority_evidence";
   blocker_code: "final_authority_evidence_incomplete" | "";
@@ -612,6 +630,7 @@ export type Goal3GaPositiveMatrixFinalAuthorityPromotionBundle = {
   artifact_ids: string[];
   gate: GateResult;
   claim: Claim;
+  formal_replay_authority_evidence?: FormalReplayAuthorityEvidence;
   proof_authority: "none" | "lean_kernel_clean_replay";
   promoted_by_ordinary_gate: boolean;
   promotion_requires_gate: true;
@@ -3882,6 +3901,132 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBin
   });
 }
 
+export function createFormalReplayAuthorityEvidenceFromFinalAuthorityPackagingV3(input: {
+  projectRoot: string;
+  packaging: unknown;
+  gate_result_id?: string;
+  recorded_at?: string;
+}): FormalReplayAuthorityEvidenceBindingResult {
+  const vetoes: string[] = [];
+  const report = input.packaging && typeof input.packaging === "object"
+    ? (input.packaging as Record<string, unknown>)
+    : {};
+  if (report.schema_version !== "comath.final_authority_packaging.v3") {
+    vetoes.push("final_authority_packaging_v3_required");
+  }
+  const verifiedPackaging =
+    report.final_evidence_status === "verified_final_authority_evidence" &&
+    report.proof_authority === "lean_kernel_clean_replay" &&
+    report.can_promote_claim === false &&
+    report.promotion_requires_gate === true &&
+    Array.isArray(report.missing_final_evidence_classes) &&
+    report.missing_final_evidence_classes.length === 0;
+  if (!verifiedPackaging) {
+    vetoes.push("final_authority_packaging_not_verified");
+  }
+
+  const finalReplayManifestPath = typeof report.final_replay_manifest_v3_path === "string" ? report.final_replay_manifest_v3_path : "";
+  const packagingReportPath = typeof report.packaging_report_path === "string" ? report.packaging_report_path : "";
+  const derivedBindingPath = typeof report.source_packaging_report_path === "string" ? report.source_packaging_report_path : "";
+  if (!finalReplayManifestPath || !evidencePathExistsInsideProject(input.projectRoot, finalReplayManifestPath)) {
+    vetoes.push("final_replay_manifest_v3_missing");
+  }
+  if (!packagingReportPath || !evidencePathExistsInsideProject(input.projectRoot, packagingReportPath)) {
+    vetoes.push("final_authority_packaging_artifact_missing");
+  }
+  if (
+    !derivedBindingPath ||
+    !derivedBindingPath.endsWith("/derived_final_authority_bindings_v3.json") ||
+    !evidencePathExistsInsideProject(input.projectRoot, derivedBindingPath)
+  ) {
+    vetoes.push("final_authority_derived_binding_manifest_missing");
+  }
+
+  const finalReplayManifest = finalReplayManifestPath ? readJsonInsideProject(input.projectRoot, finalReplayManifestPath) : null;
+  const finalReplayVerification = verifyFinalReplayManifestV3(input.projectRoot, finalReplayManifest);
+  if (!finalReplayVerification.ok) {
+    vetoes.push(...finalReplayVerification.vetoes);
+  }
+  const finalReplayRecord = finalReplayManifest && typeof finalReplayManifest === "object"
+    ? (finalReplayManifest as Record<string, unknown>)
+    : {};
+  if (
+    finalReplayRecord.result !== "pass" ||
+    finalReplayRecord.exit_code !== 0 ||
+    finalReplayRecord.proof_authority !== "lean_kernel_clean_replay"
+  ) {
+    vetoes.push("final_replay_manifest_not_passed");
+  }
+  if (typeof report.claim_id === "string" && finalReplayRecord.claim_id !== report.claim_id) {
+    vetoes.push("final_replay_claim_mismatch");
+  }
+  const derivedBinding = derivedBindingPath ? readJsonInsideProject(input.projectRoot, derivedBindingPath) : null;
+  const derivedBindingRecord = derivedBinding && typeof derivedBinding === "object"
+    ? (derivedBinding as Record<string, unknown>)
+    : {};
+  if (
+    derivedBindingRecord.schema_version !== "comath.final_authority_derived_bindings.v3" ||
+    derivedBindingRecord.task_id !== report.task_id ||
+    derivedBindingRecord.claim_id !== report.claim_id ||
+    derivedBindingRecord.final_replay_manifest_v3_path !== finalReplayManifestPath ||
+    derivedBindingRecord.proof_authority !== "none" ||
+    derivedBindingRecord.can_promote_claim !== false ||
+    derivedBindingRecord.promotion_requires_gate !== true ||
+    typeof derivedBindingRecord.formal_spec_lock_path !== "string" ||
+    hashProjectJsonFile(input.projectRoot, derivedBindingRecord.formal_spec_lock_path) !== derivedBindingRecord.formal_spec_lock_sha256 ||
+    typeof derivedBindingRecord.assumption_ledger_path !== "string" ||
+    hashProjectJsonFile(input.projectRoot, derivedBindingRecord.assumption_ledger_path) !== derivedBindingRecord.assumption_ledger_sha256 ||
+    hashProjectJsonFile(input.projectRoot, finalReplayManifestPath) !== derivedBindingRecord.replay_manifest_sha256
+  ) {
+    vetoes.push("final_authority_derived_binding_manifest_mismatch");
+  }
+  if (!hasFinalReplayRegistryProvenanceV3(input.projectRoot, finalReplayManifest)) {
+    vetoes.push("final_replay_registry_provenance_missing");
+  }
+  if (!hasLeanLakeBinaryHashProvenanceV3(input.projectRoot, finalReplayManifest)) {
+    vetoes.push("lean_lake_binary_hash_provenance_missing");
+  }
+
+  const artifactHash = packagingReportPath && evidencePathExistsInsideProject(input.projectRoot, packagingReportPath)
+    ? sha256File(join(input.projectRoot, packagingReportPath))
+    : undefined;
+  if (artifactHash !== undefined && !validSha256(artifactHash)) {
+    vetoes.push("final_authority_packaging_artifact_hash_invalid");
+  }
+
+  const uniqueVetoes = Array.from(new Set(vetoes));
+  if (uniqueVetoes.length > 0) {
+    return {
+      schema_version: "comath.formal_replay_authority_evidence_binding.v1",
+      ok: false,
+      vetoes: uniqueVetoes,
+      proof_authority: "none",
+      can_promote_claim: false
+    };
+  }
+
+  const evidence = formalReplayAuthorityEvidenceSchema.parse({
+    schema_version: "comath.formal_replay_authority_evidence.v1",
+    proof_authority: "lean_kernel_clean_replay",
+    final_evidence_status: "verified_final_authority_evidence",
+    final_replay_manifest_v3_path: finalReplayManifestPath,
+    final_authority_packaging_path: packagingReportPath,
+    replay_id: typeof finalReplayRecord.replay_id === "string" ? finalReplayRecord.replay_id : undefined,
+    gate_result_id: input.gate_result_id,
+    artifact_hash: artifactHash,
+    recorded_at: input.recorded_at ?? new Date().toISOString()
+  });
+
+  return {
+    schema_version: "comath.formal_replay_authority_evidence_binding.v1",
+    ok: true,
+    evidence,
+    vetoes: [],
+    proof_authority: "lean_kernel_clean_replay",
+    can_promote_claim: false
+  };
+}
+
 export async function promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3(input: {
   projectRoot: string;
   projectId: string;
@@ -3936,6 +4081,16 @@ export async function promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDeri
     artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id],
     actor: input.actor
   });
+  const formalReplayAuthorityEvidence = promotion.gate.ok
+    ? createFormalReplayAuthorityEvidenceFromFinalAuthorityPackagingV3({
+        projectRoot: input.projectRoot,
+        packaging: report,
+        gate_result_id: promotion.gate.id
+      })
+    : undefined;
+  if (promotion.gate.ok && formalReplayAuthorityEvidence?.ok !== true) {
+    throw new Error("formal_replay_authority_evidence_binding_failed");
+  }
   return {
     schema_version: "comath.goal3_positive_matrix_final_authority_promotion_bundle.v1",
     task_id: input.taskId,
@@ -3946,6 +4101,7 @@ export async function promoteGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDeri
     artifact_ids: [packagingArtifact.id, finalReplayArtifact.id, derivedBindingArtifact.id],
     gate: promotion.gate,
     claim: promotion.claim,
+    formal_replay_authority_evidence: formalReplayAuthorityEvidence?.evidence,
     proof_authority: promotion.gate.ok ? "lean_kernel_clean_replay" : "none",
     promoted_by_ordinary_gate: promotion.gate.ok,
     promotion_requires_gate: true,

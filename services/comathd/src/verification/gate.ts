@@ -19,7 +19,11 @@ import {
   type GateResult
 } from "../types/schemas.js";
 import { nextSequentialId } from "../utils/id.js";
-import { verifyFinalReplayManifestV3 } from "../proof-kernel/lean/final-replay-manifest-v3.js";
+import {
+  hasFinalReplayRegistryProvenanceV3,
+  hasLeanLakeBinaryHashProvenanceV3,
+  verifyFinalReplayManifestV3
+} from "../proof-kernel/lean/final-replay-manifest-v3.js";
 import { verifyLeanRunManifestV3Evidence } from "../proof-kernel/lean/lean-run-manifest-v3.js";
 import { runnerResultSha256, sha256Text } from "./runner-contracts.js";
 
@@ -286,47 +290,6 @@ function leanRunManifestPathsMatchAndVerify(
   return replayPaths.every((manifestPath) => {
     const manifest = readJsonInsideProject(projectRoot, manifestPath);
     return verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok;
-  });
-}
-
-function isSha256(value: unknown): value is string {
-  return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
-}
-
-function hasLeanLakeBinaryHashProvenance(
-  projectRoot: string,
-  finalReplayManifest: Record<string, unknown>
-): boolean {
-  const binaryHashes = finalReplayManifest.binary_hashes && typeof finalReplayManifest.binary_hashes === "object"
-    ? (finalReplayManifest.binary_hashes as Record<string, unknown>)
-    : {};
-  const leanHash = binaryHashes.lean;
-  const lakeHash = binaryHashes.lake;
-  if (!isSha256(leanHash) || !isSha256(lakeHash)) {
-    return false;
-  }
-
-  const replayPaths = stringArray(finalReplayManifest.lean_run_manifest_paths).map(normalizedStoredPath);
-  if (replayPaths.length === 0) {
-    return false;
-  }
-
-  return replayPaths.some((manifestPath) => {
-    const manifest = readJsonInsideProject(projectRoot, manifestPath);
-    if (!manifest || typeof manifest !== "object") {
-      return false;
-    }
-    const record = manifest as Record<string, unknown>;
-    return (
-      record.schema_version === "comath.lean_run_manifest.v3" &&
-      record.purpose === "final_replay" &&
-      record.runner === "comathd.LeanRunner" &&
-      record.proof_authority === "lean_kernel_check" &&
-      record.exit_code === 0 &&
-      record.lean_binary_sha256 === leanHash &&
-      record.lake_binary_sha256 === lakeHash &&
-      verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok
-    );
   });
 }
 
@@ -637,13 +600,13 @@ function hasVerifiedFinalAuthorityPackagingV3(
     if (!finalReplayVerification.ok) {
       continue;
     }
-    if (!hasFinalReplayRegistryProvenance(projectRoot, parsed.data)) {
+    if (!hasFinalReplayRegistryProvenanceV3(projectRoot, parsed.data)) {
       continue;
     }
     if (!leanRunManifestPathsMatchAndVerify(projectRoot, report, finalReplay as Record<string, unknown>)) {
       continue;
     }
-    if (!hasLeanLakeBinaryHashProvenance(projectRoot, finalReplay as Record<string, unknown>)) {
+    if (!hasLeanLakeBinaryHashProvenanceV3(projectRoot, finalReplay as Record<string, unknown>)) {
       continue;
     }
     if (!hasVerifiedDerivedBindingManifest(projectRoot, request, report, finalReplay as Record<string, unknown>, artifacts)) {
@@ -673,54 +636,6 @@ function hasVerifiedFinalAuthorityPackagingV3(
     return true;
   }
   return false;
-}
-
-function hasFinalReplayRegistryProvenance(projectRoot: string, finalReplay: unknown): boolean {
-  const parsed = finalReplayManifestV3Schema.safeParse(finalReplay);
-  if (!parsed.success) {
-    return false;
-  }
-  const registryRel = join(".comath", "evidence", parsed.data.claim_id, "lean", "final_replay_registry.jsonl");
-  let registryPath: string;
-  try {
-    registryPath = assertPathAllowed(projectRoot, registryRel, { purpose: "read", resolveRealpath: true });
-  } catch {
-    return false;
-  }
-  if (!existsSync(registryPath)) {
-    return false;
-  }
-  const expected = canonicalJson(parsed.data);
-  const expectedSha256 = sha256Text(expected);
-  const hasRegistryLine = readFileSync(registryPath, "utf8")
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .some((line) => {
-      try {
-        const entry = JSON.parse(line);
-        return canonicalJson(entry) === expected;
-      } catch {
-        return false;
-      }
-    });
-  if (!hasRegistryLine) {
-    return false;
-  }
-  return readAuditEvents(projectRoot).some((event) => {
-    const payload = event.payload as Record<string, unknown>;
-    return (
-      event.event_type === "lean.final_replay_registry_appended" &&
-      event.target_id === parsed.data.claim_id &&
-      payload.claim_id === parsed.data.claim_id &&
-      payload.replay_id === parsed.data.replay_id &&
-      payload.registry_path === registryRel.replace(/\\/g, "/") &&
-      payload.entry_sha256 === expectedSha256 &&
-      payload.manifest_sha256 === expectedSha256 &&
-      payload.runner === "comathd.LeanAuthority" &&
-      payload.proof_authority === "lean_kernel_clean_replay" &&
-      payload.service_owned_clean_replay_provenance === true
-    );
-  });
 }
 
 function hasPromotionGradeLeanAuthorityEvidence(
@@ -783,7 +698,7 @@ function finalAuthorityProvenanceVetoes(projectRoot: string, artifacts: Artifact
     }
     const finalReplay = readJsonInsideProject(projectRoot, report.final_replay_manifest_v3_path);
     const verification = verifyFinalReplayManifestV3(projectRoot, finalReplay);
-    if (verification.ok && !hasFinalReplayRegistryProvenance(projectRoot, finalReplay)) {
+    if (verification.ok && !hasFinalReplayRegistryProvenanceV3(projectRoot, finalReplay)) {
       vetoes.push("formally_checked requires service-owned clean replay provenance");
     }
   }
@@ -809,7 +724,7 @@ function finalAuthorityBinaryHashProvenanceVetoes(projectRoot: string, artifacts
       continue;
     }
     const finalReplay = readJsonInsideProject(projectRoot, report.final_replay_manifest_v3_path);
-    if (!finalReplay || typeof finalReplay !== "object" || !hasLeanLakeBinaryHashProvenance(projectRoot, finalReplay as Record<string, unknown>)) {
+    if (!finalReplay || typeof finalReplay !== "object" || !hasLeanLakeBinaryHashProvenanceV3(projectRoot, finalReplay as Record<string, unknown>)) {
       vetoes.push("formally_checked requires Lean/Lake binary hash provenance");
     }
   }

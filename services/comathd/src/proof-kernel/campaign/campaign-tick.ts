@@ -821,7 +821,7 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
     blocker_certificates: Record<string, unknown>[];
     next_actions: string[];
     evidence_pack_ready: boolean;
-    proof_authority: "none";
+    proof_authority: "none" | "lean_kernel_clean_replay";
     can_promote_claim: false;
   };
 } {
@@ -842,7 +842,10 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
       next_actions: campaign.next_actions,
       evidence_pack_ready:
         campaign.terminal_state === "completed_formal_proof" && hasFormalReplayAuthorityPassEvidence(campaign),
-      proof_authority: "none",
+      proof_authority:
+        campaign.terminal_state === "completed_formal_proof" && hasFormalReplayAuthorityPassEvidence(campaign)
+          ? "lean_kernel_clean_replay"
+          : "none",
       can_promote_claim: false
     }
   };

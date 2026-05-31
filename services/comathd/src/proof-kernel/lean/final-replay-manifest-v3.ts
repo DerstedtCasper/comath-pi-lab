@@ -15,7 +15,8 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { finalReplayManifestV3Schema, type FinalReplayManifestV3 } from "../../types/schemas.js";
 import { sha256Buffer, sha256FileSync } from "./lean-project.js";
-import { appendAuditEvent } from "../../audit/jsonl-writer.js";
+import { appendAuditEvent, readAuditEvents } from "../../audit/jsonl-writer.js";
+import { verifyLeanRunManifestV3Evidence } from "./lean-run-manifest-v3.js";
 
 type HashRef = { sha256: string; size_bytes: number };
 
@@ -43,6 +44,18 @@ function canonicalJson(value: unknown): string {
 
 function sha256Text(text: string): string {
   return createHash("sha256").update(text).digest("hex");
+}
+
+function isSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function normalizedStoredPath(path: string): string {
+  return path.replace(/\\/g, "/");
 }
 
 function assertInside(root: string, candidate: string): void {
@@ -93,6 +106,11 @@ function workspaceDigest(hashes: Record<string, HashRef>): string {
 
 function reportHash(projectRoot: string, path: string): HashRef {
   return sha256FileSync(assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true }));
+}
+
+function readJsonInsideProject(projectRoot: string, path: string): unknown {
+  const absolute = assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true });
+  return JSON.parse(readFileSync(absolute, "utf8"));
 }
 
 function dependencyLock(input: {
@@ -252,6 +270,92 @@ export function appendFinalReplayRegistryEntryV3(
     });
   }
   return { registry_path, entry_sha256: entrySha256 };
+}
+
+export function hasFinalReplayRegistryProvenanceV3(projectRoot: string, candidate: unknown): boolean {
+  const parsed = finalReplayManifestV3Schema.safeParse(candidate);
+  if (!parsed.success) {
+    return false;
+  }
+  const registryRel = join(".comath", "evidence", parsed.data.claim_id, "lean", "final_replay_registry.jsonl");
+  let registryPath: string;
+  try {
+    registryPath = assertPathAllowed(projectRoot, registryRel, { purpose: "read", resolveRealpath: true });
+  } catch {
+    return false;
+  }
+  if (!existsSync(registryPath)) {
+    return false;
+  }
+  const expected = canonicalJson(parsed.data);
+  const expectedSha256 = sha256Text(expected);
+  const hasRegistryLine = readFileSync(registryPath, "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .some((line) => {
+      try {
+        const entry = JSON.parse(line);
+        return canonicalJson(entry) === expected;
+      } catch {
+        return false;
+      }
+    });
+  if (!hasRegistryLine) {
+    return false;
+  }
+  return readAuditEvents(projectRoot).some((event) => {
+    const payload = event.payload as Record<string, unknown>;
+    return (
+      event.event_type === "lean.final_replay_registry_appended" &&
+      event.target_id === parsed.data.claim_id &&
+      payload.claim_id === parsed.data.claim_id &&
+      payload.replay_id === parsed.data.replay_id &&
+      payload.registry_path === registryRel.replace(/\\/g, "/") &&
+      payload.entry_sha256 === expectedSha256 &&
+      payload.manifest_sha256 === expectedSha256 &&
+      payload.runner === "comathd.LeanAuthority" &&
+      payload.proof_authority === "lean_kernel_clean_replay" &&
+      payload.service_owned_clean_replay_provenance === true
+    );
+  });
+}
+
+export function hasLeanLakeBinaryHashProvenanceV3(projectRoot: string, candidate: unknown): boolean {
+  const parsed = finalReplayManifestV3Schema.safeParse(candidate);
+  if (!parsed.success) {
+    return false;
+  }
+  const binaryHashes = parsed.data.binary_hashes && typeof parsed.data.binary_hashes === "object"
+    ? parsed.data.binary_hashes
+    : {};
+  const leanHash = binaryHashes.lean;
+  const lakeHash = binaryHashes.lake;
+  if (!isSha256(leanHash) || !isSha256(lakeHash)) {
+    return false;
+  }
+
+  const replayPaths = stringArray(parsed.data.lean_run_manifest_paths).map(normalizedStoredPath);
+  if (replayPaths.length === 0) {
+    return false;
+  }
+
+  return replayPaths.some((manifestPath) => {
+    const manifest = readJsonInsideProject(projectRoot, manifestPath);
+    if (!manifest || typeof manifest !== "object") {
+      return false;
+    }
+    const record = manifest as Record<string, unknown>;
+    return (
+      record.schema_version === "comath.lean_run_manifest.v3" &&
+      record.purpose === "final_replay" &&
+      record.runner === "comathd.LeanRunner" &&
+      record.proof_authority === "lean_kernel_check" &&
+      record.exit_code === 0 &&
+      record.lean_binary_sha256 === leanHash &&
+      record.lake_binary_sha256 === lakeHash &&
+      verifyLeanRunManifestV3Evidence(projectRoot, manifest).ok
+    );
+  });
 }
 
 export function verifyFinalReplayManifestV3(
