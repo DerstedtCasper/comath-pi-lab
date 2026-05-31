@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { assertPathAllowed } from "../../security/path-policy.js";
-import { verifyFinalReplayManifestV3 } from "../lean/final-replay-manifest-v3.js";
+import {
+  hasFinalReplayRegistryProvenanceV3,
+  verifyFinalReplayManifestV3
+} from "../lean/final-replay-manifest-v3.js";
 import { hasLeanRunManifestProvenanceIndexV1, verifyLeanRunManifestV3Evidence } from "../lean/lean-run-manifest-v3.js";
 
 export type ServiceOwnedLeanEvidenceContext = {
@@ -129,12 +132,14 @@ function isVerifiedFinalReplayManifest(input: {
     manifest.campaign_id !== input.campaignId ||
     manifest.claim_id !== input.claimId ||
     manifest.runner !== "comathd.LeanAuthority" ||
-    manifest.result !== "pass" ||
-    manifest.promotion_allowed !== true
+    manifest.result !== "pass"
   ) {
     return false;
   }
-  return verifyFinalReplayManifestV3(input.projectRoot, input.manifest).ok;
+  return (
+    verifyFinalReplayManifestV3(input.projectRoot, input.manifest).ok &&
+    hasFinalReplayRegistryProvenanceV3(input.projectRoot, input.manifest)
+  );
 }
 
 export function hasVerifiedServiceOwnedLeanManifestEvidence(input: ServiceOwnedLeanEvidenceContext): boolean {
