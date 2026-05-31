@@ -9,6 +9,7 @@ import { initProject } from "../../project/project-store.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
+import { summarizeCandidateProofGradeEvidence } from "../ensemble/candidate-proof-grade-summary.js";
 import { runGaAgentStageCandidates } from "../ensemble/ga-agent-stage-runner.js";
 import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-candidate-lean-check.js";
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
@@ -2217,6 +2218,11 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       })
     });
     const candidatesRel = writeStoredCandidates(input.project_root, campaign, obligation.obligation_id, batch.candidates);
+    const generationCandidateEvidenceSummary = summarizeCandidateProofGradeEvidence({
+      projectRoot: input.project_root,
+      campaign,
+      candidates: batch.candidates
+    });
     const generationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_generation.json", {
       schema_version: "comath.live_candidate_generation.v1",
       campaign_id: campaign.campaign_id,
@@ -2224,7 +2230,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       claim_id: campaign.root_claim_id,
       obligation_id: obligation.obligation_id,
       total_candidates: batch.candidates.length,
-      kernel_checked_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_kernel_checked").length,
+      ...generationCandidateEvidenceSummary,
       failed_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_failed").length,
       blocked_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_blocked").length,
       plausible_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_plausible_only").length,
@@ -2289,6 +2295,11 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         candidate.locked_statement_hash === obligation.statement_hash &&
         candidate.candidate_statement_hash === obligation.statement_hash
     );
+    const verificationCandidateEvidenceSummary = summarizeCandidateProofGradeEvidence({
+      projectRoot: input.project_root,
+      campaign,
+      candidates
+    });
     const verificationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_verification.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
@@ -2296,7 +2307,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       unique_variant_count: variantIds.size,
       all_required_variants_present: allRequiredVariantsPresent,
       all_manifest_paths_present: allManifestPathsPresent,
-      kernel_checked_candidates: candidates.filter((candidate) => candidate.state === "candidate_kernel_checked").length,
+      ...verificationCandidateEvidenceSummary,
       failed_candidates: candidates.filter((candidate) => candidate.state === "candidate_failed").length,
       all_statement_hashes_match: allStatementHashesMatch,
       all_manifest_bindings_match_obligation: manifestBindingsValid,

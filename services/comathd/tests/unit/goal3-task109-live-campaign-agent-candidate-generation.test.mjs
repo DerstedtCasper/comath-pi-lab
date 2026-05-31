@@ -102,6 +102,11 @@ try {
   assert.equal(generation.obligation_id, "PO-0001");
   assert.equal(generation.total_candidates, 8);
   assert.equal(generation.kernel_checked_candidates, 0);
+  assert.equal(generation.kernel_checked_count_semantics, "raw_candidate_state_only");
+  assert.deepEqual(generation.kernel_checked_candidate_ids, []);
+  assert.equal(generation.proof_grade_kernel_checked_candidates, 0);
+  assert.equal(generation.proof_grade_kernel_checked_count_semantics, "service_owned_manifest_verified");
+  assert.deepEqual(generation.proof_grade_kernel_checked_candidate_ids, []);
   assert.equal(generation.proof_authority, "none");
   assert.equal(generation.can_promote_claim, false);
   assert.equal(generation.source_request_path, requestRel);
@@ -112,6 +117,11 @@ try {
   const verification = readJson(verificationRel);
   assert.equal(verification.total_candidates, 8);
   assert.equal(verification.kernel_checked_candidates, 0);
+  assert.equal(verification.kernel_checked_count_semantics, "raw_candidate_state_only");
+  assert.deepEqual(verification.kernel_checked_candidate_ids, []);
+  assert.equal(verification.proof_grade_kernel_checked_candidates, 0);
+  assert.equal(verification.proof_grade_kernel_checked_count_semantics, "service_owned_manifest_verified");
+  assert.deepEqual(verification.proof_grade_kernel_checked_candidate_ids, []);
   assert.equal(verification.all_statement_hashes_match, true);
   assert.equal(verification.unique_variant_count, 8);
   assert.equal(verification.all_required_variants_present, true);

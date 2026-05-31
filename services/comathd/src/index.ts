@@ -49,6 +49,7 @@ export * from "./proof-kernel/ensemble/decision-forest.js";
 export * from "./proof-kernel/ensemble/failure-aggregator.js";
 export * from "./proof-kernel/ensemble/ga-agent-stage-runner.js";
 export * from "./proof-kernel/ensemble/live-candidate-lean-check.js";
+export * from "./proof-kernel/ensemble/candidate-proof-grade-summary.js";
 export * from "./proof-kernel/lean/lean-project.js";
 export * from "./proof-kernel/lean/static-cheat-scan.js";
 export * from "./proof-kernel/lean/statement-signature.js";

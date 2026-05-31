@@ -2103,3 +2103,21 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. Task115 hardens LeanRunManifest evidence against post-run input mutation, but it does not implement OS-level sandboxing, append-only storage enforcement at the filesystem layer, richer Lean/mathlib dependency fetching, nontrivial theorem proof synthesis, full Pi/Codex lifecycle validation, or final GA audit.
 - Next step: Task116 should continue hardening the live proof-evidence chain, preferably by making the candidate/read-model counts distinguish manifest-verified kernel checks from raw `candidate_kernel_checked` state, or by adding append-only/provenance checks around service-owned LeanRunManifest storage before promotion-visible summaries consume them.
 - Commit: `8c118d6` (`Bind Lean run manifests to input files`)
+
+## Task 116: Proof-Grade Candidate Count Read Model
+
+- [x] Confirm no earlier `[ ]`, `[~]`, or `Commit: pending` task item remained before opening Task 116.
+- [x] Re-read Goal 3 required context and confirm the current repository state instead of relying on prior memory.
+- [x] Add a failing regression proving read-model summaries must distinguish raw `candidate_kernel_checked` state from service-owned manifest-verified kernel checks.
+- [x] Implement a shared candidate proof-grade evidence summarizer that treats stale/tampered LeanRunManifest evidence as non-proof-grade while preserving raw candidate-state counts.
+- [x] Write raw/proof-grade count semantics and candidate id lists into both `candidate_generation.json` and `candidate_verification.json`.
+- [x] Extend live campaign regression coverage so stage artifacts expose `raw_candidate_state_only` and `service_owned_manifest_verified` semantics explicitly.
+- [x] Run focused Task116/Task109/Task115/Task113/Task114/Task111 regressions plus package build/typecheck/default-test gates.
+
+Completion record:
+
+- Work done: confirmed `main` was clean after Task115 and treated the tracker next step as authoritative. Added `goal3-task116-proof-grade-candidate-counts.test.mjs`; RED showed `summarizeCandidateProofGradeEvidence` did not exist. Implemented `candidate-proof-grade-summary.ts`, which counts raw `candidate_kernel_checked` candidates separately from candidates whose manifest evidence passes `hasVerifiedServiceOwnedLeanManifestEvidence()`. A stale/tampered manifest now contributes to `kernel_checked_candidates` but not to `proof_grade_kernel_checked_candidates`. Wired the summary into campaign `candidate_generation.json` and `candidate_verification.json`, and extended the Task109 live campaign test so the produced stage artifacts carry both count semantics and candidate id lists.
+- Verification evidence: TDD RED was observed before implementation: `node services/comathd/tests/unit/goal3-task116-proof-grade-candidate-counts.test.mjs` failed because `../../dist/index.js` did not export `summarizeCandidateProofGradeEvidence`. After implementation, `corepack pnpm --dir services/comathd build` exited 0. Focused regressions exited 0: Task116, Task109, Task115, Task113, Task114, and Task111. Package/root gates exited 0: `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, `corepack pnpm build`, `corepack pnpm typecheck`, `corepack pnpm test`, and `git diff --check` with Windows LF-to-CRLF warnings only.
+- Residual risk: Goal 3 remains incomplete. Task116 prevents read-model/stage-summary overclaiming from raw candidate state, but it does not enforce append-only manifest storage at the filesystem layer, implement OS-level sandboxing, complete richer Lean/mathlib dependency fetching, synthesize nontrivial theorem proofs, validate the full Pi/Codex lifecycle, or finish final GA audit.
+- Next step: Task117 should continue hardening Lean Authority v3 provenance, with the best next slice being append-only/provenance checks around service-owned LeanRunManifest storage or explicit promotion-visible summary guards that reject stale final evidence after manifest files are rewritten.
+- Commit: pending
