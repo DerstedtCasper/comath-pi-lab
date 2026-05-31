@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
+import { importArtifact } from "../../artifacts/store.js";
 import { appendAuditEvent } from "../../audit/jsonl-writer.js";
 import { applyGatePromotedClaim, getClaim, registerClaim } from "../../claim/claim-store.js";
 import { ComathError } from "../../errors.js";
@@ -1125,6 +1126,104 @@ function assembleFinalGlobalReplayRequestFromAcceptedArtifacts(
   return undefined;
 }
 
+function acceptedFinalReplayTargetExists(projectRoot: string, campaign: ResearchCampaign): boolean {
+  return campaign.accepted_artifacts.some((artifact) => {
+    if (artifact.project_id !== campaign.project_id) {
+      return false;
+    }
+    const payload = readAcceptedArtifactJson(projectRoot, artifact);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return false;
+    }
+    const record = payload as Record<string, unknown>;
+    return (
+      record.schema_version === "comath.campaign_final_replay_target.v1" &&
+      record.campaign_id === campaign.campaign_id &&
+      record.claim_id === campaign.root_claim_id
+    );
+  });
+}
+
+async function produceFinalReplayTargetFromAcceptedMaterials(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  actor: string;
+}): Promise<
+  | {
+      targetPath: string;
+      targetArtifact: ArtifactRef;
+      sourceMaterialArtifact: ArtifactRef;
+    }
+  | undefined
+> {
+  if (artifactExists(input.projectRoot, campaignRel(input.campaign, "final_replay_request.json"))) {
+    return undefined;
+  }
+  if (acceptedFinalReplayTargetExists(input.projectRoot, input.campaign)) {
+    return undefined;
+  }
+  for (const artifact of input.campaign.accepted_artifacts) {
+    if (artifact.project_id !== input.campaign.project_id) {
+      continue;
+    }
+    const payload = readAcceptedArtifactJson(input.projectRoot, artifact);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      continue;
+    }
+    const record = payload as Record<string, unknown>;
+    if (record.schema_version !== "comath.campaign_final_replay_material.v1") {
+      continue;
+    }
+    if (
+      record.campaign_id !== input.campaign.campaign_id ||
+      record.claim_id !== input.campaign.root_claim_id ||
+      record.obligation_id !== input.obligation.obligation_id ||
+      record.artifact_role !== "final_replay_material_source" ||
+      record.proof_authority !== "none" ||
+      record.can_promote_claim !== false
+    ) {
+      throw new Error("accepted_final_replay_material_identity_mismatch");
+    }
+    const replayRequest = {
+      schema_version: "comath.campaign_final_global_replay_request.v1",
+      claim_id: input.campaign.root_claim_id,
+      packaging_scope: "campaign",
+      lean_project: objectRecord(record.lean_project, "accepted_final_replay_material.lean_project")
+    };
+    parseFinalGlobalReplayRequestPayload({
+      projectRoot: input.projectRoot,
+      campaign: input.campaign,
+      raw: replayRequest,
+      expectedObligation: input.obligation
+    });
+    const targetPath = writeSimpleStageArtifact(input.projectRoot, input.campaign, "generated_final_replay_target.json", {
+      schema_version: "comath.campaign_final_replay_target.v1",
+      campaign_id: input.campaign.campaign_id,
+      claim_id: input.campaign.root_claim_id,
+      obligation_id: input.obligation.obligation_id,
+      artifact_role: "final_replay_request_source",
+      source_material_artifact_id: artifact.id,
+      source_material_artifact_sha256: artifact.sha256,
+      source_material_artifact_path: normalizeRelPath(artifact.path),
+      produced_by: "comathd.final_static_audit_replay_target_producer",
+      replay_request: replayRequest,
+      proof_authority: "none",
+      can_promote_claim: false,
+      created_at: now()
+    });
+    const targetArtifact = await importArtifact({
+      projectRoot: input.projectRoot,
+      project_id: input.campaign.project_id,
+      source_path: targetPath,
+      kind: "code",
+      actor: input.actor
+    });
+    return { targetPath, targetArtifact, sourceMaterialArtifact: artifact };
+  }
+  return undefined;
+}
+
 function readFinalGlobalReplayRequest(projectRoot: string, campaign: ResearchCampaign): FinalGlobalReplayRequest | undefined {
   const requestRel = campaignRel(campaign, "final_replay_request.json");
   if (artifactExists(projectRoot, requestRel)) {
@@ -1789,6 +1888,24 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "final_static_audit") {
+    let producedTarget: Awaited<ReturnType<typeof produceFinalReplayTargetFromAcceptedMaterials>>;
+    try {
+      producedTarget = await produceFinalReplayTargetFromAcceptedMaterials({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor
+      });
+    } catch (error) {
+      return blockCampaignAtFinalReplay({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor,
+        stage: "final_static_audit",
+        reason: `service-owned Lean Authority v3 replay target production failed: ${error instanceof Error ? error.message : "unknown_error"}`
+      });
+    }
     const auditPlanRel = writeSimpleStageArtifact(input.project_root, campaign, "final_static_audit_plan.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
@@ -1798,15 +1915,26 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         "dependency_closure.json",
         "statement_equivalence.json"
       ],
+      produced_final_replay_target_path: producedTarget?.targetPath ?? null,
+      produced_final_replay_target_artifact_id: producedTarget?.targetArtifact.id ?? null,
+      source_final_replay_material_artifact_id: producedTarget?.sourceMaterialArtifact.id ?? null,
       next_stage_runs_clean_replay: true,
       created_at: now()
     });
+    const stageArtifacts = [
+      auditPlanRel,
+      producedTarget?.targetPath,
+      producedTarget?.targetArtifact.path
+    ].filter((path): path is string => typeof path === "string" && path.length > 0);
     const next = writeCampaign(
       input.project_root,
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "final_global_replay",
-        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "final_static_audit", [auditPlanRel])],
+        accepted_artifacts: producedTarget
+          ? [...campaign.accepted_artifacts, producedTarget.targetArtifact]
+          : campaign.accepted_artifacts,
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "final_static_audit", stageArtifacts)],
         next_actions: ["run final global Lean replay and claim promotion gate"]
       }),
       actor
