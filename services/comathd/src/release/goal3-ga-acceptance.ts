@@ -2384,6 +2384,66 @@ export function executeGoal3GaPositiveMatrixLeanAuthorityReplay(input: {
   });
 }
 
+export function goal3RealLeanReplaySliceEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env.COMATH_ENABLE_GOAL3_REAL_LEAN_REPLAY === "1";
+}
+
+export function executeGoal3GaPositiveMatrixRealLeanReplaySlice(input: {
+  projectRoot: string;
+  taskId: string;
+  claimId: string;
+  materialSource: Goal3GaDeclaredReplayMaterialSource;
+  realReplayEnabled?: boolean;
+}): Goal3GaPositiveMatrixLeanAuthorityExecutorReport {
+  const task = taskByIdOrThrow(input.taskId);
+  if (task.task_id === "PM-001") {
+    throw new Error("invalid_positive_matrix_lean_authority_executor_task");
+  }
+  if (input.materialSource.task_id !== task.task_id) {
+    throw new Error("invalid_positive_matrix_material_source_task");
+  }
+
+  const materialCheck = validateDeclaredReplayMaterialSource({
+    projectRoot: input.projectRoot,
+    task,
+    source: input.materialSource
+  });
+  if (materialCheck.status !== "ready_for_live_executor") {
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "declared_replay_material_missing",
+      blocker_detail: `${task.task_id} declared replay material is missing, outside the project root, or incomplete.`,
+      attempted_commands: []
+    });
+  }
+
+  const enabled = input.realReplayEnabled ?? goal3RealLeanReplaySliceEnabled();
+  if (!enabled) {
+    return blockedPositiveMatrixExecutorReport({
+      projectRoot: input.projectRoot,
+      task,
+      claimId: input.claimId,
+      materialSource: input.materialSource,
+      materialCheck,
+      blocker_code: "live_replay_executor_not_configured",
+      blocker_detail: `${task.task_id} real Lean/mathlib replay slice is environment-gated; set COMATH_ENABLE_GOAL3_REAL_LEAN_REPLAY=1 to run service-owned lean/lake commands without injected replay stubs.`,
+      attempted_commands: []
+    });
+  }
+
+  return executeGoal3GaPositiveMatrixLeanAuthorityReplay({
+    projectRoot: input.projectRoot,
+    taskId: input.taskId,
+    claimId: input.claimId,
+    materialSource: input.materialSource,
+    completeFinalAuthorityEvidence: true
+  });
+}
+
 export function executeGoal3GaPositiveMatrixLeanAuthorityReplayTranche(input: {
   projectRoot: string;
   startTaskId: string;
@@ -2958,6 +3018,34 @@ function verifyOptionalFinalAuthorityBindings(input: {
   return submitted;
 }
 
+function hasSemanticallyBoundFinalLeanRun(input: {
+  projectRoot: string;
+  claimId: string;
+  leanRunManifestPaths: string[];
+  finalReplayRecord: Record<string, unknown>;
+}): boolean {
+  const finalReplayCommand = Array.isArray(input.finalReplayRecord.command)
+    ? input.finalReplayRecord.command.filter((part): part is string => typeof part === "string")
+    : [];
+  return input.leanRunManifestPaths.some((manifestPath) => {
+    const manifest = readJsonInsideProject(input.projectRoot, manifestPath);
+    const record = manifest && typeof manifest === "object" ? (manifest as Record<string, unknown>) : {};
+    const command = Array.isArray(record.command) ? record.command.filter((part): part is string => typeof part === "string") : [];
+    return (
+      record.schema_version === "comath.lean_run_manifest.v3" &&
+      record.runner === "comathd.LeanRunner" &&
+      record.claim_id === input.claimId &&
+      record.campaign_id === input.finalReplayRecord.campaign_id &&
+      record.purpose === "final_replay" &&
+      record.exit_code === 0 &&
+      record.proof_authority === "lean_kernel_check" &&
+      record.network_policy === "disabled" &&
+      record.cwd === input.finalReplayRecord.clean_workspace_path &&
+      canonicalJson(command) === canonicalJson(finalReplayCommand)
+    );
+  });
+}
+
 function verifyFinalAuthorityEvidenceSourceReportV3(input: {
   projectRoot: string;
   taskId: string;
@@ -3007,6 +3095,16 @@ function verifyFinalAuthorityEvidenceSourceReportV3(input: {
       canonicalJson(finalReplayLeanRunManifestPaths.map((path) => path.replace(/\\/g, "/")).sort())
   ) {
     missing.add("lean_run_manifest_v3");
+  }
+  if (finalReplayPassed) {
+    if (!hasSemanticallyBoundFinalLeanRun({
+      projectRoot: input.projectRoot,
+      claimId: input.claimId,
+      leanRunManifestPaths,
+      finalReplayRecord
+    })) {
+      missing.add("lean_run_manifest_v3");
+    }
   }
 
   if (!structuredAuditPath || !reportPasses(input.projectRoot, structuredAuditPath)) {
@@ -3534,6 +3632,14 @@ export function packageGoal3GaPm002FinalAuthorityEvidence(input: {
     finalReplayRecord.proof_authority === "lean_kernel_clean_replay";
   if (!finalReplayVerification.ok || !finalReplayPassed) {
     missing.add("final_replay_manifest_v3");
+  }
+  if (finalReplayPassed && !hasSemanticallyBoundFinalLeanRun({
+    projectRoot: input.projectRoot,
+    claimId: String(finalReplayRecord.claim_id ?? ""),
+    leanRunManifestPaths,
+    finalReplayRecord
+  })) {
+    missing.add("lean_run_manifest_v3");
   }
 
   const finalReplay = finalReplayManifest && typeof finalReplayManifest === "object" ? (finalReplayManifest as { report_paths?: Record<string, unknown> }) : null;

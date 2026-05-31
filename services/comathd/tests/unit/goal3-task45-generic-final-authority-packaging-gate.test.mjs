@@ -8,6 +8,7 @@ import {
   applyGatePromotedClaim,
   createFinalReplayManifestV3,
   createGoal3GaPm002ReplayMaterialPackPreflight,
+  createServiceOwnedLeanRunManifestV3,
   executeGoal3GaPm002LeanAuthorityReplay,
   importArtifact,
   initProject,
@@ -47,7 +48,7 @@ try {
     runReplayCommand: (command) => ({ exit_code: 0, stdout: `${command.join(" ")} ok`, stderr: "" })
   });
   const commandBlocker = JSON.parse(readFileSync(join(projectRoot, commandReport.executor_blocker_path), "utf8"));
-  const leanRunManifestPaths = commandBlocker.lean_run_manifest_paths;
+  let leanRunManifestPaths = commandBlocker.lean_run_manifest_paths;
   assert.ok(leanRunManifestPaths.length > 0);
 
   const claimStatement = "theorem Goal3Positive045 (M : Type) [Monoid M] (x : M) : 1 * x = x";
@@ -93,6 +94,34 @@ try {
     `.comath/evidence/${claim.id}/lean/statement_equivalence.json`,
     JSON.stringify({ result: "pass", locked_statement_hash: claim.statement_hash, hard_vetoes: [] })
   );
+  const finalRunManifest = createServiceOwnedLeanRunManifestV3({
+    projectRoot,
+    run_id: "LRUN-004503",
+    claim_id: claim.id,
+    campaign_id: "CAM-0045",
+    purpose: "final_replay",
+    command: ["lake", "build", "MathResearch"],
+    cwd: cleanRoot,
+    input_files: [target, audit, formalSpec, lakefile, toolchain, lakeManifest],
+    lean_version: "4.23.0",
+    lake_version: "5.0.0",
+    elan_toolchain: "leanprover/lean4:v4.23.0",
+    lean_toolchain_file: toolchain,
+    lake_manifest_file: lakeManifest,
+    network_policy: "disabled",
+    sandbox: "none",
+    exit_code: 0,
+    stdout_path: stdout,
+    stderr_path: stderr,
+    started_at: new Date().toISOString(),
+    ended_at: new Date().toISOString(),
+    proof_authority: "lean_kernel_check"
+  });
+  const finalRunManifestRel = `.comath/evidence/${claim.id}/lean/LRUN-004503.manifest.json`;
+  writeProjectFile(finalRunManifestRel, `${JSON.stringify(finalRunManifest, null, 2)}\n`);
+  leanRunManifestPaths = [...leanRunManifestPaths, finalRunManifestRel];
+  commandBlocker.lean_run_manifest_paths = leanRunManifestPaths;
+  writeFileSync(join(projectRoot, commandReport.executor_blocker_path), `${JSON.stringify(commandBlocker, null, 2)}\n`, "utf8");
 
   const finalReplayManifest = createFinalReplayManifestV3({
     projectRoot,

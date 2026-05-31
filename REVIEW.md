@@ -1,3 +1,46 @@
+## Goal 3 Task 86 / Environment-Gated Real Lean Replay Slice
+
+Scope: make the PM-084 real Lean/mathlib replay path explicit and fail-closed by default, and harden final-authority packaging against same-path LeanRunManifest semantic drift.
+
+Changes:
+
+- Added `executeGoal3GaPositiveMatrixRealLeanReplaySlice()` and `goal3RealLeanReplaySliceEnabled()`.
+- The real slice validates declared PM material but returns a replayable blocker unless explicitly enabled by `COMATH_ENABLE_GOAL3_REAL_LEAN_REPLAY=1` or a service-owned enable flag.
+- The real slice does not accept injected `runReplayCommand` stubs; enabled execution uses the existing service-owned Lean/Lake runner path.
+- Hardened PM-002 and generic final-authority source verification so a submitted LeanRunManifest set must contain a final replay run with matching claim, campaign, clean cwd, command, disabled network policy, zero exit code, and `proof_authority: lean_kernel_check`.
+- Updated older Task42/44/45 positive fixtures to include explicit final replay LeanRunManifest evidence rather than relying on check/build manifests.
+- Added `goal3-task86-real-lean-replay-slice-gate.test.mjs` and wired it into the default `@comath/comathd` test chain.
+
+TDD evidence:
+
+```text
+node services/comathd/tests/unit/goal3-task86-real-lean-replay-slice-gate.test.mjs
+Initial RED result: exit 1; ../../dist/index.js did not export executeGoal3GaPositiveMatrixRealLeanReplaySlice.
+
+node services/comathd/tests/unit/goal3-task86-real-lean-replay-slice-gate.test.mjs
+Second RED result: exit 1; a same-path final LeanRunManifest mutated to purpose=build/proof_authority=none/command=echo still returned verified_final_authority_evidence.
+```
+
+Verification:
+
+- `corepack pnpm --filter @comath/comathd build`
+- `node services/comathd/tests/unit/goal3-task86-real-lean-replay-slice-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task42-pm002-final-authority-packaging.test.mjs`
+- `node services/comathd/tests/unit/goal3-task44-pm002-packaging-promotion-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task85-pm084-live-final-authority-completion.test.mjs`
+- `node services/comathd/tests/unit/goal3-task84-structured-audit-run-binding.test.mjs`
+- `node services/comathd/tests/unit/goal3-task45-generic-final-authority-packaging-gate.test.mjs`
+- `node services/comathd/tests/unit/goal3-task8-lean-authority-v3-final-replay.test.mjs`
+- `corepack pnpm --filter @comath/comathd typecheck`
+- `corepack pnpm --filter @comath/comathd test`
+- `corepack pnpm build`
+- `corepack pnpm typecheck`
+- `corepack pnpm test`
+
+Boundary notes: Task 86 does not add theorem recognition, Nat-linear synthesis, default assumptions, or a new proof authority. Without explicit real-replay enablement it records only a blocker. Verified packaging still cannot directly promote a claim.
+
+Residual risks: Task 86 does not make default CI a real Lean/mathlib proof authority run. The real replay path is explicit and environment-gated; broader PM matrix live replay coverage and final GA validation remain open.
+
 ## Goal 2 Task 33 / Phase 81 Controlled Nat Linear Identity Synthesis
 
 Scope: move broad theorem synthesis one product step beyond the Phase 76 registered Nat target table by adding a controlled one-variable Nat linear identity synthesizer.

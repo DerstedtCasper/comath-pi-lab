@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import {
   createFinalReplayManifestV3,
   createGoal3GaPm002ReplayMaterialPackPreflight,
+  createServiceOwnedLeanRunManifestV3,
   executeGoal3GaPm002LeanAuthorityReplay,
   packageGoal3GaPm002FinalAuthorityEvidence,
   verifyFinalReplayManifestV3,
@@ -91,6 +92,35 @@ writeProjectFile(
 const axiomProfile = writeProjectFile(`.comath/evidence/${claimId}/lean/axiom_profile.json`, JSON.stringify({ result: "pass", detected_axioms: [], hard_vetoes: [] }));
 const dependencyClosure = writeProjectFile(`.comath/evidence/${claimId}/lean/dependency_closure.json`, JSON.stringify({ result: "pass", hard_vetoes: [] }));
 const statementEquivalence = writeProjectFile(`.comath/evidence/${claimId}/lean/statement_equivalence.json`, JSON.stringify({ result: "pass", hard_vetoes: [] }));
+const finalRunManifest = createServiceOwnedLeanRunManifestV3({
+  projectRoot,
+  run_id: "LRUN-0003",
+  claim_id: claimId,
+  campaign_id: "CAM-0002",
+  purpose: "final_replay",
+  command: ["lake", "build", "MathResearch"],
+  cwd: cleanRoot,
+  input_files: [target, audit, formalSpec, lakefile, toolchain, lakeManifest],
+  lean_version: "4.23.0",
+  lake_version: "5.0.0",
+  elan_toolchain: "leanprover/lean4:v4.23.0",
+  lean_toolchain_file: toolchain,
+  lake_manifest_file: lakeManifest,
+  network_policy: "disabled",
+  sandbox: "none",
+  exit_code: 0,
+  stdout_path: stdout,
+  stderr_path: stderr,
+  started_at: new Date().toISOString(),
+  ended_at: new Date().toISOString(),
+  proof_authority: "lean_kernel_check"
+});
+const finalRunManifestRel = ".comath/evidence/C-0002/lean/LRUN-0003.manifest.json";
+writeProjectFile(finalRunManifestRel, `${JSON.stringify(finalRunManifest, null, 2)}\n`);
+const commandBlockerPath = commandReport.executor_blocker_path;
+const commandBlocker = JSON.parse(readFileSync(join(projectRoot, commandBlockerPath), "utf8"));
+commandBlocker.lean_run_manifest_paths = [...commandBlocker.lean_run_manifest_paths, finalRunManifestRel];
+writeProjectFile(commandBlockerPath, `${JSON.stringify(commandBlocker, null, 2)}\n`);
 
 const sourceHashesBefore = {
   "MathResearch/Target.lean": hashRef(target),
