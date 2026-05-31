@@ -280,6 +280,30 @@ export function verifyFinalReplayManifestV3(
     vetoes.push(error instanceof Error ? error.message : "final_replay_clean_workspace_unreadable");
   }
 
+  const artifactPaths: Record<string, string> = {
+    stdout: manifest.stdout_path,
+    stderr: manifest.stderr_path,
+    static_audit: manifest.report_paths.static_audit,
+    axiom_profile: manifest.report_paths.axiom_profile,
+    dependency_closure: manifest.report_paths.dependency_closure,
+    statement_equivalence: manifest.report_paths.statement_equivalence
+  };
+  for (const [key, relativePath] of Object.entries(artifactPaths)) {
+    const expected = manifest.artifact_hashes[key as keyof typeof manifest.artifact_hashes];
+    if (!expected) {
+      vetoes.push("final_replay_artifact_hash_missing");
+      continue;
+    }
+    try {
+      const actual = reportHash(projectRoot, relativePath);
+      if (actual.sha256 !== expected.sha256 || actual.size_bytes !== expected.size_bytes) {
+        vetoes.push("final_replay_artifact_hash_mismatch");
+      }
+    } catch {
+      vetoes.push("final_replay_artifact_unreadable");
+    }
+  }
+
   return { ok: vetoes.length === 0, vetoes: Array.from(new Set(vetoes)) };
 }
 
