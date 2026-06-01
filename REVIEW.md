@@ -1,3 +1,28 @@
+# Goal 3 Task 151 / Pi-Codex API Probe Release Consumer
+
+Scope: expose the Task150 service-owned production Codex API account/network validation probe through the Pi release consumer surface, without letting Pi carry API credentials, write `.comath/` directly, overclaim proof authority, or certify GA.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed `main` was clean at `b730265` before opening Task151.
+- Audited Task150 service route `POST /release/pi-codex-lifecycle/codex-api-probe`, Task147 release consumer patterns, Phase6 tool registration, and Phase26 runtime registration.
+- Added `goal3-task151-pi-codex-api-probe-consumer.test.mjs`.
+- RED showed `comath.release.piCodexApiProbe` was not registered in the Pi extension.
+- Added the mutating `comath.release.piCodexApiProbe` tool, host-confirmed runtime execution, public sanitizer coverage, `/cm:release codex-api-probe` command parsing, runtime-registration subcommand metadata, and default Pi package test wiring.
+- The Pi request forwards only project metadata and optional validation id to `comathd`; API keys remain service-owned env/config and are not accepted from Pi payloads.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task151-pi-codex-api-probe-consumer.test.mjs` failed because `comath.release.piCodexApiProbe` was not registered.
+- GREEN focused test exited 0: Task151 Pi/Codex API probe consumer.
+- GREEN adjacent tests exited 0: Task147 Pi/Codex lifecycle consumer, Phase6 extension, Phase26 Pi runtime registration, and Task150 service Codex API account/network probe.
+- Package gate exited 0: `corepack pnpm --filter @comath/pi-extension test`, with Task151 discovered by the default Pi extension runner.
+
+Boundary notes: Task151 is a Pi consumer and command exposure task only. It calls the service-owned Task150 probe route through host-confirmed Pi tooling and sanitizes public notifications. It does not validate a real Pi host install/runtime registration path, does not carry or inspect Codex API credentials, does not promote claims, and cannot certify GA.
+
+Residual risks: Goal 3 remains incomplete. Direct real-Pi install/runtime-registration probes, OS-level adapter isolation, richer operator UI, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 150 / Production Codex API Account-Network Probe
 
 Scope: move from durable `comathd` service lifecycle evidence to a service-owned production Codex API account/network validation probe that can produce the `codex_validation_report` artifact consumed by Task148, without claiming proof authority or GA certification.

@@ -144,6 +144,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.sourceReviewPublicArchive",
   "comath.release.publicArchiveReview",
   "comath.release.piCodexLifecycleReview",
+  "comath.release.piCodexApiProbe",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -430,6 +431,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.sourceReviewPublicArchive" ||
     name === "comath.release.publicArchiveReview" ||
     name === "comath.release.piCodexLifecycleReview" ||
+    name === "comath.release.piCodexApiProbe" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -934,6 +936,20 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
           : { review_id: readString(input, "review_id", { optional: true }) }),
         install_session_evidence: readRecord(input, "install_session_evidence"),
         codex_evidence: readRecord(input, "codex_evidence")
+      })
+    );
+  }
+
+  if (name === "comath.release.piCodexApiProbe") {
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/codex-api-probe", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: readString(input, "actor"),
+        ...(readString(input, "validation_id", { optional: true }) === undefined
+          ? {}
+          : { validation_id: readString(input, "validation_id", { optional: true }) })
       })
     );
   }
@@ -1596,6 +1612,18 @@ export function createComathTools(): ToolDescriptor[] {
             }
           }
         }
+      })
+    },
+    {
+      name: "comath.release.piCodexApiProbe",
+      description:
+        "Run the service-owned production Codex API account/network validation probe for Pi/Codex lifecycle readiness.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "actor"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        actor: stringProp,
+        validation_id: stringProp
       })
     }
   ].map((tool) =>
@@ -2582,6 +2610,27 @@ async function handleReleaseCommand(
           review_id: optionValue(parsed.args, "--review-id"),
           install_session_evidence: parsePiCodexLifecycleInstallSessionEvidence(parsed.args),
           codex_evidence: parsePiCodexLifecycleCodexEvidence(parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "codex-api-probe") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.piCodexApiProbe");
+    if (!tool) {
+      throw new Error("Pi/Codex Codex API probe tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          validation_id: optionValue(parsed.args, "--validation-id")
         },
         ctx
       )
