@@ -1,3 +1,30 @@
+# Goal 3 Task 140 / Pi Relative Snapshot Manifest Contract
+
+Scope: audit the public-download presentation consumer side after Task139's project-relative snapshot export path contract, with emphasis on Pi-host UX for project-relative snapshot manifest paths and without weakening internal restore or replay fidelity.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task before Task140.
+- Audited Pi snapshot tool schemas, live `/cm:snapshot` command handling, runtime registration metadata, and adjacent snapshot/replay sanitizer tests after Task139.
+- Found that public `/snapshot/export` now returns project-relative manifest paths, but Pi `comath.snapshot.verify`, `comath.snapshot.restore`, `comath.replay.verifyManifest`, and `/cm:snapshot verify|restore|verify-manifest` still did not advertise or forward `project_root`.
+- Added `goal3-task140-pi-relative-snapshot-manifest-contract.test.mjs`.
+- RED showed `comath.snapshot.verify` did not advertise optional `project_root`; after the first fix, RED also showed `/cm:snapshot` did not advertise `verify-manifest`.
+- Hardened Pi tool execution and live command handling so relative public snapshot manifest paths are submitted with `project_root` when available while absolute manifest paths remain compatible.
+- Advertised `verify-manifest` in `/cm:snapshot` runtime metadata and wired the Task140 regression into the Pi extension default test chain.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task140-pi-relative-snapshot-manifest-contract.test.mjs` first failed because `comath.snapshot.verify` lacked `project_root`, then failed because `/cm:snapshot` did not advertise `verify-manifest`.
+- GREEN focused tests exited 0: Task140, Task131 Pi snapshot runtime consistency, Phase59 Pi product surface tool routing, and Task130 Pi snapshot/replay public authority sanitizer.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension typecheck` and `corepack pnpm --filter @comath/pi-extension test`, with Task140 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task140 is Pi extension consumer/metadata hardening only. It does not change service-side snapshot resolution, persisted snapshot manifests, direct internal restore fidelity, public download non-restorability, replay semantics, or proof-authority gates.
+
+Residual risks: Goal 3 remains incomplete. Task140 closes the discovered Pi-host project-relative snapshot manifest UX gap, but it does not audit any future source-review package assembly route, generated HTML/Markdown download renderers, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+
 # Goal 3 Task 139 / Public Snapshot Export Path Contract
 
 Scope: audit remaining source-review/package assembly or public download route surfaces for host-path, metadata, and non-authority contract leaks after the paper and snapshot route hardening line, without weakening internal restore or replay fidelity.
