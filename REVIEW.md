@@ -1,3 +1,30 @@
+# Goal 3 Task 139 / Public Snapshot Export Path Contract
+
+Scope: audit remaining source-review/package assembly or public download route surfaces for host-path, metadata, and non-authority contract leaks after the paper and snapshot route hardening line, without weakening internal restore or replay fidelity.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task item before Task139.
+- Audited the remaining public snapshot download route surface after Task137/Task138 hardening and found `POST /snapshot/export` still returned the direct `exportSnapshot()` result, including absolute `snapshot_root`, `manifest_path`, and `replay_manifest_path`.
+- Added `goal3-task139-public-snapshot-export-path-contract.test.mjs`.
+- RED showed `/snapshot/export` lacked the expected non-authoritative public archive contract and still exposed internal route shape before any project-relative path checks could pass.
+- Wrapped public `/snapshot/export` responses so they expose project-relative snapshot paths and explicit `proof_authority: none`, `can_restore: false`, and `exposes_host_paths: false` public download semantics.
+- Added optional `project_root` handling to public snapshot verify/restore/replay routes so project-relative manifest paths returned by public export can still be verified while absolute internal manifest inputs remain supported.
+- Preserved direct internal `exportSnapshot()` fidelity, including absolute local paths and explicit `internal_restore` byte-for-byte restore material.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task139-public-snapshot-export-path-contract.test.mjs` failed because `public_archive_contract` was missing from `/snapshot/export`.
+- GREEN focused tests exited 0: Task139, Task133 public snapshot restore contract, Task134 release public archive contract, Task138 snapshot route public contract, Phase16 snapshot/replay, and Phase55 runner cross-machine replay.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task139 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task139 is public route response hardening only. It does not rewrite persisted snapshot manifests, does not change public snapshot copy contents, does not weaken direct `internal_restore` fidelity, and does not promote snapshot or replay diagnostics into proof authority.
+
+Residual risks: Goal 3 remains incomplete. Task139 closes the discovered public snapshot export path/contract leak, but it does not audit any future source-review package assembly route, generated HTML/Markdown download renderers, real Pi-host UX around project-relative snapshot manifests, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+
 # Goal 3 Task 138 / Snapshot Route Public Path Contract
 
 Scope: audit snapshot verify/restore and replay-verify public route payloads for path/metadata exposure, caller-supplied absolute path echoes, and public-vs-internal restore semantics while preserving explicit `internal_restore` byte-for-byte fidelity.
