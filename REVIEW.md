@@ -1,3 +1,29 @@
+# Goal 3 Task 146 / Pi-Codex Lifecycle Readiness Gate
+
+Scope: move from public archive hardening to the real-host Pi/Codex lifecycle residual blocker by adding a service-owned readiness gate that refuses to treat fake-host install-session evidence as full production lifecycle validation.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `main` was clean with no earlier `[ ]`, `[~]`, or `Commit: pending` tracker item before opening Task146.
+- Audited Phase45 local Pi/comathd install-session e2e, Phase43 packaged Codex adapter lifecycle metadata, Phase53 installed Codex CLI validation, and the TODO/REVIEW residual-risk wording around real-host Pi UX and production Codex validation.
+- Added `goal3-task146-pi-codex-lifecycle-readiness.test.mjs`.
+- RED showed `reviewPiCodexLifecycleReadiness` was not exported by `comathd`.
+- Added `reviewPiCodexLifecycleReadiness()` and `POST /release/pi-codex-lifecycle/review`.
+- The review writes `.comath/release/pi-codex-lifecycle/<id>/review.json`, records `proof_authority: "none"`, `can_promote_claim: false`, and `can_certify_ga: false`, and vetoes missing real Pi host validation, ephemeral/non-durable service lifecycle evidence, and missing production Codex account/network validation.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task146-pi-codex-lifecycle-readiness.test.mjs` failed because `../../dist/index.js` did not export `reviewPiCodexLifecycleReadiness`.
+- GREEN focused tests exited 0: Task146 Pi/Codex lifecycle readiness, Phase53 installed Codex CLI validation, and Phase43 agent adapter package.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, and `corepack pnpm --filter @comath/pi-extension test`, with Task146 discovered by the default comathd runner.
+- Post-doc `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants, and `Test-Path -LiteralPath .comath` returned `False`.
+- Code commit: `6bc1ebb` (`Add Pi Codex lifecycle readiness gate`).
+
+Boundary notes: Task146 is a lifecycle readiness gate and blocker-evidence surface only. It does not run a real Pi host, does not install a durable service, does not validate a production Codex account/network path, does not expose a Pi UI walkthrough, does not promote claims, and does not certify GA.
+
+Residual risks: Goal 3 remains incomplete. Task146 prevents fake-host and ephemeral local install-session evidence from satisfying full lifecycle readiness, but actual real-host Pi validation, durable service start/stop/restart validation, production Codex account/network validation, richer Lean/mathlib replay, nontrivial theorem synthesis, OS-level sandboxing, and final GA audit remain open.
+
 # Goal 3 Task 145 / Public Archive Notarization Policy Evidence
 
 Scope: move the public source-review archive line to the next highest-risk release blocker by adding explicit tamper-evident/notarization-policy evidence while preserving the public/internal archive authority boundary.
