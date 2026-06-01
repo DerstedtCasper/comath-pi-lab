@@ -145,6 +145,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.publicArchiveReview",
   "comath.release.piCodexLifecycleReview",
   "comath.release.piCodexApiProbe",
+  "comath.release.piRealPiRuntimeProbe",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -432,6 +433,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.publicArchiveReview" ||
     name === "comath.release.piCodexLifecycleReview" ||
     name === "comath.release.piCodexApiProbe" ||
+    name === "comath.release.piRealPiRuntimeProbe" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -954,6 +956,26 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.piRealPiRuntimeProbe") {
+    const probeId = readString(input, "probe_id", { optional: true });
+    const piHostKind = readString(input, "pi_host_kind", { optional: true });
+    const timeoutMs = readNumber(input, "timeout_ms");
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/real-pi-runtime-probe", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: readString(input, "actor"),
+        ...(probeId === undefined ? {} : { probe_id: probeId }),
+        pi_host_label: readString(input, "pi_host_label"),
+        ...(piHostKind === undefined ? {} : { pi_host_kind: piHostKind }),
+        session_kind: readString(input, "session_kind"),
+        ...(timeoutMs === undefined ? {} : { timeout_ms: timeoutMs }),
+        commands: readRecord(input, "commands")
+      })
+    );
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -1001,7 +1023,18 @@ function toolLabel(name: string): string {
 export function createComathTools(): ToolDescriptor[] {
   const stringProp = { type: "string" };
   const stringArrayProp = { type: "array", items: stringProp };
+  const numberProp = { type: "number" };
   const agentAdapterBackendProp = { type: "string", enum: ["bundled", "external", "codex-api"] };
+  const realPiRuntimeProbeCommandProp = {
+    type: "object",
+    required: ["program"],
+    properties: {
+      program: stringProp,
+      args: stringArrayProp,
+      expected_exit_code: numberProp,
+      timeout_ms: numberProp
+    }
+  };
   return [
     {
       name: "comath.project.open",
@@ -1625,6 +1658,31 @@ export function createComathTools(): ToolDescriptor[] {
         actor: stringProp,
         validation_id: stringProp
       })
+    },
+    {
+      name: "comath.release.piRealPiRuntimeProbe",
+      description:
+        "Run the service-owned real-Pi install/runtime-registration probe for Pi/Codex lifecycle readiness.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "actor", "pi_host_label", "session_kind", "commands"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        actor: stringProp,
+        probe_id: stringProp,
+        pi_host_label: stringProp,
+        pi_host_kind: { type: "string", enum: ["real_pi_host"] },
+        session_kind: { type: "string", enum: ["real_pi_host_manual_install", "real_pi_host_automated_install"] },
+        timeout_ms: numberProp,
+        commands: {
+          type: "object",
+          required: ["install", "runtime_registration", "host_confirmation"],
+          properties: {
+            install: realPiRuntimeProbeCommandProp,
+            runtime_registration: realPiRuntimeProbeCommandProp,
+            host_confirmation: realPiRuntimeProbeCommandProp
+          }
+        }
+      })
     }
   ].map((tool) =>
     tool.mutates
@@ -1834,6 +1892,33 @@ function parsePiCodexLifecycleCodexEvidence(args: string[]): Record<string, unkn
       optionValue(args, "--codex-api-account-network-validation"),
       "codex_api_account_network_validation"
     )
+  };
+}
+
+function parsePiRealPiRuntimeProbeCommand(
+  args: string[],
+  optionPrefix: "install" | "runtime-registration" | "host-confirmation",
+  fieldPrefix: string
+): Record<string, unknown> {
+  const expectedExitCode = numberOptionValue(args, `--${optionPrefix}-expected-exit-code`);
+  const timeoutMs = numberOptionValue(args, `--${optionPrefix}-timeout-ms`);
+  return {
+    program: requiredOption(optionValue(args, `--${optionPrefix}-program`), `${fieldPrefix}_program`),
+    args: optionValues(args, `--${optionPrefix}-arg`),
+    ...(expectedExitCode === undefined ? {} : { expected_exit_code: expectedExitCode }),
+    ...(timeoutMs === undefined ? {} : { timeout_ms: timeoutMs })
+  };
+}
+
+function parsePiRealPiRuntimeProbeCommands(args: string[]): Record<string, unknown> {
+  return {
+    install: parsePiRealPiRuntimeProbeCommand(args, "install", "install"),
+    runtime_registration: parsePiRealPiRuntimeProbeCommand(
+      args,
+      "runtime-registration",
+      "runtime_registration"
+    ),
+    host_confirmation: parsePiRealPiRuntimeProbeCommand(args, "host-confirmation", "host_confirmation")
   };
 }
 
@@ -2631,6 +2716,32 @@ async function handleReleaseCommand(
           project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
           actor: actorFrom(options, parsed.args),
           validation_id: optionValue(parsed.args, "--validation-id")
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "real-pi-runtime-probe") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.piRealPiRuntimeProbe");
+    if (!tool) {
+      throw new Error("Pi/Codex real-Pi runtime probe tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          probe_id: optionValue(parsed.args, "--probe-id"),
+          pi_host_label: requiredOption(optionValue(parsed.args, "--pi-host-label"), "pi_host_label"),
+          pi_host_kind: optionValue(parsed.args, "--pi-host-kind") ?? "real_pi_host",
+          session_kind: requiredOption(optionValue(parsed.args, "--session-kind"), "session_kind"),
+          timeout_ms: numberOptionValue(parsed.args, "--timeout-ms"),
+          commands: parsePiRealPiRuntimeProbeCommands(parsed.args)
         },
         ctx
       )

@@ -1,3 +1,28 @@
+# Goal 3 Task 153 / Pi Real-Pi Runtime Probe Release Consumer
+
+Scope: expose the Task152 service-owned real-Pi install/runtime-registration probe through the Pi release consumer surface, without letting Pi write `.comath/` directly, carry secrets, overclaim proof authority, or certify GA.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed Task152 was the latest completed task before opening Task153.
+- Audited Task152 service route `POST /release/pi-codex-lifecycle/real-pi-runtime-probe`, Task147/151 release consumer patterns, and Phase26 runtime-registration guards.
+- Added `goal3-task153-pi-real-pi-runtime-probe-consumer.test.mjs`.
+- RED showed `comath.release.piRealPiRuntimeProbe` was not registered in the Pi extension.
+- Added the mutating `comath.release.piRealPiRuntimeProbe` tool, executable runtime registration, public sanitizer coverage, route dispatch to `POST /release/pi-codex-lifecycle/real-pi-runtime-probe`, `/cm:release real-pi-runtime-probe` command parsing, runtime-registration subcommand metadata, default package test wiring, and the Phase26 executable-tool guard.
+- The Pi payload forwards only project metadata, optional probe id, real-Pi host label/kind/session fields, timeout, and the three operator command specs; `confirmation_id` remains host-injected and is stripped before service dispatch, and API credentials or other secret material are not accepted from Pi payloads.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task153-pi-real-pi-runtime-probe-consumer.test.mjs` failed because `comath.release.piRealPiRuntimeProbe` was not registered.
+- GREEN focused test exited 0: Task153 Pi real-Pi runtime probe consumer.
+- GREEN adjacent tests exited 0: Task147 Pi/Codex lifecycle consumer, Task151 Pi/Codex API probe consumer, and Task152 service real-Pi install/runtime-registration probe.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension typecheck` and `corepack pnpm --filter @comath/pi-extension test`, with Task153 discovered by the default Pi extension runner.
+
+Boundary notes: Task153 is a Pi consumer and command exposure task only. It calls the service-owned Task152 probe route through host-confirmed Pi tooling and sanitizes public notifications. It does not itself prove this workstation ran on a Pi, does not bypass service command allowlists, does not carry credentials, does not promote claims, and cannot certify GA.
+
+Residual risks: Goal 3 remains incomplete. Richer operator UI/manual real-Pi walkthrough, indefinite operator sessions, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 152 / Real-Pi Install Runtime Probe
 
 Scope: add a service-owned non-authoritative producer for real-Pi install/runtime-registration evidence artifacts, without accepting fake Pi host evidence, exposing host paths, promoting proof claims, or certifying GA.
