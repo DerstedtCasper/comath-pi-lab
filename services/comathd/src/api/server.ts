@@ -51,6 +51,7 @@ import {
 import { runV3NegativeGaSlices } from "../release/v3-negative-ga-slices.js";
 import { assembleSourceReviewPublicArchive } from "../release/source-review-public-archive.js";
 import { reviewGoal3PublicArchiveSurfaces } from "../release/public-archive-review.js";
+import { reviewPiCodexLifecycleReadiness } from "../release/pi-codex-lifecycle-readiness.js";
 import {
   buildAgentProfileLaunch,
   buildAgentAdapterPackageLaunch,
@@ -348,6 +349,15 @@ async function route(method: string, path: string, body: unknown, context: Route
       (payload) => {
         const body = payload as Parameters<typeof reviewGoal3PublicArchiveSurfaces>[1] & { project_root: string };
         return reviewGoal3PublicArchiveSurfaces(body.project_root, body);
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/review",
+      (payload) => {
+        const body = payload as Parameters<typeof reviewPiCodexLifecycleReadiness>[1] & { project_root: string };
+        return {
+          review: reviewPiCodexLifecycleReadiness(body.project_root, body)
+        };
       }
     ],
     ["POST /project/open", (payload) => openProject(payload as { root_path: string })],
