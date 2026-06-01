@@ -412,6 +412,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.snapshot.verify" ||
     name === "comath.snapshot.restore" ||
     name === "comath.replay.verifyManifest" ||
+    name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
 }
@@ -569,7 +570,7 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
   if (name === "comath.campaign.export") {
     const projectRoot = readString(input, "project_root");
     const campaignId = readString(input, "campaign_id");
-    return client.get(`${campaignPath(campaignId, "/export")}?project_root=${encodeQuery(projectRoot)}`);
+    return publicToolResult(name, client.get(`${campaignPath(campaignId, "/export")}?project_root=${encodeQuery(projectRoot)}`));
   }
 
   if (name === "comath.campaign.finalAudit") {

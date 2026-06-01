@@ -12,7 +12,10 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
-import { sanitizePublicFormalAuthorityVocabulary } from "../proof-kernel/campaign/external-terminal-vocabulary.js";
+import {
+  sanitizePublicFormalAuthorityText,
+  sanitizePublicFormalAuthorityVocabulary
+} from "../proof-kernel/campaign/external-terminal-vocabulary.js";
 import { ensureRuntimeTree } from "../project/project-store.js";
 import { assertPathAllowed } from "../security/path-policy.js";
 import { scanForSecrets, type SecretScanResult } from "../security/secret-scan.js";
@@ -54,7 +57,8 @@ export type SnapshotManifest = {
   snapshot_id: string;
   project_id: string;
   created_at: string;
-  can_restore: true;
+  snapshot_kind: "public_download" | "internal_restore";
+  can_restore: boolean;
   source_runtime_root: ".comath";
   entries: SnapshotEntry[];
   replay: ReplayManifest;
@@ -74,6 +78,7 @@ export type SnapshotManifest = {
 export type ExportSnapshotInput = {
   project_id: string;
   actor: string;
+  audience?: "public_download" | "internal_restore";
 };
 
 export type ExportSnapshotResult = {
@@ -349,19 +354,39 @@ function shouldSanitizeSnapshotCopy(relativePath: string): boolean {
   return (
     normalized === ".comath/evidence/evidence.jsonl" ||
     normalized === ".comath/claims/gate-results.jsonl" ||
+    normalized.startsWith(".comath/audit/") ||
+    normalized.startsWith(".comath/workstreams/") ||
+    normalized === ".comath/artifacts/artifacts.jsonl" ||
+    normalized.startsWith(".comath/artifacts/sha256/") ||
     normalized.endsWith("/candidate_manifest.json") ||
     normalized.endsWith("/agent_output.json") ||
     normalized.endsWith("/agent_stage_log.jsonl")
   );
 }
 
-function writeSanitizedSnapshotCopy(source: string, target: string, relativePath: string): boolean {
+function isUtf8Text(bytes: Buffer): boolean {
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function writeSanitizedSnapshotCopy(source: string, target: string, relativePath: string, snapshotKind: SnapshotManifest["snapshot_kind"]): boolean {
+  if (snapshotKind !== "public_download") {
+    return false;
+  }
   if (!shouldSanitizeSnapshotCopy(relativePath)) {
     return false;
   }
   const text = readFileSync(source, "utf8");
   if (relativePath.endsWith(".json")) {
-    writeFileSync(target, canonicalJson(sanitizePublicFormalAuthorityVocabulary(JSON.parse(text))), "utf8");
+    try {
+      writeFileSync(target, canonicalJson(sanitizePublicFormalAuthorityVocabulary(JSON.parse(text))), "utf8");
+    } catch {
+      writeFileSync(target, sanitizePublicFormalAuthorityText(text), "utf8");
+    }
     return true;
   }
   if (relativePath.endsWith(".jsonl")) {
@@ -379,7 +404,12 @@ function writeSanitizedSnapshotCopy(source: string, target: string, relativePath
     writeFileSync(target, `${sanitized}${sanitized ? "\n" : ""}`, "utf8");
     return true;
   }
-  return false;
+  const bytes = readFileSync(source);
+  if (!isUtf8Text(bytes)) {
+    return false;
+  }
+  writeFileSync(target, sanitizePublicFormalAuthorityText(bytes.toString("utf8")), "utf8");
+  return true;
 }
 
 function secretScanSummary(scans: SecretScanResult[]): SnapshotManifest["secret_scan"] {
@@ -393,6 +423,7 @@ function secretScanSummary(scans: SecretScanResult[]): SnapshotManifest["secret_
 
 export async function exportSnapshot(projectRoot: string, input: ExportSnapshotInput): Promise<ExportSnapshotResult> {
   const root = resolve(projectRoot);
+  const snapshotKind = input.audience ?? "public_download";
   const snapshotBase = snapshotsDir(root);
   mkdirSync(snapshotBase, { recursive: true });
   const id = snapshotId(readdirSync(snapshotBase, { withFileTypes: true }).filter((item) => item.isDirectory()).map((item) => item.name));
@@ -421,7 +452,7 @@ export async function exportSnapshot(projectRoot: string, input: ExportSnapshotI
     }
     mkdirSync(dirname(target), { recursive: true });
     const category = categoryFor(relativePath);
-    if (!writeSanitizedSnapshotCopy(source, target, relativePath)) {
+    if (!writeSanitizedSnapshotCopy(source, target, relativePath, snapshotKind)) {
       copyFileSync(source, target);
     }
     const hash = await sha256File(target);
@@ -445,7 +476,8 @@ export async function exportSnapshot(projectRoot: string, input: ExportSnapshotI
     snapshot_id: id,
     project_id: input.project_id,
     created_at: createdAt,
-    can_restore: true,
+    snapshot_kind: snapshotKind,
+    can_restore: snapshotKind === "internal_restore",
     source_runtime_root: ".comath",
     entries,
     replay,
@@ -654,6 +686,12 @@ export async function restoreSnapshot(
     });
   }
   const manifest = verification.manifest;
+  if (!manifest.can_restore || manifest.snapshot_kind !== "internal_restore") {
+    throw new ComathError("public snapshot downloads cannot be restored", {
+      statusCode: 400,
+      code: "SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE"
+    });
+  }
   const snapshotRoot = dirname(manifestPath);
   const target = resolve(targetRoot);
   ensureRuntimeTree(target);

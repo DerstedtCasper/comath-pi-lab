@@ -186,7 +186,8 @@ try {
   const first = await exportSnapshot(projectRoot, { project_id: project.project_id, actor: "phase16-test" });
   assert.equal(first.manifest.schema_version, 1);
   assert.equal(first.manifest.project_id, project.project_id);
-  assert.equal(first.manifest.can_restore, true);
+  assert.equal(first.manifest.snapshot_kind, "public_download");
+  assert.equal(first.manifest.can_restore, false);
   assert.equal(first.manifest.secret_scan.status, "clean");
   assert.equal(first.manifest.entries.length > 5, true);
   assert.equal(first.manifest.entries.some((entry) => entry.relative_path === ".comath/project.json"), true);
@@ -245,7 +246,8 @@ try {
     });
     assert.equal(routeExport.status, 200);
     assert.equal(routeExport.body.manifest.project_id, project.project_id);
-    assert.equal(routeExport.body.manifest.can_restore, true);
+    assert.equal(routeExport.body.manifest.snapshot_kind, "public_download");
+    assert.equal(routeExport.body.manifest.can_restore, false);
     assert.doesNotMatch(
       JSON.stringify(routeExport.body.manifest.replay),
       privilegedReplayTerms,
@@ -301,9 +303,8 @@ try {
         path: "/snapshot/restore",
         body: { manifest_path: routeExport.body.manifest_path, target_root: routeRestoreRoot, actor: "phase16-route-test" }
       });
-      assert.equal(routeRestore.status, 200);
-      assert.equal(routeRestore.body.restored_entries, routeExport.body.manifest.entries.length);
-      assert.equal(existsSync(join(routeRestoreRoot, ".comath", "project.json")), true);
+      assert.equal(routeRestore.status, 400);
+      assert.equal(routeRestore.body.code, "SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE");
     } finally {
       rmSync(routeRestoreRoot, { recursive: true, force: true });
     }
@@ -311,10 +312,21 @@ try {
     await server.close();
   }
 
-  const manifestBeforeRestore = readFileSync(first.manifest_path, "utf8");
-  const restored = await restoreSnapshot(first.manifest_path, restoreRoot, { actor: "phase16-test" });
-  assert.equal(restored.restored_entries, first.manifest.entries.length);
-  assert.equal(readFileSync(first.manifest_path, "utf8"), manifestBeforeRestore, "restore must not mutate source snapshot");
+  await assert.rejects(
+    () => restoreSnapshot(first.manifest_path, restoreRoot, { actor: "phase16-test" }),
+    /public snapshot downloads cannot be restored/
+  );
+  const internalRestoreSnapshot = await exportSnapshot(projectRoot, {
+    project_id: project.project_id,
+    actor: "phase16-test",
+    audience: "internal_restore"
+  });
+  assert.equal(internalRestoreSnapshot.manifest.snapshot_kind, "internal_restore");
+  assert.equal(internalRestoreSnapshot.manifest.can_restore, true);
+  const manifestBeforeRestore = readFileSync(internalRestoreSnapshot.manifest_path, "utf8");
+  const restored = await restoreSnapshot(internalRestoreSnapshot.manifest_path, restoreRoot, { actor: "phase16-test" });
+  assert.equal(restored.restored_entries, internalRestoreSnapshot.manifest.entries.length);
+  assert.equal(readFileSync(internalRestoreSnapshot.manifest_path, "utf8"), manifestBeforeRestore, "restore must not mutate source snapshot");
   assert.equal(existsSync(join(restoreRoot, ".comath", "project.json")), true);
   assert.equal(getClaim(restoreRoot, project.project_id, claim.id)?.statement, claim.statement);
 

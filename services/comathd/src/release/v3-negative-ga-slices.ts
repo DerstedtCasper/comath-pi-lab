@@ -278,7 +278,11 @@ async function snapshotReplayCase(projectRoot: string, actor: string): Promise<N
     actor
   });
   const final = await tickToTerminal(projectRoot, started.campaign.campaign_id, actor);
-  const snapshot = await exportSnapshot(projectRoot, { project_id: final.campaign.project_id, actor });
+  const snapshot = await exportSnapshot(projectRoot, {
+    project_id: final.campaign.project_id,
+    actor,
+    audience: "internal_restore"
+  });
   const restoreRoot = assertPathAllowed(projectRoot, ".comath/release/negative/snapshot_restore", { purpose: "runtime-write" });
   await restoreSnapshot(snapshot.manifest_path, restoreRoot, { actor });
   const replay = await replayCampaign({ project_root: restoreRoot, campaign_id: final.campaign.campaign_id, actor });
