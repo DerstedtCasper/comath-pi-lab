@@ -41,6 +41,36 @@ export type SourceReviewPublicArchiveContract = {
   generated_report_formats: ["markdown", "html", "json"];
 };
 
+export type SourceReviewPublicArchiveImmutabilityPolicy = {
+  kind: "source_review_public_archive_immutability_policy";
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_restore: false;
+  tamper_evident_manifest: true;
+  os_immutable_storage: {
+    status: "not_configured";
+    evidence: null;
+  };
+  external_notarization: {
+    status: "not_configured";
+    evidence: null;
+  };
+};
+
+export type SourceReviewPublicArchiveNotarization = {
+  schema_version: "comath.source_review_public_archive_notarization.v1";
+  project_id: string;
+  archive_id: string;
+  archive_kind: "source_review_public_diagnostic";
+  source_review_manifest_path: string;
+  source_review_manifest_sha256: string;
+  reports: SourceReviewPublicArchiveReport[];
+  immutability_policy: SourceReviewPublicArchiveImmutabilityPolicy;
+  recorded_at: string;
+  actor: string;
+  warnings: string[];
+};
+
 export type SourceReviewPublicArchiveResult = SourceReviewPublicArchiveContract & {
   schema_version: "comath.source_review_public_archive.v1";
   archive_kind: "source_review_public_diagnostic";
@@ -48,7 +78,9 @@ export type SourceReviewPublicArchiveResult = SourceReviewPublicArchiveContract 
   archive_id: string;
   archive_root: string;
   manifest_path: string;
+  notarization_manifest_path: string;
   public_archive_contract: SourceReviewPublicArchiveContract;
+  immutability_policy: SourceReviewPublicArchiveImmutabilityPolicy;
   reports: SourceReviewPublicArchiveReport[];
   warnings: string[];
 };
@@ -80,6 +112,24 @@ function publicArchiveContract(): SourceReviewPublicArchiveContract {
     exposes_host_paths: false,
     requires_sanitized_generated_reports: true,
     generated_report_formats: [...generatedReportFormats] as ["markdown", "html", "json"]
+  };
+}
+
+function publicArchiveImmutabilityPolicy(): SourceReviewPublicArchiveImmutabilityPolicy {
+  return {
+    kind: "source_review_public_archive_immutability_policy",
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_restore: false,
+    tamper_evident_manifest: true,
+    os_immutable_storage: {
+      status: "not_configured",
+      evidence: null
+    },
+    external_notarization: {
+      status: "not_configured",
+      evidence: null
+    }
   };
 }
 
@@ -244,6 +294,7 @@ export function assembleSourceReviewPublicArchive(
   });
 
   const contract = publicArchiveContract();
+  const immutabilityPolicy = publicArchiveImmutabilityPolicy();
   const result: SourceReviewPublicArchiveResult = {
     schema_version: "comath.source_review_public_archive.v1",
     archive_kind: "source_review_public_diagnostic",
@@ -251,13 +302,31 @@ export function assembleSourceReviewPublicArchive(
     archive_id: archiveId,
     archive_root: archiveRoot,
     manifest_path: normalizeRelativePath(join(archiveRoot, "manifest.json")),
+    notarization_manifest_path: normalizeRelativePath(join(archiveRoot, "notarization-policy.json")),
     ...contract,
     public_archive_contract: contract,
+    immutability_policy: immutabilityPolicy,
     reports,
     warnings: []
   };
   const manifestPath = assertPathAllowed(projectRoot, result.manifest_path, { purpose: "runtime-write" });
-  writeFileSync(manifestPath, canonicalJson(result), "utf8");
+  const manifestText = canonicalJson(result);
+  writeFileSync(manifestPath, manifestText, "utf8");
+  const notarization: SourceReviewPublicArchiveNotarization = {
+    schema_version: "comath.source_review_public_archive_notarization.v1",
+    project_id: input.project_id,
+    archive_id: archiveId,
+    archive_kind: "source_review_public_diagnostic",
+    source_review_manifest_path: result.manifest_path,
+    source_review_manifest_sha256: sha256Text(manifestText),
+    reports,
+    immutability_policy: immutabilityPolicy,
+    recorded_at: new Date().toISOString(),
+    actor: input.actor,
+    warnings: ["os_immutable_storage_not_configured", "external_notarization_not_configured"]
+  };
+  const notarizationPath = assertPathAllowed(projectRoot, result.notarization_manifest_path, { purpose: "runtime-write" });
+  writeFileSync(notarizationPath, canonicalJson(notarization), "utf8");
   appendAuditEvent(projectRoot, {
     project_id: input.project_id,
     event_type: "source_review.public_archive_assembled",
@@ -266,11 +335,15 @@ export function assembleSourceReviewPublicArchive(
     payload: {
       archive_id: archiveId,
       manifest_path: result.manifest_path,
+      notarization_manifest_path: result.notarization_manifest_path,
       report_count: reports.length,
       generated_report_formats: result.generated_report_formats,
       proof_authority: "none",
       can_restore: false,
-      exposes_host_paths: false
+      exposes_host_paths: false,
+      tamper_evident_manifest: true,
+      os_immutable_storage: "not_configured",
+      external_notarization: "not_configured"
     }
   });
   return result;

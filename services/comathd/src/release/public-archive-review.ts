@@ -111,6 +111,22 @@ function projectRelativePath(projectRoot: string, path: string): { absolute: str
   return { absolute, relative: relativePath };
 }
 
+function isSafeProjectRelativeMaterialPath(path: string): boolean {
+  const normalized = normalizeRelativePath(path);
+  return (
+    !!normalized &&
+    normalized !== "." &&
+    normalized !== ".." &&
+    !normalized.startsWith("../") &&
+    !normalized.includes("/../") &&
+    !normalized.endsWith("/..") &&
+    !normalized.startsWith("/") &&
+    !normalized.startsWith("//") &&
+    !/^[A-Za-z]:\//.test(normalized) &&
+    !path.includes("\\\\")
+  );
+}
+
 function hostPathVariants(projectRoot: string): string[] {
   const resolved = resolve(projectRoot);
   return Array.from(new Set([resolved, resolved.replace(/\\/g, "/"), resolved.replace(/\\/g, "\\\\")])).filter(Boolean);
@@ -223,6 +239,130 @@ function materialPayload(projectRoot: string, surface: PublicArchiveReviewSurfac
   return { payload: surface.payload };
 }
 
+function payloadReports(payload: unknown): Record<string, unknown>[] {
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+  const reports = (payload as { reports?: unknown }).reports;
+  if (!Array.isArray(reports)) {
+    return [];
+  }
+  return reports.filter((report): report is Record<string, unknown> => !!report && typeof report === "object");
+}
+
+function policyStatus(policy: unknown, key: "os_immutable_storage" | "external_notarization"): string | undefined {
+  if (!policy || typeof policy !== "object") {
+    return undefined;
+  }
+  const entry = (policy as Record<string, unknown>)[key];
+  if (!entry || typeof entry !== "object") {
+    return undefined;
+  }
+  const status = (entry as { status?: unknown }).status;
+  return typeof status === "string" ? status : undefined;
+}
+
+function inspectSourceReviewNotarizationPolicy(
+  projectRoot: string,
+  surface: PublicArchiveReviewSurfaceInput,
+  payload: unknown,
+  material: ReturnType<typeof materialPayload>,
+  findings: PublicArchiveReviewFinding[]
+): void {
+  if (surface.surface_kind !== "source_review_public_archive" || !payload || typeof payload !== "object") {
+    return;
+  }
+  const record = payload as {
+    notarization_manifest_path?: unknown;
+    immutability_policy?: unknown;
+  };
+  if (typeof record.notarization_manifest_path !== "string") {
+    addFinding(findings, surface, "source_review_public_archive_notarization_missing", "$.notarization_manifest_path");
+    return;
+  }
+  if (!isSafeProjectRelativeMaterialPath(record.notarization_manifest_path)) {
+    addFinding(findings, surface, "source_review_public_archive_notarization_path_invalid", "$.notarization_manifest_path");
+    return;
+  }
+  if (!material.materialPath || !material.materialSha256) {
+    addFinding(findings, surface, "source_review_public_archive_notarization_unbound", "$.notarization_manifest_path");
+    return;
+  }
+
+  const notarizationPath = projectRelativePath(projectRoot, record.notarization_manifest_path);
+  if (!existsSync(notarizationPath.absolute) || !statSync(notarizationPath.absolute).isFile()) {
+    addFinding(findings, surface, "source_review_public_archive_notarization_missing", "$.notarization_manifest_path");
+    return;
+  }
+
+  let notarization: unknown;
+  try {
+    notarization = JSON.parse(readFileSync(notarizationPath.absolute, "utf8"));
+  } catch {
+    addFinding(findings, surface, "source_review_public_archive_notarization_invalid", "$.notarization_manifest_path");
+    return;
+  }
+  inspectValue(projectRoot, surface, notarization, "$.notarization", findings);
+  if (!notarization || typeof notarization !== "object") {
+    addFinding(findings, surface, "source_review_public_archive_notarization_invalid", "$.notarization");
+    return;
+  }
+
+  const notarizationRecord = notarization as Record<string, unknown>;
+  if (notarizationRecord.schema_version !== "comath.source_review_public_archive_notarization.v1") {
+    addFinding(findings, surface, "source_review_public_archive_notarization_invalid", "$.notarization.schema_version");
+  }
+  if (notarizationRecord.source_review_manifest_path !== material.materialPath) {
+    addFinding(findings, surface, "source_review_public_archive_notarization_manifest_path_mismatch", "$.notarization.source_review_manifest_path");
+  }
+  if (notarizationRecord.source_review_manifest_sha256 !== material.materialSha256) {
+    addFinding(findings, surface, "source_review_public_archive_notarization_hash_mismatch", "$.notarization.source_review_manifest_sha256");
+  }
+
+  const manifestPolicy = record.immutability_policy;
+  const notarizationPolicy = notarizationRecord.immutability_policy;
+  for (const [policy, location] of [
+    [manifestPolicy, "$.immutability_policy"],
+    [notarizationPolicy, "$.notarization.immutability_policy"]
+  ] as const) {
+    if (!policy || typeof policy !== "object") {
+      addFinding(findings, surface, "source_review_public_archive_immutability_policy_missing", location);
+      continue;
+    }
+    const policyRecord = policy as Record<string, unknown>;
+    if (
+      policyRecord.proof_authority !== "none" ||
+      policyRecord.can_promote_claim !== false ||
+      policyRecord.can_restore !== false ||
+      policyRecord.tamper_evident_manifest !== true
+    ) {
+      addFinding(findings, surface, "source_review_public_archive_immutability_policy_invalid", location);
+    }
+    if (
+      policyStatus(policy, "os_immutable_storage") !== "not_configured" ||
+      policyStatus(policy, "external_notarization") !== "not_configured"
+    ) {
+      addFinding(findings, surface, "source_review_public_archive_immutability_overclaim", location);
+    }
+  }
+
+  const notarizedReports = payloadReports(notarization);
+  for (const report of payloadReports(payload)) {
+    const publicRelativePath = report.public_relative_path;
+    if (typeof publicRelativePath !== "string") {
+      continue;
+    }
+    const match = notarizedReports.find((entry) => entry.public_relative_path === publicRelativePath);
+    if (!match) {
+      addFinding(findings, surface, "source_review_public_archive_notarization_report_missing", `$.reports[${publicRelativePath}]`);
+      continue;
+    }
+    if (match.sha256 !== report.sha256 || match.size_bytes !== report.size_bytes) {
+      addFinding(findings, surface, "source_review_public_archive_notarization_report_mismatch", `$.reports[${publicRelativePath}]`);
+    }
+  }
+}
+
 function inspectReferencedPublicReports(
   projectRoot: string,
   surface: PublicArchiveReviewSurfaceInput,
@@ -270,6 +410,7 @@ function reviewSurface(projectRoot: string, surface: PublicArchiveReviewSurfaceI
   const material = materialPayload(projectRoot, surface);
   inspectValue(projectRoot, surface, material.payload, "$", findings);
   inspectReferencedPublicReports(projectRoot, surface, material.payload, findings);
+  inspectSourceReviewNotarizationPolicy(projectRoot, surface, material.payload, material, findings);
   return {
     surface_id: surface.surface_id,
     surface_kind: surface.surface_kind,
