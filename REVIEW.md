@@ -1,3 +1,30 @@
+# Goal 3 Task 147 / Pi-Codex Lifecycle Release Consumer
+
+Scope: expose the Task146 service-owned Pi/Codex lifecycle readiness review gate through the Pi release consumer surface without letting Pi write `.comath/` directly, overclaim proof authority, or treat submitted lifecycle evidence as verified real-host validation.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed `main` was clean at `01c730c` before opening Task147.
+- Audited the Task146 service gate and route plus the existing Task143 `/cm:release` public archive consumer path.
+- Added `goal3-task147-pi-codex-lifecycle-consumer.test.mjs`.
+- RED showed `comath.release.piCodexLifecycleReview` was not registered in the Pi extension.
+- Added the `comath.release.piCodexLifecycleReview` mutating Pi tool, executable runtime registration, public result sanitization, and route dispatch to `POST /release/pi-codex-lifecycle/review`.
+- Added `/cm:release pi-codex-lifecycle` command parsing for explicit install-session and Codex evidence fields, reusing Pi host confirmation and sanitized notifications.
+- Wired the Task147 regression into the default `@comath/pi-extension` package test chain and updated adjacent Phase6/Phase26 registration checks.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task147-pi-codex-lifecycle-consumer.test.mjs` failed because `comath.release.piCodexLifecycleReview` was not registered.
+- GREEN focused/adjacent tests exited 0: Task147 Pi/Codex lifecycle consumer, Task143 Pi public release review consumer, Phase6 extension, Phase26 Pi runtime registration, and Task146 service Pi/Codex lifecycle readiness.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension typecheck` and `corepack pnpm --filter @comath/pi-extension test`, with Task147 discovered by the default Pi extension runner.
+- Post-code `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants, `git diff --check` exited 0, and `Test-Path -LiteralPath .comath` returned `False`.
+- Code commit: `d99122c` (`Add Pi Codex lifecycle release consumer`).
+
+Boundary notes: Task147 is a Pi consumer and release-command exposure task only. It does not create real Pi host evidence, install or manage a durable `comathd` service, validate a production Codex account/network path, provide OS-enforced adapter isolation, promote claims, certify proofs, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. The lifecycle readiness gate is now reachable from Pi tooling and `/cm:release`, but actual evidence producers for real-host Pi installation, durable service start/stop/restart, and production Codex account/network validation remain open, along with richer Lean/mathlib replay, nontrivial theorem synthesis, OS-level sandboxing, and final GA audit.
+
 # Goal 3 Task 146 / Pi-Codex Lifecycle Readiness Gate
 
 Scope: move from public archive hardening to the real-host Pi/Codex lifecycle residual blocker by adding a service-owned readiness gate that refuses to treat fake-host install-session evidence as full production lifecycle validation.
