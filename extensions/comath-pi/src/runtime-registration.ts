@@ -183,7 +183,7 @@ function commandMetadata(command: string): Pick<
   }
   if (command === "/cm:snapshot") {
     return {
-      subcommands: ["export", "verify", "restore"],
+      subcommands: ["export", "verify", "restore", "verify-manifest"],
       dispatch_tool: "comath.snapshot.verify",
       mutates: true,
       goal_compatible: false

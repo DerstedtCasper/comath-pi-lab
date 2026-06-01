@@ -6,7 +6,7 @@ const privilegedVocabulary =
 
 const snapshotRegistration = runtime_registration.commands.find((command) => command.command === "/cm:snapshot");
 assert.ok(snapshotRegistration, "/cm:snapshot must be advertised in the static Pi runtime registration");
-assert.deepEqual(snapshotRegistration.subcommands, ["export", "verify", "restore"]);
+assert.deepEqual(snapshotRegistration.subcommands, ["export", "verify", "restore", "verify-manifest"]);
 
 function leakedSnapshotPayload(path, body) {
   return {
@@ -89,6 +89,7 @@ assert.deepEqual(calls.at(-1), {
   method: "POST",
   path: "/snapshot/verify",
   body: {
+    project_root: "D:/research/project",
     manifest_path: "D:/research/project/.comath/snapshots/SNAP-0001/manifest.json"
   }
 });
@@ -101,6 +102,7 @@ assert.deepEqual(calls.at(-1), {
   method: "POST",
   path: "/snapshot/restore",
   body: {
+    project_root: "D:/research/project",
     manifest_path: "D:/research/project/.comath/snapshots/SNAP-0001/manifest.json",
     target_root: "D:/research/restored",
     actor: "goal3-task131"

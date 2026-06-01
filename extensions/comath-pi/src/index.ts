@@ -343,6 +343,11 @@ function encodeQuery(value: string): string {
   return encodeURIComponent(value);
 }
 
+function optionalProjectRoot(input: Record<string, unknown>): { project_root?: string } {
+  const projectRoot = readString(input, "project_root", { optional: true });
+  return projectRoot ? { project_root: projectRoot } : {};
+}
+
 function readNumber(payload: Record<string, unknown>, field: string): number | undefined {
   const value = payload[field];
   if (value === undefined) {
@@ -846,6 +851,7 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     return publicToolResult(
       name,
       client.post("/snapshot/verify", {
+        ...optionalProjectRoot(input),
         manifest_path: readString(input, "manifest_path")
       })
     );
@@ -855,6 +861,7 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     return publicToolResult(
       name,
       client.post("/snapshot/restore", {
+        ...optionalProjectRoot(input),
         manifest_path: readString(input, "manifest_path"),
         target_root: readString(input, "target_root"),
         actor: readString(input, "actor")
@@ -866,6 +873,7 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     return publicToolResult(
       name,
       client.post("/replay/verify-manifest", {
+        ...optionalProjectRoot(input),
         manifest_path: readString(input, "manifest_path")
       })
     );
@@ -1401,17 +1409,19 @@ export function createComathTools(): ToolDescriptor[] {
     },
     {
       name: "comath.snapshot.verify",
-      description: "Verify a service-owned runtime snapshot manifest through comathd.",
+      description: "Verify a service-owned runtime snapshot manifest through comathd, including project-relative public manifest paths.",
       mutates: false,
       input_schema: objectSchema(["manifest_path"], {
+        project_root: stringProp,
         manifest_path: stringProp
       })
     },
     {
       name: "comath.snapshot.restore",
-      description: "Restore a verified service-owned runtime snapshot into a target root through comathd.",
+      description: "Restore a verified service-owned runtime snapshot into a target root through comathd, including project-relative public manifest paths.",
       mutates: true,
       input_schema: objectSchema(["manifest_path", "target_root", "actor"], {
+        project_root: stringProp,
         manifest_path: stringProp,
         target_root: stringProp,
         actor: stringProp
@@ -1419,9 +1429,10 @@ export function createComathTools(): ToolDescriptor[] {
     },
     {
       name: "comath.replay.verifyManifest",
-      description: "Verify replay manifest metadata embedded in a service-owned snapshot.",
+      description: "Verify replay manifest metadata embedded in a service-owned snapshot, including project-relative public manifest paths.",
       mutates: false,
       input_schema: objectSchema(["manifest_path"], {
+        project_root: stringProp,
         manifest_path: stringProp
       })
     }
@@ -2206,9 +2217,11 @@ async function handleSnapshotCommand(
   }
   if (subcommand === "verify") {
     const manifestPath = optionValue(parsed.args, "--manifest-path") ?? positionals[0];
+    const projectRoot = optionValue(parsed.args, "--project-root") ?? options.project_root;
     await notifyRuntimeResult(
       ctx,
       await executeComathTool(client, "comath.snapshot.verify", {
+        ...(projectRoot ? { project_root: projectRoot } : {}),
         manifest_path: requiredOption(manifestPath, "manifest_path")
       })
     );
@@ -2221,12 +2234,14 @@ async function handleSnapshotCommand(
     }
     const manifestPath = optionValue(parsed.args, "--manifest-path") ?? positionals[0];
     const targetRoot = optionValue(parsed.args, "--target-root") ?? positionals[1];
+    const projectRoot = optionValue(parsed.args, "--project-root") ?? options.project_root;
     await notifyRuntimeResult(
       ctx,
       await executeRuntimeToolWithHostConfirmation(
         client,
         tool,
         {
+          ...(projectRoot ? { project_root: projectRoot } : {}),
           manifest_path: requiredOption(manifestPath, "manifest_path"),
           target_root: requiredOption(targetRoot, "target_root"),
           actor: actorFrom(options, parsed.args)
@@ -2238,9 +2253,11 @@ async function handleSnapshotCommand(
   }
   if (subcommand === "verify-manifest") {
     const manifestPath = optionValue(parsed.args, "--manifest-path") ?? positionals[0];
+    const projectRoot = optionValue(parsed.args, "--project-root") ?? options.project_root;
     await notifyRuntimeResult(
       ctx,
       await executeComathTool(client, "comath.replay.verifyManifest", {
+        ...(projectRoot ? { project_root: projectRoot } : {}),
         manifest_path: requiredOption(manifestPath, "manifest_path")
       })
     );
