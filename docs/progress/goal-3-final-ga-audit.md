@@ -2,6 +2,8 @@
 
 Date: 2026-05-30
 
+Historical snapshot note: this file records the Task 20 audit at commit `9b6db33` and is superseded by later Goal 3 tasks. It is retained for audit history only and is not the current release or final GA authority snapshot.
+
 Scope: final Task 20 review of the current `main` worktree against `goal-3/input.md`, the Goal 3 plan, the 2026-05-29 no-reinvent audit, the 2026-05-29 open formal workbench design, the v2 agent prompt protocol, and current public project documents.
 
 Result: Goal 3 is not eligible to be marked complete as a GA release. The trust-core implementation, documentation hardening, negative suite, representative positive workflow, and package/root validation pass, but the full GA completion gate still contains non-promotional blockers. The central blocker is the unexecuted 100-task positive clean-replay matrix required by the GA design; additional release-grade blockers remain for live provider/network validation, OS-enforced sandboxing, and richer real-host Pi/service lifecycle validation. These blockers are documented as replayable or deferred, not promoted proof success.

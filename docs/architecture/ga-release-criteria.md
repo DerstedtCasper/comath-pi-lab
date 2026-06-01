@@ -26,7 +26,7 @@ CoMath uses CAS or papers as formal proof authority.
 Any one of these blocks a GA release:
 
 - A production path imports a theorem-family recognizer, Nat-linear synthesizer, default `n : Nat` injection, synthetic V1 winner, or business-layer theorem verifier.
-- A claim can reach `formally_checked` without a service-owned FinalReplayManifest whose result is `pass`.
+- A claim can reach `formally_checked` without a service-owned FinalReplayManifest whose result is `pass` and matching FinalAuthorityPackagingV3 source report / generic Lean Authority v3 packaging evidence.
 - A proof claim lacks FormalSpecLock, AssumptionLedger, dependency lock, toolchain hash, artifact hash, LeanRunManifest, and final replay material.
 - Candidate, literature, computation, agent vote, reviewer approval, or MathProve-style audit output can override Lean replay failure.
 - Pi or an agent can write trusted `.comath/` proof state directly.
@@ -88,4 +88,3 @@ Use these labels when evidence is incomplete:
 - `ga-candidate`: all gates implemented, final review pending.
 - `replayable-blocker`: a blocker certificate and resume path exist.
 - `draft` or `candidate`: no final clean Lean replay.
-

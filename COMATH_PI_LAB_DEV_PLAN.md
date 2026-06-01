@@ -10,7 +10,7 @@ This document defines the complete target design and implementation goals. The c
 Current repository state after Phase 80:
 
 - Repo bootstrap, contracts, service foundation, artifact/audit kernel, claim registry, fail-closed gate, in-memory memory adapter, workstreams, GraphPatch review, MathProve bridge mock, compute runners, literature condition checks, working paper, optional TriviumDB adapter boundary, braid-statistics domain pack, read-only dashboard, snapshot/replay, Phase 17 audits, deterministic runner re-execution, the external MathProve evidence-runner bridge, AgentRun runtime-boundary contracts, and AgentRun process scheduling are implemented and verified.
-- Native CoMath proof-kernel campaign routes, 8-candidate GA audit artifacts, clean Lean replay for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices, statement-drift/cheat rejection, exact `n + 1 = n` refutation, snapshot restore plus proof replay, Pi research/campaign tools, Pi 0.75.5-compatible runtime registration, auditable child-agent run persistence/write-scope/report contracts, and real absolute-realpath allowlisted child-process launching with concurrency/rpm/timeout/cancel controls, minimal environment inheritance, non-authoritative scheduler report envelopes, byte-capped logs, and process-tree termination attempts are implemented as bounded GA vertical slices.
+- Native CoMath proof-kernel campaign routes, 8-candidate GA audit artifacts, historical/quarantined clean Lean replay for the registered `Nat.add_zero` and `Nat.mul_zero` vertical slices, statement-drift/cheat rejection, exact `n + 1 = n` refutation, snapshot restore plus proof replay, Pi research/campaign tools, Pi 0.75.5-compatible runtime registration, auditable child-agent run persistence/write-scope/report contracts, and real absolute-realpath allowlisted child-process launching with concurrency/rpm/timeout/cancel controls, minimal environment inheritance, non-authoritative scheduler report envelopes, byte-capped logs, and process-tree termination attempts are implemented as bounded GA vertical slices, not current production proof paths.
 - Full design, roadmap, agent model, risk register, acceptance matrix, runbook, TODO, REVIEW, security review, mathematical-integrity review, and Research Alpha retrospective are documented.
 - Research Alpha plus Phase 18-80 is a local auditable product slice with narrow executable proof-kernel slices, optional TriviumDB target-platform evaluation, Pi package/runtime registration, local Pi/comathd install-session e2e, AgentRun scheduler/profile/adapter surfaces, service-configured Codex CLI/API adapter boundaries, conservative Lean statement-binding extensions including direct and transitive registered logical-equivalence witness metadata, non-authoritative statement-equivalence proof-search plan artifacts, and bounded registered witness materialization metadata, controlled MathProve evidence-runner bridges, fail-closed broad theorem planning evidence, stage-gate repair/resume, historical/quarantined Phase 72-76 registered Nat linear identity target-table fixture coverage, theorem-specific Lean target packages, proof-body candidates, Lean Authority preview reports, and claim-scoped final clean replay/promotion paths that are not current production proof paths, plus a service-level runner network-denial environment contract for compute-runner execution and replay. It is not a production arbitrary theorem prover.
 - Arbitrary theorem synthesis beyond the Phase 70 fail-closed planning evidence, broad MathProve proof search or MathProve-as-proof-authority semantics, production Codex API account/network validation, indefinite operator sessions, richer real-host Pi UX/service lifecycle management, full DLP-grade secret scanning, execution of statement-equivalence proof-search plans into kernel-checked witnesses or automatically discovered semantic equivalence, promotion of historical/quarantined Phase 72-76 registered Nat linear identity fixtures into current production proof authority, and OS-level network sandboxed runner replay remain later candidates.
@@ -825,7 +825,7 @@ Deliverables:
 - native proof-kernel modules under `services/comathd/src/proof-kernel`;
 - 8-candidate ensemble artifacts with failure-route preservation;
 - clean Lean replay, static audit, dependency closure, axiom profile, and statement-equivalence gates;
-- positive `Nat.add_zero` formal proof vertical slice;
+- historical/quarantined positive `Nat.add_zero` formal proof vertical slice;
 - negative statement-drift, fake metadata, and cheat-construct tests;
 - exact counterexample refutation path for `n + 1 = n`;
 - snapshot restore followed by campaign proof replay;
@@ -848,17 +848,17 @@ Research Alpha is complete when:
 - Snapshot basic works.
 - security and math-integrity reviews exist.
 
-### GA Vertical Slice
+### Historical GA Vertical Slice
 
-The GA vertical slice is complete when:
+The historical GA vertical slice was a Goal 2 fixture criterion and is not a current release criteria set. It was complete when:
 
 - `comathd` starts and ticks a bounded `ResearchCampaign`;
 - `formally_checked` requires a passed proof-kernel final replay manifest for the same claim;
 - 8 candidates are generated and their manifests/audit artifacts are preserved;
 - statement drift and static Lean cheats are rejected;
-- one Lean theorem replay passes from a clean workspace;
+- one Lean theorem replay passes from a clean workspace as historical fixture coverage, not current release criteria;
 - one false theorem is refuted by exact counterexample evidence;
-- snapshot restore followed by proof replay passes;
+- snapshot restore followed by proof replay passes as historical fixture coverage, not current release criteria;
 - Pi exposes campaign tools without direct `.comath/` writes.
 
 ### Research Beta

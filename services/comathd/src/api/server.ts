@@ -254,7 +254,7 @@ async function route(method: string, path: string, body: unknown, context: Route
         const evidence = readEvidenceRecords(projectRoot, projectId).filter(
           (record) => !claimId || record.claim_id === claimId
         );
-        return { evidence };
+        return { evidence: sanitizePublicFormalAuthorityVocabulary(evidence) };
       }
     ],
     [
@@ -264,7 +264,7 @@ async function route(method: string, path: string, body: unknown, context: Route
         const projectId = parsedUrl.searchParams.get("project_id") ?? undefined;
         const claimId = parsedUrl.searchParams.get("claim_id") ?? undefined;
         const gates = readGateResults(projectRoot, projectId).filter((gate) => !claimId || gate.claim_id === claimId);
-        return { gates };
+        return { gates: sanitizePublicFormalAuthorityVocabulary(gates) };
       }
     ],
     [

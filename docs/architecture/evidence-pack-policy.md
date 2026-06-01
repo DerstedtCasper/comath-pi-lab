@@ -26,13 +26,13 @@ Every promoted proof artifact must export or reference:
 
 Use these labels consistently:
 
-- `proven`: final clean Lean replay passed and promotion gates passed.
+- `proven`: final clean Lean replay passed, promotion gates passed, and the release evidence includes FinalAuthorityPackagingV3 source report / generic Lean Authority v3 packaging material.
 - `candidate`: Lean/candidate work may exist, but final replay or integrity gates are incomplete.
 - `hypothesis`: no formal proof evidence yet.
 - `counterexample`: refutation evidence is present; Lean confirmation is required for formal status where applicable.
 - `replayable_blocker`: the system reached a blocker with enough evidence to reproduce or resume.
 
-No pack may label a result `proven` without FinalReplayManifest pass and promotion-gate pass.
+No pack may label a result `proven` without FinalReplayManifest pass, promotion-gate pass, and FinalAuthorityPackagingV3 source report / generic Lean Authority v3 packaging evidence.
 
 ## Literature And Copyright
 

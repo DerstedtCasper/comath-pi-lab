@@ -12,6 +12,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
+import { sanitizePublicFormalAuthorityVocabulary } from "../proof-kernel/campaign/external-terminal-vocabulary.js";
 import { ensureRuntimeTree } from "../project/project-store.js";
 import { assertPathAllowed } from "../security/path-policy.js";
 import { scanForSecrets, type SecretScanResult } from "../security/secret-scan.js";
@@ -343,6 +344,44 @@ function writeJson(path: string, value: unknown): void {
   writeFileSync(path, canonicalJson(value), "utf8");
 }
 
+function shouldSanitizeSnapshotCopy(relativePath: string): boolean {
+  const normalized = normalizeRelativePath(relativePath);
+  return (
+    normalized === ".comath/evidence/evidence.jsonl" ||
+    normalized === ".comath/claims/gate-results.jsonl" ||
+    normalized.endsWith("/candidate_manifest.json") ||
+    normalized.endsWith("/agent_output.json") ||
+    normalized.endsWith("/agent_stage_log.jsonl")
+  );
+}
+
+function writeSanitizedSnapshotCopy(source: string, target: string, relativePath: string): boolean {
+  if (!shouldSanitizeSnapshotCopy(relativePath)) {
+    return false;
+  }
+  const text = readFileSync(source, "utf8");
+  if (relativePath.endsWith(".json")) {
+    writeFileSync(target, canonicalJson(sanitizePublicFormalAuthorityVocabulary(JSON.parse(text))), "utf8");
+    return true;
+  }
+  if (relativePath.endsWith(".jsonl")) {
+    const sanitized = text
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        try {
+          return JSON.stringify(sanitizePublicFormalAuthorityVocabulary(JSON.parse(line)));
+        } catch {
+          return String(sanitizePublicFormalAuthorityVocabulary(line));
+        }
+      })
+      .join("\n");
+    writeFileSync(target, `${sanitized}${sanitized ? "\n" : ""}`, "utf8");
+    return true;
+  }
+  return false;
+}
+
 function secretScanSummary(scans: SecretScanResult[]): SnapshotManifest["secret_scan"] {
   return {
     status: scans.some((scan) => scan.status === "blocked") ? "blocked" : "clean",
@@ -382,7 +421,9 @@ export async function exportSnapshot(projectRoot: string, input: ExportSnapshotI
     }
     mkdirSync(dirname(target), { recursive: true });
     const category = categoryFor(relativePath);
-    copyFileSync(source, target);
+    if (!writeSanitizedSnapshotCopy(source, target, relativePath)) {
+      copyFileSync(source, target);
+    }
     const hash = await sha256File(target);
     entries.push({
       relative_path: normalizeRelativePath(relativePath),

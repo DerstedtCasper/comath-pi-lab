@@ -62,6 +62,7 @@ export type Goal3GaNegativeCaseId =
 export type Goal3GaTrustCoreCase = {
   case_id: Goal3GaNegativeCaseId;
   result: "blocked";
+  diagnostic_scope: "negative_diagnostic_only";
   can_promote_claim: false;
   bound_gate: string[];
   vetoes: string[];
@@ -864,6 +865,7 @@ function blockedCase(case_id: Goal3GaNegativeCaseId, bound_gate: string[], vetoe
   return {
     case_id,
     result: "blocked",
+    diagnostic_scope: "negative_diagnostic_only",
     can_promote_claim: false,
     bound_gate,
     vetoes: Array.from(new Set(vetoes))

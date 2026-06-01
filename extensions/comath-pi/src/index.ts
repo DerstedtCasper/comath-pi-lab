@@ -137,6 +137,10 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.campaign.export",
   "comath.campaign.finalAudit",
   "comath.campaign.replay",
+  "comath.snapshot.export",
+  "comath.snapshot.verify",
+  "comath.snapshot.restore",
+  "comath.replay.verifyManifest",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -176,6 +180,7 @@ const PI_RUNTIME_COMMANDS = [
   "/cm:campaign",
   "/cm:agent",
   "/cm:audit",
+  "/cm:snapshot",
   "/cm:replay"
 ];
 
@@ -1534,6 +1539,22 @@ function firstPositional(args: string[]): string | undefined {
   return undefined;
 }
 
+function positionalArgs(args: string[]): string[] {
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg.startsWith("--")) {
+      const next = args[index + 1];
+      if (next && !next.startsWith("--")) {
+        index += 1;
+      }
+      continue;
+    }
+    values.push(arg);
+  }
+  return values;
+}
+
 function requiredOption(value: string | undefined, field: string): string {
   if (value) {
     return value;
@@ -2146,6 +2167,87 @@ async function handleReplayCommand(
   );
 }
 
+async function handleSnapshotCommand(
+  client: ComathClient,
+  options: RegisterComathPiRuntimeOptions,
+  args: string,
+  ctx: unknown
+): Promise<void> {
+  const parsed = parseComathCommand(`/cm:snapshot ${args}`.trim());
+  if (!parsed || parsed.action !== "snapshot") {
+    throw new Error("snapshot command is required");
+  }
+  const subcommand = parsed.subcommand ?? "verify";
+  const positionals = positionalArgs(parsed.args);
+  if (subcommand === "export") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.snapshot.export");
+    if (!tool) {
+      throw new Error("snapshot export tool is not registered");
+    }
+    const projectRoot = optionValue(parsed.args, "--project-root") ?? positionals[0] ?? options.project_root;
+    if (!projectRoot) {
+      throw new Error("project_root is required");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRoot,
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "verify") {
+    const manifestPath = optionValue(parsed.args, "--manifest-path") ?? positionals[0];
+    await notifyRuntimeResult(
+      ctx,
+      await executeComathTool(client, "comath.snapshot.verify", {
+        manifest_path: requiredOption(manifestPath, "manifest_path")
+      })
+    );
+    return;
+  }
+  if (subcommand === "restore") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.snapshot.restore");
+    if (!tool) {
+      throw new Error("snapshot restore tool is not registered");
+    }
+    const manifestPath = optionValue(parsed.args, "--manifest-path") ?? positionals[0];
+    const targetRoot = optionValue(parsed.args, "--target-root") ?? positionals[1];
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          manifest_path: requiredOption(manifestPath, "manifest_path"),
+          target_root: requiredOption(targetRoot, "target_root"),
+          actor: actorFrom(options, parsed.args)
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "verify-manifest") {
+    const manifestPath = optionValue(parsed.args, "--manifest-path") ?? positionals[0];
+    await notifyRuntimeResult(
+      ctx,
+      await executeComathTool(client, "comath.replay.verifyManifest", {
+        manifest_path: requiredOption(manifestPath, "manifest_path")
+      })
+    );
+    return;
+  }
+  throw new Error(`unsupported snapshot command: ${subcommand}`);
+}
+
 export function discoverComathResources(input: {
   skills?: string[];
   prompts?: string[];
@@ -2259,6 +2361,13 @@ export default function registerComathPiRuntime(pi: PiExtensionApi, options: Reg
     description: "Run CoMath final audit routes through comathd.",
     handler: async (args, ctx) => {
       await handleAuditCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.registerCommand("cm:snapshot", {
+    description: "Export, verify, or restore CoMath runtime snapshots through comathd.",
+    handler: async (args, ctx) => {
+      await handleSnapshotCommand(client, options, args, ctx);
     }
   });
 

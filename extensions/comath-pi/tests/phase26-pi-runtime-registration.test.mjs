@@ -148,10 +148,11 @@ assert.equal(fakePi.commands.has("cm:research"), true);
 assert.equal(fakePi.commands.has("cm:campaign"), true);
 assert.equal(fakePi.commands.has("cm:agent"), true);
 assert.equal(fakePi.commands.has("cm:audit"), true);
+assert.equal(fakePi.commands.has("cm:snapshot"), true);
 assert.equal(fakePi.commands.has("cm:replay"), true);
 assert.deepEqual(
   runtime_registration.commands.map((command) => command.command).sort(),
-  ["/cm:agent", "/cm:audit", "/cm:campaign", "/cm:replay", "/cm:research"].sort()
+  ["/cm:agent", "/cm:audit", "/cm:campaign", "/cm:replay", "/cm:research", "/cm:snapshot"].sort()
 );
 assert.equal(fakePi.handlers.has("resources_discover"), true);
 for (const toolName of fakePi.tools.keys()) {
@@ -167,6 +168,10 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.campaign.export",
       "comath.campaign.finalAudit",
       "comath.campaign.replay",
+      "comath.snapshot.export",
+      "comath.snapshot.verify",
+      "comath.snapshot.restore",
+      "comath.replay.verifyManifest",
       "comath.agent.profileList",
       "comath.agent.profileGet",
       "comath.agent.runForProfile",

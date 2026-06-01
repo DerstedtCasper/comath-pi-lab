@@ -62,6 +62,10 @@ const threatModel = readFileSync(join(root, "docs/architecture/threat-model.md")
 const adapterContracts = readFileSync(join(root, "docs/architecture/adapter-contracts.md"), "utf8");
 const leanSupplyChain = readFileSync(join(root, "docs/architecture/external-lean-supply-chain.md"), "utf8");
 const evidencePackPolicy = readFileSync(join(root, "docs/architecture/evidence-pack-policy.md"), "utf8");
+const productReadinessMatrix = readFileSync(join(root, "docs/progress/product-readiness-matrix.md"), "utf8");
+const goal3FinalGaAudit = readFileSync(join(root, "docs/progress/goal-3-final-ga-audit.md"), "utf8");
+const goal3TasksPath = join(root, "goal-3/tasks.md");
+const goal3Tasks = existsSync(goal3TasksPath) ? readFileSync(goal3TasksPath, "utf8") : "";
 const sampleConfig = readFileSync(join(root, "config/comath.sample.json"), "utf8");
 const moduleBoundaries = readFileSync(join(root, "docs/architecture/module-boundaries.md"), "utf8");
 const securityReview = readFileSync(join(root, "SECURITY_REVIEW.md"), "utf8");
@@ -284,6 +288,71 @@ for (const [content, label, pattern, guard] of [
   if (pattern.test(content) && !guard.test(content)) {
     invariantFailures.push(`${label} legacy Nat/formal replay wording must be explicitly historical/quarantined`);
   }
+}
+
+function requireGuardedLines(content, label, patterns, guard) {
+  const lines = content.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!patterns.some((pattern) => pattern.test(line))) {
+      continue;
+    }
+    const context = [
+      lines[index - 1] ?? "",
+      line,
+      lines[index + 1] ?? ""
+    ].join("\n");
+    if (!guard.test(context)) {
+      invariantFailures.push(`${label}:${index + 1} legacy release/proof-authority wording must be guarded as historical/quarantined`);
+    }
+  }
+}
+
+requireGuardedLines(
+  productReadinessMatrix,
+  "docs/progress/product-readiness-matrix.md",
+  [
+    /Native proof-kernel is the GA proof authority/i,
+    /Implemented for registered elementary Nat theorem-family slices/i,
+    /Phase 67 positive slice|Phase 72-76|clean replay, promotion/i
+  ],
+  /historical|quarantined|not current production proof path|not current release authority/i
+);
+
+requireGuardedLines(
+  devPlan,
+  "COMATH_PI_LAB_DEV_PLAN.md",
+  [
+    /clean Lean replay for the registered/i,
+    /positive `Nat\.add_zero` formal proof vertical slice/i,
+    /The GA vertical slice is complete when/i,
+    /one Lean theorem replay passes from a clean workspace/i,
+    /snapshot restore followed by proof replay passes/i
+  ],
+  /historical|quarantined|not current production proof path|not current release criteria/i
+);
+
+const evidenceLabelSection = evidencePackPolicy.match(/## Evidence Labels[\s\S]*?(?:\n## |$)/)?.[0] ?? "";
+if (
+  evidenceLabelSection.includes("`proven`") &&
+  !/FinalAuthorityPackagingV3|source report|generic Lean Authority v3 packaging/i.test(evidenceLabelSection)
+) {
+  invariantFailures.push("evidence pack policy proven label must require Lean Authority v3 source-report/package evidence");
+}
+
+if (
+  gaReleaseCriteria.includes("formally_checked") &&
+  !/FinalAuthorityPackagingV3|source report|generic Lean Authority v3 packaging/i.test(gaReleaseCriteria)
+) {
+  invariantFailures.push("GA release criteria must bind formally_checked release claims to Lean Authority v3 source-report/package evidence");
+}
+
+if (
+  /Task\s+(?:2[1-9]|[3-9]\d|1\d\d)/.test(goal3Tasks) &&
+  /final Task 20 review of the current/i.test(goal3FinalGaAudit) &&
+  !/historical snapshot|superseded by later Goal 3 tasks|audited commit/i.test(goal3FinalGaAudit)
+) {
+  invariantFailures.push("goal-3-final-ga-audit.md must be marked as a historical snapshot once later Goal 3 tasks exist");
 }
 
 const terminalStateSection = examplesReadme.match(/## Terminal States[\s\S]*?(?:\n## |$)/)?.[0] ?? "";
