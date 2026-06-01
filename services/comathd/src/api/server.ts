@@ -555,30 +555,34 @@ async function route(method: string, path: string, body: unknown, context: Route
     ],
     [
       "POST /literature/import-bibtex",
-      (payload) => {
+      async (payload) => {
         const body = payload as Parameters<typeof importBibTeX>[1] & { project_root: string };
-        return importBibTeX(body.project_root, body);
+        return sanitizePublicFormalAuthorityVocabulary(await importBibTeX(body.project_root, body));
       }
     ],
     [
       "POST /literature/import-pdf",
-      (payload) => {
+      async (payload) => {
         const body = payload as Parameters<typeof importLiteraturePdf>[1] & { project_root: string };
-        return importLiteraturePdf(body.project_root, body);
+        return sanitizePublicFormalAuthorityVocabulary(await importLiteraturePdf(body.project_root, body));
       }
     ],
     [
       "POST /literature/register-citation",
       (payload) => {
         const body = payload as Parameters<typeof registerCitation>[1] & { project_root: string };
-        return { citation: registerCitation(body.project_root, body) };
+        return {
+          citation: sanitizePublicFormalAuthorityVocabulary(registerCitation(body.project_root, body))
+        };
       }
     ],
     [
       "POST /literature/check-condition",
       (payload) => {
         const body = payload as Parameters<typeof checkCitationConditions>[1] & { project_root: string };
-        return { match: checkCitationConditions(body.project_root, body) };
+        return {
+          match: sanitizePublicFormalAuthorityVocabulary(checkCitationConditions(body.project_root, body))
+        };
       }
     ],
     [
@@ -587,8 +591,8 @@ async function route(method: string, path: string, body: unknown, context: Route
         const projectRoot = parsedUrl.searchParams.get("project_root") ?? "";
         const projectId = parsedUrl.searchParams.get("project_id") ?? "";
         return {
-          citations: listCitations(projectRoot, projectId),
-          condition_matches: listCitationConditionMatches(projectRoot, projectId)
+          citations: sanitizePublicFormalAuthorityVocabulary(listCitations(projectRoot, projectId)),
+          condition_matches: sanitizePublicFormalAuthorityVocabulary(listCitationConditionMatches(projectRoot, projectId))
         };
       }
     ],
@@ -596,43 +600,47 @@ async function route(method: string, path: string, body: unknown, context: Route
       "POST /paper/init",
       (payload) => {
         const body = payload as Parameters<typeof initPaper>[1] & { project_root: string };
-        return initPaper(body.project_root, body);
+        return sanitizePublicFormalAuthorityVocabulary(initPaper(body.project_root, body));
       }
     ],
     [
       "GET /paper/state",
       (_payload, parsedUrl) =>
-        readPaperState(
-          parsedUrl.searchParams.get("project_root") ?? "",
-          parsedUrl.searchParams.get("project_id") ?? ""
+        sanitizePublicFormalAuthorityVocabulary(
+          readPaperState(
+            parsedUrl.searchParams.get("project_root") ?? "",
+            parsedUrl.searchParams.get("project_id") ?? ""
+          )
         )
     ],
     [
       "POST /paper/update-section",
       (payload) => {
         const body = payload as Parameters<typeof updatePaperSection>[1] & { project_root: string };
-        return updatePaperSection(body.project_root, body);
+        return sanitizePublicFormalAuthorityVocabulary(updatePaperSection(body.project_root, body));
       }
     ],
     [
       "POST /paper/render-claim",
       (payload) => {
         const body = payload as Parameters<typeof renderClaimBlock>[1] & { project_root: string };
-        return renderClaimBlock(body.project_root, body);
+        return sanitizePublicFormalAuthorityVocabulary(renderClaimBlock(body.project_root, body));
       }
     ],
     [
       "GET /paper/check",
       (_payload, parsedUrl) =>
-        checkPaper(parsedUrl.searchParams.get("project_root") ?? "", {
-          project_id: parsedUrl.searchParams.get("project_id") ?? ""
-        })
+        sanitizePublicFormalAuthorityVocabulary(
+          checkPaper(parsedUrl.searchParams.get("project_root") ?? "", {
+            project_id: parsedUrl.searchParams.get("project_id") ?? ""
+          })
+        )
     ],
     [
       "POST /paper/export",
-      (payload) => {
+      async (payload) => {
         const body = payload as Parameters<typeof exportPaper>[1] & { project_root: string };
-        return exportPaper(body.project_root, body);
+        return sanitizePublicFormalAuthorityVocabulary(await exportPaper(body.project_root, body));
       }
     ],
     [
