@@ -1,3 +1,29 @@
+# Goal 3 Task 142 / Public Archive Review Gate
+
+Scope: audit final GA public archive review and public review package consumers after the new source-review assembly route, especially cross-route archive manifests or download presentation surfaces that could reintroduce authority vocabulary, host-path echoes, or restorable-public-archive semantics.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task before Task142.
+- Audited Task134-141 public archive/download surfaces: source-review public archive manifests, public snapshot export payloads, paper export payloads, generated report sanitization, and the service route table.
+- Added `goal3-task142-public-archive-review-gate.test.mjs`.
+- RED showed `dist/index.js` did not export `reviewGoal3PublicArchiveSurfaces`.
+- Added `reviewGoal3PublicArchiveSurfaces()` and `/release/public-archive/review`.
+- The review gate inspects manifest files and route payloads without treating the review as proof authority, writes `.comath/release/public-archive-review/<id>/review.json`, emits non-authoritative audit metadata, and reports sanitized veto codes for public archive restorable semantics, proof-authority claims, host-path exposure, authority vocabulary, and host-path echoes.
+- The review output deliberately does not repeat leaked host paths or final-authority vocabulary found in malicious public material.
+
+Verification evidence:
+
+- `corepack pnpm build` in `services/comathd` exited 0.
+- TDD RED: `node tests/unit/goal3-task142-public-archive-review-gate.test.mjs` failed because `../../dist/index.js` did not export `reviewGoal3PublicArchiveSurfaces`.
+- GREEN focused test exited 0: Task142 public archive review gate.
+- Adjacent public archive/path regressions exited 0: Task141 source-review public archive, Task139 public snapshot export path contract, Task137 public paper export path contract, and Task134 release public archive contract.
+- Package gates exited 0: `corepack pnpm typecheck` and `corepack pnpm test` in `services/comathd`, with Task142 discovered by the default runner.
+
+Boundary notes: Task142 adds a public archive review gate only. It does not make public archives restorable, does not certify proofs, does not change final authority packaging, and does not weaken internal restore fidelity.
+
+Residual risks: Goal 3 remains incomplete. Task142 closes the discovered final public archive review gap for service-side manifests and route payloads, but it does not add Pi/UI review-export ergonomics, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+
 # Goal 3 Task 141 / Source-Review Public Archive Contract
 
 Scope: audit remaining source-review package assembly and generated HTML/Markdown/JSON download presentation surfaces after the Pi-host project-relative snapshot manifest UX fix, without letting public review material act as proof authority or expose host paths.
