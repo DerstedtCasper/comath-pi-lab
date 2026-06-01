@@ -1,3 +1,29 @@
+# Goal 3 Task 137 / Public Paper Export Path Contract
+
+Scope: audit remaining public export/package route payloads for non-authoritative archive semantics and path/metadata exposure, with emphasis on `/paper/export` route fields.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task item before Task137.
+- Audited remaining public export/package route payloads after the Task133-136 public archive and route-sanitizer line.
+- Added `goal3-task137-public-paper-export-path-contract.test.mjs`.
+- RED showed `/paper/export` exposed the internal absolute `path` returned by `exportPaper()`.
+- Wrapped the public `/paper/export` route response so it omits the internal host path, exposes a slash-normalized project-relative artifact path, and includes a non-authoritative public archive contract with `proof_authority: none`, `can_restore: false`, and `exposes_host_paths: false`.
+- Preserved direct internal `exportPaper()` behavior, including its absolute local source path for internal file fidelity.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task137-public-paper-export-path-contract.test.mjs` failed because `/paper/export` still returned public `path`.
+- GREEN focused tests exited 0: Task137, Task136 public paper/literature route sanitizer, Task135 public generated report sanitizer, Task134 release public archive contract, Task133 public snapshot restore contract, and Phase12 working paper.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task137 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task137 is public route response hardening only. It does not rewrite persisted paper artifacts, does not change `exportPaper()` internal return fidelity, does not change snapshot restore rules, and does not make paper export material proof authority.
+
+Residual risks: Goal 3 remains incomplete. Task137 closes the discovered public paper export host-path leak and adds explicit non-authoritative archive semantics for that route, but it does not yet fully audit snapshot verify/restore route response path echoes, any future source-review package assembly route, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+
 # Goal 3 Task 136 / Public Paper And Literature Route Sanitizer
 
 Scope: audit remaining public export/read-model route bodies outside snapshot material, with emphasis on paper and literature responses that could bypass the public authority vocabulary sanitizer.
