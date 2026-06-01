@@ -191,7 +191,14 @@ function commandMetadata(command: string): Pick<
   }
   if (command === "/cm:release") {
     return {
-      subcommands: ["source-review", "review", "pi-codex-lifecycle", "codex-api-probe", "real-pi-runtime-probe"],
+      subcommands: [
+        "source-review",
+        "review",
+        "pi-codex-lifecycle",
+        "codex-api-probe",
+        "real-pi-runtime-probe",
+        "lifecycle-walkthrough"
+      ],
       dispatch_tool: "comath.release.publicArchiveReview",
       mutates: true,
       goal_compatible: false

@@ -146,6 +146,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleReview",
   "comath.release.piCodexApiProbe",
   "comath.release.piRealPiRuntimeProbe",
+  "comath.release.piCodexLifecycleWalkthrough",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -405,12 +406,14 @@ const privilegedProofAuthorityPattern =
   /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/gi;
 
 const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
+const secretEchoPattern = /\b(?:COMATH_CODEX_API_KEY|sk-[A-Za-z0-9._-]+)\b/gi;
 
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
     return value
       .replace(privilegedProofAuthorityPattern, "unverified_formal_status")
-      .replace(hostPathEchoPattern, "[redacted_host_path]");
+      .replace(hostPathEchoPattern, "[redacted_host_path]")
+      .replace(secretEchoPattern, "[redacted_secret]");
   }
   if (Array.isArray(value)) {
     return value.map((item) => sanitizePublicProofAuthorityValue(item));
@@ -434,6 +437,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleReview" ||
     name === "comath.release.piCodexApiProbe" ||
     name === "comath.release.piRealPiRuntimeProbe" ||
+    name === "comath.release.piCodexLifecycleWalkthrough" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -442,6 +446,128 @@ function shouldSanitizePublicToolResult(name: string): boolean {
 async function publicToolResult(name: string, result: Promise<any>): Promise<any> {
   const value = await result;
   return shouldSanitizePublicToolResult(name) ? sanitizePublicProofAuthorityValue(value) : value;
+}
+
+const PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS = [
+  "real_pi_host_manual_install",
+  "real_pi_host_automated_install"
+] as const;
+
+function publicOperatorText(value: string): string {
+  return sanitizePublicProofAuthorityValue(value) as string;
+}
+
+function optionalPublicOperatorText(input: Record<string, unknown>, field: string, fallback: string): string {
+  return publicOperatorText(readString(input, field, { optional: true }) ?? fallback);
+}
+
+function readLifecycleWalkthroughSessionKind(input: Record<string, unknown>): typeof PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS[number] {
+  const value = readString(input, "session_kind", { optional: true }) ?? "real_pi_host_manual_install";
+  if ((PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS as readonly string[]).includes(value)) {
+    return value as typeof PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS[number];
+  }
+  throw new Error("session_kind must be real_pi_host_manual_install or real_pi_host_automated_install");
+}
+
+function buildPiCodexLifecycleWalkthrough(input: Record<string, unknown>): Record<string, unknown> {
+  const projectId = publicOperatorText(readString(input, "project_id"));
+  const actor = publicOperatorText(readString(input, "actor"));
+  const piHostLabel = publicOperatorText(readString(input, "pi_host_label"));
+  const sessionKind = readLifecycleWalkthroughSessionKind(input);
+  const probeId = optionalPublicOperatorText(input, "probe_id", `${projectId}-REAL-PI-RUNTIME`);
+  const validationId = optionalPublicOperatorText(input, "validation_id", `${projectId}-CODEX-API`);
+  const reviewId = optionalPublicOperatorText(input, "review_id", `${projectId}-LIFECYCLE-REVIEW`);
+
+  return {
+    schema_version: "comath.pi.lifecycle.operator_walkthrough.v1",
+    project_id: projectId,
+    actor,
+    pi_host_label: piHostLabel,
+    session_kind: sessionKind,
+    probe_id: probeId,
+    validation_id: validationId,
+    review_id: reviewId,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    direct_trusted_state_mutation: false,
+    service_authority: "comathd_only",
+    boundary_notes: [
+      "This walkthrough only renders operator steps and command templates.",
+      "Lifecycle reports are release-readiness evidence, not GA certification.",
+      "Lean4/mathlib kernel replay remains the only mathematical authority."
+    ],
+    operator_steps: [
+      {
+        order: 1,
+        code: "confirm_real_pi_host",
+        title: "Confirm the operator is using a real Pi host session.",
+        checks: [
+          "Use a real Pi host label; fake Pi or local-only sessions remain blockers.",
+          "Keep Codex credentials in service-owned environment or config, never in Pi command text."
+        ]
+      },
+      {
+        order: 2,
+        code: "collect_real_pi_runtime_probe",
+        title: "Collect real-Pi install and runtime-registration evidence.",
+        command_subcommand: "real-pi-runtime-probe",
+        expected_artifact_kinds: ["pi_install_transcript", "runtime_registration_snapshot"]
+      },
+      {
+        order: 3,
+        code: "collect_codex_api_probe",
+        title: "Collect production Codex API account and network evidence through service-owned config.",
+        command_subcommand: "codex-api-probe",
+        expected_artifact_kinds: ["codex_validation_report"]
+      },
+      {
+        order: 4,
+        code: "run_lifecycle_review",
+        title: "Review the lifecycle evidence with fail-closed non-authority semantics.",
+        command_subcommand: "pi-codex-lifecycle",
+        expected_artifact_kinds: ["pi_codex_lifecycle_readiness_review"]
+      }
+    ],
+    service_evidence_sources: [
+      {
+        source: "durable_service_lifecycle_probe",
+        service_route: "/release/pi-codex-lifecycle/service-probe",
+        ownership: "service_owned_allowlisted_command_config",
+        pi_side_action: "Use the resulting durable service lifecycle report as evidence for the lifecycle review."
+      }
+    ],
+    command_templates: [
+      {
+        order: 1,
+        subcommand: "real-pi-runtime-probe",
+        command:
+          `/cm:release real-pi-runtime-probe --project-id ${projectId} --probe-id ${probeId} ` +
+          `--pi-host-label ${piHostLabel} --session-kind ${sessionKind} ` +
+          "--install-program <absolute-install-program> --install-arg <operator-install-arg> " +
+          "--runtime-registration-program <absolute-runtime-registration-program> " +
+          "--runtime-registration-arg <operator-runtime-registration-arg> " +
+          "--host-confirmation-program <absolute-host-confirmation-program> " +
+          "--host-confirmation-arg <operator-host-confirmation-arg>"
+      },
+      {
+        order: 2,
+        subcommand: "codex-api-probe",
+        command: `/cm:release codex-api-probe --project-id ${projectId} --validation-id ${validationId}`
+      },
+      {
+        order: 3,
+        subcommand: "pi-codex-lifecycle",
+        command:
+          `/cm:release pi-codex-lifecycle --project-id ${projectId} --review-id ${reviewId} ` +
+          `--session-kind ${sessionKind} --pi-host-kind real_pi_host ` +
+          "--runtime-entrypoint-imported true --runtime-registered true --host-confirmation-observed true " +
+          "--comathd-server-kind durable_service --service-start-observed true --service-stop-observed true " +
+          "--service-restart-observed true --installed-cli-validation-ok true " +
+          "--installed-cli-probe-source service_owned_process --codex-api-account-network-validation passed"
+      }
+    ]
+  };
 }
 
 export async function executeComathTool(client: ComathClient, name: string, input: Record<string, unknown>): Promise<any> {
@@ -974,6 +1100,10 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
         commands: readRecord(input, "commands")
       })
     );
+  }
+
+  if (name === "comath.release.piCodexLifecycleWalkthrough") {
+    return publicToolResult(name, Promise.resolve(buildPiCodexLifecycleWalkthrough(input)));
   }
 
   throw new Error(`unsupported comath tool: ${name}`);
@@ -1682,6 +1812,21 @@ export function createComathTools(): ToolDescriptor[] {
             host_confirmation: realPiRuntimeProbeCommandProp
           }
         }
+      })
+    },
+    {
+      name: "comath.release.piCodexLifecycleWalkthrough",
+      description:
+        "Render a read-only operator walkthrough for the Pi/Codex lifecycle evidence and readiness-review chain.",
+      mutates: false,
+      input_schema: objectSchema(["project_id", "actor", "pi_host_label"], {
+        project_id: stringProp,
+        actor: stringProp,
+        pi_host_label: stringProp,
+        session_kind: { type: "string", enum: [...PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS] },
+        probe_id: stringProp,
+        validation_id: stringProp,
+        review_id: stringProp
       })
     }
   ].map((tool) =>
@@ -2745,6 +2890,21 @@ async function handleReleaseCommand(
         },
         ctx
       )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-walkthrough") {
+    await notifyRuntimeResult(
+      ctx,
+      await executeComathTool(client, "comath.release.piCodexLifecycleWalkthrough", {
+        project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+        actor: actorFrom(options, parsed.args),
+        pi_host_label: requiredOption(optionValue(parsed.args, "--pi-host-label"), "pi_host_label"),
+        session_kind: optionValue(parsed.args, "--session-kind"),
+        probe_id: optionValue(parsed.args, "--probe-id"),
+        validation_id: optionValue(parsed.args, "--validation-id"),
+        review_id: optionValue(parsed.args, "--review-id")
+      })
     );
     return;
   }

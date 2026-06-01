@@ -95,6 +95,7 @@ assert.equal(tools.some((tool) => tool.name === "comath.release.sourceReviewPubl
 assert.equal(tools.some((tool) => tool.name === "comath.release.publicArchiveReview"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleReview"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexApiProbe"), true);
+assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleWalkthrough"), true);
 assert.equal(
   tools.every((tool) => tool.input_schema && tool.input_schema.type === "object"),
   true
