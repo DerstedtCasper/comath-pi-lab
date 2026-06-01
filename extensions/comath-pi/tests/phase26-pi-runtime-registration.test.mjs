@@ -175,6 +175,7 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.replay.verifyManifest",
       "comath.release.sourceReviewPublicArchive",
       "comath.release.publicArchiveReview",
+      "comath.release.piCodexLifecycleReview",
       "comath.agent.profileList",
       "comath.agent.profileGet",
       "comath.agent.runForProfile",

@@ -93,6 +93,7 @@ assert.equal(tools.some((tool) => tool.name === "comath.snapshot.restore"), true
 assert.equal(tools.some((tool) => tool.name === "comath.replay.verifyManifest"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.sourceReviewPublicArchive"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.publicArchiveReview"), true);
+assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleReview"), true);
 assert.equal(
   tools.every((tool) => tool.input_schema && tool.input_schema.type === "object"),
   true

@@ -143,6 +143,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.replay.verifyManifest",
   "comath.release.sourceReviewPublicArchive",
   "comath.release.publicArchiveReview",
+  "comath.release.piCodexLifecycleReview",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -428,6 +429,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.replay.verifyManifest" ||
     name === "comath.release.sourceReviewPublicArchive" ||
     name === "comath.release.publicArchiveReview" ||
+    name === "comath.release.piCodexLifecycleReview" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -916,6 +918,22 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
           ? {}
           : { review_id: readString(input, "review_id", { optional: true }) }),
         surfaces: Array.isArray(input.surfaces) ? input.surfaces : []
+      })
+    );
+  }
+
+  if (name === "comath.release.piCodexLifecycleReview") {
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/review", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: readString(input, "actor"),
+        ...(readString(input, "review_id", { optional: true }) === undefined
+          ? {}
+          : { review_id: readString(input, "review_id", { optional: true }) }),
+        install_session_evidence: readRecord(input, "install_session_evidence"),
+        codex_evidence: readRecord(input, "codex_evidence")
       })
     );
   }
@@ -1525,6 +1543,60 @@ export function createComathTools(): ToolDescriptor[] {
           }
         }
       })
+    },
+    {
+      name: "comath.release.piCodexLifecycleReview",
+      description: "Review real-host Pi/Codex lifecycle readiness through the service-owned non-authoritative release gate.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "actor", "install_session_evidence", "codex_evidence"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        actor: stringProp,
+        review_id: stringProp,
+        install_session_evidence: {
+          type: "object",
+          required: [
+            "session_kind",
+            "pi_host_kind",
+            "runtime_entrypoint_imported",
+            "runtime_registered",
+            "host_confirmation_observed",
+            "comathd_server_kind",
+            "service_start_observed",
+            "service_stop_observed",
+            "service_restart_observed"
+          ],
+          properties: {
+            session_kind: {
+              type: "string",
+              enum: ["phase45_local_fake_pi_http_e2e", "real_pi_host_manual_install", "real_pi_host_automated_install", "unknown"]
+            },
+            pi_host_kind: { type: "string", enum: ["fake_pi_host", "real_pi_host", "unknown"] },
+            runtime_entrypoint_imported: { type: "boolean" },
+            runtime_registered: { type: "boolean" },
+            host_confirmation_observed: { type: "boolean" },
+            comathd_server_kind: {
+              type: "string",
+              enum: ["ephemeral_test_http_server", "durable_service", "manual_shell", "unknown"]
+            },
+            service_start_observed: { type: "boolean" },
+            service_stop_observed: { type: "boolean" },
+            service_restart_observed: { type: "boolean" }
+          }
+        },
+        codex_evidence: {
+          type: "object",
+          required: ["installed_cli_validation_ok", "installed_cli_probe_source", "codex_api_account_network_validation"],
+          properties: {
+            installed_cli_validation_ok: { type: "boolean" },
+            installed_cli_probe_source: { type: "string", enum: ["service_owned_process", "injected_fake_cli", "not_run"] },
+            codex_api_account_network_validation: {
+              type: "string",
+              enum: ["passed", "not_run", "injected_fake", "blocked_missing_credentials"]
+            }
+          }
+        }
+      })
     }
   ].map((tool) =>
     tool.mutates
@@ -1611,6 +1683,28 @@ function numberOptionValue(args: string[], name: string): number | undefined {
   throw new Error(`${name} must be a non-negative number`);
 }
 
+function booleanOptionValue(args: string[], name: string): boolean | undefined {
+  const value = optionValue(args, name);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error(`${name} must be true or false`);
+}
+
+function requiredBooleanOption(args: string[], name: string, field: string): boolean {
+  const value = booleanOptionValue(args, name);
+  if (value !== undefined) {
+    return value;
+  }
+  throw new Error(`${field} is required`);
+}
+
 function optionValues(args: string[], name: string): string[] {
   const values: string[] = [];
   for (let index = 0; index < args.length; index += 1) {
@@ -1668,6 +1762,14 @@ function parseReportSpec(value: string): { format: string; path: string } {
   };
 }
 
+function readRecord(payload: Record<string, unknown>, field: string): Record<string, unknown> {
+  const value = payload[field];
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  throw new Error(`${field} is required`);
+}
+
 function parseSurfaceSpec(value: string): Record<string, unknown> {
   const parts = value.split(":");
   if (parts.length < 2) {
@@ -1679,6 +1781,31 @@ function parseSurfaceSpec(value: string): Record<string, unknown> {
     surface_id: requiredOption(surfaceId, "surface_id"),
     surface_kind: requiredOption(surfaceKind, "surface_kind"),
     ...(manifestPath ? { manifest_path: manifestPath } : {})
+  };
+}
+
+function parsePiCodexLifecycleInstallSessionEvidence(args: string[]): Record<string, unknown> {
+  return {
+    session_kind: requiredOption(optionValue(args, "--session-kind"), "session_kind"),
+    pi_host_kind: requiredOption(optionValue(args, "--pi-host-kind"), "pi_host_kind"),
+    runtime_entrypoint_imported: requiredBooleanOption(args, "--runtime-entrypoint-imported", "runtime_entrypoint_imported"),
+    runtime_registered: requiredBooleanOption(args, "--runtime-registered", "runtime_registered"),
+    host_confirmation_observed: requiredBooleanOption(args, "--host-confirmation-observed", "host_confirmation_observed"),
+    comathd_server_kind: requiredOption(optionValue(args, "--comathd-server-kind"), "comathd_server_kind"),
+    service_start_observed: requiredBooleanOption(args, "--service-start-observed", "service_start_observed"),
+    service_stop_observed: requiredBooleanOption(args, "--service-stop-observed", "service_stop_observed"),
+    service_restart_observed: requiredBooleanOption(args, "--service-restart-observed", "service_restart_observed")
+  };
+}
+
+function parsePiCodexLifecycleCodexEvidence(args: string[]): Record<string, unknown> {
+  return {
+    installed_cli_validation_ok: requiredBooleanOption(args, "--installed-cli-validation-ok", "installed_cli_validation_ok"),
+    installed_cli_probe_source: requiredOption(optionValue(args, "--installed-cli-probe-source"), "installed_cli_probe_source"),
+    codex_api_account_network_validation: requiredOption(
+      optionValue(args, "--codex-api-account-network-validation"),
+      "codex_api_account_network_validation"
+    )
   };
 }
 
@@ -2432,6 +2559,29 @@ async function handleReleaseCommand(
           actor: actorFrom(options, parsed.args),
           review_id: optionValue(parsed.args, "--review-id"),
           surfaces
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "pi-codex-lifecycle") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.piCodexLifecycleReview");
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle review tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          review_id: optionValue(parsed.args, "--review-id"),
+          install_session_evidence: parsePiCodexLifecycleInstallSessionEvidence(parsed.args),
+          codex_evidence: parsePiCodexLifecycleCodexEvidence(parsed.args)
         },
         ctx
       )
