@@ -49,6 +49,7 @@ import {
   withPublicExternalV3TerminalState
 } from "../proof-kernel/campaign/external-terminal-vocabulary.js";
 import { runV3NegativeGaSlices } from "../release/v3-negative-ga-slices.js";
+import { assembleSourceReviewPublicArchive } from "../release/source-review-public-archive.js";
 import {
   buildAgentProfileLaunch,
   buildAgentAdapterPackageLaunch,
@@ -333,6 +334,13 @@ async function route(method: string, path: string, body: unknown, context: Route
             actor?: string;
           }
         )
+    ],
+    [
+      "POST /release/source-review/public-archive",
+      (payload) => {
+        const body = payload as Parameters<typeof assembleSourceReviewPublicArchive>[1] & { project_root: string };
+        return assembleSourceReviewPublicArchive(body.project_root, body);
+      }
     ],
     ["POST /project/open", (payload) => openProject(payload as { root_path: string })],
     [
