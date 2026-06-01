@@ -6,7 +6,7 @@ The current repository is a Goal 3 GA-refactor worktree with Research Alpha foun
 
 ## What CoMath Owns
 
-- Pi interaction surfaces for `/cm:research`, `/cm:campaign`, and `/cm:agent` commands.
+- Pi interaction surfaces for `/cm:research`, `/cm:campaign`, `/cm:agent`, and `/cm:release` commands.
 - `comathd`, the trusted local mutation boundary for runtime state, artifacts, audit logs, campaign state, and promotion decisions.
 - FormalSpecLock, AssumptionLedger, StatementDiffGate, statement-drift red-team reports, and no-cheat gates that preserve theorem boundaries.
 - External wheel registry contracts for theorem search, proof-search backends, literature retrieval, ingestion, and computation adapters.
@@ -94,7 +94,7 @@ Artifacts without clean replay remain `draft`, `hypothesis`, `candidate`, `block
 
 ## Release Hardening Docs
 
-Public release material uses three separate archive contracts. A source-review public diagnostic archive is non-authoritative (`proof_authority: none`) and may include sanitized source, markdown, HTML, and JSON reports for review, but `public_archive_is_proof_authority=false`; it cannot replace FinalAuthorityPackagingV3 / Lean Authority v3 source-report evidence. A default snapshot export is a sanitized `public_download` with `can_restore=false`, is not a restore source, and is rejected by restore with `SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE`. Only an explicit `internal_restore` snapshot is a byte-for-byte runtime-fidelity restore source, and it is not a public distribution artifact.
+Public release material uses three separate archive contracts. A source-review public diagnostic archive is non-authoritative (`proof_authority: none`) and may include sanitized source, markdown, HTML, and JSON reports for review, but `public_archive_is_proof_authority=false`; it cannot replace FinalAuthorityPackagingV3 / Lean Authority v3 source-report evidence. A default snapshot export is a sanitized `public_download` with `can_restore=false`, is not a restore source, and is rejected by restore with `SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE`. Only an explicit `internal_restore` snapshot is a byte-for-byte runtime-fidelity restore source, and it is not a public distribution artifact. Pi `/cm:release` and release tools expose source-review assembly and public archive review through `comathd` with host confirmation; they do not write `.comath/` directly or turn public diagnostics into proof authority.
 
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)

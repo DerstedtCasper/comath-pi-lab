@@ -1,3 +1,33 @@
+# Goal 3 Task 143 / Pi Public Release Review Consumer
+
+Scope: audit Pi/UI and public release consumer ergonomics for the source-review public archive and public archive review routes added by Tasks141-142, without letting Pi write `.comath/` directly, leak host paths, or present public diagnostics as proof authority.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task before Task143; also repaired the stale Task142 `Commit: pending` tracker marker to `cf9cfba`.
+- Audited Pi runtime registration, executable tool allowlists, `/cm:*` command parsing/handlers, public tool result sanitization, and adjacent snapshot/replay/campaign export sanitizer tests.
+- Added `goal3-task143-pi-public-release-review-consumer.test.mjs`.
+- RED showed `comath.release.sourceReviewPublicArchive` was not registered in the Pi extension.
+- Added `comath.release.sourceReviewPublicArchive` and `comath.release.publicArchiveReview` tools, both routed only to `comathd` release endpoints and both requiring Pi host confirmation.
+- Added `/cm:release source-review|review` command handling and runtime-registration metadata.
+- Expanded public Pi result/notification sanitization so release review responses redact privileged proof-authority vocabulary and host-path echoes.
+- Updated Phase6/Phase26 runtime contract tests, Pi package test chain, README public surface wording, and TODO deferred-risk wording.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task143-pi-public-release-review-consumer.test.mjs` failed because `comath.release.sourceReviewPublicArchive` was not registered.
+- GREEN focused test exited 0: Task143 Pi public release review consumer.
+- Package gate exited 0: `corepack pnpm --filter @comath/pi-extension test`, with Task143 discovered by the default runner.
+- Typecheck gates exited 0 for `@comath/pi-extension` and `@comath/comathd`.
+- Adjacent service regressions exited 0: Task141 source-review public archive and Task142 public archive review gate.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+
+Boundary notes: Task143 is a Pi consumer and presentation hardening task only. It does not change service-side release archive semantics, does not make public archives restorable, does not promote claims, and does not weaken final Lean Authority v3 packaging gates.
+
+Residual risks: Goal 3 remains incomplete. Task143 closes the Pi public release review consumer gap, but richer visual review workflows, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, and final GA audit remain open.
+
 # Goal 3 Task 142 / Public Archive Review Gate
 
 Scope: audit final GA public archive review and public review package consumers after the new source-review assembly route, especially cross-route archive manifests or download presentation surfaces that could reintroduce authority vocabulary, host-path echoes, or restorable-public-archive semantics.

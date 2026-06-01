@@ -39,6 +39,13 @@ assert.deepEqual(parseComathCommand("/cm:replay verify SNAP-0001"), {
   args: ["SNAP-0001"]
 });
 
+assert.deepEqual(parseComathCommand("/cm:release review --project-id PRJ-0001"), {
+  namespace: "cm",
+  action: "release",
+  subcommand: "review",
+  args: ["--project-id", "PRJ-0001"]
+});
+
 assert.equal(parseComathCommand("/not-comath"), null);
 
 const calls = [];
@@ -84,6 +91,8 @@ assert.equal(tools.some((tool) => tool.name === "comath.snapshot.export"), true)
 assert.equal(tools.some((tool) => tool.name === "comath.snapshot.verify"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.snapshot.restore"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.replay.verifyManifest"), true);
+assert.equal(tools.some((tool) => tool.name === "comath.release.sourceReviewPublicArchive"), true);
+assert.equal(tools.some((tool) => tool.name === "comath.release.publicArchiveReview"), true);
 assert.equal(
   tools.every((tool) => tool.input_schema && tool.input_schema.type === "object"),
   true
@@ -131,6 +140,7 @@ assert.equal(extension.name, "coMath-pi-lab");
 assert.equal(extension.commands.length > 0, true);
 assert.equal(extension.commands.includes("/cm:snapshot"), true);
 assert.equal(extension.commands.includes("/cm:replay"), true);
+assert.equal(extension.commands.includes("/cm:release"), true);
 assert.equal(extension.tools.length, tools.length);
 
 function collectFiles(dir) {

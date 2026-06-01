@@ -141,6 +141,8 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.snapshot.verify",
   "comath.snapshot.restore",
   "comath.replay.verifyManifest",
+  "comath.release.sourceReviewPublicArchive",
+  "comath.release.publicArchiveReview",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -172,6 +174,7 @@ const COMATH_EXTENSION_COMMANDS = [
   "/cm:audit",
   "/cm:snapshot",
   "/cm:replay",
+  "/cm:release",
   "/cm:dashboard"
 ];
 
@@ -181,7 +184,8 @@ const PI_RUNTIME_COMMANDS = [
   "/cm:agent",
   "/cm:audit",
   "/cm:snapshot",
-  "/cm:replay"
+  "/cm:replay",
+  "/cm:release"
 ];
 
 function splitCommand(input: string): string[] {
@@ -252,7 +256,8 @@ export function parseComathCommand(input: string): ParsedComathCommand | null {
     action === "audit" ||
     action === "research" ||
     action === "campaign" ||
-    action === "agent"
+    action === "agent" ||
+    action === "release"
   ) {
     const [subcommand, ...args] = parts.slice(1);
     return {
@@ -396,9 +401,13 @@ function requireToolExecutionConfirmation(name: string, input: Record<string, un
 const privilegedProofAuthorityPattern =
   /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/gi;
 
+const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
+
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
-    return value.replace(privilegedProofAuthorityPattern, "unverified_formal_status");
+    return value
+      .replace(privilegedProofAuthorityPattern, "unverified_formal_status")
+      .replace(hostPathEchoPattern, "[redacted_host_path]");
   }
   if (Array.isArray(value)) {
     return value.map((item) => sanitizePublicProofAuthorityValue(item));
@@ -417,6 +426,8 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.snapshot.verify" ||
     name === "comath.snapshot.restore" ||
     name === "comath.replay.verifyManifest" ||
+    name === "comath.release.sourceReviewPublicArchive" ||
+    name === "comath.release.publicArchiveReview" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -875,6 +886,36 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
       client.post("/replay/verify-manifest", {
         ...optionalProjectRoot(input),
         manifest_path: readString(input, "manifest_path")
+      })
+    );
+  }
+
+  if (name === "comath.release.sourceReviewPublicArchive") {
+    return publicToolResult(
+      name,
+      client.post("/release/source-review/public-archive", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: readString(input, "actor"),
+        ...(readString(input, "archive_id", { optional: true }) === undefined
+          ? {}
+          : { archive_id: readString(input, "archive_id", { optional: true }) }),
+        reports: Array.isArray(input.reports) ? input.reports : []
+      })
+    );
+  }
+
+  if (name === "comath.release.publicArchiveReview") {
+    return publicToolResult(
+      name,
+      client.post("/release/public-archive/review", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: readString(input, "actor"),
+        ...(readString(input, "review_id", { optional: true }) === undefined
+          ? {}
+          : { review_id: readString(input, "review_id", { optional: true }) }),
+        surfaces: Array.isArray(input.surfaces) ? input.surfaces : []
       })
     );
   }
@@ -1435,6 +1476,55 @@ export function createComathTools(): ToolDescriptor[] {
         project_root: stringProp,
         manifest_path: stringProp
       })
+    },
+    {
+      name: "comath.release.sourceReviewPublicArchive",
+      description: "Assemble a sanitized non-authoritative source-review public diagnostic archive through comathd.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "actor", "reports"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        actor: stringProp,
+        archive_id: stringProp,
+        reports: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["format", "path"],
+            properties: {
+              format: { type: "string", enum: ["markdown", "html", "json"] },
+              path: stringProp
+            }
+          }
+        }
+      })
+    },
+    {
+      name: "comath.release.publicArchiveReview",
+      description: "Review public release/archive surfaces through the service-owned Goal 3 public archive review gate.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "actor", "surfaces"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        actor: stringProp,
+        review_id: stringProp,
+        surfaces: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["surface_id", "surface_kind"],
+            properties: {
+              surface_id: stringProp,
+              surface_kind: {
+                type: "string",
+                enum: ["source_review_public_archive", "public_route_payload", "public_review_manifest"]
+              },
+              manifest_path: stringProp,
+              payload: { type: "object" }
+            }
+          }
+        }
+      })
     }
   ].map((tool) =>
     tool.mutates
@@ -1565,6 +1655,31 @@ function positionalArgs(args: string[]): string[] {
     values.push(arg);
   }
   return values;
+}
+
+function parseReportSpec(value: string): { format: string; path: string } {
+  const separator = value.indexOf(":");
+  if (separator <= 0 || separator === value.length - 1) {
+    throw new Error("report must use format:path");
+  }
+  return {
+    format: value.slice(0, separator),
+    path: value.slice(separator + 1)
+  };
+}
+
+function parseSurfaceSpec(value: string): Record<string, unknown> {
+  const parts = value.split(":");
+  if (parts.length < 2) {
+    throw new Error("surface must use surface_id:surface_kind[:manifest_path]");
+  }
+  const [surfaceId, surfaceKind, ...pathParts] = parts;
+  const manifestPath = pathParts.join(":");
+  return {
+    surface_id: requiredOption(surfaceId, "surface_id"),
+    surface_kind: requiredOption(surfaceKind, "surface_kind"),
+    ...(manifestPath ? { manifest_path: manifestPath } : {})
+  };
 }
 
 function requiredOption(value: string | undefined, field: string): string {
@@ -2266,6 +2381,66 @@ async function handleSnapshotCommand(
   throw new Error(`unsupported snapshot command: ${subcommand}`);
 }
 
+async function handleReleaseCommand(
+  client: ComathClient,
+  options: RegisterComathPiRuntimeOptions,
+  args: string,
+  ctx: unknown
+): Promise<void> {
+  const parsed = parseComathCommand(`/cm:release ${args}`.trim());
+  if (!parsed || parsed.action !== "release") {
+    throw new Error("release command is required");
+  }
+  const subcommand = parsed.subcommand ?? "review";
+  if (subcommand === "source-review") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.sourceReviewPublicArchive");
+    if (!tool) {
+      throw new Error("source-review public archive tool is not registered");
+    }
+    const reports = optionValues(parsed.args, "--report").map(parseReportSpec);
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          archive_id: optionValue(parsed.args, "--archive-id"),
+          reports
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "review") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.publicArchiveReview");
+    if (!tool) {
+      throw new Error("public archive review tool is not registered");
+    }
+    const surfaces = optionValues(parsed.args, "--surface").map(parseSurfaceSpec);
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          review_id: optionValue(parsed.args, "--review-id"),
+          surfaces
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  throw new Error(`unsupported release command: ${subcommand}`);
+}
+
 export function discoverComathResources(input: {
   skills?: string[];
   prompts?: string[];
@@ -2393,6 +2568,13 @@ export default function registerComathPiRuntime(pi: PiExtensionApi, options: Reg
     description: "Run CoMath replay routes through comathd.",
     handler: async (args, ctx) => {
       await handleReplayCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.registerCommand("cm:release", {
+    description: "Assemble and review public release archives through comathd.",
+    handler: async (args, ctx) => {
+      await handleReleaseCommand(client, options, args, ctx);
     }
   });
 

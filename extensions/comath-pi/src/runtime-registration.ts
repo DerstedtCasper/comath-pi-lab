@@ -189,6 +189,14 @@ function commandMetadata(command: string): Pick<
       goal_compatible: false
     };
   }
+  if (command === "/cm:release") {
+    return {
+      subcommands: ["source-review", "review"],
+      dispatch_tool: "comath.release.publicArchiveReview",
+      mutates: true,
+      goal_compatible: false
+    };
+  }
   if (command === "/cm:paper") {
     return {
       subcommands: ["init", "state", "update-section", "render-claim", "check", "export"],
