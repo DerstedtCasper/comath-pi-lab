@@ -42,11 +42,17 @@ export type ResearchCampaignWithExternalV3TerminalState = ResearchCampaign & {
 };
 
 const unverifiedPublicAuthorityVocabulary =
-  /\b(?:completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/i;
+  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/i;
+const unverifiedPublicAuthorityVocabularyText =
+  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/gi;
+
+export function sanitizePublicFormalAuthorityText(value: string): string {
+  return value.replace(unverifiedPublicAuthorityVocabularyText, "unverified_formal_status");
+}
 
 export function sanitizePublicFormalAuthorityVocabulary(value: unknown): unknown {
   if (typeof value === "string") {
-    return unverifiedPublicAuthorityVocabulary.test(value) ? "unverified_formal_status" : value;
+    return sanitizePublicFormalAuthorityText(value);
   }
   if (Array.isArray(value)) {
     return value.map((entry) => sanitizePublicFormalAuthorityVocabulary(entry));

@@ -229,19 +229,23 @@ async function route(method: string, path: string, body: unknown, context: Route
     [
       "GET /claim/get",
       (_payload, parsedUrl) => ({
-        claim: getClaim(
-          parsedUrl.searchParams.get("project_root") ?? "",
-          parsedUrl.searchParams.get("project_id") ?? "",
-          parsedUrl.searchParams.get("claim_id") ?? ""
+        claim: sanitizePublicFormalAuthorityVocabulary(
+          getClaim(
+            parsedUrl.searchParams.get("project_root") ?? "",
+            parsedUrl.searchParams.get("project_id") ?? "",
+            parsedUrl.searchParams.get("claim_id") ?? ""
+          )
         )
       })
     ],
     [
       "GET /claim/list",
       (_payload, parsedUrl) => ({
-        claims: readClaims(
-          parsedUrl.searchParams.get("project_root") ?? "",
-          parsedUrl.searchParams.get("project_id") ?? undefined
+        claims: sanitizePublicFormalAuthorityVocabulary(
+          readClaims(
+            parsedUrl.searchParams.get("project_root") ?? "",
+            parsedUrl.searchParams.get("project_id") ?? undefined
+          )
         )
       })
     ],
@@ -374,14 +378,16 @@ async function route(method: string, path: string, body: unknown, context: Route
           actor: string;
         };
         return {
-          health: probeAgentAdapterHealth(body.project_root, {
-            project_id: body.project_id,
-            profile_id: body.profile_id as Parameters<typeof probeAgentAdapterHealth>[1]["profile_id"],
-            program: body.program,
-            adapter_args: body.adapter_args,
-            timeout_ms: body.timeout_ms,
-            actor: body.actor
-          })
+          health: sanitizePublicFormalAuthorityVocabulary(
+            probeAgentAdapterHealth(body.project_root, {
+              project_id: body.project_id,
+              profile_id: body.profile_id as Parameters<typeof probeAgentAdapterHealth>[1]["profile_id"],
+              program: body.program,
+              adapter_args: body.adapter_args,
+              timeout_ms: body.timeout_ms,
+              actor: body.actor
+            })
+          )
         };
       }
     ],
@@ -468,28 +474,34 @@ async function route(method: string, path: string, body: unknown, context: Route
     [
       "GET /workstream/status",
       (_payload, parsedUrl) => ({
-        workstream: getWorkstreamStatus(parsedUrl.searchParams.get("project_root") ?? "", {
-          project_id: parsedUrl.searchParams.get("project_id") ?? "",
-          workstream_id: parsedUrl.searchParams.get("workstream_id") ?? ""
-        })
+        workstream: sanitizePublicFormalAuthorityVocabulary(
+          getWorkstreamStatus(parsedUrl.searchParams.get("project_root") ?? "", {
+            project_id: parsedUrl.searchParams.get("project_id") ?? "",
+            workstream_id: parsedUrl.searchParams.get("workstream_id") ?? ""
+          })
+        )
       })
     ],
     [
       "GET /workstream/list",
       (_payload, parsedUrl) => ({
-        workstreams: listWorkstreams(
-          parsedUrl.searchParams.get("project_root") ?? "",
-          parsedUrl.searchParams.get("project_id") ?? ""
+        workstreams: sanitizePublicFormalAuthorityVocabulary(
+          listWorkstreams(
+            parsedUrl.searchParams.get("project_root") ?? "",
+            parsedUrl.searchParams.get("project_id") ?? ""
+          )
         )
       })
     ],
     [
       "GET /workstream/bundle",
       (_payload, parsedUrl) =>
-        readWorkstreamBundle(parsedUrl.searchParams.get("project_root") ?? "", {
-          project_id: parsedUrl.searchParams.get("project_id") ?? "",
-          workstream_id: parsedUrl.searchParams.get("workstream_id") ?? ""
-        })
+        sanitizePublicFormalAuthorityVocabulary(
+          readWorkstreamBundle(parsedUrl.searchParams.get("project_root") ?? "", {
+            project_id: parsedUrl.searchParams.get("project_id") ?? "",
+            workstream_id: parsedUrl.searchParams.get("workstream_id") ?? ""
+          })
+        )
     ],
     [
       "POST /workstream/report",
@@ -692,12 +704,14 @@ async function route(method: string, path: string, body: unknown, context: Route
       try {
         const maxBytes = url.searchParams.get("max_bytes");
         return success({
-          logs: readAgentRunLogs(url.searchParams.get("project_root") ?? "", {
-            project_id: url.searchParams.get("project_id") ?? "",
-            run_id: decodeURIComponent(agentRunLogsMatch[1] ?? ""),
-            max_bytes: maxBytes ? Number(maxBytes) : undefined,
-            actor: url.searchParams.get("actor") ?? "api"
-          })
+          logs: sanitizePublicFormalAuthorityVocabulary(
+            readAgentRunLogs(url.searchParams.get("project_root") ?? "", {
+              project_id: url.searchParams.get("project_id") ?? "",
+              run_id: decodeURIComponent(agentRunLogsMatch[1] ?? ""),
+              max_bytes: maxBytes ? Number(maxBytes) : undefined,
+              actor: url.searchParams.get("actor") ?? "api"
+            })
+          )
         });
       } catch (error) {
         return dynamicRouteError(error);
@@ -711,16 +725,18 @@ async function route(method: string, path: string, body: unknown, context: Route
         const stdoutCursor = url.searchParams.get("stdout_cursor");
         const stderrCursor = url.searchParams.get("stderr_cursor");
         return success({
-          stream: streamAgentRunLogs(url.searchParams.get("project_root") ?? "", {
-            project_id: url.searchParams.get("project_id") ?? "",
-            run_id: decodeURIComponent(agentRunLogStreamMatch[1] ?? ""),
-            cursor: {
-              stdout: stdoutCursor ? Number(stdoutCursor) : 0,
-              stderr: stderrCursor ? Number(stderrCursor) : 0
-            },
-            max_bytes: maxBytes ? Number(maxBytes) : undefined,
-            actor: url.searchParams.get("actor") ?? "api"
-          })
+          stream: sanitizePublicFormalAuthorityVocabulary(
+            streamAgentRunLogs(url.searchParams.get("project_root") ?? "", {
+              project_id: url.searchParams.get("project_id") ?? "",
+              run_id: decodeURIComponent(agentRunLogStreamMatch[1] ?? ""),
+              cursor: {
+                stdout: stdoutCursor ? Number(stdoutCursor) : 0,
+                stderr: stderrCursor ? Number(stderrCursor) : 0
+              },
+              max_bytes: maxBytes ? Number(maxBytes) : undefined,
+              actor: url.searchParams.get("actor") ?? "api"
+            })
+          )
         });
       } catch (error) {
         return dynamicRouteError(error);
@@ -752,7 +768,7 @@ async function route(method: string, path: string, body: unknown, context: Route
             "cache-control": "no-cache",
             connection: "keep-alive"
           },
-          body: snapshot.body
+          body: sanitizePublicFormalAuthorityVocabulary(snapshot.body)
         };
       } catch (error) {
         return dynamicRouteError(error);
@@ -786,7 +802,7 @@ async function route(method: string, path: string, body: unknown, context: Route
             "cache-control": "no-cache",
             connection: "keep-alive"
           },
-          body: session.body
+          body: sanitizePublicFormalAuthorityVocabulary(session.body)
         };
       } catch (error) {
         return dynamicRouteError(error);
@@ -800,16 +816,18 @@ async function route(method: string, path: string, body: unknown, context: Route
         const stdoutCursor = url.searchParams.get("stdout_cursor");
         const stderrCursor = url.searchParams.get("stderr_cursor");
         return success({
-          panel: readAgentRunOperatorPanel(url.searchParams.get("project_root") ?? "", {
-            project_id: url.searchParams.get("project_id") ?? "",
-            run_id: decodeURIComponent(agentRunOperatorPanelMatch[1] ?? ""),
-            cursor: {
-              stdout: stdoutCursor ? Number(stdoutCursor) : 0,
-              stderr: stderrCursor ? Number(stderrCursor) : 0
-            },
-            max_bytes: maxBytes ? Number(maxBytes) : undefined,
-            actor: url.searchParams.get("actor") ?? "api"
-          })
+          panel: sanitizePublicFormalAuthorityVocabulary(
+            readAgentRunOperatorPanel(url.searchParams.get("project_root") ?? "", {
+              project_id: url.searchParams.get("project_id") ?? "",
+              run_id: decodeURIComponent(agentRunOperatorPanelMatch[1] ?? ""),
+              cursor: {
+                stdout: stdoutCursor ? Number(stdoutCursor) : 0,
+                stderr: stderrCursor ? Number(stderrCursor) : 0
+              },
+              max_bytes: maxBytes ? Number(maxBytes) : undefined,
+              actor: url.searchParams.get("actor") ?? "api"
+            })
+          )
         });
       } catch (error) {
         return dynamicRouteError(error);
