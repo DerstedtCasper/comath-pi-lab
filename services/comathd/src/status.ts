@@ -78,7 +78,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "codex_cli_external_adapter_invocation",
       "codex_api_adapter_backend",
       "codex_api_retry_telemetry",
-      "installed_codex_cli_validation"
+      "installed_codex_cli_validation",
+      "pi_codex_durable_service_lifecycle_probe"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
 import { assertPathAllowed } from "../security/path-policy.js";
-import { canonicalJson } from "../verification/runner-contracts.js";
+import { canonicalJson, scrubHostPaths, sha256Text } from "../verification/runner-contracts.js";
 
 export type PiCodexLifecycleInstallSessionEvidence = {
   session_kind:
@@ -115,6 +116,115 @@ export type PiCodexLifecycleEvidenceBundle = {
   can_certify_ga: false;
 };
 
+export type PiCodexLifecycleServiceCommandName = "start" | "status" | "stop" | "restart";
+
+export type PiCodexLifecycleServiceProbeStep =
+  | "start"
+  | "status_after_start"
+  | "stop"
+  | "restart"
+  | "status_after_restart";
+
+export type PiCodexLifecycleServiceProbeCommandInput = {
+  program: string;
+  args?: string[];
+  expected_exit_code?: number;
+  timeout_ms?: number;
+};
+
+export type PiCodexLifecycleServiceProbeInput = {
+  project_id: string;
+  probe_id?: string;
+  actor: string;
+  service_label: string;
+  timeout_ms?: number;
+  commands: Partial<Record<PiCodexLifecycleServiceCommandName, PiCodexLifecycleServiceProbeCommandInput>>;
+};
+
+export type PiCodexLifecycleServiceProbeRunnerCommand = {
+  program: string;
+  args: string[];
+  timeout_ms: number;
+  shell: false;
+  network: false;
+};
+
+export type PiCodexLifecycleServiceProbeRunnerResult = {
+  exit_code: number | null;
+  signal: NodeJS.Signals | null;
+  timed_out: boolean;
+  stdout: string;
+  stderr: string;
+};
+
+export type PiCodexLifecycleServiceProbeRunner = (
+  command: PiCodexLifecycleServiceProbeRunnerCommand,
+  step: PiCodexLifecycleServiceProbeStep
+) => PiCodexLifecycleServiceProbeRunnerResult;
+
+export type PiCodexLifecycleServiceProbeOptions = {
+  runner?: PiCodexLifecycleServiceProbeRunner;
+};
+
+export type PiCodexLifecycleServiceProbeCommandRecord = {
+  step: PiCodexLifecycleServiceProbeStep;
+  command_name: PiCodexLifecycleServiceCommandName;
+  program_label: string;
+  program_path_sha256: string;
+  args_count: number;
+  args_sha256: string;
+  expected_exit_code: number;
+  exit_code: number | null;
+  signal: NodeJS.Signals | null;
+  timed_out: boolean;
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+};
+
+export type PiCodexLifecycleServiceProbeVeto = {
+  code: string;
+  message: string;
+};
+
+export type PiCodexLifecycleServiceProbeArtifact = {
+  kind: "durable_service_lifecycle_log";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexLifecycleServiceProbeResult = {
+  schema_version: "comath.pi_codex_durable_service_lifecycle_probe.v1";
+  probe_id: string;
+  project_id: string;
+  service_label: string;
+  created_at: string;
+  ok: boolean;
+  probe_status: "durable_service_lifecycle_observed" | "blocked_service_lifecycle_probe_failed";
+  service_lifecycle_log_path: string;
+  service_lifecycle_artifact: PiCodexLifecycleServiceProbeArtifact;
+  readiness_fragment: {
+    comathd_server_kind: "durable_service";
+    service_start_observed: boolean;
+    service_stop_observed: boolean;
+    service_restart_observed: boolean;
+  };
+  commands: PiCodexLifecycleServiceProbeCommandRecord[];
+  vetoes: PiCodexLifecycleServiceProbeVeto[];
+  shell: false;
+  network: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexLifecycleServiceProbeArtifactBody = Omit<
+  PiCodexLifecycleServiceProbeResult,
+  "service_lifecycle_artifact"
+>;
+
 const defaultInstallSessionEvidence: PiCodexLifecycleInstallSessionEvidence = {
   session_kind: "unknown",
   pi_host_kind: "unknown",
@@ -132,6 +242,23 @@ const defaultCodexEvidence: PiCodexLifecycleCodexEvidence = {
   installed_cli_probe_source: "not_run",
   codex_api_account_network_validation: "not_run"
 };
+
+const lifecycleProbeAllowedProgramsEnv = "COMATH_PI_CODEX_LIFECYCLE_ALLOWED_PROGRAMS";
+const lifecycleProbeOutputLimit = 16 * 1024;
+const lifecycleProbeMaxTimeoutMs = 30_000;
+const deniedShellProgramNames = new Set([
+  "bash",
+  "bash.exe",
+  "cmd",
+  "cmd.exe",
+  "powershell",
+  "powershell.exe",
+  "pwsh",
+  "pwsh.exe",
+  "sh",
+  "sh.exe"
+]);
+const deniedShellArgumentTokens = new Set(["-c", "/c", "-command", "--command", "-e", "--eval"]);
 
 function normalizeRelativePath(value: string): string {
   return value.replace(/\\/g, "/");
@@ -163,6 +290,272 @@ function assertEvidenceId(value: string | undefined): string {
   return evidenceId;
 }
 
+function assertProbeId(value: string | undefined): string {
+  const probeId = value ?? `LIFE-PROBE-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (!/^[A-Za-z0-9._-]+$/.test(probeId)) {
+    throw new ComathError("invalid Pi/Codex lifecycle service probe id", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_INVALID_ID"
+    });
+  }
+  return probeId;
+}
+
+function assertProbeTimeout(value: number | undefined): number {
+  const timeoutMs = value ?? 10_000;
+  if (Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= lifecycleProbeMaxTimeoutMs) {
+    return timeoutMs;
+  }
+  throw new ComathError("Pi/Codex lifecycle service probe timeout must be between 1 and 30000 ms", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_TIMEOUT_INVALID"
+  });
+}
+
+function assertExpectedExitCode(value: number | undefined): number {
+  const exitCode = value ?? 0;
+  if (Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255) {
+    return exitCode;
+  }
+  throw new ComathError("Pi/Codex lifecycle service probe expected exit code is invalid", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_EXPECTED_EXIT_INVALID"
+  });
+}
+
+function assertServiceLabel(value: string): string {
+  const label = value.trim();
+  if (/^[A-Za-z0-9._-]{1,80}$/.test(label)) {
+    return label;
+  }
+  throw new ComathError("Pi/Codex lifecycle service label is invalid", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_LABEL_INVALID"
+  });
+}
+
+function canonicalLifecycleProgram(program: string, field: string): string {
+  if (!program || program.includes("\0")) {
+    throw new ComathError(`${field} is invalid`, {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_PROGRAM_INVALID"
+    });
+  }
+  if (!isAbsolute(program)) {
+    throw new ComathError(`${field} must be an absolute path`, {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_PROGRAM_NOT_ABSOLUTE"
+    });
+  }
+  const resolvedProgram = resolve(program);
+  if (!existsSync(resolvedProgram) || !statSync(resolvedProgram).isFile()) {
+    throw new ComathError("Pi/Codex lifecycle service probe program is missing", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_PROGRAM_MISSING"
+    });
+  }
+  const realProgram = realpathSync.native(resolvedProgram);
+  if (deniedShellProgramNames.has(basename(realProgram).toLowerCase())) {
+    throw new ComathError("shell-like lifecycle probe programs are not allowed", {
+      statusCode: 403,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_SHELL_PROGRAM_DENIED"
+    });
+  }
+  return realProgram;
+}
+
+function configuredLifecycleAllowedPrograms(): Set<string> {
+  const rawValue = process.env[lifecycleProbeAllowedProgramsEnv];
+  if (!rawValue) {
+    throw new ComathError("Pi/Codex lifecycle service probe allowed programs are not configured", {
+      statusCode: 500,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_ALLOWED_PROGRAMS_MISSING"
+    });
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawValue);
+  } catch {
+    throw new ComathError(`${lifecycleProbeAllowedProgramsEnv} must be a JSON string array`, {
+      statusCode: 500,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_ALLOWED_PROGRAMS_INVALID"
+    });
+  }
+  if (!Array.isArray(parsed) || parsed.some((entry) => typeof entry !== "string" || entry.length === 0)) {
+    throw new ComathError(`${lifecycleProbeAllowedProgramsEnv} must be a JSON string array`, {
+      statusCode: 500,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_ALLOWED_PROGRAMS_INVALID"
+    });
+  }
+  return new Set(parsed.map((entry) => canonicalLifecycleProgram(entry, lifecycleProbeAllowedProgramsEnv)));
+}
+
+function assertLifecycleArgsAllowed(args: string[] | undefined): string[] {
+  const safeArgs = args ?? [];
+  for (const arg of safeArgs) {
+    if (typeof arg !== "string" || arg.length === 0 || arg.includes("\0")) {
+      throw new ComathError("Pi/Codex lifecycle service probe argument is invalid", {
+        statusCode: 400,
+        code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_ARGS_INVALID"
+      });
+    }
+    const lowered = arg.toLowerCase();
+    if (
+      deniedShellArgumentTokens.has(lowered) ||
+      /(?:&&|\|\||[|;<>`])/.test(arg) ||
+      arg.includes("$(")
+    ) {
+      throw new ComathError("PI_CODEX_LIFECYCLE_SERVICE_PROBE_SHELL_ARGS_DENIED", {
+        statusCode: 403,
+        code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_SHELL_ARGS_DENIED"
+      });
+    }
+  }
+  return [...safeArgs];
+}
+
+function requiredProbeCommand(
+  commands: PiCodexLifecycleServiceProbeInput["commands"],
+  name: PiCodexLifecycleServiceCommandName
+): PiCodexLifecycleServiceProbeCommandInput {
+  const command = commands[name];
+  if (!command) {
+    throw new ComathError("PI_CODEX_LIFECYCLE_SERVICE_PROBE_COMMAND_MISSING", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_COMMAND_MISSING"
+    });
+  }
+  return command;
+}
+
+function prepareProbeCommand(
+  commandName: PiCodexLifecycleServiceCommandName,
+  input: PiCodexLifecycleServiceProbeCommandInput,
+  defaultTimeoutMs: number,
+  allowedPrograms: Set<string>
+): {
+  commandName: PiCodexLifecycleServiceCommandName;
+  program: string;
+  args: string[];
+  expectedExitCode: number;
+  timeoutMs: number;
+} {
+  const program = canonicalLifecycleProgram(input.program, `${commandName}.program`);
+  if (!allowedPrograms.has(program)) {
+    throw new ComathError("PI_CODEX_LIFECYCLE_SERVICE_PROBE_PROGRAM_NOT_ALLOWLISTED", {
+      statusCode: 403,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_PROGRAM_NOT_ALLOWLISTED"
+    });
+  }
+  return {
+    commandName,
+    program,
+    args: assertLifecycleArgsAllowed(input.args),
+    expectedExitCode: assertExpectedExitCode(input.expected_exit_code),
+    timeoutMs: assertProbeTimeout(input.timeout_ms ?? defaultTimeoutMs)
+  };
+}
+
+function truncateProbeOutput(value: string): string {
+  return Buffer.from(scrubHostPaths(value), "utf8").subarray(0, lifecycleProbeOutputLimit).toString("utf8");
+}
+
+function defaultLifecycleProbeRunner(
+  command: PiCodexLifecycleServiceProbeRunnerCommand
+): PiCodexLifecycleServiceProbeRunnerResult {
+  const result = spawnSync(command.program, command.args, {
+    cwd: dirname(command.program),
+    shell: false,
+    windowsHide: true,
+    timeout: command.timeout_ms,
+    encoding: "utf8",
+    maxBuffer: lifecycleProbeOutputLimit,
+    env: {
+      PATH: process.env.PATH ?? "",
+      PATHEXT: process.env.PATHEXT ?? "",
+      SYSTEMROOT: process.env.SYSTEMROOT ?? "",
+      SystemRoot: process.env.SystemRoot ?? "",
+      WINDIR: process.env.WINDIR ?? "",
+      COMATH_PROOF_AUTHORITY: "none",
+      COMATH_PI_CODEX_LIFECYCLE_PROBE: "true"
+    }
+  });
+  return {
+    exit_code: result.status,
+    signal: result.signal,
+    timed_out: Boolean(result.error && result.error.message.includes("ETIMEDOUT")),
+    stdout: typeof result.stdout === "string" ? result.stdout : "",
+    stderr: typeof result.stderr === "string" ? result.stderr : result.error?.message ?? ""
+  };
+}
+
+function runProbeStep(
+  step: PiCodexLifecycleServiceProbeStep,
+  command: ReturnType<typeof prepareProbeCommand>,
+  runner: PiCodexLifecycleServiceProbeRunner
+): PiCodexLifecycleServiceProbeCommandRecord {
+  const startedAt = Date.now();
+  let result: PiCodexLifecycleServiceProbeRunnerResult;
+  try {
+    result = runner(
+      {
+        program: command.program,
+        args: command.args,
+        timeout_ms: command.timeoutMs,
+        shell: false,
+        network: false
+      },
+      step
+    );
+  } catch (error) {
+    result = {
+      exit_code: null,
+      signal: null,
+      timed_out: false,
+      stdout: "",
+      stderr: error instanceof Error ? error.message : String(error)
+    };
+  }
+  const ok = result.exit_code === command.expectedExitCode && !result.timed_out;
+  return {
+    step,
+    command_name: command.commandName,
+    program_label: basename(command.program),
+    program_path_sha256: sha256Text(command.program),
+    args_count: command.args.length,
+    args_sha256: sha256Text(canonicalJson(command.args)),
+    expected_exit_code: command.expectedExitCode,
+    exit_code: result.exit_code,
+    signal: result.signal,
+    timed_out: result.timed_out,
+    ok,
+    stdout: truncateProbeOutput(result.stdout),
+    stderr: truncateProbeOutput(result.stderr),
+    duration_ms: Math.max(Date.now() - startedAt, 0)
+  };
+}
+
+function probeVetoForCommand(record: PiCodexLifecycleServiceProbeCommandRecord): PiCodexLifecycleServiceProbeVeto[] {
+  if (record.ok) {
+    return [];
+  }
+  const baseCode = `durable_service_lifecycle_${record.step}`;
+  return [
+    ...(record.timed_out
+      ? [
+          {
+            code: `${baseCode}_timeout`,
+            message: `Durable service lifecycle ${record.step} command timed out.`
+          }
+        ]
+      : []),
+    {
+      code: `${baseCode}_failed`,
+      message: `Durable service lifecycle ${record.step} command did not return the expected exit code.`
+    }
+  ];
+}
+
 function projectRelativePath(projectRoot: string, absolutePath: string): string {
   return normalizeRelativePath(relative(resolve(projectRoot), absolutePath));
 }
@@ -192,6 +585,94 @@ function readLifecycleArtifact(
     sha256: sha256Bytes(content),
     size_bytes: content.byteLength
   };
+}
+
+export function probePiCodexDurableServiceLifecycle(
+  projectRoot: string,
+  input: PiCodexLifecycleServiceProbeInput,
+  options: PiCodexLifecycleServiceProbeOptions = {}
+): PiCodexLifecycleServiceProbeResult {
+  const probeId = assertProbeId(input.probe_id);
+  const serviceLabel = assertServiceLabel(input.service_label);
+  const timeoutMs = assertProbeTimeout(input.timeout_ms);
+  const allowedPrograms = configuredLifecycleAllowedPrograms();
+  const start = prepareProbeCommand("start", requiredProbeCommand(input.commands, "start"), timeoutMs, allowedPrograms);
+  const status = prepareProbeCommand("status", requiredProbeCommand(input.commands, "status"), timeoutMs, allowedPrograms);
+  const stop = prepareProbeCommand("stop", requiredProbeCommand(input.commands, "stop"), timeoutMs, allowedPrograms);
+  const restart = prepareProbeCommand("restart", requiredProbeCommand(input.commands, "restart"), timeoutMs, allowedPrograms);
+  const runner = options.runner ?? defaultLifecycleProbeRunner;
+  const commands = [
+    runProbeStep("start", start, runner),
+    runProbeStep("status_after_start", status, runner),
+    runProbeStep("stop", stop, runner),
+    runProbeStep("restart", restart, runner),
+    runProbeStep("status_after_restart", status, runner)
+  ];
+  const byStep = new Map(commands.map((command) => [command.step, command]));
+  const serviceStartObserved = Boolean(byStep.get("start")?.ok && byStep.get("status_after_start")?.ok);
+  const serviceStopObserved = Boolean(byStep.get("stop")?.ok);
+  const serviceRestartObserved = Boolean(byStep.get("restart")?.ok && byStep.get("status_after_restart")?.ok);
+  const vetoes = commands.flatMap(probeVetoForCommand);
+  const ok = serviceStartObserved && serviceStopObserved && serviceRestartObserved && vetoes.length === 0;
+  const serviceLifecycleLogPath = normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", probeId, "service-lifecycle-probe.json")
+  );
+  const artifactBody: PiCodexLifecycleServiceProbeArtifactBody = {
+    schema_version: "comath.pi_codex_durable_service_lifecycle_probe.v1",
+    probe_id: probeId,
+    project_id: input.project_id,
+    service_label: serviceLabel,
+    created_at: new Date().toISOString(),
+    ok,
+    probe_status: ok ? "durable_service_lifecycle_observed" : "blocked_service_lifecycle_probe_failed",
+    service_lifecycle_log_path: serviceLifecycleLogPath,
+    readiness_fragment: {
+      comathd_server_kind: "durable_service",
+      service_start_observed: serviceStartObserved,
+      service_stop_observed: serviceStopObserved,
+      service_restart_observed: serviceRestartObserved
+    },
+    commands,
+    vetoes,
+    shell: false,
+    network: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const absoluteProbePath = assertPathAllowed(projectRoot, serviceLifecycleLogPath, { purpose: "runtime-write" });
+  mkdirSync(dirname(absoluteProbePath), { recursive: true });
+  const artifactText = canonicalJson(artifactBody);
+  writeFileSync(absoluteProbePath, artifactText, "utf8");
+  const result: PiCodexLifecycleServiceProbeResult = {
+    ...artifactBody,
+    service_lifecycle_artifact: {
+      kind: "durable_service_lifecycle_log",
+      path: serviceLifecycleLogPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "release.pi_codex_lifecycle_service_probe_completed",
+    actor: input.actor,
+    target_id: input.project_id,
+    payload: {
+      probe_id: probeId,
+      ok,
+      probe_status: result.probe_status,
+      service_lifecycle_log_path: serviceLifecycleLogPath,
+      service_start_observed: serviceStartObserved,
+      service_stop_observed: serviceStopObserved,
+      service_restart_observed: serviceRestartObserved,
+      veto_codes: vetoes.map((veto) => veto.code),
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
 }
 
 function pushVeto(vetoes: PiCodexLifecycleReadinessVeto[], code: string, message: string): void {
