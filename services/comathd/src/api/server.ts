@@ -53,6 +53,7 @@ import { assembleSourceReviewPublicArchive } from "../release/source-review-publ
 import { reviewGoal3PublicArchiveSurfaces } from "../release/public-archive-review.js";
 import {
   collectPiCodexLifecycleEvidence,
+  probePiCodexProductionCodexAccountNetwork,
   probePiCodexDurableServiceLifecycle,
   reviewPiCodexLifecycleReadiness
 } from "../release/pi-codex-lifecycle-readiness.js";
@@ -370,6 +371,15 @@ async function route(method: string, path: string, body: unknown, context: Route
         const body = payload as Parameters<typeof probePiCodexDurableServiceLifecycle>[1] & { project_root: string };
         return {
           probe: probePiCodexDurableServiceLifecycle(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/codex-api-probe",
+      async (payload) => {
+        const body = payload as Parameters<typeof probePiCodexProductionCodexAccountNetwork>[1] & { project_root: string };
+        return {
+          probe: await probePiCodexProductionCodexAccountNetwork(body.project_root, body)
         };
       }
     ],

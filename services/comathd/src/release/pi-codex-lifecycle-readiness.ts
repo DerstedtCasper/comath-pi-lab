@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
+import { validateCodexApiAccountNetworkConnectivity } from "../agents/agent-adapter-packages.js";
 import { ComathError } from "../errors.js";
 import { assertPathAllowed } from "../security/path-policy.js";
 import { canonicalJson, scrubHostPaths, sha256Text } from "../verification/runner-contracts.js";
@@ -26,7 +27,12 @@ export type PiCodexLifecycleInstallSessionEvidence = {
 export type PiCodexLifecycleCodexEvidence = {
   installed_cli_validation_ok: boolean;
   installed_cli_probe_source: "service_owned_process" | "injected_fake_cli" | "not_run";
-  codex_api_account_network_validation: "passed" | "not_run" | "injected_fake" | "blocked_missing_credentials";
+  codex_api_account_network_validation:
+    | "passed"
+    | "not_run"
+    | "injected_fake"
+    | "blocked_missing_credentials"
+    | "blocked_network_or_account_failure";
 };
 
 export type PiCodexLifecycleReadinessInput = {
@@ -225,6 +231,61 @@ type PiCodexLifecycleServiceProbeArtifactBody = Omit<
   "service_lifecycle_artifact"
 >;
 
+export type PiCodexProductionCodexAccountNetworkProbeInput = {
+  project_id: string;
+  validation_id?: string;
+  actor: string;
+};
+
+export type PiCodexProductionCodexAccountNetworkProbeVeto = {
+  code: string;
+  message: string;
+};
+
+export type PiCodexProductionCodexAccountNetworkProbeArtifact = {
+  kind: "codex_validation_report";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexProductionCodexAccountNetworkProbeResult = {
+  schema_version: "comath.pi_codex_production_codex_account_network_probe.v1";
+  validation_id: string;
+  project_id: string;
+  created_at: string;
+  ok: boolean;
+  validation_status:
+    | "production_codex_account_network_validation_passed"
+    | "blocked_missing_codex_api_credentials"
+    | "blocked_codex_api_account_network_validation_failed";
+  account_network_validation: PiCodexLifecycleCodexEvidence["codex_api_account_network_validation"];
+  credential_source: "service_env";
+  base_url_host: string | null;
+  model: string | null;
+  response_id: string | null;
+  status: number | null;
+  attempts: number;
+  statuses: number[];
+  rate_limited: boolean;
+  codex_validation_report_path: string;
+  codex_validation_artifact: PiCodexProductionCodexAccountNetworkProbeArtifact;
+  readiness_fragment: {
+    codex_api_account_network_validation: PiCodexLifecycleCodexEvidence["codex_api_account_network_validation"];
+  };
+  vetoes: PiCodexProductionCodexAccountNetworkProbeVeto[];
+  shell: false;
+  network: true;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexProductionCodexAccountNetworkProbeArtifactBody = Omit<
+  PiCodexProductionCodexAccountNetworkProbeResult,
+  "codex_validation_artifact"
+>;
+
 const defaultInstallSessionEvidence: PiCodexLifecycleInstallSessionEvidence = {
   session_kind: "unknown",
   pi_host_kind: "unknown",
@@ -299,6 +360,22 @@ function assertProbeId(value: string | undefined): string {
     });
   }
   return probeId;
+}
+
+function assertCodexValidationId(value: string | undefined): string {
+  const validationId = value ?? `LIFE-CODEX-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (
+    !/^[A-Za-z0-9._-]+$/.test(validationId) ||
+    validationId === "." ||
+    validationId === ".." ||
+    validationId.split(".").some((segment) => segment.length === 0)
+  ) {
+    throw new ComathError("invalid Pi/Codex lifecycle Codex API validation id", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_CODEX_API_VALIDATION_INVALID_ID"
+    });
+  }
+  return validationId;
 }
 
 function assertProbeTimeout(value: number | undefined): number {
@@ -667,6 +744,122 @@ export function probePiCodexDurableServiceLifecycle(
       service_stop_observed: serviceStopObserved,
       service_restart_observed: serviceRestartObserved,
       veto_codes: vetoes.map((veto) => veto.code),
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
+function codexValidationOutcome(
+  failureCode: string | undefined,
+  ok: boolean
+): {
+  validationStatus: PiCodexProductionCodexAccountNetworkProbeResult["validation_status"];
+  accountNetworkValidation: PiCodexLifecycleCodexEvidence["codex_api_account_network_validation"];
+  vetoes: PiCodexProductionCodexAccountNetworkProbeVeto[];
+} {
+  if (ok) {
+    return {
+      validationStatus: "production_codex_account_network_validation_passed",
+      accountNetworkValidation: "passed",
+      vetoes: []
+    };
+  }
+  if (failureCode === "AGENT_ADAPTER_PACKAGE_CODEX_API_KEY_MISSING") {
+    return {
+      validationStatus: "blocked_missing_codex_api_credentials",
+      accountNetworkValidation: "blocked_missing_credentials",
+      vetoes: [
+        {
+          code: "codex_api_credentials_missing",
+          message: "Production Codex API account/network validation requires service-owned Codex API credentials."
+        }
+      ]
+    };
+  }
+  return {
+    validationStatus: "blocked_codex_api_account_network_validation_failed",
+    accountNetworkValidation: "blocked_network_or_account_failure",
+    vetoes: [
+      {
+        code: "codex_api_account_network_validation_failed",
+        message: "Production Codex API account/network validation did not complete successfully."
+      }
+    ]
+  };
+}
+
+export async function probePiCodexProductionCodexAccountNetwork(
+  projectRoot: string,
+  input: PiCodexProductionCodexAccountNetworkProbeInput
+): Promise<PiCodexProductionCodexAccountNetworkProbeResult> {
+  const validationId = assertCodexValidationId(input.validation_id);
+  const validation = await validateCodexApiAccountNetworkConnectivity({
+    project_id: input.project_id,
+    validation_id: validationId,
+    actor: input.actor
+  });
+  const outcome = codexValidationOutcome(validation.failure_code, validation.ok);
+  const codexValidationReportPath = normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", validationId, "codex-account-network-validation.json")
+  );
+  const artifactBody: PiCodexProductionCodexAccountNetworkProbeArtifactBody = {
+    schema_version: "comath.pi_codex_production_codex_account_network_probe.v1",
+    validation_id: validationId,
+    project_id: input.project_id,
+    created_at: new Date().toISOString(),
+    ok: validation.ok,
+    validation_status: outcome.validationStatus,
+    account_network_validation: outcome.accountNetworkValidation,
+    credential_source: "service_env",
+    base_url_host: validation.base_url_host,
+    model: validation.model,
+    response_id: validation.response_id,
+    status: validation.status,
+    attempts: validation.attempts,
+    statuses: validation.statuses,
+    rate_limited: validation.rate_limited,
+    codex_validation_report_path: codexValidationReportPath,
+    readiness_fragment: {
+      codex_api_account_network_validation: outcome.accountNetworkValidation
+    },
+    vetoes: outcome.vetoes,
+    shell: false,
+    network: true,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const absoluteReportPath = assertPathAllowed(projectRoot, codexValidationReportPath, { purpose: "runtime-write" });
+  mkdirSync(dirname(absoluteReportPath), { recursive: true });
+  const artifactText = canonicalJson(artifactBody);
+  writeFileSync(absoluteReportPath, artifactText, "utf8");
+  const result: PiCodexProductionCodexAccountNetworkProbeResult = {
+    ...artifactBody,
+    codex_validation_artifact: {
+      kind: "codex_validation_report",
+      path: codexValidationReportPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "release.pi_codex_codex_api_account_network_validated",
+    actor: input.actor,
+    target_id: input.project_id,
+    payload: {
+      validation_id: validationId,
+      ok: result.ok,
+      validation_status: result.validation_status,
+      account_network_validation: result.account_network_validation,
+      attempts: result.attempts,
+      statuses: result.statuses,
+      rate_limited: result.rate_limited,
+      codex_validation_report_path: result.codex_validation_report_path,
+      veto_codes: result.vetoes.map((veto) => veto.code),
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false

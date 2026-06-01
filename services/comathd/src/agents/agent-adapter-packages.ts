@@ -130,6 +130,26 @@ export type CodexApiBackendResponse = {
 
 export type CodexApiBackendClient = (request: CodexApiBackendRequest) => Promise<CodexApiBackendResponse>;
 
+export type ValidateCodexApiAccountNetworkInput = {
+  project_id: string;
+  validation_id: string;
+  actor: string;
+};
+
+export type CodexApiAccountNetworkValidation = {
+  ok: boolean;
+  credential_configured: boolean;
+  base_url_host: string | null;
+  model: string | null;
+  response_id: string | null;
+  status: number | null;
+  attempts: number;
+  statuses: number[];
+  rate_limited: boolean;
+  failure_code?: string;
+  failure_message?: string;
+};
+
 let codexApiBackendClientForTests: CodexApiBackendClient | undefined;
 
 export function setCodexApiBackendClientForTests(client: CodexApiBackendClient | undefined): void {
@@ -571,6 +591,80 @@ async function invokeCodexApiWithRetry(client: CodexApiBackendClient, request: C
     });
   }
   return { response, attempts: maxAttempts, statuses, rateLimited };
+}
+
+export async function validateCodexApiAccountNetworkConnectivity(
+  input: ValidateCodexApiAccountNetworkInput
+): Promise<CodexApiAccountNetworkValidation> {
+  try {
+    const config = assertCodexApiConfigured();
+    const request: CodexApiBackendRequest = {
+      url: `${config.baseUrl}/responses`,
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        "content-type": "application/json"
+      },
+      body: {
+        model: config.model,
+        input: [
+          "CoMath Pi/Codex lifecycle validation.",
+          "Return a short non-secret account/network health marker only.",
+          "This output is runtime readiness evidence, not proof authority."
+        ].join("\n"),
+        metadata: {
+          project_id: input.project_id,
+          validation_id: input.validation_id,
+          actor: input.actor,
+          validation_purpose: "pi_codex_lifecycle_account_network_probe",
+          proof_authority: "none"
+        }
+      }
+    };
+    const attemptResult = await invokeCodexApiWithRetry(
+      codexApiBackendClientForTests ?? defaultCodexApiBackendClient,
+      request
+    );
+    const response = attemptResult.response;
+    const extracted = extractCodexApiOutputText(response.json);
+    return {
+      ok: response.status >= 200 && response.status < 300,
+      credential_configured: true,
+      base_url_host: new URL(config.baseUrl).host,
+      model: config.model,
+      response_id: extracted.responseId,
+      status: response.status,
+      attempts: attemptResult.attempts,
+      statuses: attemptResult.statuses,
+      rate_limited: attemptResult.rateLimited,
+      ...(response.status >= 200 && response.status < 300
+        ? {}
+        : {
+            failure_code: "CODEX_API_ACCOUNT_NETWORK_VALIDATION_FAILED",
+            failure_message: `Codex API validation failed with status ${response.status}.`
+          })
+    };
+  } catch (error) {
+    const normalized = error instanceof ComathError ? error : new ComathError("Codex API validation failed", {
+      statusCode: 500,
+      code: "AGENT_ADAPTER_PACKAGE_CODEX_API_VALIDATION_FAILED"
+    });
+    const missingCredentials = normalized.code === "AGENT_ADAPTER_PACKAGE_CODEX_API_KEY_MISSING";
+    return {
+      ok: false,
+      credential_configured: !missingCredentials && codexApiKeyConfigured(),
+      base_url_host: null,
+      model: null,
+      response_id: null,
+      status: null,
+      attempts: 0,
+      statuses: [],
+      rate_limited: false,
+      failure_code: normalized.code,
+      failure_message: missingCredentials
+        ? "Codex API key is not configured."
+        : "Codex API account/network validation failed before a successful response."
+    };
+  }
 }
 
 function renderCodexApiPrompt(input: ExecuteAgentAdapterPackageInput, run: AgentRun, profile: AgentProfile): string {

@@ -1,3 +1,32 @@
+# Goal 3 Task 150 / Production Codex API Account-Network Probe
+
+Scope: move from durable `comathd` service lifecycle evidence to a service-owned production Codex API account/network validation probe that can produce the `codex_validation_report` artifact consumed by Task148, without claiming proof authority or GA certification.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed `main` was clean at `ab88067` before opening Task150.
+- Audited Task146 readiness review, Task148 evidence intake, Task149 durable service lifecycle probe, and Phase51-53 Codex API/CLI validation.
+- Added `goal3-task150-codex-api-account-network-probe.test.mjs`.
+- RED showed `probePiCodexProductionCodexAccountNetwork` was not exported by `comathd`.
+- Added `validateCodexApiAccountNetworkConnectivity()` over the existing service-configured Codex API backend config/retry path.
+- Added `probePiCodexProductionCodexAccountNetwork()` and `POST /release/pi-codex-lifecycle/codex-api-probe`.
+- The probe writes `.comath/release/pi-codex-lifecycle/<id>/codex-account-network-validation.json`, emits a `codex_validation_report` artifact descriptor, feeds Task148 lifecycle evidence intake through a readiness fragment, preserves bounded retry/rate-limit/status metadata, and records missing credentials, API/network failures, thrown client errors, and invalid base URLs as non-authoritative blocker evidence.
+- Added the `pi_codex_production_codex_api_account_network_probe` service status capability.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task150-codex-api-account-network-probe.test.mjs` failed because `../../dist/index.js` did not export `probePiCodexProductionCodexAccountNetwork`.
+- GREEN focused tests exited 0: Task150 Codex API account/network probe.
+- GREEN adjacent regressions exited 0: Task146 Pi/Codex lifecycle readiness, Task148 Pi/Codex lifecycle evidence intake, Task149 durable service lifecycle probe, Phase51 Codex API backend, Phase52 Codex API retry telemetry, and Phase53 installed Codex CLI validation.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task150 discovered by the default comathd runner.
+- Post-code `node scripts/phase0-smoke.mjs`, `git diff --check`, and `Test-Path -LiteralPath .comath` exited 0.
+- Code commit: pending.
+
+Boundary notes: Task150 validates Codex API account/network reachability only through service-owned credentials and a bounded Responses-compatible request. It does not expose credentials, raw auth headers, host paths, raw prompts, or raw model output in persisted artifacts. It is lifecycle readiness evidence only: `proof_authority: none`, `can_promote_claim: false`, and `can_certify_ga: false`.
+
+Residual risks: Goal 3 remains incomplete. Task150 does not add a Pi command/tool consumer for the probe, does not validate a real Pi host install/runtime-registration path, does not provide OS-level adapter isolation, does not provide indefinite operator sessions, does not broaden Lean/mathlib replay, does not complete nontrivial theorem synthesis, and does not certify GA.
+
 # Goal 3 Task 149 / Pi-Codex Durable Service Lifecycle Probe
 
 Scope: move from artifact-backed operator-submitted lifecycle evidence to a service-owned durable `comathd` lifecycle probe that can directly produce the service lifecycle log consumed by Task148, without claiming proof authority or GA certification.
