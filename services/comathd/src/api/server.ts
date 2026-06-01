@@ -106,6 +106,30 @@ function success(body: unknown): InjectResponse {
   return { status: 200, body };
 }
 
+type PaperExportRouteResult = Awaited<ReturnType<typeof exportPaper>>;
+
+function publicRelativePath(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
+function publicPaperExportRouteResult(result: PaperExportRouteResult): unknown {
+  const artifactPath = publicRelativePath(result.artifact.path);
+  return sanitizePublicFormalAuthorityVocabulary({
+    artifact: {
+      ...result.artifact,
+      path: artifactPath
+    },
+    check: result.check,
+    exported_relative_path: artifactPath,
+    public_archive_contract: {
+      kind: "paper_export_public_diagnostic",
+      proof_authority: "none",
+      can_restore: false,
+      exposes_host_paths: false
+    }
+  });
+}
+
 async function route(method: string, path: string, body: unknown, context: RouteContext): Promise<InjectResponse> {
   const url = new URL(path, "http://127.0.0.1");
 
@@ -640,7 +664,7 @@ async function route(method: string, path: string, body: unknown, context: Route
       "POST /paper/export",
       async (payload) => {
         const body = payload as Parameters<typeof exportPaper>[1] & { project_root: string };
-        return sanitizePublicFormalAuthorityVocabulary(await exportPaper(body.project_root, body));
+        return publicPaperExportRouteResult(await exportPaper(body.project_root, body));
       }
     ],
     [
