@@ -965,28 +965,50 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
   if (!campaign) {
     throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
   }
+  const finalReplayAuthorityPassed =
+    campaign.terminal_state === "completed_formal_proof" &&
+    hasFormalReplayAuthorityPassEvidence({ ...campaign, projectRoot: input.project_root });
+  const publicProofTerminalWithoutAuthority = campaign.terminal_state === "completed_formal_proof" && !finalReplayAuthorityPassed;
   return {
     export_manifest: {
       schema_version: "comath.pi_goal_export.v1",
       campaign_id: campaign.campaign_id,
       project_id: campaign.project_id,
       root_claim_id: campaign.root_claim_id,
-      terminal_state: campaign.terminal_state ?? null,
-      current_stage: campaign.current_stage,
+      terminal_state: publicProofTerminalWithoutAuthority ? "blocked_with_replayable_reason" : campaign.terminal_state ?? null,
+      current_stage: publicProofTerminalWithoutAuthority ? "blocked" : campaign.current_stage,
       status: campaign.status,
-      blocker_certificates: campaign.blockers,
-      next_actions: campaign.next_actions,
-      evidence_pack_ready:
-        campaign.terminal_state === "completed_formal_proof" &&
-        hasFormalReplayAuthorityPassEvidence({ ...campaign, projectRoot: input.project_root }),
-      proof_authority:
-        campaign.terminal_state === "completed_formal_proof" &&
-        hasFormalReplayAuthorityPassEvidence({ ...campaign, projectRoot: input.project_root })
-          ? "lean_kernel_clean_replay"
-          : "none",
+      blocker_certificates: finalReplayAuthorityPassed
+        ? campaign.blockers
+        : (sanitizePublicExportValue(campaign.blockers) as Record<string, unknown>[]),
+      next_actions: finalReplayAuthorityPassed ? campaign.next_actions : (sanitizePublicExportValue(campaign.next_actions) as string[]),
+      evidence_pack_ready: finalReplayAuthorityPassed,
+      proof_authority: finalReplayAuthorityPassed ? "lean_kernel_clean_replay" : "none",
       can_promote_claim: false
     }
   };
+}
+
+function sanitizePublicExportValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return /completed_formal_proof|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence/i.test(value)
+      ? "unverified_formal_status"
+      : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizePublicExportValue(entry));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+        /completed_formal_proof|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence/i.test(key)
+          ? "unverified_formal_status"
+          : key,
+        sanitizePublicExportValue(entry)
+      ])
+    );
+  }
+  return value;
 }
 
 function blockCampaignAtFinalReplay(input: {
