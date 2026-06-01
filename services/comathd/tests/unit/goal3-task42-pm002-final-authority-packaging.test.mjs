@@ -192,12 +192,13 @@ const packaged = packageGoal3GaPm002FinalAuthorityEvidence({
   commandReplayReport: commandReport
 });
 
-assert.equal(packaged.final_evidence_status, "verified_final_authority_evidence");
-assert.equal(packaged.blocker_code, "");
+assert.equal(packaged.final_evidence_status, "blocked_missing_final_evidence");
+assert.equal(packaged.blocker_code, "final_authority_evidence_incomplete");
 assert.deepEqual(packaged.missing_final_evidence_classes, []);
-assert.equal(packaged.proof_authority, "lean_kernel_clean_replay");
+assert.equal(packaged.proof_authority, "none");
 assert.equal(packaged.can_promote_claim, false, "packaging alone must not bypass the promotion gate");
 assert.equal(packaged.promotion_requires_gate, true);
+assert.match(packaged.blocker_detail, /Legacy PM-002 v1 packaging is retained for compatibility diagnostics only/);
 assert.equal(packaged.final_replay_manifest_v3_path, finalReplayManifestRel);
 assert.equal(packaged.structured_audit_path, structuredAuditRel);
 assert.equal(packaged.third_party_replay_pack_path, replayPack.pack_path);

@@ -383,6 +383,39 @@ function requireToolExecutionConfirmation(name: string, input: Record<string, un
   }
 }
 
+const privilegedProofAuthorityPattern =
+  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/gi;
+
+function sanitizePublicProofAuthorityValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.replace(privilegedProofAuthorityPattern, "unverified_formal_status");
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizePublicProofAuthorityValue(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, sanitizePublicProofAuthorityValue(item)])
+    );
+  }
+  return value;
+}
+
+function shouldSanitizePublicToolResult(name: string): boolean {
+  return (
+    name === "comath.snapshot.export" ||
+    name === "comath.snapshot.verify" ||
+    name === "comath.snapshot.restore" ||
+    name === "comath.replay.verifyManifest" ||
+    name === "comath.campaign.replay"
+  );
+}
+
+async function publicToolResult(name: string, result: Promise<any>): Promise<any> {
+  const value = await result;
+  return shouldSanitizePublicToolResult(name) ? sanitizePublicProofAuthorityValue(value) : value;
+}
+
 export async function executeComathTool(client: ComathClient, name: string, input: Record<string, unknown>): Promise<any> {
   requireToolExecutionConfirmation(name, input);
 
@@ -544,10 +577,13 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
 
   if (name === "comath.campaign.replay") {
     const campaignId = readString(input, "campaign_id");
-    return client.post(campaignPath(campaignId, "/replay"), {
-      project_root: readString(input, "project_root"),
-      actor: readString(input, "actor")
-    });
+    return publicToolResult(
+      name,
+      client.post(campaignPath(campaignId, "/replay"), {
+        project_root: readString(input, "project_root"),
+        actor: readString(input, "actor")
+      })
+    );
   }
 
   if (name === "comath.agent.profileList") {
@@ -790,31 +826,43 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
   }
 
   if (name === "comath.snapshot.export") {
-    return client.post("/snapshot/export", {
-      project_root: readString(input, "project_root"),
-      project_id: readString(input, "project_id"),
-      actor: readString(input, "actor")
-    });
+    return publicToolResult(
+      name,
+      client.post("/snapshot/export", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: readString(input, "actor")
+      })
+    );
   }
 
   if (name === "comath.snapshot.verify") {
-    return client.post("/snapshot/verify", {
-      manifest_path: readString(input, "manifest_path")
-    });
+    return publicToolResult(
+      name,
+      client.post("/snapshot/verify", {
+        manifest_path: readString(input, "manifest_path")
+      })
+    );
   }
 
   if (name === "comath.snapshot.restore") {
-    return client.post("/snapshot/restore", {
-      manifest_path: readString(input, "manifest_path"),
-      target_root: readString(input, "target_root"),
-      actor: readString(input, "actor")
-    });
+    return publicToolResult(
+      name,
+      client.post("/snapshot/restore", {
+        manifest_path: readString(input, "manifest_path"),
+        target_root: readString(input, "target_root"),
+        actor: readString(input, "actor")
+      })
+    );
   }
 
   if (name === "comath.replay.verifyManifest") {
-    return client.post("/replay/verify-manifest", {
-      manifest_path: readString(input, "manifest_path")
-    });
+    return publicToolResult(
+      name,
+      client.post("/replay/verify-manifest", {
+        manifest_path: readString(input, "manifest_path")
+      })
+    );
   }
 
   throw new Error(`unsupported comath tool: ${name}`);
@@ -1531,7 +1579,7 @@ function projectRootFrom(options: RegisterComathPiRuntimeOptions, args: string[]
 async function notifyRuntimeResult(ctx: unknown, result: unknown): Promise<void> {
   const notify = runtimeCtx(ctx).ui?.notify;
   if (notify) {
-    await notify(JSON.stringify(result), "info");
+    await notify(JSON.stringify(sanitizePublicProofAuthorityValue(result)), "info");
   }
 }
 

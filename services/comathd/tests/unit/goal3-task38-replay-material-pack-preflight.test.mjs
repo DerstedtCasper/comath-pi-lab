@@ -94,7 +94,7 @@ assert.equal(forgedPass.summary.clean_replay_passed, 0, "preflight material must
 assert.equal(forgedPass.results[0].terminal_classification, "replayable_blocker");
 assert.equal(forgedPass.results[0].proof_authority, "none");
 assert.equal(forgedPass.results[0].can_promote_claim, false);
-assert.ok(forgedPass.results[0].blockers.includes("live_replay_success_manifest_verification_failed"));
-assert.equal(forgedPass.results[0].live_replay.blocker_code, "live_replay_success_manifest_verification_failed");
+assert.ok(forgedPass.results[0].blockers.includes("live_replay_success_final_authority_packaging_incomplete"));
+assert.equal(forgedPass.results[0].live_replay.blocker_code, "live_replay_success_final_authority_packaging_incomplete");
 
 console.log("Goal 3 Task 38 PM-002 replay material pack preflight test passed.");

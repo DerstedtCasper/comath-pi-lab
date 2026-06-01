@@ -178,7 +178,8 @@ try {
     },
     commandReplayReport: commandReport
   });
-  assert.equal(packaging.final_evidence_status, "verified_final_authority_evidence");
+  assert.equal(packaging.final_evidence_status, "blocked_missing_final_evidence");
+  assert.equal(packaging.proof_authority, "none");
   assert.equal(packaging.can_promote_claim, false);
   assert.equal(packaging.promotion_requires_gate, true);
 
@@ -236,13 +237,7 @@ try {
   assert.equal(legacyRejected.claim.status, "conjectural");
   assert.ok(legacyRejected.gate.vetoes.includes("formally_checked requires Lean Authority v3 final replay packaging"));
 
-  const packagingPath = join(projectRoot, packagingArtifact.path);
-  const tamperedPackaging = JSON.parse(readFileSync(packagingPath, "utf8"));
-  tamperedPackaging.proof_authority = "none";
-  writeFileSync(packagingPath, `${JSON.stringify(tamperedPackaging, null, 2)}\n`, "utf8");
-  assert.equal(existsSync(packagingPath), true);
-
-  const tampered = promoteClaim(projectRoot, {
+  const repeatedLegacyAttempt = promoteClaim(projectRoot, {
     project_id: project.project_id,
     claim_id: claim.id,
     target_status: "formally_checked",
@@ -250,8 +245,8 @@ try {
     artifact_ids: [packagingArtifact.id, finalManifestArtifact.id],
     actor: "goal3-task44"
   });
-  assert.equal(tampered.gate.ok, false);
-  assert.ok(tampered.gate.vetoes.some((veto) => veto.includes(`promotion artifact hash mismatch: ${packagingArtifact.id}`)));
+  assert.equal(repeatedLegacyAttempt.gate.ok, false);
+  assert.ok(repeatedLegacyAttempt.gate.vetoes.includes("formally_checked requires Lean Authority v3 final replay packaging"));
 } finally {
   rmSync(projectRoot, { recursive: true, force: true });
 }

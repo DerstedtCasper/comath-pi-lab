@@ -178,7 +178,9 @@ try {
     commandReplayReport: commandReport
   });
   assert.equal(packaging.schema_version, "comath.goal3_pm002_final_authority_packaging.v1");
-  assert.equal(packaging.final_evidence_status, "verified_final_authority_evidence");
+  assert.equal(packaging.final_evidence_status, "blocked_missing_final_evidence");
+  assert.equal(packaging.proof_authority, "none");
+  assert.match(packaging.blocker_detail, /Legacy PM-002 v1 packaging is retained for compatibility diagnostics only/);
 
   const packagingArtifact = await importArtifact({
     projectRoot,

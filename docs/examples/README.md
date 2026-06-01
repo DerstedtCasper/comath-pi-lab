@@ -46,11 +46,10 @@ Expected dependency policy:
 
 Valid terminal outcomes are:
 
-- `formal_replay_passed`
+- `formal_replay_passed` only after the service-owned `FinalReplayManifest` and promotion gate packaging verify
 - `formal_counterexample_confirmed`
 - `needs_user_statement_disambiguation`
 - `blocked_with_replayable_certificate`
 - `budget_exhausted_with_resume_state`
 
 Any other stop condition must be mapped to a replayable blocker or resumable state before public export.
-

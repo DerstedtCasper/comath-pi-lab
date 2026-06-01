@@ -191,7 +191,8 @@ try {
     },
     commandReplayReport: commandReport
   });
-  assert.equal(pm002Packaging.final_evidence_status, "verified_final_authority_evidence");
+  assert.equal(pm002Packaging.final_evidence_status, "blocked_missing_final_evidence");
+  assert.equal(pm002Packaging.proof_authority, "none");
 
   const genericPackaging = packageFinalAuthorityEvidenceV3({
     projectRoot,

@@ -1894,7 +1894,37 @@ function normalizeLiveReplayOutcomeForProject(
     const finalReplayManifest = JSON.parse(readFileSync(join(projectRoot, normalized.final_replay_manifest_v3_path), "utf8"));
     const leanRunVerification = verifyLeanRunManifestV3Evidence(projectRoot, leanRunManifest);
     const finalReplayVerification = verifyFinalReplayManifestV3(projectRoot, finalReplayManifest);
-    if (leanRunVerification.ok && finalReplayVerification.ok) {
+    const finalReplayRecord = finalReplayManifest && typeof finalReplayManifest === "object"
+      ? (finalReplayManifest as Record<string, unknown>)
+      : {};
+    const sourceReport = verifyFinalAuthorityEvidenceSourceReportV3({
+      projectRoot,
+      claimId: String(finalReplayRecord.claim_id ?? ""),
+      evidence: {
+        lean_run_manifest_paths: [normalized.lean_run_manifest_v3_path],
+        final_replay_manifest_v3_path: normalized.final_replay_manifest_v3_path,
+        structured_audit_path: normalized.structured_audit_path,
+        dependency_closure_path:
+          typeof (finalReplayRecord.report_paths as Record<string, unknown> | undefined)?.dependency_closure === "string"
+            ? String((finalReplayRecord.report_paths as Record<string, unknown>).dependency_closure)
+            : "",
+        axiom_profile_path:
+          typeof (finalReplayRecord.report_paths as Record<string, unknown> | undefined)?.axiom_profile === "string"
+            ? String((finalReplayRecord.report_paths as Record<string, unknown>).axiom_profile)
+            : "",
+        statement_check_path:
+          typeof (finalReplayRecord.report_paths as Record<string, unknown> | undefined)?.statement_equivalence === "string"
+            ? String((finalReplayRecord.report_paths as Record<string, unknown>).statement_equivalence)
+            : "",
+        third_party_replay_pack_path: normalized.third_party_replay_pack_path
+      }
+    });
+    if (
+      leanRunVerification.ok &&
+      finalReplayVerification.ok &&
+      sourceReport.final_evidence_status === "verified_final_authority_evidence" &&
+      sourceReport.proof_authority === "lean_kernel_clean_replay"
+    ) {
       return normalized;
     }
   } catch {
@@ -1902,8 +1932,8 @@ function normalizeLiveReplayOutcomeForProject(
   }
   return {
     ok: false,
-    blocker_code: "live_replay_success_manifest_verification_failed",
-    detail: "A live replay adapter reported success, but the supplied LeanRunManifest v3 or FinalReplayManifest v3 did not verify as service-owned Lean Authority evidence."
+    blocker_code: "live_replay_success_final_authority_packaging_incomplete",
+    detail: "A live replay adapter reported success, but the supplied evidence did not pass the full Lean Authority v3 source-report and final packaging evidence gate."
   };
 }
 
@@ -4717,14 +4747,15 @@ export function packageGoal3GaPm002FinalAuthorityEvidence(input: {
   const blockerPath = pm002FinalPackagingReportPath("blocker");
   const packagingReportPath = pm002FinalPackagingReportPath("report");
   const missingFinalEvidenceClasses = Array.from(missing).sort();
+  const legacyComplete = missingFinalEvidenceClasses.length === 0;
   const report: Goal3GaPm002FinalAuthorityPackagingReport = {
     schema_version: "comath.goal3_pm002_final_authority_packaging.v1",
     task_id: "PM-002",
-    final_evidence_status: missingFinalEvidenceClasses.length === 0 ? "verified_final_authority_evidence" : "blocked_missing_final_evidence",
-    blocker_code: missingFinalEvidenceClasses.length === 0 ? "" : "final_authority_evidence_incomplete",
+    final_evidence_status: "blocked_missing_final_evidence",
+    blocker_code: "final_authority_evidence_incomplete",
     blocker_detail:
-      missingFinalEvidenceClasses.length === 0
-        ? "PM-002 final authority evidence verifies, but claim promotion still requires the ordinary promotion gate."
+      legacyComplete
+        ? "Legacy PM-002 v1 packaging is retained for compatibility diagnostics only; current proof authority requires generic Lean Authority v3 source-report and packaging gates."
         : "PM-002 command replay evidence is present, but final Lean Authority v3 evidence is missing or unverifiable.",
     missing_final_evidence_classes: missingFinalEvidenceClasses,
     lean_run_manifest_paths: leanRunManifestPaths,
@@ -4734,17 +4765,15 @@ export function packageGoal3GaPm002FinalAuthorityEvidence(input: {
     axiom_profile_path: axiomProfilePath,
     statement_check_path: statementCheckPath,
     third_party_replay_pack_path: input.materialSource.third_party_replay_pack_path,
-    blocker_path: missingFinalEvidenceClasses.length === 0 ? "" : blockerPath,
+    blocker_path: blockerPath,
     packaging_report_path: packagingReportPath,
-    proof_authority: missingFinalEvidenceClasses.length === 0 ? "lean_kernel_clean_replay" : "none",
+    proof_authority: "none",
     can_promote_claim: false,
     promotion_requires_gate: true
   };
 
   writeJsonProjectFile(input.projectRoot, packagingReportPath, report);
-  if (missingFinalEvidenceClasses.length > 0) {
-    writeJsonProjectFile(input.projectRoot, blockerPath, report);
-  }
+  writeJsonProjectFile(input.projectRoot, blockerPath, report);
   return report;
 }
 

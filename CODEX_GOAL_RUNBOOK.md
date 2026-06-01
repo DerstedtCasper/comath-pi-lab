@@ -493,6 +493,10 @@ Allowed:
 
 Definition of Done:
 
+Historical/quarantined runbook note: the Phase 18 `Nat.add_zero` and old gate-mediated `formally_checked`
+criteria below are retained as fixture coverage records only. They are not a current production proof path;
+current authority requires the Goal 3 Lean Authority v3 source-report, derived-binding, and final packaging gates.
+
 - `ResearchCampaign` start/status/next-actions/tick/final-audit/replay routes exist through `comathd`;
 - `formally_checked` requires a passed proof-kernel final replay manifest for the same claim;
 - positive `Nat.add_zero` campaign reaches `formal_proof_verified`;
@@ -533,6 +537,10 @@ Constraints:
 ## 5.1 Phase 18 GA Vertical-Slice Goal
 
 Use only after Phases 0-17 are complete:
+
+Historical/quarantined runbook note: this Phase 18 vertical-slice prompt is kept as an old fixture
+recipe, not as the current production proof path. Goal 3 authority requires Lean Authority v3 final
+source-report and packaging evidence before any public final proof wording.
 
 ```text
 /goal Bring CoMath Pi Lab through the GA proof-kernel vertical slices.

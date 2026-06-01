@@ -240,6 +240,60 @@ for (const [marker, testName] of goal2AcceptanceMarkers) {
   }
 }
 
+const historicalNatSliceRequired = [
+  ["18", "old `Nat.add_zero` campaign fixture"],
+  ["23", "old `Nat.mul_zero` theorem-family fixture"],
+  ["57", "phase57-ga-theorem-template-instantiation.test.mjs"],
+  ["67", "phase67-v3-formal-campaign-slice.test.mjs"],
+  ["72", "theorem_specific_lean_project.json"],
+  ["73", "bounded_proof_body_synthesis.json"],
+  ["74", "bounded_authority_report_preparation.json"],
+  ["75", "final_replay_manifest.json"],
+  ["76", "registered Nat linear identity targets"]
+];
+
+for (const [phase, marker] of historicalNatSliceRequired) {
+  const row = acceptanceMatrix
+    .split(/\r?\n/)
+    .find((line) => line.includes(marker));
+  if (!row) {
+    invariantFailures.push(`acceptance matrix must retain Phase ${phase} Nat/formal replay historical marker: ${marker}`);
+    continue;
+  }
+  if (!/Historical fixture coverage only|not current production|quarantined/i.test(row)) {
+    invariantFailures.push(
+      `acceptance matrix Phase ${phase} legacy Nat/formal replay row must be marked historical/quarantined, not current production proof path`
+    );
+  }
+}
+
+for (const [content, label, pattern, guard] of [
+  [
+    devPlan,
+    "COMATH_PI_LAB_DEV_PLAN.md",
+    /registered Nat linear identity target table|Phase 72-76|final clean replay\/promotion paths/i,
+    /historical|quarantined|not current production proof path/i
+  ],
+  [
+    runbook,
+    "CODEX_GOAL_RUNBOOK.md",
+    /positive `Nat\.add_zero` campaign reaches `formal_proof_verified`|gate-mediated `formally_checked`/i,
+    /historical|quarantined|not current production proof path/i
+  ]
+]) {
+  if (pattern.test(content) && !guard.test(content)) {
+    invariantFailures.push(`${label} legacy Nat/formal replay wording must be explicitly historical/quarantined`);
+  }
+}
+
+const terminalStateSection = examplesReadme.match(/## Terminal States[\s\S]*?(?:\n## |$)/)?.[0] ?? "";
+if (
+  terminalStateSection.includes("formal_replay_passed") &&
+  !/FinalReplayManifest|promotion gate|final replay packaging/i.test(terminalStateSection)
+) {
+  invariantFailures.push("docs/examples/README.md formal_replay_passed terminal state must mention FinalReplayManifest/promotion-gate packaging");
+}
+
 if (!acceptanceMatrix.includes("67 v3 end-to-end formal campaign slice")) {
   invariantFailures.push("acceptance matrix must include Phase 67 v3 formal campaign slice acceptance");
 }
