@@ -1,3 +1,31 @@
+# Goal 3 Task 145 / Public Archive Notarization Policy Evidence
+
+Scope: move the public source-review archive line to the next highest-risk release blocker by adding explicit tamper-evident/notarization-policy evidence while preserving the public/internal archive authority boundary.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `main` was clean with no earlier `[ ]`, `[~]`, or `Commit: pending` tracker item before opening Task145.
+- Audited `source-review-public-archive`, `public-archive-review`, adjacent Task141/142/144 regressions, and release-hardening docs.
+- Added `goal3-task145-public-archive-notarization-policy.test.mjs`.
+- RED showed assembled source-review public archives had no `notarization_manifest_path` or immutability/notarization policy evidence.
+- Added a service-owned `.comath/release/source-review/public-archive/<id>/notarization-policy.json` sidecar that binds the source-review manifest hash and public report hashes.
+- Recorded an explicit `source_review_public_archive_immutability_policy` with `proof_authority: "none"`, `can_promote_claim: false`, `can_restore: false`, `tamper_evident_manifest: true`, and OS immutable storage / external notarization statuses set to `not_configured`.
+- Hardened the public archive review gate so legacy source-review public archive manifests without sidecar evidence, or archives whose sidecar manifest hash no longer matches, receive sanitized non-authoritative vetoes.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task145-public-archive-notarization-policy.test.mjs` failed because `notarization_manifest_path` was `undefined`.
+- GREEN focused tests exited 0: Task145 public archive notarization policy, Task141 source-review public archive, Task142 public archive review gate, and Task144 public archive review error contract.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, and `corepack pnpm --filter @comath/pi-extension test`.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Post-doc `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+- Code commit: `d9e9be8` (`Add public archive notarization policy evidence`).
+
+Boundary notes: Task145 adds tamper-evident policy evidence for public diagnostic archives only. It does not provide OS-level immutable storage, does not perform external notarization, does not make public archives restorable, does not promote claims, and does not weaken Lean Authority v3 source-report or final packaging gates.
+
+Residual risks: Goal 3 remains incomplete. Task145 closes one public archive policy-evidence gap, but richer visual review workflows, real OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, and final GA audit remain open.
+
 # Goal 3 Task 144 / Public Archive Review Error Contract
 
 Scope: audit public review package presentation surfaces outside the Pi command/tool path, especially service-side release review error responses that could leak host paths or privileged proof-authority vocabulary.
