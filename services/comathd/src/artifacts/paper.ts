@@ -9,7 +9,13 @@ import { ComathError } from "../errors.js";
 import { readEvidenceRecords } from "../evidence/store.js";
 import { hasSuccessfulCitationConditionMatch } from "../literature/index.js";
 import { assertPathAllowed } from "../security/path-policy.js";
-import { paperMarginNoteSchema, type ArtifactRef, type Claim, type PaperMarginNote } from "../types/schemas.js";
+import {
+  paperMarginNoteSchema,
+  type ArtifactRef,
+  type Claim,
+  type ClaimStatus,
+  type PaperMarginNote
+} from "../types/schemas.js";
 import { nextSequentialId } from "../utils/id.js";
 import { buildPaperBibTeX } from "./bibtex.js";
 
@@ -203,7 +209,26 @@ function writeRenderedFiles(projectRoot: string, manifest: PaperManifest, sectio
   writeFileSync(paperPath(projectRoot, "references.bib"), buildPaperBibTeX(projectRoot, manifest.project_id), "utf8");
 }
 
+const privilegedPaperClaimStatuses = new Set<ClaimStatus>([
+  "formally_checked",
+  "lean_skeleton",
+  "symbolically_checked",
+  "computationally_supported",
+  "literature_supported",
+  "human_accepted"
+]);
+
+const privilegedPaperExportVocabulary =
+  /\b(?:completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/i;
+
+function publicPaperClaimStatus(status: ClaimStatus): string {
+  return privilegedPaperClaimStatuses.has(status) ? "unverified_formal_status" : status;
+}
+
 function claimLabel(wording: RenderClaimBlockInput["wording"], claim: Claim): string {
+  if (privilegedPaperClaimStatuses.has(claim.status)) {
+    return "Claim";
+  }
   if (wording === "theorem" || wording === "lemma" || wording === "proposition") {
     return wording[0].toUpperCase() + wording.slice(1);
   }
@@ -344,6 +369,9 @@ export function renderClaimBlock(projectRoot: string, input: RenderClaimBlockInp
   if (theoremLike(input.wording) && claim.status !== "formally_checked") {
     vetoes.push("theorem_wording_requires_formally_checked_claim");
   }
+  if (theoremLike(input.wording) && claim.status === "formally_checked") {
+    vetoes.push("theorem_wording_requires_final_replay_authority");
+  }
   if (input.wording === "conjecture" && claim.status === "refuted") {
     vetoes.push("refuted_claim_cannot_be_rendered_as_conjecture");
   }
@@ -365,7 +393,7 @@ export function renderClaimBlock(projectRoot: string, input: RenderClaimBlockInp
   const metadata = [
     `claim:${claim.id}`,
     `margin_note:${nextNoteId}`,
-    `status: ${claim.status}`,
+    `status: ${publicPaperClaimStatus(claim.status)}`,
     `statement_hash: ${claim.statement_hash}`,
     evidenceLine,
     workstreamLine,
@@ -467,6 +495,9 @@ export function checkPaper(projectRoot: string, input: { project_id: string }): 
         vetoes.push("theorem_wording_requires_formally_checked_claim");
       }
     }
+  }
+  if (privilegedPaperExportVocabulary.test(markdown)) {
+    vetoes.push("paper_export_contains_unverified_formal_authority_vocabulary");
   }
 
   for (const ref of claimRefs) {
