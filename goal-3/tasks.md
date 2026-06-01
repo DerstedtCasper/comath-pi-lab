@@ -2289,3 +2289,21 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. Task125 closes public Pi proof-terminal leakage and packaging-hash omission in terminal/read-model authority projection, but it does not provide OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, full Codex lifecycle validation, or final GA audit.
 - Next step: Task126 should continue toward GA by auditing any remaining download/archive/report export endpoints and final dashboard renderers for proof-authority wording, especially surfaces that serialize historical raw service payloads or cached terminal states outside the Pi research loop.
 - Commit: `1169a48` (`Harden Pi proof UX authority gates`)
+
+## Task 126: Dashboard Public Authority Wording Gate
+
+- [x] Confirm no earlier `[ ]`, `[~]`, or `Commit: pending` task item remained before opening Task126.
+- [x] Re-read the Goal 3 required context set and confirm the current repository state instead of relying on prior memory.
+- [x] Add a failing Pi dashboard regression proving raw claim/workstream/gate proof-authority vocabulary cannot be rendered in public text or TUI dashboards without service proof context.
+- [x] Sanitize legacy/local dashboard claim and workstream statuses that look like privileged proof-authority or final replay vocabulary.
+- [x] Sanitize aggregated dashboard claim statuses, workstream statuses, and gate target statuses while preserving service-owned internal proof authority fields.
+- [x] Wire the Task126 regression into the default `@comath/pi-extension` test chain.
+- [x] Run focused Task126, package-level Pi tests, and root build/typecheck/test gates.
+
+Completion record:
+
+- Work done: treated Task125's tracker next step as authoritative and continued the public UX/read-model authority wording audit at the final dashboard renderer boundary. Preserved the existing partial Task126 dashboard test and strengthened it so both legacy/local `renderTextDashboard()` snapshots and service-aggregated dashboard snapshots include raw proof-authority-looking workstream statuses. RED showed the legacy text dashboard still rendered `formal_replay_passed` directly. Hardened the Pi dashboard text/TUI renderers so privileged claim/workstream statuses and gate target statuses are public-display downgraded to `unverified_formal_status` or `unverified_formal_target` instead of implying Lean clean replay or final authority evidence. Wired the regression into `@comath/pi-extension`'s default test chain.
+- Verification evidence: TDD RED was observed before implementation: `node extensions/comath-pi/tests/goal3-task126-dashboard-public-authority-wording.test.mjs` failed because `renderTextDashboard()` emitted `WS-1260 [formal_replay_passed]`. After implementation, `corepack pnpm --filter @comath/pi-extension build` exited 0 and the focused Task126 test exited 0. Package/root gates exited 0: `corepack pnpm --filter @comath/pi-extension test`, `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test`. `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+- Residual risk: Goal 3 remains incomplete. Task126 closes dashboard text/TUI proof-authority wording leakage for claim/workstream statuses and gate targets, but it does not audit every future custom visual component, downloadable report renderer, archive endpoint, or real-host Pi dashboard integration. Service-owned internal proof authority fields still exist and must remain gated by the Lean Authority v3 evidence chain before any final promotion.
+- Next step: Task127 should continue toward GA by auditing remaining download/archive/report export endpoints that may serialize historical raw service payloads or cached terminal states outside the dashboard renderer path, especially any public evidence-pack or source-report summaries that can still imply proof authority without fresh service-owned final replay packaging.
+- Commit: `4948629` (`Harden dashboard public authority wording`)
