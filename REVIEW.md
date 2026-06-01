@@ -1,3 +1,28 @@
+# Goal 3 Task 135 / Public Generated Report Snapshot Sanitizer
+
+Scope: comprehensive check-debug loop over the Task133-134 public/internal archive and release-metadata hardening line, with emphasis on generated Markdown/HTML/JSON reports copied into public snapshot downloads.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task item before Task135.
+- Audited source-review/package assembly references, generated report paths, snapshot verify/restore semantics, public archive docs/runbooks, and public proof-authority vocabulary scans.
+- Added `goal3-task135-public-generated-report-sanitizer.test.mjs`.
+- RED showed `.comath/artifacts/papers/main.md` was copied raw into a default `public_download` snapshot when it contained `proven`, `formally_checked`, and `clean_replay_passed`.
+- Hardened public snapshot copy sanitization so generated working-paper/report material under `.comath/artifacts/papers/**` is sanitized like release, evidence, audit, workstream, artifact-index, and UTF-8 artifact-blob material.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task135-public-generated-report-sanitizer.test.mjs` failed on `.comath/artifacts/papers/main.md` leaking privileged public vocabulary.
+- GREEN focused tests exited 0: Task135, Task134 release public archive contract, Task133 public snapshot restore contract, Phase16 snapshot/replay, Task131 public download consumer sanitizer, and Task17 GA acceptance workflow.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task135 discovered by the default comathd test runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task135 preserves the Task133 split: default/public snapshots remain sanitized `public_download` artifacts with `can_restore=false`, while explicit `internal_restore` snapshots preserve byte-for-byte generated paper/report material and remain local restore sources only.
+
+Residual risks: Goal 3 remains incomplete. Task135 closes the discovered generated paper/report public-snapshot leak, but it does not provide OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+
 # Goal 3 Task 134 / Release Public Archive Contract Metadata
 
 Scope: align release/source-review package wording and generated GA acceptance metadata after the Task133 public-vs-internal snapshot split.

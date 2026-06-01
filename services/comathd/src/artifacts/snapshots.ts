@@ -361,6 +361,7 @@ function shouldSanitizeSnapshotCopy(relativePath: string): boolean {
     normalized === ".comath/claims/gate-results.jsonl" ||
     normalized.startsWith(".comath/audit/") ||
     normalized.startsWith(".comath/workstreams/") ||
+    normalized.startsWith(".comath/artifacts/papers/") ||
     normalized === ".comath/artifacts/artifacts.jsonl" ||
     normalized.startsWith(".comath/artifacts/sha256/") ||
     normalized.endsWith("/candidate_manifest.json") ||
