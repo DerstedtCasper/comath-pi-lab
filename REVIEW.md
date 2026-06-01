@@ -1,3 +1,30 @@
+# Goal 3 Task 152 / Real-Pi Install Runtime Probe
+
+Scope: add a service-owned non-authoritative producer for real-Pi install/runtime-registration evidence artifacts, without accepting fake Pi host evidence, exposing host paths, promoting proof claims, or certifying GA.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed Task151 was the latest completed task before opening Task152.
+- Audited Task148 lifecycle evidence intake, Task149 durable service lifecycle probe, Task150 Codex API probe, `comathd` route wiring, and capability reporting.
+- Added `goal3-task152-real-pi-install-runtime-probe.test.mjs`.
+- RED showed `probePiCodexRealPiInstallRuntimeRegistration` was not exported by `comathd`.
+- Added `probePiCodexRealPiInstallRuntimeRegistration()` plus `POST /release/pi-codex-lifecycle/real-pi-runtime-probe`.
+- The probe executes service-configured allowlisted `shell:false` install/runtime-registration/host-confirmation commands, writes a scrubbed `pi-install-transcript.md` and `runtime-registration-snapshot.json`, returns readiness-compatible real-Pi runtime fields, and emits artifacts ingestible by Task148 evidence intake.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0 before RED and after implementation.
+- TDD RED: `node services/comathd/tests/unit/goal3-task152-real-pi-install-runtime-probe.test.mjs` failed because `../../dist/index.js` did not export `probePiCodexRealPiInstallRuntimeRegistration`.
+- GREEN focused test exited 0: Task152 real-Pi install/runtime-registration probe.
+- GREEN adjacent tests exited 0: Task148 lifecycle evidence intake, Task149 durable service lifecycle probe, and Task150 Codex API account/network probe.
+- Package gate exited 0: `corepack pnpm --filter @comath/comathd typecheck`.
+- Package gate exited 0: `corepack pnpm --filter @comath/comathd test`, with Task152 discovered by the default comathd runner.
+- Post-code `node scripts/phase0-smoke.mjs`, `git diff --check`, and `Test-Path -LiteralPath .comath` exited cleanly, with diff check reporting only Windows LF-to-CRLF warnings and `.comath` remaining absent at the repo root.
+
+Boundary notes: Task152 is a service-owned artifact producer. It can collect operator-configured real-Pi install/runtime-registration command evidence into project-local release artifacts, but it does not itself prove that this workstation ran on a Pi, does not grant proof authority, does not expose API secrets, and cannot certify GA.
+
+Residual risks: Goal 3 remains incomplete. Pi-facing consumer UX for this new probe, richer operator UI/manual walkthrough, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 151 / Pi-Codex API Probe Release Consumer
 
 Scope: expose the Task150 service-owned production Codex API account/network validation probe through the Pi release consumer surface, without letting Pi carry API credentials, write `.comath/` directly, overclaim proof authority, or certify GA.

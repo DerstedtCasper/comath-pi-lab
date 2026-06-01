@@ -172,6 +172,108 @@ export type PiCodexLifecycleServiceProbeOptions = {
   runner?: PiCodexLifecycleServiceProbeRunner;
 };
 
+export type PiCodexRealPiRuntimeProbeStep = "install" | "runtime_registration" | "host_confirmation";
+
+export type PiCodexRealPiRuntimeProbeCommandName = PiCodexRealPiRuntimeProbeStep;
+
+export type PiCodexRealPiRuntimeProbeInput = {
+  project_id: string;
+  probe_id?: string;
+  actor: string;
+  pi_host_label: string;
+  pi_host_kind?: "real_pi_host" | "fake_pi_host" | "unknown";
+  session_kind: PiCodexLifecycleInstallSessionEvidence["session_kind"];
+  timeout_ms?: number;
+  commands: Partial<Record<PiCodexRealPiRuntimeProbeCommandName, PiCodexLifecycleServiceProbeCommandInput>>;
+};
+
+export type PiCodexRealPiRuntimeProbeRunnerCommand = PiCodexLifecycleServiceProbeRunnerCommand;
+
+export type PiCodexRealPiRuntimeProbeRunnerResult = PiCodexLifecycleServiceProbeRunnerResult;
+
+export type PiCodexRealPiRuntimeProbeRunner = (
+  command: PiCodexRealPiRuntimeProbeRunnerCommand,
+  step: PiCodexRealPiRuntimeProbeStep
+) => PiCodexRealPiRuntimeProbeRunnerResult;
+
+export type PiCodexRealPiRuntimeProbeOptions = {
+  runner?: PiCodexRealPiRuntimeProbeRunner;
+};
+
+export type PiCodexRealPiRuntimeProbeCommandRecord = {
+  step: PiCodexRealPiRuntimeProbeStep;
+  command_name: PiCodexRealPiRuntimeProbeCommandName;
+  program_label: string;
+  program_path_sha256: string;
+  args_count: number;
+  args_sha256: string;
+  expected_exit_code: number;
+  exit_code: number | null;
+  signal: NodeJS.Signals | null;
+  timed_out: boolean;
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+};
+
+export type PiCodexRealPiRuntimeProbeVeto = {
+  code: string;
+  message: string;
+};
+
+export type PiCodexRealPiRuntimeProbeInstallArtifact = {
+  kind: "pi_install_transcript";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexRealPiRuntimeProbeRegistrationArtifact = {
+  kind: "runtime_registration_snapshot";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexRealPiRuntimeProbeArtifact =
+  | PiCodexRealPiRuntimeProbeInstallArtifact
+  | PiCodexRealPiRuntimeProbeRegistrationArtifact;
+
+export type PiCodexRealPiRuntimeProbeResult = {
+  schema_version: "comath.pi_codex_real_pi_install_runtime_probe.v1";
+  probe_id: string;
+  project_id: string;
+  pi_host_label: string;
+  created_at: string;
+  ok: boolean;
+  probe_status: "real_pi_install_runtime_observed" | "blocked_real_pi_install_runtime_probe_failed";
+  pi_install_transcript_path: string;
+  runtime_registration_snapshot_path: string;
+  pi_install_artifact: PiCodexRealPiRuntimeProbeInstallArtifact;
+  runtime_registration_artifact: PiCodexRealPiRuntimeProbeRegistrationArtifact;
+  readiness_fragment: Pick<
+    PiCodexLifecycleInstallSessionEvidence,
+    | "session_kind"
+    | "pi_host_kind"
+    | "runtime_entrypoint_imported"
+    | "runtime_registered"
+    | "host_confirmation_observed"
+  >;
+  commands: PiCodexRealPiRuntimeProbeCommandRecord[];
+  vetoes: PiCodexRealPiRuntimeProbeVeto[];
+  shell: false;
+  network: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexRealPiRuntimeProbeArtifactBody = Omit<
+  PiCodexRealPiRuntimeProbeResult,
+  "pi_install_artifact" | "runtime_registration_artifact"
+>;
+
 export type PiCodexLifecycleServiceProbeCommandRecord = {
   step: PiCodexLifecycleServiceProbeStep;
   command_name: PiCodexLifecycleServiceCommandName;
@@ -362,6 +464,22 @@ function assertProbeId(value: string | undefined): string {
   return probeId;
 }
 
+function assertRealPiRuntimeProbeId(value: string | undefined): string {
+  const probeId = value ?? `LIFE-PI-RUNTIME-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (
+    !/^[A-Za-z0-9._-]+$/.test(probeId) ||
+    probeId === "." ||
+    probeId === ".." ||
+    probeId.split(".").some((segment) => segment.length === 0)
+  ) {
+    throw new ComathError("invalid Pi/Codex real-Pi runtime probe id", {
+      statusCode: 400,
+      code: "PI_CODEX_REAL_PI_RUNTIME_PROBE_INVALID_ID"
+    });
+  }
+  return probeId;
+}
+
 function assertCodexValidationId(value: string | undefined): string {
   const validationId = value ?? `LIFE-CODEX-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
   if (
@@ -409,6 +527,34 @@ function assertServiceLabel(value: string): string {
     statusCode: 400,
     code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_LABEL_INVALID"
   });
+}
+
+function assertPiHostLabel(value: string): string {
+  const label = value.trim();
+  if (/^[A-Za-z0-9._-]{1,80}$/.test(label)) {
+    return label;
+  }
+  throw new ComathError("Pi/Codex real-Pi host label is invalid", {
+    statusCode: 400,
+    code: "PI_CODEX_REAL_PI_RUNTIME_PROBE_HOST_LABEL_INVALID"
+  });
+}
+
+function assertRealPiRuntimeProbeHost(input: PiCodexRealPiRuntimeProbeInput): {
+  piHostKind: "real_pi_host";
+  sessionKind: "real_pi_host_manual_install" | "real_pi_host_automated_install";
+} {
+  const piHostKind = input.pi_host_kind ?? "real_pi_host";
+  if (
+    piHostKind !== "real_pi_host" ||
+    (input.session_kind !== "real_pi_host_manual_install" && input.session_kind !== "real_pi_host_automated_install")
+  ) {
+    throw new ComathError("real-Pi install/runtime probe requires real Pi host evidence", {
+      statusCode: 400,
+      code: "PI_CODEX_REAL_PI_RUNTIME_PROBE_FAKE_HOST_DENIED"
+    });
+  }
+  return { piHostKind, sessionKind: input.session_kind };
 }
 
 function canonicalLifecycleProgram(program: string, field: string): string {
@@ -533,6 +679,48 @@ function prepareProbeCommand(
   };
 }
 
+function requiredRealPiRuntimeCommand(
+  commands: PiCodexRealPiRuntimeProbeInput["commands"],
+  name: PiCodexRealPiRuntimeProbeCommandName
+): PiCodexLifecycleServiceProbeCommandInput {
+  const command = commands[name];
+  if (!command) {
+    throw new ComathError("PI_CODEX_REAL_PI_RUNTIME_PROBE_COMMAND_MISSING", {
+      statusCode: 400,
+      code: "PI_CODEX_REAL_PI_RUNTIME_PROBE_COMMAND_MISSING"
+    });
+  }
+  return command;
+}
+
+function prepareRealPiRuntimeCommand(
+  commandName: PiCodexRealPiRuntimeProbeCommandName,
+  input: PiCodexLifecycleServiceProbeCommandInput,
+  defaultTimeoutMs: number,
+  allowedPrograms: Set<string>
+): {
+  commandName: PiCodexRealPiRuntimeProbeCommandName;
+  program: string;
+  args: string[];
+  expectedExitCode: number;
+  timeoutMs: number;
+} {
+  const program = canonicalLifecycleProgram(input.program, `${commandName}.program`);
+  if (!allowedPrograms.has(program)) {
+    throw new ComathError("PI_CODEX_LIFECYCLE_SERVICE_PROBE_PROGRAM_NOT_ALLOWLISTED", {
+      statusCode: 403,
+      code: "PI_CODEX_LIFECYCLE_SERVICE_PROBE_PROGRAM_NOT_ALLOWLISTED"
+    });
+  }
+  return {
+    commandName,
+    program,
+    args: assertLifecycleArgsAllowed(input.args),
+    expectedExitCode: assertExpectedExitCode(input.expected_exit_code),
+    timeoutMs: assertProbeTimeout(input.timeout_ms ?? defaultTimeoutMs)
+  };
+}
+
 function truncateProbeOutput(value: string): string {
   return Buffer.from(scrubHostPaths(value), "utf8").subarray(0, lifecycleProbeOutputLimit).toString("utf8");
 }
@@ -612,6 +800,52 @@ function runProbeStep(
   };
 }
 
+function runRealPiRuntimeProbeStep(
+  step: PiCodexRealPiRuntimeProbeStep,
+  command: ReturnType<typeof prepareRealPiRuntimeCommand>,
+  runner: PiCodexRealPiRuntimeProbeRunner
+): PiCodexRealPiRuntimeProbeCommandRecord {
+  const startedAt = Date.now();
+  let result: PiCodexRealPiRuntimeProbeRunnerResult;
+  try {
+    result = runner(
+      {
+        program: command.program,
+        args: command.args,
+        timeout_ms: command.timeoutMs,
+        shell: false,
+        network: false
+      },
+      step
+    );
+  } catch (error) {
+    result = {
+      exit_code: null,
+      signal: null,
+      timed_out: false,
+      stdout: "",
+      stderr: error instanceof Error ? error.message : String(error)
+    };
+  }
+  const ok = result.exit_code === command.expectedExitCode && !result.timed_out;
+  return {
+    step,
+    command_name: command.commandName,
+    program_label: basename(command.program),
+    program_path_sha256: sha256Text(command.program),
+    args_count: command.args.length,
+    args_sha256: sha256Text(canonicalJson(command.args)),
+    expected_exit_code: command.expectedExitCode,
+    exit_code: result.exit_code,
+    signal: result.signal,
+    timed_out: result.timed_out,
+    ok,
+    stdout: truncateProbeOutput(result.stdout),
+    stderr: truncateProbeOutput(result.stderr),
+    duration_ms: Math.max(Date.now() - startedAt, 0)
+  };
+}
+
 function probeVetoForCommand(record: PiCodexLifecycleServiceProbeCommandRecord): PiCodexLifecycleServiceProbeVeto[] {
   if (record.ok) {
     return [];
@@ -629,6 +863,34 @@ function probeVetoForCommand(record: PiCodexLifecycleServiceProbeCommandRecord):
     {
       code: `${baseCode}_failed`,
       message: `Durable service lifecycle ${record.step} command did not return the expected exit code.`
+    }
+  ];
+}
+
+function realPiRuntimeProbeVetoForCommand(
+  record: PiCodexRealPiRuntimeProbeCommandRecord
+): PiCodexRealPiRuntimeProbeVeto[] {
+  if (record.ok) {
+    return [];
+  }
+  const baseCode =
+    record.step === "install"
+      ? "real_pi_install"
+      : record.step === "runtime_registration"
+        ? "real_pi_runtime_registration"
+        : "real_pi_host_confirmation";
+  return [
+    ...(record.timed_out
+      ? [
+          {
+            code: `${baseCode}_timeout`,
+            message: `Real Pi ${record.step} command timed out.`
+          }
+        ]
+      : []),
+    {
+      code: `${baseCode}_failed`,
+      message: `Real Pi ${record.step} command did not return the expected exit code.`
     }
   ];
 }
@@ -743,6 +1005,207 @@ export function probePiCodexDurableServiceLifecycle(
       service_start_observed: serviceStartObserved,
       service_stop_observed: serviceStopObserved,
       service_restart_observed: serviceRestartObserved,
+      veto_codes: vetoes.map((veto) => veto.code),
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
+function defaultRealPiRuntimeProbeRunner(
+  command: PiCodexRealPiRuntimeProbeRunnerCommand
+): PiCodexRealPiRuntimeProbeRunnerResult {
+  return defaultLifecycleProbeRunner(command);
+}
+
+function realPiTranscriptText(input: {
+  probeId: string;
+  projectId: string;
+  piHostLabel: string;
+  createdAt: string;
+  ok: boolean;
+  probeStatus: PiCodexRealPiRuntimeProbeResult["probe_status"];
+  commands: PiCodexRealPiRuntimeProbeCommandRecord[];
+  vetoes: PiCodexRealPiRuntimeProbeVeto[];
+}): string {
+  const lines = [
+    "# CoMath Pi/Codex Real-Pi Install Runtime Probe",
+    "",
+    `probe_id: ${input.probeId}`,
+    `project_id: ${input.projectId}`,
+    `pi_host_label: ${input.piHostLabel}`,
+    `created_at: ${input.createdAt}`,
+    `ok: ${input.ok}`,
+    `probe_status: ${input.probeStatus}`,
+    "proof_authority: none",
+    "can_promote_claim: false",
+    "can_certify_ga: false",
+    "",
+    "## Commands",
+    ...input.commands.map(
+      (command) =>
+        `- ${command.step}: ok=${command.ok}; program=${command.program_label}; args_sha256=${command.args_sha256}; exit_code=${command.exit_code ?? "null"}; stdout=${command.stdout}; stderr=${command.stderr}`
+    ),
+    "",
+    "## Vetoes",
+    ...(input.vetoes.length > 0
+      ? input.vetoes.map((veto) => `- ${veto.code}: ${veto.message}`)
+      : ["- none"])
+  ];
+  return `${scrubHostPaths(lines.join("\n"))}\n`;
+}
+
+export function probePiCodexRealPiInstallRuntimeRegistration(
+  projectRoot: string,
+  input: PiCodexRealPiRuntimeProbeInput,
+  options: PiCodexRealPiRuntimeProbeOptions = {}
+): PiCodexRealPiRuntimeProbeResult {
+  const probeId = assertRealPiRuntimeProbeId(input.probe_id);
+  const piHostLabel = assertPiHostLabel(input.pi_host_label);
+  const host = assertRealPiRuntimeProbeHost(input);
+  const timeoutMs = assertProbeTimeout(input.timeout_ms);
+  const allowedPrograms = configuredLifecycleAllowedPrograms();
+  const install = prepareRealPiRuntimeCommand(
+    "install",
+    requiredRealPiRuntimeCommand(input.commands, "install"),
+    timeoutMs,
+    allowedPrograms
+  );
+  const runtimeRegistration = prepareRealPiRuntimeCommand(
+    "runtime_registration",
+    requiredRealPiRuntimeCommand(input.commands, "runtime_registration"),
+    timeoutMs,
+    allowedPrograms
+  );
+  const hostConfirmation = prepareRealPiRuntimeCommand(
+    "host_confirmation",
+    requiredRealPiRuntimeCommand(input.commands, "host_confirmation"),
+    timeoutMs,
+    allowedPrograms
+  );
+  const runner = options.runner ?? defaultRealPiRuntimeProbeRunner;
+  const commands = [
+    runRealPiRuntimeProbeStep("install", install, runner),
+    runRealPiRuntimeProbeStep("runtime_registration", runtimeRegistration, runner),
+    runRealPiRuntimeProbeStep("host_confirmation", hostConfirmation, runner)
+  ];
+  const byStep = new Map(commands.map((command) => [command.step, command]));
+  const runtimeEntrypointImported = Boolean(byStep.get("install")?.ok);
+  const runtimeRegistered = Boolean(byStep.get("runtime_registration")?.ok);
+  const hostConfirmationObserved = Boolean(byStep.get("host_confirmation")?.ok);
+  const vetoes = commands.flatMap(realPiRuntimeProbeVetoForCommand);
+  const ok = runtimeEntrypointImported && runtimeRegistered && hostConfirmationObserved && vetoes.length === 0;
+  const probeStatus = ok
+    ? "real_pi_install_runtime_observed"
+    : "blocked_real_pi_install_runtime_probe_failed";
+  const createdAt = new Date().toISOString();
+  const piInstallTranscriptPath = normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", probeId, "pi-install-transcript.md")
+  );
+  const runtimeRegistrationSnapshotPath = normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", probeId, "runtime-registration-snapshot.json")
+  );
+  const artifactBody: PiCodexRealPiRuntimeProbeArtifactBody = {
+    schema_version: "comath.pi_codex_real_pi_install_runtime_probe.v1",
+    probe_id: probeId,
+    project_id: input.project_id,
+    pi_host_label: piHostLabel,
+    created_at: createdAt,
+    ok,
+    probe_status: probeStatus,
+    pi_install_transcript_path: piInstallTranscriptPath,
+    runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath,
+    readiness_fragment: {
+      session_kind: host.sessionKind,
+      pi_host_kind: host.piHostKind,
+      runtime_entrypoint_imported: runtimeEntrypointImported,
+      runtime_registered: runtimeRegistered,
+      host_confirmation_observed: hostConfirmationObserved
+    },
+    commands,
+    vetoes,
+    shell: false,
+    network: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const installTranscript = realPiTranscriptText({
+    probeId,
+    projectId: input.project_id,
+    piHostLabel,
+    createdAt,
+    ok,
+    probeStatus,
+    commands,
+    vetoes
+  });
+  const runtimeSnapshot = canonicalJson({
+    schema_version: "comath.pi_codex_runtime_registration_snapshot.v1",
+    probe_id: probeId,
+    project_id: input.project_id,
+    pi_host_label: piHostLabel,
+    created_at: createdAt,
+    session_kind: host.sessionKind,
+    pi_host_kind: host.piHostKind,
+    runtime_entrypoint_imported: runtimeEntrypointImported,
+    runtime_registered: runtimeRegistered,
+    host_confirmation_observed: hostConfirmationObserved,
+    commands: commands.map((command) => ({
+      step: command.step,
+      ok: command.ok,
+      program_label: command.program_label,
+      program_path_sha256: command.program_path_sha256,
+      args_count: command.args_count,
+      args_sha256: command.args_sha256,
+      exit_code: command.exit_code,
+      timed_out: command.timed_out
+    })),
+    vetoes,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  });
+  const absoluteInstallPath = assertPathAllowed(projectRoot, piInstallTranscriptPath, { purpose: "runtime-write" });
+  const absoluteRuntimePath = assertPathAllowed(projectRoot, runtimeRegistrationSnapshotPath, {
+    purpose: "runtime-write"
+  });
+  mkdirSync(dirname(absoluteInstallPath), { recursive: true });
+  mkdirSync(dirname(absoluteRuntimePath), { recursive: true });
+  writeFileSync(absoluteInstallPath, installTranscript, "utf8");
+  writeFileSync(absoluteRuntimePath, runtimeSnapshot, "utf8");
+  const result: PiCodexRealPiRuntimeProbeResult = {
+    ...artifactBody,
+    pi_install_artifact: {
+      kind: "pi_install_transcript",
+      path: piInstallTranscriptPath,
+      sha256: sha256Text(installTranscript),
+      size_bytes: Buffer.byteLength(installTranscript, "utf8")
+    },
+    runtime_registration_artifact: {
+      kind: "runtime_registration_snapshot",
+      path: runtimeRegistrationSnapshotPath,
+      sha256: sha256Text(runtimeSnapshot),
+      size_bytes: Buffer.byteLength(runtimeSnapshot, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "release.pi_codex_real_pi_runtime_probe_completed",
+    actor: input.actor,
+    target_id: input.project_id,
+    payload: {
+      probe_id: probeId,
+      ok,
+      probe_status: probeStatus,
+      pi_host_label: piHostLabel,
+      pi_install_transcript_path: piInstallTranscriptPath,
+      runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath,
+      runtime_entrypoint_imported: runtimeEntrypointImported,
+      runtime_registered: runtimeRegistered,
+      host_confirmation_observed: hostConfirmationObserved,
       veto_codes: vetoes.map((veto) => veto.code),
       proof_authority: "none",
       can_promote_claim: false,

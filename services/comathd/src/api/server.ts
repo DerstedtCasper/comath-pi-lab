@@ -55,6 +55,7 @@ import {
   collectPiCodexLifecycleEvidence,
   probePiCodexProductionCodexAccountNetwork,
   probePiCodexDurableServiceLifecycle,
+  probePiCodexRealPiInstallRuntimeRegistration,
   reviewPiCodexLifecycleReadiness
 } from "../release/pi-codex-lifecycle-readiness.js";
 import {
@@ -380,6 +381,15 @@ async function route(method: string, path: string, body: unknown, context: Route
         const body = payload as Parameters<typeof probePiCodexProductionCodexAccountNetwork>[1] & { project_root: string };
         return {
           probe: await probePiCodexProductionCodexAccountNetwork(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/real-pi-runtime-probe",
+      (payload) => {
+        const body = payload as Parameters<typeof probePiCodexRealPiInstallRuntimeRegistration>[1] & { project_root: string };
+        return {
+          probe: probePiCodexRealPiInstallRuntimeRegistration(body.project_root, body)
         };
       }
     ],
