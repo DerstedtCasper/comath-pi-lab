@@ -34,6 +34,10 @@ Use these labels consistently:
 
 No pack may label a result `proven` without FinalReplayManifest pass, promotion-gate pass, and FinalAuthorityPackagingV3 source report / generic Lean Authority v3 packaging evidence.
 
+## Public Diagnostic Archives And Restore Snapshots
+
+Source-review public diagnostic archives may include source files plus generated markdown, HTML, and JSON reports for release review, but they remain non-authoritative (`proof_authority: none`) and `public_archive_is_proof_authority=false`. A sanitized snapshot download is a `public_download` with `can_restore=false`; it is not a restore source and restore must reject it with `SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE`. Byte-for-byte runtime fidelity belongs only to an explicit `internal_restore` snapshot, which is a restore source for local recovery and not a public distribution artifact. Neither source-review archives nor public/internal snapshots can replace FinalAuthorityPackagingV3 / Lean Authority v3 source-report evidence.
+
 ## Literature And Copyright
 
 For literature-derived material:

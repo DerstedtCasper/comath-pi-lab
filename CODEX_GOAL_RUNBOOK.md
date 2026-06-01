@@ -496,6 +496,9 @@ Definition of Done:
 Historical/quarantined runbook note: the Phase 18 `Nat.add_zero` and old gate-mediated `formally_checked`
 criteria below are retained as fixture coverage records only. They are not a current production proof path;
 current authority requires the Goal 3 Lean Authority v3 source-report, derived-binding, and final packaging gates.
+Public release packaging must also keep archive semantics separate: source-review public diagnostic material is
+non-authoritative (`proof_authority: none`), sanitized `public_download` snapshots have `can_restore=false` and
+are not restore sources, and only explicit `internal_restore` snapshots preserve byte-for-byte runtime fidelity.
 
 - `ResearchCampaign` start/status/next-actions/tick/final-audit/replay routes exist through `comathd`;
 - `formally_checked` requires a passed proof-kernel final replay manifest for the same claim;
@@ -541,6 +544,8 @@ Use only after Phases 0-17 are complete:
 Historical/quarantined runbook note: this Phase 18 vertical-slice prompt is kept as an old fixture
 recipe, not as the current production proof path. Goal 3 authority requires Lean Authority v3 final
 source-report and packaging evidence before any public final proof wording.
+For current source-review packages, `public_download` snapshot material is public diagnostic evidence only
+with `can_restore=false`; byte-for-byte restore-fidelity material must be exported as `internal_restore`.
 
 ```text
 /goal Bring CoMath Pi Lab through the GA proof-kernel vertical slices.

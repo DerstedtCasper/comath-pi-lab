@@ -766,6 +766,7 @@ export type Goal3GaAcceptanceReport = {
   schema_version: "comath.goal3_ga_acceptance.v1";
   proof_authority: "none";
   generated_by: "comathd.goal3_ga_acceptance";
+  public_archive_contract: Goal3GaPublicArchiveContract;
   trust_core_negative_suite: {
     required_cases: Goal3GaNegativeCaseId[];
     cases: Goal3GaTrustCoreCase[];
@@ -799,6 +800,37 @@ export type Goal3GaAcceptanceReport = {
     final_replay_verification: { ok: boolean; vetoes: string[] };
   };
   positive_matrix: Goal3GaPositiveProofMatrix;
+};
+
+export type Goal3GaPublicArchiveContract = {
+  schema_version: "comath.goal3_public_archive_contract.v1";
+  proof_authority: "none";
+  can_promote_claim: false;
+  source_review_archive: {
+    archive_kind: "source_review_public_diagnostic";
+    restore_source: false;
+    public_archive_is_proof_authority: false;
+    requires_sanitized_generated_reports: true;
+    generated_report_formats: ["markdown", "html", "json"];
+  };
+  public_snapshot_download: {
+    snapshot_kind: "public_download";
+    can_restore: false;
+    restore_source: false;
+    restore_rejection_code: "SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE";
+  };
+  internal_restore_snapshot: {
+    snapshot_kind: "internal_restore";
+    can_restore: true;
+    restore_source: true;
+    byte_for_byte_runtime_fidelity: true;
+    public_distribution: false;
+  };
+  lean_authority_evidence: {
+    required_packaging_schema: "comath.final_authority_packaging.v3";
+    required_source_report: true;
+    public_archive_substitutes_for_lean_authority: false;
+  };
 };
 
 const requiredNegativeCases: Goal3GaNegativeCaseId[] = [
@@ -838,6 +870,39 @@ function sha256File(path: string): string {
 
 function hashRef(path: string): { sha256: string; size_bytes: number } {
   return { sha256: sha256File(path), size_bytes: statSync(path).size };
+}
+
+function createPublicArchiveContract(): Goal3GaPublicArchiveContract {
+  return {
+    schema_version: "comath.goal3_public_archive_contract.v1",
+    proof_authority: "none",
+    can_promote_claim: false,
+    source_review_archive: {
+      archive_kind: "source_review_public_diagnostic",
+      restore_source: false,
+      public_archive_is_proof_authority: false,
+      requires_sanitized_generated_reports: true,
+      generated_report_formats: ["markdown", "html", "json"]
+    },
+    public_snapshot_download: {
+      snapshot_kind: "public_download",
+      can_restore: false,
+      restore_source: false,
+      restore_rejection_code: "SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE"
+    },
+    internal_restore_snapshot: {
+      snapshot_kind: "internal_restore",
+      can_restore: true,
+      restore_source: true,
+      byte_for_byte_runtime_fidelity: true,
+      public_distribution: false
+    },
+    lean_authority_evidence: {
+      required_packaging_schema: "comath.final_authority_packaging.v3",
+      required_source_report: true,
+      public_archive_substitutes_for_lean_authority: false
+    }
+  };
 }
 
 function writeProjectFile(projectRoot: string, relativePath: string, content: string): string {
@@ -4958,6 +5023,7 @@ export function runGoal3GaAcceptanceWorkflow(input: {
     schema_version: "comath.goal3_ga_acceptance.v1",
     proof_authority: "none",
     generated_by: "comathd.goal3_ga_acceptance",
+    public_archive_contract: createPublicArchiveContract(),
     trust_core_negative_suite: {
       required_cases: requiredNegativeCases,
       cases,

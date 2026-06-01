@@ -351,8 +351,13 @@ function writeJson(path: string, value: unknown): void {
 
 function shouldSanitizeSnapshotCopy(relativePath: string): boolean {
   const normalized = normalizeRelativePath(relativePath);
+  if (normalized.includes("/runners/RUN-") && normalized.endsWith(".json")) {
+    return false;
+  }
   return (
     normalized === ".comath/evidence/evidence.jsonl" ||
+    normalized.startsWith(".comath/evidence/") ||
+    normalized.startsWith(".comath/release/") ||
     normalized === ".comath/claims/gate-results.jsonl" ||
     normalized.startsWith(".comath/audit/") ||
     normalized.startsWith(".comath/workstreams/") ||

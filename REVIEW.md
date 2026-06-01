@@ -1,3 +1,17 @@
+# Goal 3 Task 134 / Release Public Archive Contract Metadata
+
+Scope: align release/source-review package wording and generated GA acceptance metadata after the Task133 public-vs-internal snapshot split.
+
+Work performed:
+
+- Added `goal3-task134-release-public-archive-contract.test.mjs`.
+- Added `public_archive_contract` to `runGoal3GaAcceptanceWorkflow()` so generated release reports explicitly distinguish source-review public diagnostic archives, sanitized `public_download` snapshots with `can_restore=false`, explicit `internal_restore` byte-for-byte runtime-fidelity snapshots, and FinalAuthorityPackagingV3 / Lean Authority v3 source-report evidence.
+- Hardened `scripts/phase0-smoke.mjs` so README, REVIEW, runbook, GA release criteria, and evidence-pack policy must preserve that distinction.
+
+Boundary notes: source-review public diagnostic archives remain non-authoritative with `proof_authority: none`; public snapshot downloads are not restore sources; internal restore snapshots are not public release artifacts; none of these archive forms can substitute for Lean Authority v3 final packaging evidence.
+
+Residual risks: final GA audit, external notarization, richer real Lean/mathlib replay coverage, and full real-host Pi/Codex lifecycle validation remain open.
+
 # Goal 3 Task 112 / Artifact-Backed Statement-Equivalence Replay Evidence Gate
 
 Scope: prevent marker-only or id-only non-exact statement-equivalence evidence from satisfying candidate arbitration, StatementDiffGate, or registered logical/transitive statement-equivalence acceptance.

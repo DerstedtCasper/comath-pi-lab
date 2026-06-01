@@ -54,6 +54,7 @@ const npmrc = readFileSync(join(root, ".npmrc"), "utf8");
 const devPlan = readFileSync(join(root, "COMATH_PI_LAB_DEV_PLAN.md"), "utf8");
 const runbook = readFileSync(join(root, "CODEX_GOAL_RUNBOOK.md"), "utf8");
 const readme = readFileSync(join(root, "README.md"), "utf8");
+const review = readFileSync(join(root, "REVIEW.md"), "utf8");
 const acceptanceMatrix = readFileSync(join(root, "docs/architecture/acceptance-matrix.md"), "utf8");
 const riskRegister = readFileSync(join(root, "docs/architecture/risk-register.md"), "utf8");
 const agentModel = readFileSync(join(root, "docs/architecture/agent-operating-model.md"), "utf8");
@@ -345,6 +346,34 @@ if (
   !/FinalAuthorityPackagingV3|source report|generic Lean Authority v3 packaging/i.test(gaReleaseCriteria)
 ) {
   invariantFailures.push("GA release criteria must bind formally_checked release claims to Lean Authority v3 source-report/package evidence");
+}
+
+const publicArchiveContractDocs = [
+  [readme, "README.md"],
+  [review, "REVIEW.md"],
+  [runbook, "CODEX_GOAL_RUNBOOK.md"],
+  [gaReleaseCriteria, "docs/architecture/ga-release-criteria.md"],
+  [evidencePackPolicy, "docs/architecture/evidence-pack-policy.md"]
+];
+
+for (const [content, label] of publicArchiveContractDocs) {
+  const hasPublicDiagnosticArchive =
+    /source-review|source review|public diagnostic|public archive/i.test(content) &&
+    /proof_authority:?\s*["`']?none|non-authoritative|not proof authority|public_archive_is_proof_authority/i.test(content);
+  const hasPublicSnapshotDownload =
+    /public_download/.test(content) &&
+    /can_restore\s*=\s*false|can_restore["`]?:\s*false|non-restorable|not a restore source|cannot be restored/i.test(content);
+  const hasInternalRestore =
+    /internal_restore/.test(content) &&
+    /byte-for-byte|runtime fidelity|restore-fidelity|restore source/i.test(content);
+  const hasLeanAuthorityBoundary =
+    /FinalAuthorityPackagingV3|comath\.final_authority_packaging\.v3|Lean Authority v3 source-report/i.test(content);
+
+  if (!hasPublicDiagnosticArchive || !hasPublicSnapshotDownload || !hasInternalRestore || !hasLeanAuthorityBoundary) {
+    invariantFailures.push(
+      `${label} must distinguish public diagnostic/source-review archives, public_download non-restorable snapshots, internal_restore restore-fidelity snapshots, and Lean Authority v3 evidence`
+    );
+  }
 }
 
 if (

@@ -639,7 +639,7 @@ async function route(method: string, path: string, body: unknown, context: Route
       "POST /snapshot/export",
       (payload) => {
         const body = payload as Parameters<typeof exportSnapshot>[1] & { project_root: string };
-        return exportSnapshot(body.project_root, body);
+        return exportSnapshot(body.project_root, { ...body, audience: "public_download" });
       }
     ],
     [

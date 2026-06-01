@@ -33,6 +33,7 @@ Any one of these blocks a GA release:
 - External Lean repositories can enter final replay without license, toolchain, commit, manifest, import, hash, and symlink checks.
 - Literature or RAG evidence lacks provider, retrieval timestamp, content hash, terms note, prompt-injection scan, and citation anchors.
 - Evidence packs cannot be replayed by a third party or do not distinguish omitted copyrighted material from included redistributable material.
+- Public release/source-review archives blur the archive contract: source-review public diagnostic archives must stay non-authoritative (`proof_authority: none`), sanitized `public_download` snapshots must state `can_restore=false` and not a restore source, explicit `internal_restore` snapshots must be byte-for-byte runtime-fidelity restore sources only, and no public archive may substitute for FinalAuthorityPackagingV3 / Lean Authority v3 source-report evidence.
 
 ## Required Verification Before GA Tagging
 
