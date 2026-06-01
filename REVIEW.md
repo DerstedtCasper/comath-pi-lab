@@ -1,3 +1,29 @@
+# Goal 3 Task 136 / Public Paper And Literature Route Sanitizer
+
+Scope: audit remaining public export/read-model route bodies outside snapshot material, with emphasis on paper and literature responses that could bypass the public authority vocabulary sanitizer.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task item before Task136.
+- Audited public `comathd` route bodies after the Task131-135 sanitizer line and found that paper and literature routes still returned internal records directly.
+- Added `goal3-task136-public-paper-literature-route-sanitizer.test.mjs`.
+- RED showed `/paper/update-section` returned raw `formal_replay_passed`, `lean_kernel_clean_replay`, `formally_checked`, `proven`, and related privileged public vocabulary.
+- Hardened public route responses for `/literature/import-bibtex`, `/literature/import-pdf`, `/literature/register-citation`, `/literature/check-condition`, `/literature/list`, `/paper/init`, `/paper/state`, `/paper/update-section`, `/paper/render-claim`, `/paper/check`, and `/paper/export`.
+- Preserved internal paper and literature stores unchanged; sanitizer is applied only to public HTTP route response bodies.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task136-public-paper-literature-route-sanitizer.test.mjs` failed on `/paper/update-section must sanitize route response vocabulary`.
+- GREEN focused tests exited 0: Task136, Task132 public read-model route sanitizer, Task135 public generated report sanitizer, Task128 paper export public authority sanitizer, Phase12 working paper, Phase11 literature, Task127 campaign export public authority sanitizer, and Phase21 read-model routes.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task136 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task136 is response-surface hardening only. It does not rewrite persisted paper/literature evidence, does not change claim promotion gates, and does not make citation, paper, or export material proof authority.
+
+Residual risks: Goal 3 remains incomplete. Task136 closes the discovered public paper/literature route vocabulary leaks, but it does not provide OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+
 # Goal 3 Task 135 / Public Generated Report Snapshot Sanitizer
 
 Scope: comprehensive check-debug loop over the Task133-134 public/internal archive and release-metadata hardening line, with emphasis on generated Markdown/HTML/JSON reports copied into public snapshot downloads.
