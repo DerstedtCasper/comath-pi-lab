@@ -1,3 +1,32 @@
+# Goal 3 Task 141 / Source-Review Public Archive Contract
+
+Scope: audit remaining source-review package assembly and generated HTML/Markdown/JSON download presentation surfaces after the Pi-host project-relative snapshot manifest UX fix, without letting public review material act as proof authority or expose host paths.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task before Task141.
+- Audited release public archive contracts, snapshot public generated-report sanitization, `/paper/export`, `/snapshot/export`, and the service route table after Task134-140.
+- Found a real contract gap: Task134 declared source-review public archives and sanitized generated Markdown/HTML/JSON reports, but `comathd` had no service-owned source-review public archive assembler or route that enforced those semantics at package time.
+- Added `goal3-task141-source-review-public-archive.test.mjs`.
+- RED showed `dist/index.js` did not export `assembleSourceReviewPublicArchive`.
+- Added `assembleSourceReviewPublicArchive()` and `/release/source-review/public-archive`.
+- The assembler writes a public diagnostic archive manifest plus sanitized Markdown/HTML/JSON report copies under `.comath/release/source-review/public-archive/<id>/`, exposes only project-relative paths, records `proof_authority: "none"`, `can_restore: false`, `can_promote_claim: false`, and preserves source report files unchanged.
+- Bound the audit event target to `project_id` while keeping the free-form archive id in payload/result, because audit `target_id` requires a CoMath stable id.
+
+Verification evidence:
+
+- `corepack pnpm build` in `services/comathd` exited 0.
+- TDD RED: `node tests/unit/goal3-task141-source-review-public-archive.test.mjs` failed because `../../dist/index.js` did not export `assembleSourceReviewPublicArchive`.
+- GREEN focused test exited 0: Task141 source-review public archive.
+- Adjacent public archive/path regressions exited 0: Task134 release public archive contract, Task135 public generated report sanitizer, Task137 public paper export path contract, and Task139 public snapshot export path contract.
+- Package gates exited 0: `corepack pnpm typecheck` and `corepack pnpm test` in `services/comathd`, with Task141 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task141 adds a public diagnostic package assembly surface only. It does not make public archives restorable, does not promote claims, does not alter internal snapshot restore fidelity, and does not make Markdown/HTML/JSON reports proof authority.
+
+Residual risks: Goal 3 remains incomplete. Task141 closes the discovered source-review public archive assembly gap for generated Markdown/HTML/JSON report presentation, but it does not complete final GA public archive review, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+
 # Goal 3 Task 140 / Pi Relative Snapshot Manifest Contract
 
 Scope: audit the public-download presentation consumer side after Task139's project-relative snapshot export path contract, with emphasis on Pi-host UX for project-relative snapshot manifest paths and without weakening internal restore or replay fidelity.
