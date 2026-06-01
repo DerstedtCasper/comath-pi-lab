@@ -1,3 +1,30 @@
+# Goal 3 Task 148 / Pi-Codex Lifecycle Evidence Intake
+
+Scope: move from Pi-side lifecycle review exposure to service-owned artifact-backed evidence intake for real-host Pi/Codex lifecycle review, without treating operator-submitted evidence as proof authority or GA certification.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed `main` was clean at `e94634c` before opening Task148.
+- Audited Task146 readiness review and Task147 Pi release consumer wiring and identified the remaining gap: lifecycle evidence could be submitted as bare structured fields without a service-owned artifact manifest binding real-host install, runtime registration, durable service lifecycle, and Codex validation material.
+- Added `goal3-task148-pi-codex-lifecycle-evidence-intake.test.mjs`.
+- RED showed `collectPiCodexLifecycleEvidence` was not exported by `comathd`.
+- Added `collectPiCodexLifecycleEvidence()` and `POST /release/pi-codex-lifecycle/evidence`.
+- The intake reads project-contained evidence artifacts, records project-relative paths, SHA-256 hashes, and byte sizes, writes `.comath/release/pi-codex-lifecycle/<id>/evidence.json`, and produces a readiness-gate input envelope.
+- Missing or non-file evidence artifacts fail closed before a readiness review can be assembled.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task148-pi-codex-lifecycle-evidence-intake.test.mjs` failed because `../../dist/index.js` did not export `collectPiCodexLifecycleEvidence`.
+- GREEN focused/adjacent tests exited 0: Task148 Pi/Codex lifecycle evidence intake, Task146 Pi/Codex lifecycle readiness, Task147 Pi/Codex lifecycle consumer, Phase53 installed Codex CLI validation, and Phase43 agent adapter package.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task148 discovered by the default comathd runner.
+- Post-code `git diff --check` exited 0 and `Test-Path -LiteralPath .comath` returned `False`.
+- Code commit: `678c574` (`Add Pi Codex lifecycle evidence intake`).
+
+Boundary notes: Task148 is evidence intake and manifest binding only. It does not independently operate a real Pi host, install or manage a durable `comathd` service, validate production Codex credentials/network access, promote claims, certify proofs, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. Real-host Pi lifecycle execution, durable service start/stop/restart automation, production Codex account/network validation, OS-level adapter isolation, richer operator UI, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 147 / Pi-Codex Lifecycle Release Consumer
 
 Scope: expose the Task146 service-owned Pi/Codex lifecycle readiness review gate through the Pi release consumer surface without letting Pi write `.comath/` directly, overclaim proof authority, or treat submitted lifecycle evidence as verified real-host validation.
