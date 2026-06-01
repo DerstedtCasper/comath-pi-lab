@@ -257,7 +257,7 @@ try {
     const routeVerify = await server.inject({
       method: "POST",
       path: "/snapshot/verify",
-      body: { manifest_path: routeExport.body.manifest_path }
+      body: { project_root: projectRoot, manifest_path: routeExport.body.manifest_path }
     });
     assert.equal(routeVerify.status, 200);
     assert.equal(routeVerify.body.ok, true);
@@ -271,7 +271,7 @@ try {
     const routeReplay = await server.inject({
       method: "POST",
       path: "/replay/verify-manifest",
-      body: { manifest_path: routeExport.body.manifest_path }
+      body: { project_root: projectRoot, manifest_path: routeExport.body.manifest_path }
     });
     assert.equal(routeReplay.status, 200);
     assert.equal(routeReplay.body.ok, true);
@@ -301,7 +301,12 @@ try {
       const routeRestore = await server.inject({
         method: "POST",
         path: "/snapshot/restore",
-        body: { manifest_path: routeExport.body.manifest_path, target_root: routeRestoreRoot, actor: "phase16-route-test" }
+        body: {
+          project_root: projectRoot,
+          manifest_path: routeExport.body.manifest_path,
+          target_root: routeRestoreRoot,
+          actor: "phase16-route-test"
+        }
       });
       assert.equal(routeRestore.status, 400);
       assert.equal(routeRestore.body.code, "SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE");

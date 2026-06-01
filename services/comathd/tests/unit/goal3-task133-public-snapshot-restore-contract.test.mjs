@@ -123,6 +123,7 @@ try {
     method: "POST",
     path: "/snapshot/restore",
     body: {
+      project_root: projectRoot,
       manifest_path: routeExport.body.manifest_path,
       target_root: join(dirname(restoreRoot), "comath-goal3-task133-route-restore"),
       actor: "goal3-task133-route"

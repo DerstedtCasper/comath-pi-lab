@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { isAbsolute, relative, resolve } from "node:path";
 import { URL } from "node:url";
 import { toComathError } from "../errors.js";
 import { getComathdStatus } from "../status.js";
@@ -107,6 +108,7 @@ function success(body: unknown): InjectResponse {
 }
 
 type PaperExportRouteResult = Awaited<ReturnType<typeof exportPaper>>;
+type SnapshotExportRouteResult = Awaited<ReturnType<typeof exportSnapshot>>;
 type SnapshotVerifyRouteResult = Awaited<ReturnType<typeof verifySnapshot>>;
 type SnapshotRestoreRouteResult = Awaited<ReturnType<typeof restoreSnapshot>>;
 
@@ -170,6 +172,39 @@ function publicPaperExportRouteResult(result: PaperExportRouteResult): unknown {
   });
 }
 
+function publicProjectRelativePath(projectRoot: string, path: string): string {
+  const root = resolve(projectRoot);
+  const absolutePath = isAbsolute(path) ? resolve(path) : resolve(root, path);
+  const relativePath = publicRelativePath(relative(root, absolutePath));
+  if (
+    !relativePath ||
+    relativePath === "." ||
+    relativePath === ".." ||
+    relativePath.startsWith("../") ||
+    /[A-Za-z]:\//.test(relativePath) ||
+    relativePath.startsWith("/")
+  ) {
+    return "[redacted_unsafe_path]";
+  }
+  return relativePath;
+}
+
+function publicSnapshotExportRouteResult(projectRoot: string, result: SnapshotExportRouteResult): unknown {
+  return publicSnapshotRouteValue({
+    snapshot_root: publicProjectRelativePath(projectRoot, result.snapshot_root),
+    manifest_path: publicProjectRelativePath(projectRoot, result.manifest_path),
+    replay_manifest_path: publicProjectRelativePath(projectRoot, result.replay_manifest_path),
+    manifest: result.manifest,
+    public_archive_contract: {
+      kind: "snapshot_export_public_download",
+      proof_authority: "none",
+      can_restore: false,
+      exposes_host_paths: false,
+      internal_restore_required_for_restore: true
+    }
+  });
+}
+
 function publicSnapshotVerifyRouteResult(result: SnapshotVerifyRouteResult): unknown {
   return publicSnapshotRouteValue({
     ok: result.ok,
@@ -215,6 +250,29 @@ function publicReplayVerifyRouteResult(result: SnapshotVerifyRouteResult): unkno
       internal_restore_required_for_restore: true
     }
   });
+}
+
+type SnapshotManifestRouteBody = {
+  project_root?: string;
+  manifest_path: string;
+};
+
+function routeSnapshotManifestPath(body: SnapshotManifestRouteBody): string {
+  if (!body.project_root || isAbsolute(body.manifest_path)) {
+    return body.manifest_path;
+  }
+  const root = resolve(body.project_root);
+  const manifestPath = resolve(root, body.manifest_path);
+  const relativePath = publicRelativePath(relative(root, manifestPath));
+  if (
+    relativePath === ".." ||
+    relativePath.startsWith("../") ||
+    /[A-Za-z]:\//.test(relativePath) ||
+    relativePath.startsWith("/")
+  ) {
+    return body.manifest_path;
+  }
+  return manifestPath;
 }
 
 async function route(method: string, path: string, body: unknown, context: RouteContext): Promise<InjectResponse> {
@@ -756,30 +814,35 @@ async function route(method: string, path: string, body: unknown, context: Route
     ],
     [
       "POST /snapshot/export",
-      (payload) => {
+      async (payload) => {
         const body = payload as Parameters<typeof exportSnapshot>[1] & { project_root: string };
-        return exportSnapshot(body.project_root, { ...body, audience: "public_download" });
+        return publicSnapshotExportRouteResult(
+          body.project_root,
+          await exportSnapshot(body.project_root, { ...body, audience: "public_download" })
+        );
       }
     ],
     [
       "POST /snapshot/verify",
       async (payload) => {
-        const body = payload as { manifest_path: string };
-        return publicSnapshotVerifyRouteResult(await verifySnapshot(body.manifest_path));
+        const body = payload as SnapshotManifestRouteBody;
+        return publicSnapshotVerifyRouteResult(await verifySnapshot(routeSnapshotManifestPath(body)));
       }
     ],
     [
       "POST /snapshot/restore",
       async (payload) => {
-        const body = payload as { manifest_path: string; target_root: string; actor: string };
-        return publicSnapshotRestoreRouteResult(await restoreSnapshot(body.manifest_path, body.target_root, { actor: body.actor }));
+        const body = payload as SnapshotManifestRouteBody & { target_root: string; actor: string };
+        return publicSnapshotRestoreRouteResult(
+          await restoreSnapshot(routeSnapshotManifestPath(body), body.target_root, { actor: body.actor })
+        );
       }
     ],
     [
       "POST /replay/verify-manifest",
       async (payload) => {
-        const body = payload as { manifest_path: string };
-        const result = await verifySnapshot(body.manifest_path, { reexecuteRunners: true });
+        const body = payload as SnapshotManifestRouteBody;
+        const result = await verifySnapshot(routeSnapshotManifestPath(body), { reexecuteRunners: true });
         return publicReplayVerifyRouteResult(result);
       }
     ]
