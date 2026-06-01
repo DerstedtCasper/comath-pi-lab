@@ -1,3 +1,32 @@
+# Goal 3 Task 149 / Pi-Codex Durable Service Lifecycle Probe
+
+Scope: move from artifact-backed operator-submitted lifecycle evidence to a service-owned durable `comathd` lifecycle probe that can directly produce the service lifecycle log consumed by Task148, without claiming proof authority or GA certification.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed `main` was clean at `ef4c465` before opening Task149.
+- Audited Task146 readiness review, Task148 evidence intake, Phase43 packaged adapter execution, and Phase53 installed Codex CLI validation against the remaining durable-service lifecycle collector gap.
+- Added `goal3-task149-pi-codex-service-lifecycle-probe.test.mjs`.
+- RED showed `probePiCodexDurableServiceLifecycle` was not exported by `comathd`.
+- Added `probePiCodexDurableServiceLifecycle()` and `POST /release/pi-codex-lifecycle/service-probe`.
+- The probe executes configured allowlisted `shell:false` start/status/stop/restart/status commands with bounded timeout/output capture, writes `.comath/release/pi-codex-lifecycle/<id>/service-lifecycle-probe.json`, emits a `durable_service_lifecycle_log` artifact descriptor, and returns readiness-compatible durable service lifecycle booleans.
+- Missing commands, unallowlisted programs, shell-like arguments, nonzero exits, and timeouts fail closed; failed command probes still persist non-authoritative blocker evidence.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task149-pi-codex-service-lifecycle-probe.test.mjs` failed because `../../dist/index.js` did not export `probePiCodexDurableServiceLifecycle`.
+- GREEN focused/adjacent tests exited 0: Task149 durable service lifecycle probe, Task148 Pi/Codex lifecycle evidence intake, Task146 Pi/Codex lifecycle readiness, Task147 Pi/Codex lifecycle consumer, Phase53 installed Codex CLI validation, and Phase43 agent adapter package.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task149 discovered by the default comathd runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Post-code `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task149 only probes durable service lifecycle commands configured by the service operator. It does not validate a real Pi host install/runtime registration path, does not validate production Codex credentials or network access, does not provide OS-level process isolation, does not promote claims, and cannot certify GA.
+
+Residual risks: Goal 3 remains incomplete. Real Pi host install/runtime-registration probes beyond durable service lifecycle, production Codex account/network validation, OS-level adapter isolation, richer operator UI, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
+Code commit: `2857649` (`Add Pi Codex service lifecycle probe`)
+
 # Goal 3 Task 148 / Pi-Codex Lifecycle Evidence Intake
 
 Scope: move from Pi-side lifecycle review exposure to service-owned artifact-backed evidence intake for real-host Pi/Codex lifecycle review, without treating operator-submitted evidence as proof authority or GA certification.
