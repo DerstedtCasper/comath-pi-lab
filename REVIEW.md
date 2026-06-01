@@ -21,7 +21,7 @@ Verification evidence:
 - GREEN adjacent regressions exited 0: Task146 Pi/Codex lifecycle readiness, Task148 Pi/Codex lifecycle evidence intake, Task149 durable service lifecycle probe, Phase51 Codex API backend, Phase52 Codex API retry telemetry, and Phase53 installed Codex CLI validation.
 - Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task150 discovered by the default comathd runner.
 - Post-code `node scripts/phase0-smoke.mjs`, `git diff --check`, and `Test-Path -LiteralPath .comath` exited 0.
-- Code commit: pending.
+- Code commit: `a9379f0` (`Add Codex API lifecycle validation probe`).
 
 Boundary notes: Task150 validates Codex API account/network reachability only through service-owned credentials and a bounded Responses-compatible request. It does not expose credentials, raw auth headers, host paths, raw prompts, or raw model output in persisted artifacts. It is lifecycle readiness evidence only: `proof_authority: none`, `can_promote_claim: false`, and `can_certify_ga: false`.
 
