@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
@@ -248,6 +248,16 @@ function inspectReferencedPublicReports(
       continue;
     }
     const material = projectRelativePath(projectRoot, publicPath);
+    if (!existsSync(material.absolute)) {
+      throw new ComathError("public archive review referenced report is missing", {
+        code: "PUBLIC_ARCHIVE_REVIEW_REFERENCED_REPORT_MISSING"
+      });
+    }
+    if (!statSync(material.absolute).isFile()) {
+      throw new ComathError("public archive review referenced report is not a file", {
+        code: "PUBLIC_ARCHIVE_REVIEW_REFERENCED_REPORT_NOT_FILE"
+      });
+    }
     const text = readFileSync(material.absolute, "utf8");
     inspectValue(projectRoot, surface, text, `$.reports[${index}].public_content`, findings);
   }
