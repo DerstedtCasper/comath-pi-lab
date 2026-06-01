@@ -2231,9 +2231,9 @@ export function renderTextDashboard(input: DashboardInput): string {
   const projectLabel = input.project
     ? `${input.project.project_id}${input.project.name ? ` ${input.project.name}` : ""}`
     : "no project";
-  const claims = (input.claims ?? []).map((claim) => `${claim.id} [${claim.status}] ${claim.statement ?? ""}`);
+  const claims = (input.claims ?? []).map((claim) => `${claim.id} [${publicDashboardStatus(claim.status)}] ${claim.statement ?? ""}`);
   const workstreams = (input.workstreams ?? []).map(
-    (workstream) => `${workstream.id} [${workstream.status}] ${workstream.goal ?? ""}`
+    (workstream) => `${workstream.id} [${publicDashboardStatus(workstream.status)}] ${workstream.goal ?? ""}`
   );
   const blockers = input.blockers ?? [];
 
@@ -2249,6 +2249,12 @@ export function renderTextDashboard(input: DashboardInput): string {
     "Blockers",
     blockers.length ? blockers.join("\n") : "none"
   ].join("\n");
+}
+
+function publicDashboardStatus(value: string): string {
+  return /^(?:formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)$/i.test(value)
+    ? "unverified_formal_status"
+    : value;
 }
 
 export function createComathPiExtension(options: { client: ReturnType<typeof createComathClient> }) {

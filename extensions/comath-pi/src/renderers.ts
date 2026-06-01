@@ -199,19 +199,31 @@ function linesOrNone(rows: string[]): string {
   return rows.length ? rows.join("\n") : "none";
 }
 
+function publicDashboardStatus(value: string): string {
+  return /^(?:formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)$/i.test(value)
+    ? "unverified_formal_status"
+    : value;
+}
+
+function publicDashboardTargetStatus(value: string): string {
+  return /^(?:formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)$/i.test(value)
+    ? "unverified_formal_target"
+    : value;
+}
+
 export function renderDashboardText(snapshot: DashboardSnapshot): string {
   const projectLabel = `${snapshot.project.project_id}${snapshot.project.name ? ` ${snapshot.project.name}` : ""}`;
   const claims = snapshot.claims.map((claim) => {
     const evidence = claim.evidence_ids.length ? ` evidence:${claim.evidence_ids.join(",")}` : "";
     const workstreams = claim.source_workstreams.length ? ` workstreams:${claim.source_workstreams.join(",")}` : "";
-    return `${claim.id} [${claim.status}]${evidence}${workstreams}`;
+    return `${claim.id} [${publicDashboardStatus(claim.status)}]${evidence}${workstreams}`;
   });
-  const workstreams = snapshot.workstreams.map((item) => `${item.id} [${item.status}] ${item.goal ?? ""}`.trim());
+  const workstreams = snapshot.workstreams.map((item) => `${item.id} [${publicDashboardStatus(item.status)}] ${item.goal ?? ""}`.trim());
   const evidence = snapshot.evidence.map((item) => `${item.id}${item.claim_id ? ` claim:${item.claim_id}` : ""} ${item.source}`);
   const gates = (snapshot.gates ?? []).map(
     (item) =>
       `${item.id}${item.claim_id ? ` claim:${item.claim_id}` : ""} ${item.ok ? "pass" : "blocked"}${
-        item.target_status ? ` target:${item.target_status}` : ""
+        item.target_status ? ` target:${publicDashboardTargetStatus(item.target_status)}` : ""
       }${item.vetoes.length ? ` vetoes:${item.vetoes.join(";")}` : ""}`
   );
   const paperRows = [
@@ -260,12 +272,12 @@ export function renderTuiDashboard(snapshot: DashboardSnapshot): TuiDashboardMod
       {
         id: "claims",
         title: "Claims",
-        rows: snapshot.claims.length ? snapshot.claims.map((claim) => `${claim.id} ${claim.status}`) : ["none"]
+        rows: snapshot.claims.length ? snapshot.claims.map((claim) => `${claim.id} ${publicDashboardStatus(claim.status)}`) : ["none"]
       },
       {
         id: "workstreams",
         title: "Workstreams",
-        rows: snapshot.workstreams.length ? snapshot.workstreams.map((item) => `${item.id} ${item.status}`) : ["none"]
+        rows: snapshot.workstreams.length ? snapshot.workstreams.map((item) => `${item.id} ${publicDashboardStatus(item.status)}`) : ["none"]
       },
       {
         id: "evidence",
