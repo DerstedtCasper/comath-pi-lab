@@ -1,3 +1,30 @@
+# Goal 3 Task 138 / Snapshot Route Public Path Contract
+
+Scope: audit snapshot verify/restore and replay-verify public route payloads for path/metadata exposure, caller-supplied absolute path echoes, and public-vs-internal restore semantics while preserving explicit `internal_restore` byte-for-byte fidelity.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task before Task138.
+- Audited `/snapshot/verify`, `/snapshot/restore`, and `/replay/verify-manifest` after the Task133-137 public archive hardening line.
+- Added `goal3-task138-snapshot-route-public-contract.test.mjs`.
+- RED showed public `/snapshot/restore` echoed the caller-provided absolute restore target.
+- Hardened public snapshot verify/replay-verify responses with recursive host-path redaction before public authority vocabulary sanitization.
+- Wrapped public `/snapshot/restore` so it returns restored entry count, project id, and explicit non-authoritative restore contract metadata without exposing the internal `target_root`.
+- Preserved direct internal `restoreSnapshot()` behavior, including absolute `target_root` and byte-for-byte `internal_restore` material.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task138-snapshot-route-public-contract.test.mjs` failed because public `/snapshot/restore` echoed the Windows absolute route restore target.
+- GREEN focused tests exited 0: Task138, Task133 public snapshot restore contract, Task137 public paper export path contract, Phase16 snapshot/replay, and Phase55 runner cross-machine replay.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task138 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task138 is public route response hardening only. It does not change persisted snapshot manifests, public snapshot export paths, direct internal restore fidelity, public download non-restorability, runner replay semantics, or proof authority gates.
+
+Residual risks: Goal 3 remains incomplete. Task138 closes the discovered snapshot verify/restore/replay public route host-path echo surface, but it does not yet audit any future source-review package assembly route, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+
 # Goal 3 Task 137 / Public Paper Export Path Contract
 
 Scope: audit remaining public export/package route payloads for non-authoritative archive semantics and path/metadata exposure, with emphasis on `/paper/export` route fields.
