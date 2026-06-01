@@ -1,3 +1,29 @@
+# Goal 3 Task 154 / Pi Lifecycle Operator Walkthrough
+
+Scope: add a read-only Pi operator walkthrough for the Task146-153 lifecycle evidence/probe chain, without calling `comathd`, writing `.comath/`, carrying secrets, overclaiming proof authority, or certifying GA.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed Task153 was the latest completed task before opening Task154.
+- Audited the Task147 lifecycle review consumer, Task151 Codex API probe consumer, Task153 real-Pi runtime probe consumer, runtime registration metadata, and the Task146-152 service evidence chain.
+- Added `goal3-task154-pi-lifecycle-operator-walkthrough.test.mjs`.
+- RED showed `comath.release.piCodexLifecycleWalkthrough` was not registered in the Pi extension.
+- Added the read-only `comath.release.piCodexLifecycleWalkthrough` tool, local walkthrough generator, `/cm:release lifecycle-walkthrough` command, runtime-registration subcommand metadata, default package test wiring, Phase6 tool exposure guard, and Phase26 executable-tool guard.
+- The walkthrough returns ordered operator steps and command templates for `real-pi-runtime-probe`, `codex-api-probe`, and `pi-codex-lifecycle`, references the service-owned durable lifecycle probe as evidence source material, uses placeholder executable fields, redacts public secret/path/proof-success vocabulary, and records `proof_authority: "none"`, `can_promote_claim: false`, `can_certify_ga: false`, and `direct_trusted_state_mutation: false`.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task154-pi-lifecycle-operator-walkthrough.test.mjs` failed because `comath.release.piCodexLifecycleWalkthrough` was not registered.
+- GREEN focused test exited 0: Task154 Pi lifecycle operator walkthrough.
+- GREEN adjacent tests exited 0: Task147 Pi/Codex lifecycle consumer, Task151 Pi/Codex API probe consumer, Task153 Pi real-Pi runtime probe consumer, and Phase26 Pi runtime registration.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension typecheck`, `corepack pnpm --filter @comath/pi-extension test`, and `node scripts/phase0-smoke.mjs`.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task154 is a Pi-side read-only UX/composition task. It does not run a real Pi host, run allowlisted probe commands, create lifecycle evidence, validate production Codex credentials, promote claims, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. Richer interactive operator controls beyond this read-only walkthrough, indefinite operator sessions, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 153 / Pi Real-Pi Runtime Probe Release Consumer
 
 Scope: expose the Task152 service-owned real-Pi install/runtime-registration probe through the Pi release consumer surface, without letting Pi write `.comath/` directly, carry secrets, overclaim proof authority, or certify GA.
