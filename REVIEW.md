@@ -1,3 +1,29 @@
+# Goal 3 Task 144 / Public Archive Review Error Contract
+
+Scope: audit public review package presentation surfaces outside the Pi command/tool path, especially service-side release review error responses that could leak host paths or privileged proof-authority vocabulary.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and confirmed `goal-3/tasks.md` had no earlier open task; Task143's next step named Task144 as the next frontier.
+- Audited `source-review-public-archive`, `public-archive-review`, release routes, and adjacent Task141-143 tests.
+- Found that `/release/public-archive/review` could inspect a source-review public archive manifest whose `reports[].public_relative_path` points to a missing public report, then surface Node's `ENOENT` message with the absolute host path in the public route error body.
+- Added `goal3-task144-public-archive-review-error-contract.test.mjs`.
+- RED showed the route returned `500 INTERNAL_ERROR` and exposed an absolute temp path for a missing referenced report.
+- Hardened referenced public report reads so missing referenced reports and directory-valued report paths fail as structured `ComathError` responses with stable codes and no path echo.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task144-public-archive-review-error-contract.test.mjs` failed because the route returned `500 INTERNAL_ERROR` and echoed an absolute `C:\Users\...\missing-public.md` path.
+- GREEN focused tests exited 0: Task144 public archive review error contract, Task142 public archive review gate, and Task141 source-review public archive.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, and `corepack pnpm --filter @comath/pi-extension test`.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task144 changes only the public archive review error contract for referenced public report material. It does not make public archives restorable, does not alter internal source-report fidelity, does not promote claims, and does not weaken Lean Authority v3 gates.
+
+Residual risks: Goal 3 remains incomplete. Task144 closes one remaining service-side public review error leak, but richer visual review workflows, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, and final GA audit remain open.
+
 # Goal 3 Task 143 / Pi Public Release Review Consumer
 
 Scope: audit Pi/UI and public release consumer ergonomics for the source-review public archive and public archive review routes added by Tasks141-142, without letting Pi write `.comath/` directly, leak host paths, or present public diagnostics as proof authority.
