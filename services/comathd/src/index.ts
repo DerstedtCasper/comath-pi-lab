@@ -63,3 +63,4 @@ export * from "./proof-kernel/lean/clean-replay.js";
 export * from "./release/v3-negative-ga-slices.js";
 export * from "./release/goal3-ga-acceptance.js";
 export * from "./release/source-review-public-archive.js";
+export * from "./release/public-archive-review.js";
