@@ -47,6 +47,21 @@ function sha256FileSync(path) {
   };
 }
 
+function runnerResultHash(result) {
+  return sha256Text(
+    canonicalJson({
+      ok: result.ok === true,
+      runner_id: result.runner_id,
+      runner_version: result.runner_version,
+      exactness: typeof result.exactness === "string" ? result.exactness : "not_applicable",
+      supports_status: typeof result.supports_status === "string" ? result.supports_status : "none",
+      result: result.result ?? null,
+      vetoes: Array.isArray(result.vetoes) ? result.vetoes.filter((item) => typeof item === "string") : [],
+      warnings: Array.isArray(result.warnings) ? result.warnings.filter((item) => typeof item === "string") : []
+    })
+  );
+}
+
 function materialForIntegrity(manifest) {
   const { integrity: _integrity, ...rest } = manifest;
   return rest;
@@ -147,14 +162,23 @@ async function createPopulatedProject() {
     payload: { exact_artifact: exact.artifact.id, search_artifact: search.artifact.id, sage_artifact: sage.artifact.id }
   });
 
-  return { projectRoot, project, claim };
+  return { projectRoot, project, claim, sageReportPath: sage.report_path };
 }
 
-const { projectRoot, project, claim } = await createPopulatedProject();
+const privilegedReplayTerms =
+  /completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence/i;
+
+const { projectRoot, project, claim, sageReportPath } = await createPopulatedProject();
 const restoreRoot = mkdtempSync(join(tmpdir(), "comath-snapshot-restore-"));
 const secretRoot = mkdtempSync(join(tmpdir(), "comath-snapshot-secret-"));
 
 try {
+  const poisonedRunnerReport = readJson(sageReportPath);
+  poisonedRunnerReport.result.exactness = "lean_kernel_clean_replay";
+  poisonedRunnerReport.result.supports_status = "formally_checked";
+  poisonedRunnerReport.result.result_sha256 = runnerResultHash(poisonedRunnerReport.result);
+  writeJson(sageReportPath, poisonedRunnerReport);
+
   const secretClean = scanForSecrets(join(projectRoot, ".comath", "project.json"));
   assert.equal(secretClean.status, "clean");
   assert.equal(secretClean.blocks_export, false);
@@ -186,6 +210,16 @@ try {
   assert.equal(first.manifest.integrity.entries_sha256.length, 64);
   assert.equal(first.manifest.integrity.replay_manifest_sha256.length, 64);
   assert.equal(first.manifest.integrity.manifest_sha256.length, 64);
+  assert.doesNotMatch(
+    JSON.stringify(first.manifest.replay),
+    privilegedReplayTerms,
+    "snapshot manifest replay read-model must not expose proof-authority vocabulary from runner reports"
+  );
+  assert.doesNotMatch(
+    JSON.stringify(readJson(first.replay_manifest_path)),
+    privilegedReplayTerms,
+    "replay_manifest.json must not expose proof-authority vocabulary from runner reports"
+  );
   assertNoAbsolutePaths(first.manifest);
   assert.equal(JSON.stringify(first.manifest).includes("native_id"), false);
   assert.deepEqual(
@@ -196,6 +230,11 @@ try {
   const verified = await verifySnapshot(first.manifest_path);
   assert.equal(verified.ok, true);
   assert.equal(verified.vetoes.length, 0);
+  assert.doesNotMatch(
+    JSON.stringify(verified.manifest.replay),
+    privilegedReplayTerms,
+    "snapshot verification read-model must preserve sanitized replay vocabulary"
+  );
 
   const server = createComathServer();
   try {
@@ -207,6 +246,11 @@ try {
     assert.equal(routeExport.status, 200);
     assert.equal(routeExport.body.manifest.project_id, project.project_id);
     assert.equal(routeExport.body.manifest.can_restore, true);
+    assert.doesNotMatch(
+      JSON.stringify(routeExport.body.manifest.replay),
+      privilegedReplayTerms,
+      "snapshot export route must not expose proof-authority vocabulary from runner reports"
+    );
 
     const routeVerify = await server.inject({
       method: "POST",
@@ -216,6 +260,11 @@ try {
     assert.equal(routeVerify.status, 200);
     assert.equal(routeVerify.body.ok, true);
     assert.equal(routeVerify.body.vetoes.length, 0);
+    assert.doesNotMatch(
+      JSON.stringify(routeVerify.body.manifest.replay),
+      privilegedReplayTerms,
+      "snapshot verify route must not expose proof-authority vocabulary from runner reports"
+    );
 
     const routeReplay = await server.inject({
       method: "POST",
@@ -225,6 +274,11 @@ try {
     assert.equal(routeReplay.status, 200);
     assert.equal(routeReplay.body.ok, true);
     assert.equal(routeReplay.body.replay.runs.length >= 2, true);
+    assert.doesNotMatch(
+      JSON.stringify(routeReplay.body.replay),
+      privilegedReplayTerms,
+      "replay verify route must not expose proof-authority vocabulary from runner reports"
+    );
     assert.equal(routeReplay.body.runner_reexecution.some((run) => run.runner_id === "sympy-exact" && run.ok), true);
     assert.equal(
       routeReplay.body.runner_reexecution.some((run) => run.runner_id === "counterexample-search" && run.ok),

@@ -41,6 +41,27 @@ export type ResearchCampaignWithExternalV3TerminalState = ResearchCampaign & {
   goal_mode_terminal_state?: GoalModeTerminalState;
 };
 
+const unverifiedPublicAuthorityVocabulary =
+  /\b(?:completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/i;
+
+export function sanitizePublicFormalAuthorityVocabulary(value: unknown): unknown {
+  if (typeof value === "string") {
+    return unverifiedPublicAuthorityVocabulary.test(value) ? "unverified_formal_status" : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizePublicFormalAuthorityVocabulary(entry));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+        unverifiedPublicAuthorityVocabulary.test(key) ? "unverified_formal_status" : key,
+        sanitizePublicFormalAuthorityVocabulary(entry)
+      ])
+    );
+  }
+  return value;
+}
+
 export function hasFormalReplayAuthorityPassEvidence(input: {
   projectRoot?: string;
   formal_replay_authority_passed?: boolean;
@@ -147,6 +168,30 @@ export function withExternalV3TerminalState(
   };
 }
 
+export function withPublicExternalV3TerminalState(
+  campaign: ResearchCampaign,
+  options: TerminalProjectionOptions = {}
+): ResearchCampaignWithExternalV3TerminalState {
+  const projected = withExternalV3TerminalState(campaign, options);
+  const finalReplayAuthorityPassed =
+    campaign.terminal_state === "completed_formal_proof" &&
+    hasFormalReplayAuthorityPassEvidence({ ...campaign, projectRoot: options.projectRoot });
+  if (finalReplayAuthorityPassed) {
+    return projected;
+  }
+
+  const sanitized = sanitizePublicFormalAuthorityVocabulary(projected) as ResearchCampaignWithExternalV3TerminalState;
+  const publicCampaign = {
+    ...sanitized,
+    ...(campaign.terminal_state === "completed_formal_proof"
+      ? { terminal_state: "blocked_with_replayable_reason" as const, current_stage: "blocked" as const }
+      : {}),
+    formal_replay_authority_passed: false
+  };
+  delete (publicCampaign as Partial<ResearchCampaign>).formal_replay_authority_evidence;
+  return publicCampaign;
+}
+
 export function withExternalV3CampaignResult<T extends { campaign?: ResearchCampaign }>(
   result: T,
   options: TerminalProjectionOptions = {}
@@ -157,6 +202,19 @@ export function withExternalV3CampaignResult<T extends { campaign?: ResearchCamp
   return {
     ...result,
     campaign: withExternalV3TerminalState(result.campaign, options)
+  };
+}
+
+export function withPublicExternalV3CampaignResult<T extends { campaign?: ResearchCampaign }>(
+  result: T,
+  options: TerminalProjectionOptions = {}
+): Omit<T, "campaign"> & { campaign?: ResearchCampaignWithExternalV3TerminalState } {
+  if (!result.campaign) {
+    return result;
+  }
+  return {
+    ...result,
+    campaign: withPublicExternalV3TerminalState(result.campaign, options)
   };
 }
 

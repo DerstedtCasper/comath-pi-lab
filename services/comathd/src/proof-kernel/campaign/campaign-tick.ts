@@ -18,7 +18,7 @@ import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay
 import type { LeanProjectFiles } from "../lean/lean-project.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
 import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
-import { hasFormalReplayAuthorityPassEvidence } from "./external-terminal-vocabulary.js";
+import { hasFormalReplayAuthorityPassEvidence, sanitizePublicFormalAuthorityVocabulary } from "./external-terminal-vocabulary.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
 import {
   packageCampaignFinalAuthorityEvidenceWithDerivedBindingsV3,
@@ -980,35 +980,13 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
       status: campaign.status,
       blocker_certificates: finalReplayAuthorityPassed
         ? campaign.blockers
-        : (sanitizePublicExportValue(campaign.blockers) as Record<string, unknown>[]),
-      next_actions: finalReplayAuthorityPassed ? campaign.next_actions : (sanitizePublicExportValue(campaign.next_actions) as string[]),
+        : (sanitizePublicFormalAuthorityVocabulary(campaign.blockers) as Record<string, unknown>[]),
+      next_actions: finalReplayAuthorityPassed ? campaign.next_actions : (sanitizePublicFormalAuthorityVocabulary(campaign.next_actions) as string[]),
       evidence_pack_ready: finalReplayAuthorityPassed,
       proof_authority: finalReplayAuthorityPassed ? "lean_kernel_clean_replay" : "none",
       can_promote_claim: false
     }
   };
-}
-
-function sanitizePublicExportValue(value: unknown): unknown {
-  if (typeof value === "string") {
-    return /completed_formal_proof|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence/i.test(value)
-      ? "unverified_formal_status"
-      : value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) => sanitizePublicExportValue(entry));
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
-        /completed_formal_proof|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence/i.test(key)
-          ? "unverified_formal_status"
-          : key,
-        sanitizePublicExportValue(entry)
-      ])
-    );
-  }
-  return value;
 }
 
 function blockCampaignAtFinalReplay(input: {

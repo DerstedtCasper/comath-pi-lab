@@ -7,7 +7,8 @@ import { createComathServer, exportCampaignGoalModeEvidence, writeCampaign } fro
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task127-export-sanitizer-"));
 const server = createComathServer();
 
-const privilegedPublicTerms = /completed_formal_proof|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence/i;
+const privilegedPublicTerms =
+  /completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence/i;
 
 function forgedExportCampaign() {
   const now = "2026-06-01T00:00:00.000Z";
@@ -29,7 +30,8 @@ function forgedExportCampaign() {
         reason: "cached formal_proof_verified terminal state is not service-owned authority"
       },
       {
-        nested: {
+      nested: {
+          target_status: "formally_checked",
           stale_status: "formal_replay_passed",
           final_evidence_status: "verified_final_authority_evidence"
         }

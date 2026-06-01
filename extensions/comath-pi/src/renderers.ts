@@ -211,6 +211,13 @@ function publicDashboardTargetStatus(value: string): string {
     : value;
 }
 
+function publicDashboardText(value: string): string {
+  return value.replace(
+    /\b(?:completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/gi,
+    "unverified_formal_status"
+  );
+}
+
 export function renderDashboardText(snapshot: DashboardSnapshot): string {
   const projectLabel = `${snapshot.project.project_id}${snapshot.project.name ? ` ${snapshot.project.name}` : ""}`;
   const claims = snapshot.claims.map((claim) => {
@@ -224,19 +231,23 @@ export function renderDashboardText(snapshot: DashboardSnapshot): string {
     (item) =>
       `${item.id}${item.claim_id ? ` claim:${item.claim_id}` : ""} ${item.ok ? "pass" : "blocked"}${
         item.target_status ? ` target:${publicDashboardTargetStatus(item.target_status)}` : ""
-      }${item.vetoes.length ? ` vetoes:${item.vetoes.join(";")}` : ""}`
+      }${item.vetoes.length ? ` vetoes:${item.vetoes.map(publicDashboardText).join(";")}` : ""}`
   );
   const paperRows = [
     `check:${snapshot.paper.check.ok ? "ok" : "blocked"}`,
-    ...snapshot.paper.check.vetoes.map((veto) => `veto:${veto}`),
+    ...snapshot.paper.check.vetoes.map((veto) => `veto:${publicDashboardText(veto)}`),
     ...snapshot.paper.margin_notes.map(
       (note) =>
         `margin:${note.claim_id ?? "unlinked"} evidence:${(note.evidence_ids ?? []).join(",") || "none"} workstreams:${
           (note.source_workstreams ?? []).join(",") || "none"
-        } warnings:${(note.warnings ?? []).join(";") || "none"} blockers:${(note.blockers ?? []).join(";") || "none"}`
+        } warnings:${(note.warnings ?? []).map(publicDashboardText).join(";") || "none"} blockers:${
+          (note.blockers ?? []).map(publicDashboardText).join(";") || "none"
+        }`
     )
   ];
-  const blockers = snapshot.blockers.map((blocker) => `${blocker.source}:${blocker.target_id ? `${blocker.target_id}:` : ""}${blocker.reason}`);
+  const blockers = snapshot.blockers.map(
+    (blocker) => `${blocker.source}:${blocker.target_id ? `${blocker.target_id}:` : ""}${publicDashboardText(blocker.reason)}`
+  );
   return [
     `CoMath Dashboard: ${projectLabel}`,
     `Generated: ${snapshot.generated_at}`,
@@ -260,7 +271,7 @@ export function renderDashboardText(snapshot: DashboardSnapshot): string {
     linesOrNone(blockers),
     "",
     "Degraded",
-    linesOrNone(snapshot.degraded)
+    linesOrNone(snapshot.degraded.map(publicDashboardText))
   ].join("\n");
 }
 
@@ -296,14 +307,14 @@ export function renderTuiDashboard(snapshot: DashboardSnapshot): TuiDashboardMod
         title: "Paper",
         rows: [
           `check ${snapshot.paper.check.ok ? "ok" : "blocked"}`,
-          ...snapshot.paper.check.vetoes,
-          ...snapshot.paper.margin_notes.flatMap((note) => note.blockers ?? [])
+          ...snapshot.paper.check.vetoes.map(publicDashboardText),
+          ...snapshot.paper.margin_notes.flatMap((note) => (note.blockers ?? []).map(publicDashboardText))
         ]
       },
       {
         id: "blockers",
         title: "Blockers",
-        rows: snapshot.blockers.length ? snapshot.blockers.map((item) => `${item.source} ${item.reason}`) : ["none"]
+        rows: snapshot.blockers.length ? snapshot.blockers.map((item) => `${item.source} ${publicDashboardText(item.reason)}`) : ["none"]
       }
     ]
   };

@@ -12,13 +12,17 @@ import {
   runnerSpecs,
   scrubHostPaths,
   sha256Text,
-  type RunnerSpec
+  type RunnerExactness,
+  type RunnerSpec,
+  type RunnerSupportedStatus
 } from "../verification/runner-contracts.js";
 
 const execFileAsync = promisify(execFile);
 const OUTPUT_LIMIT = 64 * 1024;
 const DEFAULT_REEXECUTION_TIMEOUT_MS = 5_000;
 const MAX_REEXECUTION_TIMEOUT_MS = 30_000;
+const RUNNER_EXACTNESS_VALUES = new Set<RunnerExactness>(["exact_symbolic", "numeric_search", "inexact", "not_applicable"]);
+const RUNNER_SUPPORTED_STATUS_VALUES = new Set<RunnerSupportedStatus>(["symbolically_checked", "computationally_supported", "none"]);
 
 export type ReplayRunStatus = "replayable" | "unreplayable";
 
@@ -88,6 +92,20 @@ export type RunnerReexecutionOptions = {
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+export function sanitizeRunnerExactness(value: unknown): RunnerExactness | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  return RUNNER_EXACTNESS_VALUES.has(value as RunnerExactness) ? (value as RunnerExactness) : "not_applicable";
+}
+
+export function sanitizeRunnerSupportedStatus(value: unknown): RunnerSupportedStatus | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  return RUNNER_SUPPORTED_STATUS_VALUES.has(value as RunnerSupportedStatus) ? (value as RunnerSupportedStatus) : "none";
 }
 
 function isSha256(value: unknown): value is string {
@@ -438,8 +456,8 @@ function runFromReport(projectRoot: string, projectId: string, reportRelativePat
     runner_version: runnerVersion,
     status,
     unreplayable_reason: unreplayableReason,
-    exactness: typeof result?.exactness === "string" ? result.exactness : undefined,
-    supports_status: typeof result?.supports_status === "string" ? result.supports_status : undefined,
+    exactness: sanitizeRunnerExactness(result?.exactness),
+    supports_status: sanitizeRunnerSupportedStatus(result?.supports_status),
     seed: typeof metadata.seed === "number" ? metadata.seed : undefined,
     timeout_ms: typeof metadata.timeout_ms === "number" ? metadata.timeout_ms : undefined,
     input_sha256: isSha256(metadata.input_sha256) ? metadata.input_sha256 : undefined,

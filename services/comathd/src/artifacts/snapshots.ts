@@ -20,6 +20,8 @@ import { sha256File } from "./hash.js";
 import {
   createReplayManifest,
   replayManifestPath,
+  sanitizeRunnerExactness,
+  sanitizeRunnerSupportedStatus,
   verifyRunnerReportReexecution,
   verifyRunnerReportReplayIntegrity,
   type ReplayManifest
@@ -319,8 +321,8 @@ function replayRunMatchesReport(run: ReplayManifest["runs"][number], report: any
     run.claim_id === (typeof report?.claim_id === "string" ? report.claim_id : undefined) &&
     run.runner_id === runnerId &&
     run.runner_version === (typeof result?.runner_version === "string" ? result.runner_version : undefined) &&
-    run.exactness === (typeof result?.exactness === "string" ? result.exactness : undefined) &&
-    run.supports_status === (typeof result?.supports_status === "string" ? result.supports_status : undefined) &&
+    run.exactness === sanitizeRunnerExactness(result?.exactness) &&
+    run.supports_status === sanitizeRunnerSupportedStatus(result?.supports_status) &&
     run.seed === (typeof metadata?.seed === "number" ? metadata.seed : undefined) &&
     run.timeout_ms === (typeof metadata?.timeout_ms === "number" ? metadata.timeout_ms : undefined) &&
     run.input_sha256 === (isSha256(metadata?.input_sha256) ? metadata.input_sha256 : undefined) &&

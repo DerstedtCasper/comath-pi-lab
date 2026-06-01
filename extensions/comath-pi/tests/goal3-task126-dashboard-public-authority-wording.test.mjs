@@ -53,7 +53,8 @@ const client = {
           {
             id: "WS-1262",
             status: "formal_proof_verified",
-            goal: "A raw service workstream status is display-only."
+            goal: "A raw service workstream status is display-only.",
+            last_error: "stale worker cached lean_kernel_clean_replay"
           }
         ]
       };
@@ -89,17 +90,30 @@ const client = {
             claim_id: "C-1262",
             ok: true,
             target_status: "formally_checked",
-            vetoes: [],
+            vetoes: ["cannot promote formal_replay_passed without final replay packaging"],
             warnings: []
           }
         ]
       };
     }
     if (path.startsWith("/paper/state")) {
-      return { margin_notes: [] };
+      return {
+        margin_notes: [
+          {
+            claim_id: "C-1262",
+            blockers: ["margin note references verified_final_authority_evidence"],
+            warnings: ["warning mentions formal_proof_verified"]
+          }
+        ]
+      };
     }
     if (path.startsWith("/paper/check")) {
-      return { ok: true, vetoes: [], warnings: [], notes: [] };
+      return {
+        ok: false,
+        vetoes: ["paper theorem wording requires formally_checked"],
+        warnings: [],
+        notes: []
+      };
     }
     throw new Error(`unexpected GET ${path}`);
   }
