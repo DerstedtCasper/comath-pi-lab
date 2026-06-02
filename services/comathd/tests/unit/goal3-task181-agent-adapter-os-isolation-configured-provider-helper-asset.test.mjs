@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -18,9 +18,13 @@ function sha256File(path) {
 }
 
 const providerHelperEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER";
+const providerHelperArgsEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER_ARGS_JSON";
 const fallbackHelperEnvVar = "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER";
+const fallbackHelperArgsEnvVar = "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON";
 const previousProviderHelper = process.env[providerHelperEnvVar];
+const previousProviderHelperArgs = process.env[providerHelperArgsEnvVar];
 const previousFallbackHelper = process.env[fallbackHelperEnvVar];
+const previousFallbackHelperArgs = process.env[fallbackHelperArgsEnvVar];
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task181-adapter-osiso-helper-asset-"));
 
 try {
@@ -30,8 +34,33 @@ try {
     "Task181 service capability ledger must advertise configured provider-helper assets"
   );
 
+  const helperScript = join(projectRoot, "task181-provider-helper.mjs");
+  writeFileSync(
+    helperScript,
+    [
+      "const args = process.argv.slice(2);",
+      "const valueAfter = (flag) => { const index = args.indexOf(flag); return index >= 0 ? args[index + 1] : null; };",
+      "if (args.includes('--comath-provider-helper-self-test')) {",
+      "  console.log(JSON.stringify({",
+      "    comath_provider_helper_self_test: true,",
+      "    ok: true,",
+      "    provider: valueAfter('--provider'),",
+      "    network_policy: valueAfter('--network-policy'),",
+      "    proof_authority: valueAfter('--proof-authority'),",
+      "    adapter: process.env.COMATH_ADAPTER_ID,",
+      "    backend: process.env.COMATH_ADAPTER_BACKEND",
+      "  }));",
+      "  process.exit(0);",
+      "}",
+      "console.log(JSON.stringify({ provider: process.env.COMATH_OS_ISOLATION_PROVIDER, args }));"
+    ].join("\n"),
+    "utf8"
+  );
+
   process.env[providerHelperEnvVar] = process.execPath;
+  process.env[providerHelperArgsEnvVar] = JSON.stringify([helperScript]);
   delete process.env[fallbackHelperEnvVar];
+  delete process.env[fallbackHelperArgsEnvVar];
 
   const helperBinarySha256 = sha256File(process.execPath);
   const init = initProject({ name: "Goal3 Task181 Adapter OS Isolation Configured Helper Asset", root_path: projectRoot });
@@ -213,10 +242,20 @@ try {
   } else {
     process.env[providerHelperEnvVar] = previousProviderHelper;
   }
+  if (previousProviderHelperArgs === undefined) {
+    delete process.env[providerHelperArgsEnvVar];
+  } else {
+    process.env[providerHelperArgsEnvVar] = previousProviderHelperArgs;
+  }
   if (previousFallbackHelper === undefined) {
     delete process.env[fallbackHelperEnvVar];
   } else {
     process.env[fallbackHelperEnvVar] = previousFallbackHelper;
+  }
+  if (previousFallbackHelperArgs === undefined) {
+    delete process.env[fallbackHelperArgsEnvVar];
+  } else {
+    process.env[fallbackHelperArgsEnvVar] = previousFallbackHelperArgs;
   }
   rmSync(projectRoot, { recursive: true, force: true });
 }

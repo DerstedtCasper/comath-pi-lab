@@ -106,6 +106,8 @@ Task182 adds a service-owned configured helper execution asset path for that sam
 
 Task184 expands configured helper asset contracts across OCI, Nix, Firejail, Windows AppContainer, and macOS `sandbox-exec` provider families, and makes the default helper-host validator fail closed when a platform-specific provider is configured on an incompatible service-observed host platform. Provider-specific helper env vars and args-prefix env vars remain host-only configuration with provider-specific precedence over fallback handles. The platform contract prevents false host validation; it is not a production helper binary, not collected OS-enforcement evidence, not readiness evidence, not proof authority, not broad provider support, and not GA certification.
 
+Task185 adds a fixed CoMath provider-helper self-test contract to the default configured-helper host validator. A configured helper must respond to service-owned fixed argv/env before host validation can unlock helper execution; the manifest records only self-test hashes/status, helper executable hash, args-prefix hash/count, and non-secret diagnostics. This checks the helper protocol surface only: it is not collected OS-enforcement evidence, readiness evidence, proof authority, broad provider support, real-Pi execution, or GA certification.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)

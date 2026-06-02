@@ -1,3 +1,26 @@
+# Goal 3 Task 185 / Provider Helper Self-Test Contract
+
+Scope: harden the default configured provider-helper host-validation path so an absolute helper executable and platform-compatible host are not enough: the helper must pass a fixed CoMath provider-helper self-test before host validation can unlock helper execution, while preserving that host validation, self-test status, helper execution, and wrapper manifests are not OS-enforcement evidence, proof authority, readiness evidence, broad provider support, real-Pi execution, or GA certification.
+
+Work performed:
+
+- Treated Task184's next step as authoritative and selected the concrete production-helper/host-probe residual blocker rather than durable transport or Lean replay breadth.
+- Added `goal3-task185-agent-adapter-os-isolation-helper-self-test-contract.test.mjs` covering a configured helper executable that exists but fails the CoMath self-test, then a service-owned helper script that passes self-test, executes under fixed argv/env, feeds internal collection, and reaches readiness only through canonical collected evidence.
+- Added `agent_adapter_os_isolation_provider_helper_self_test_contract` capability and `blocked_provider_helper_host_self_test_failed` status.
+- Extended default env-configured helper host validation to run a bounded fixed-argv self-test with the same service-owned helper executable and optional args-prefix, using fixed `COMATH_*` env and `shell=false`.
+- Persisted only self-test exit/status, stdout/stderr/transcript hashes, fixed-args hash, args-prefix hash/count, helper binary hash, and sanitized diagnostics; raw helper paths, prefix args, stdout/stderr text, host paths, and secrets remain out of public manifests.
+- Kept injected/custom service-owned host validators compatible with existing Task178/179 semantics; the self-test contract applies to the default env-configured helper path.
+- Updated config samples, config README, README, AGENTS, adapter contracts, GA release criteria, threat model, smoke invariants, and older configured-helper tests for the new contract.
+
+Verification evidence:
+
+- TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, `node services/comathd/tests/unit/goal3-task185-agent-adapter-os-isolation-helper-self-test-contract.test.mjs` exited 1 because the capability ledger did not advertise `agent_adapter_os_isolation_provider_helper_self_test_contract`.
+- After implementation, focused Task185 exited 0.
+- Adjacent focused regressions exited 0: Task178 provider-helper host validation, Task179 host-validation-bound helper execution, Task181 configured provider-helper asset, Task182 configured helper execution/collection, Task184 cross-provider helper assets, and `node scripts/phase0-smoke.mjs`.
+
+Boundary notes: Task185 does not ship real production helper binaries, does not prove Firejail/AppContainer/sandbox-exec/OCI/Nix OS enforcement from helper configuration or self-test, does not expose provider-helper routes through Pi tools, does not make host validation or helper execution readiness evidence, does not broaden Lean/mathlib replay, does not complete real-Pi execution, and does not certify GA.
+
+Residual risks: Goal 3 remains incomplete. The next frontier should continue toward the highest-risk remaining blocker, such as real provider helper binaries/host probes for one provider family, durable long-lived operator transport, broader live Lean/mathlib replay, fully interactive real-Pi execution, or a check-debug loop if tracker cadence calls for it.
 # Goal 3 Task 184 / Cross-Provider Configured Helper Assets And Platform Contract
 
 Scope: advance the Task183 residual production-helper frontier by expanding configured helper asset coverage beyond Windows-only wording and adding a default provider/helper host-platform contract that blocks platform-specific provider helpers on incompatible service-observed hosts.

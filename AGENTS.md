@@ -205,6 +205,8 @@ Task183 revalidates the Task175-182 provider-runner/helper/host-validation/colle
 
 Task184 expands configured helper asset contracts across OCI, Nix, Firejail, Windows AppContainer, and macOS `sandbox-exec` provider families. The default helper-host validator now uses the service-observed host platform and fails closed for platform-specific provider mismatches before helper execution; caller-supplied platform strings cannot authorize host validation. This remains host-configuration/platform-contract coverage only, not production helper binaries, collected OS-enforcement evidence, readiness evidence, proof authority, broad provider support, real-Pi execution, or GA certification.
 
+Task185 adds a fixed CoMath provider-helper self-test contract to the default configured-helper host-validation path. A configured helper must pass service-owned fixed argv/env self-test before host validation can unlock helper execution; self-test status and hashes remain host-validation metadata only and cannot satisfy readiness, prove OS enforcement, certify GA, or affect mathematical proof authority.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

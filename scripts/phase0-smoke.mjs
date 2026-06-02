@@ -368,6 +368,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs",
   "goal3-task182-agent-adapter-os-isolation-configured-helper-execution-collection.test.mjs",
   "goal3-task184-agent-adapter-os-isolation-cross-provider-helper-assets.test.mjs",
+  "goal3-task185-agent-adapter-os-isolation-helper-self-test-contract.test.mjs",
   "phase43-agent-adapter-package.test.mjs",
   "phase44-codex-cli-external-invocation.test.mjs"
 ];
@@ -413,6 +414,13 @@ for (const envName of [
   if (!configReadme.includes(envName)) {
     invariantFailures.push(`config README must explain ${envName} host-only helper configuration semantics`);
   }
+}
+
+if (!sampleConfig.includes('"hostValidationSelfTestRequired": true')) {
+  invariantFailures.push("sample config must mark configured provider helpers as requiring the host-validation self-test contract");
+}
+if (!configReadme.includes("provider-helper self-test")) {
+  invariantFailures.push("config README must explain the configured helper host-validation self-test contract");
 }
 
 const publicArchiveContractDocs = [

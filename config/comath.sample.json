@@ -49,6 +49,7 @@
         "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
         "argsPrefixFormat": "json_string_array",
         "executionAssetHashBound": true,
+        "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",
         "canCertifyGa": false
       },
@@ -61,6 +62,7 @@
         "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
         "argsPrefixFormat": "json_string_array",
         "executionAssetHashBound": true,
+        "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",
         "canCertifyGa": false
       },
@@ -73,6 +75,7 @@
         "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
         "argsPrefixFormat": "json_string_array",
         "executionAssetHashBound": true,
+        "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",
         "canCertifyGa": false
       },
@@ -85,6 +88,7 @@
         "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
         "argsPrefixFormat": "json_string_array",
         "executionAssetHashBound": true,
+        "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",
         "canCertifyGa": false
       },
@@ -97,6 +101,7 @@
         "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
         "argsPrefixFormat": "json_string_array",
         "executionAssetHashBound": true,
+        "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",
         "canCertifyGa": false
       }

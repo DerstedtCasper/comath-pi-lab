@@ -230,6 +230,17 @@ export type AgentAdapterOsIsolationProviderHelperHostValidationProbe = {
   helper_binary_sha256?: string;
   helper_version?: string;
   supported_platforms?: string[];
+  self_test_required?: boolean;
+  self_test_passed?: boolean;
+  self_test_exit_code?: number | null;
+  self_test_signal?: string | null;
+  self_test_timed_out?: boolean;
+  self_test_stdout_sha256?: string | null;
+  self_test_stderr_sha256?: string | null;
+  self_test_transcript_sha256?: string | null;
+  self_test_args_prefix_sha256?: string | null;
+  self_test_args_prefix_count?: number;
+  self_test_fixed_args_sha256?: string | null;
   diagnostics?: string[];
 };
 
@@ -327,7 +338,8 @@ export type AgentAdapterOsIsolationProviderHelperHostValidationStatus =
   | "blocked_provider_runner_binding_mismatch"
   | "blocked_provider_helper_host_not_validated"
   | "blocked_provider_helper_host_binary_mismatch"
-  | "blocked_provider_helper_host_platform_mismatch";
+  | "blocked_provider_helper_host_platform_mismatch"
+  | "blocked_provider_helper_host_self_test_failed";
 
 export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "provider_helper_os_evidence_collected"
@@ -868,6 +880,17 @@ export type AgentAdapterOsIsolationProviderHelperHostValidation = {
     supported_platforms: string[];
     platform: string | null;
     platform_supported: boolean;
+    self_test_required: boolean;
+    self_test_passed: boolean;
+    self_test_exit_code: number | null;
+    self_test_signal: string | null;
+    self_test_timed_out: boolean;
+    self_test_stdout_sha256: string | null;
+    self_test_stderr_sha256: string | null;
+    self_test_transcript_sha256: string | null;
+    self_test_args_prefix_sha256: string | null;
+    self_test_args_prefix_count: number;
+    self_test_fixed_args_sha256: string | null;
     shell: false;
     network_policy: "disabled";
     no_new_privileges_required: true;
@@ -1832,6 +1855,35 @@ function providerHelperFixedArgs(input: {
   ];
 }
 
+function providerHelperSelfTestFixedArgs(input: {
+  hostValidationId: string;
+  runnerId: string;
+  launchId: string;
+  adapterId: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+}): string[] {
+  return [
+    "--comath-provider-helper-self-test",
+    "--provider",
+    input.provider,
+    "--runner-id",
+    input.runnerId,
+    "--launch-id",
+    input.launchId,
+    "--host-validation-id",
+    input.hostValidationId,
+    "--adapter-id",
+    input.adapterId,
+    "--backend",
+    input.backend,
+    "--network-policy",
+    "disabled",
+    "--proof-authority",
+    "none"
+  ];
+}
+
 function providerHelperProgramEnvVar(provider: AgentAdapterOsIsolationProvider): string {
   switch (provider) {
     case "oci_container":
@@ -1995,20 +2047,135 @@ function defaultProviderHelperHostValidator(
     };
   }
   const helperHash = sha256FileSync(configuredProgram);
+  const configuredArgs = configuredHelperArgsPrefix(input.provider);
+  if (!configuredArgs.ok) {
+    return {
+      validation_source: "service_owned_provider_helper_host_validator",
+      helper_host_ready: false,
+      helper_program: configuredProgram,
+      helper_binary_sha256: helperHash.sha256,
+      helper_version: `${input.provider}-helper-env-configured`,
+      supported_platforms: supportedPlatforms,
+      self_test_required: true,
+      self_test_passed: false,
+      self_test_exit_code: null,
+      self_test_signal: null,
+      self_test_timed_out: false,
+      self_test_stdout_sha256: null,
+      self_test_stderr_sha256: null,
+      self_test_transcript_sha256: null,
+      self_test_args_prefix_sha256: null,
+      self_test_args_prefix_count: 0,
+      self_test_fixed_args_sha256: null,
+      diagnostics: configuredArgs.diagnostics
+    };
+  }
+  const fixedArgs = providerHelperSelfTestFixedArgs({
+    hostValidationId: input.host_validation_id,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend: input.backend,
+    provider: input.provider
+  });
+  const env = providerHelperEnv({
+    projectId: input.project_id,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend: input.backend,
+    provider: input.provider
+  });
+  const shouldRunSelfTest = supportedPlatforms.includes(hostPlatform);
+  const selfTest = shouldRunSelfTest
+    ? spawnSync(configuredProgram, [...configuredArgs.args, ...fixedArgs], {
+        cwd: input.project_root,
+        env,
+        encoding: "utf8",
+        shell: false,
+        timeout: 10_000
+      })
+    : undefined;
+  const stdout = typeof selfTest?.stdout === "string" ? selfTest.stdout : "";
+  const stderr = typeof selfTest?.stderr === "string" ? selfTest.stderr : "";
+  const exitCode = typeof selfTest?.status === "number" ? selfTest.status : null;
+  const signal = typeof selfTest?.signal === "string" ? selfTest.signal : null;
+  const spawnError = selfTest?.error as (Error & { code?: string }) | undefined;
+  const timedOut = spawnError?.code === "ETIMEDOUT";
+  const selfTestStdoutSha256 = shouldRunSelfTest ? sha256Bytes(stdout) : null;
+  const selfTestStderrSha256 = shouldRunSelfTest ? sha256Bytes(stderr) : null;
+  const selfTestArgsPrefixSha256 = configuredArgs.args.length > 0 ? sha256Text(canonicalJson(configuredArgs.args)) : null;
+  const selfTestFixedArgsSha256 = sha256Text(canonicalJson(fixedArgs));
+  const selfTestPassed = shouldRunSelfTest && !spawnError && exitCode === 0 && providerHelperSelfTestStdoutAccepted(stdout, input);
+  const selfTestTranscriptSha256 = shouldRunSelfTest
+    ? sha256Text(canonicalJson({
+        host_validation_id: input.host_validation_id,
+        runner_id: input.runner_id,
+        launch_id: input.launch_id,
+        helper_binary_sha256: helperHash.sha256,
+        helper_args_prefix_sha256: selfTestArgsPrefixSha256,
+        helper_args_prefix_count: configuredArgs.args.length,
+        self_test_fixed_args_sha256: selfTestFixedArgsSha256,
+        self_test_exit_code: exitCode,
+        self_test_signal: signal,
+        stdout_sha256: selfTestStdoutSha256,
+        stderr_sha256: selfTestStderrSha256
+      }))
+    : null;
   return {
     validation_source: "service_owned_provider_helper_host_validator",
-    helper_host_ready: true,
+    helper_host_ready: selfTestPassed,
     helper_program: configuredProgram,
     helper_binary_sha256: helperHash.sha256,
     helper_version: `${input.provider}-helper-env-configured`,
     supported_platforms: supportedPlatforms,
+    self_test_required: true,
+    self_test_passed: selfTestPassed,
+    self_test_exit_code: exitCode,
+    self_test_signal: signal,
+    self_test_timed_out: timedOut,
+    self_test_stdout_sha256: selfTestStdoutSha256,
+    self_test_stderr_sha256: selfTestStderrSha256,
+    self_test_transcript_sha256: selfTestTranscriptSha256,
+    self_test_args_prefix_sha256: selfTestArgsPrefixSha256,
+    self_test_args_prefix_count: configuredArgs.args.length,
+    self_test_fixed_args_sha256: selfTestFixedArgsSha256,
     diagnostics: [
       `${providerEnvVar} resolved to a service-owned helper executable for host validation.`,
+      ...configuredArgs.diagnostics,
       supportedPlatforms.includes(hostPlatform)
         ? `${input.provider} configured helper host platform contract accepts platform=${hostPlatform}.`
-        : `${input.provider} configured helper host platform contract rejects platform=${hostPlatform}; supported platforms are ${supportedPlatforms.join(", ") || "none"}.`
-    ]
+        : `${input.provider} configured helper host platform contract rejects platform=${hostPlatform}; supported platforms are ${supportedPlatforms.join(", ") || "none"}.`,
+      shouldRunSelfTest
+        ? `Provider helper self-test ${selfTestPassed ? "passed" : "failed"} with exit_code=${exitCode ?? "null"}.`
+        : "Provider helper self-test skipped because host platform is incompatible.",
+      spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined
+    ].filter((entry): entry is string => Boolean(entry))
   };
+}
+
+function providerHelperSelfTestStdoutAccepted(
+  stdout: string,
+  input: AgentAdapterOsIsolationProviderHelperHostValidatorInput
+): boolean {
+  const firstLine = stdout.split(/\r?\n/).find((line) => line.trim().length > 0);
+  if (!firstLine) {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(firstLine) as Record<string, unknown>;
+    return (
+      parsed.comath_provider_helper_self_test === true &&
+      parsed.ok === true &&
+      parsed.provider === input.provider &&
+      parsed.network_policy === "disabled" &&
+      parsed.proof_authority === "none" &&
+      parsed.adapter === input.adapter_id &&
+      parsed.backend === input.backend
+    );
+  } catch {
+    return false;
+  }
 }
 
 function providerHelperSupportedPlatforms(provider: AgentAdapterOsIsolationProvider): string[] {
@@ -2088,6 +2255,9 @@ function providerHelperHostReplayableNextAction(
   if (status === "blocked_provider_helper_host_platform_mismatch") {
     return "Run host validation on a platform explicitly supported by the service-owned provider helper validator.";
   }
+  if (status === "blocked_provider_helper_host_self_test_failed") {
+    return "Configure a service-owned provider helper that passes the fixed CoMath helper self-test protocol before host validation can unlock helper execution.";
+  }
   return "Configure and run a service-owned provider-helper host validator; caller-supplied host readiness, argv, env, or hashes cannot validate the host.";
 }
 
@@ -2097,7 +2267,10 @@ function providerHelperHostValidationStatus(input: {
   validationSourceAccepted: boolean;
   helperHostReady: boolean;
   hashesMatchRunner: boolean;
+  platformContractDeclared: boolean;
   platformSupported: boolean;
+  selfTestRequired: boolean;
+  selfTestPassed: boolean;
 }): AgentAdapterOsIsolationProviderHelperHostValidationStatus {
   if (!input.runnerReady) {
     return "blocked_provider_runner_manifest_missing";
@@ -2105,13 +2278,16 @@ function providerHelperHostValidationStatus(input: {
   if (!input.runnerMatches) {
     return "blocked_provider_runner_binding_mismatch";
   }
-  if (input.validationSourceAccepted && input.helperHostReady && !input.platformSupported) {
+  if (input.validationSourceAccepted && input.platformContractDeclared && !input.platformSupported) {
     return "blocked_provider_helper_host_platform_mismatch";
+  }
+  if (input.validationSourceAccepted && input.selfTestRequired && !input.selfTestPassed) {
+    return "blocked_provider_helper_host_self_test_failed";
   }
   if (input.validationSourceAccepted && input.helperHostReady && !input.hashesMatchRunner) {
     return "blocked_provider_helper_host_binary_mismatch";
   }
-  return input.validationSourceAccepted && input.helperHostReady && input.hashesMatchRunner && input.platformSupported
+  return input.validationSourceAccepted && input.helperHostReady && input.hashesMatchRunner && input.platformSupported && (!input.selfTestRequired || input.selfTestPassed)
     ? "provider_helper_host_validated"
     : "blocked_provider_helper_host_not_validated";
 }
@@ -2828,6 +3004,8 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
     supportedPlatforms.length > 0 &&
     supportedPlatforms.includes(validationPlatform)
   );
+  const selfTestRequired = validationSourceAccepted && validation?.self_test_required === true;
+  const selfTestPassed = validationSourceAccepted && validation?.self_test_passed === true;
   const helperHostReady = Boolean(
     validationSourceAccepted &&
       validation?.helper_host_ready === true &&
@@ -2840,7 +3018,10 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
     validationSourceAccepted,
     helperHostReady,
     hashesMatchRunner: hashesMatchProviderRunner,
-    platformSupported
+    platformContractDeclared: supportedPlatforms.length > 0,
+    platformSupported,
+    selfTestRequired,
+    selfTestPassed
   });
   const ok = status === "provider_helper_host_validated";
   const diagnostics = [
@@ -2881,6 +3062,33 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
       supported_platforms: supportedPlatforms,
       platform: validationPlatform,
       platform_supported: platformSupported,
+      self_test_required: selfTestRequired,
+      self_test_passed: selfTestPassed,
+      self_test_exit_code: validationSourceAccepted && typeof validation?.self_test_exit_code === "number"
+        ? validation.self_test_exit_code
+        : null,
+      self_test_signal: validationSourceAccepted && typeof validation?.self_test_signal === "string"
+        ? sanitizeProbeText(validation.self_test_signal)
+        : null,
+      self_test_timed_out: validationSourceAccepted && validation?.self_test_timed_out === true,
+      self_test_stdout_sha256: isSha256(validation?.self_test_stdout_sha256)
+        ? validation.self_test_stdout_sha256.toLowerCase()
+        : null,
+      self_test_stderr_sha256: isSha256(validation?.self_test_stderr_sha256)
+        ? validation.self_test_stderr_sha256.toLowerCase()
+        : null,
+      self_test_transcript_sha256: isSha256(validation?.self_test_transcript_sha256)
+        ? validation.self_test_transcript_sha256.toLowerCase()
+        : null,
+      self_test_args_prefix_sha256: isSha256(validation?.self_test_args_prefix_sha256)
+        ? validation.self_test_args_prefix_sha256.toLowerCase()
+        : null,
+      self_test_args_prefix_count: typeof validation?.self_test_args_prefix_count === "number" && Number.isInteger(validation.self_test_args_prefix_count) && validation.self_test_args_prefix_count >= 0
+        ? validation.self_test_args_prefix_count
+        : 0,
+      self_test_fixed_args_sha256: isSha256(validation?.self_test_fixed_args_sha256)
+        ? validation.self_test_fixed_args_sha256.toLowerCase()
+        : null,
       shell: false,
       network_policy: "disabled",
       no_new_privileges_required: true,
