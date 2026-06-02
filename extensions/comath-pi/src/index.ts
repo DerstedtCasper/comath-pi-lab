@@ -147,6 +147,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexApiProbe",
   "comath.release.piRealPiRuntimeProbe",
   "comath.release.piCodexLifecycleWalkthrough",
+  "comath.release.piCodexLifecycleControl",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -438,6 +439,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexApiProbe" ||
     name === "comath.release.piRealPiRuntimeProbe" ||
     name === "comath.release.piCodexLifecycleWalkthrough" ||
+    name === "comath.release.piCodexLifecycleControl" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -452,6 +454,8 @@ const PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS = [
   "real_pi_host_manual_install",
   "real_pi_host_automated_install"
 ] as const;
+
+const PI_LIFECYCLE_CONTROL_PLAN_ACTIONS = ["plan", "status"] as const;
 
 function publicOperatorText(value: string): string {
   return sanitizePublicProofAuthorityValue(value) as string;
@@ -567,6 +571,86 @@ function buildPiCodexLifecycleWalkthrough(input: Record<string, unknown>): Recor
           "--installed-cli-probe-source service_owned_process --codex-api-account-network-validation passed"
       }
     ]
+  };
+}
+
+function readLifecycleControlPlanAction(input: Record<string, unknown>): typeof PI_LIFECYCLE_CONTROL_PLAN_ACTIONS[number] {
+  const value = readString(input, "action");
+  if ((PI_LIFECYCLE_CONTROL_PLAN_ACTIONS as readonly string[]).includes(value)) {
+    return value as typeof PI_LIFECYCLE_CONTROL_PLAN_ACTIONS[number];
+  }
+  throw new Error("action must be plan or status");
+}
+
+function buildPiCodexLifecycleControl(input: Record<string, unknown>): Record<string, unknown> {
+  const projectId = publicOperatorText(readString(input, "project_id"));
+  const actor = publicOperatorText(readString(input, "actor"));
+  const piHostLabel = publicOperatorText(readString(input, "pi_host_label"));
+  const action = readLifecycleControlPlanAction(input);
+  const sessionKind = readLifecycleWalkthroughSessionKind(input);
+  const probeId = optionalPublicOperatorText(input, "probe_id", `${projectId}-REAL-PI-RUNTIME`);
+  const validationId = optionalPublicOperatorText(input, "validation_id", `${projectId}-CODEX-API`);
+  const reviewId = optionalPublicOperatorText(input, "review_id", `${projectId}-LIFECYCLE-REVIEW`);
+  const walkthrough = buildPiCodexLifecycleWalkthrough({
+    project_id: projectId,
+    actor,
+    pi_host_label: piHostLabel,
+    session_kind: sessionKind,
+    probe_id: probeId,
+    validation_id: validationId,
+    review_id: reviewId
+  });
+
+  return {
+    schema_version: "comath.pi.lifecycle.operator_control.v1",
+    project_id: projectId,
+    actor,
+    pi_host_label: piHostLabel,
+    action,
+    session_kind: sessionKind,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    direct_trusted_state_mutation: false,
+    service_authority: "comathd_only",
+    control_policy: {
+      plan_status_readonly: true,
+      executing_actions_requires_pi_host_confirmation: true,
+      trusted_state_owner: "comathd"
+    },
+    control_actions: [
+      {
+        action_id: "run-real-pi-runtime-probe",
+        label: "Run real Pi runtime probe",
+        command_subcommand: "lifecycle-control run-real-pi-runtime-probe",
+        requires_host_confirmation: true,
+        forwards_to_tool: "comath.release.piRealPiRuntimeProbe",
+        expected_inputs: ["project_id", "probe_id", "pi_host_label", "session_kind", "install/runtime/confirmation commands"]
+      },
+      {
+        action_id: "run-codex-api-probe",
+        label: "Run Codex API probe",
+        command_subcommand: "lifecycle-control run-codex-api-probe",
+        requires_host_confirmation: true,
+        forwards_to_tool: "comath.release.piCodexApiProbe",
+        expected_inputs: ["project_id", "validation_id"]
+      },
+      {
+        action_id: "review",
+        label: "Review Pi/Codex lifecycle evidence",
+        command_subcommand: "lifecycle-control review",
+        requires_host_confirmation: true,
+        forwards_to_tool: "comath.release.piCodexLifecycleReview",
+        expected_inputs: ["project_id", "review_id", "install_session_evidence", "codex_evidence"]
+      }
+    ],
+    walkthrough_summary: {
+      schema_version: walkthrough.schema_version,
+      probe_id: walkthrough.probe_id,
+      validation_id: walkthrough.validation_id,
+      review_id: walkthrough.review_id,
+      command_templates: walkthrough.command_templates
+    }
   };
 }
 
@@ -1104,6 +1188,10 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
 
   if (name === "comath.release.piCodexLifecycleWalkthrough") {
     return publicToolResult(name, Promise.resolve(buildPiCodexLifecycleWalkthrough(input)));
+  }
+
+  if (name === "comath.release.piCodexLifecycleControl") {
+    return publicToolResult(name, Promise.resolve(buildPiCodexLifecycleControl(input)));
   }
 
   throw new Error(`unsupported comath tool: ${name}`);
@@ -1823,6 +1911,22 @@ export function createComathTools(): ToolDescriptor[] {
         project_id: stringProp,
         actor: stringProp,
         pi_host_label: stringProp,
+        session_kind: { type: "string", enum: [...PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS] },
+        probe_id: stringProp,
+        validation_id: stringProp,
+        review_id: stringProp
+      })
+    },
+    {
+      name: "comath.release.piCodexLifecycleControl",
+      description:
+        "Render read-only Pi lifecycle operator controls and status, with executable actions routed through host-confirmed lifecycle tools.",
+      mutates: false,
+      input_schema: objectSchema(["project_id", "actor", "pi_host_label", "action"], {
+        project_id: stringProp,
+        actor: stringProp,
+        pi_host_label: stringProp,
+        action: { type: "string", enum: [...PI_LIFECYCLE_CONTROL_PLAN_ACTIONS] },
         session_kind: { type: "string", enum: [...PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS] },
         probe_id: stringProp,
         validation_id: stringProp,
@@ -2892,6 +2996,96 @@ async function handleReleaseCommand(
       )
     );
     return;
+  }
+  if (subcommand === "lifecycle-control") {
+    const action = requiredOption(optionValue(parsed.args, "--action") ?? firstPositional(parsed.args), "action");
+    if (action === "plan" || action === "status") {
+      await notifyRuntimeResult(
+        ctx,
+        await executeComathTool(client, "comath.release.piCodexLifecycleControl", {
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          pi_host_label: requiredOption(optionValue(parsed.args, "--pi-host-label"), "pi_host_label"),
+          action,
+          session_kind: optionValue(parsed.args, "--session-kind"),
+          probe_id: optionValue(parsed.args, "--probe-id"),
+          validation_id: optionValue(parsed.args, "--validation-id"),
+          review_id: optionValue(parsed.args, "--review-id")
+        })
+      );
+      return;
+    }
+    if (action === "run-real-pi-runtime-probe") {
+      const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.piRealPiRuntimeProbe");
+      if (!tool) {
+        throw new Error("Pi/Codex real-Pi runtime probe tool is not registered");
+      }
+      await notifyRuntimeResult(
+        ctx,
+        await executeRuntimeToolWithHostConfirmation(
+          client,
+          tool,
+          {
+            project_root: projectRootFrom(options, parsed.args),
+            project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+            actor: actorFrom(options, parsed.args),
+            probe_id: optionValue(parsed.args, "--probe-id"),
+            pi_host_label: requiredOption(optionValue(parsed.args, "--pi-host-label"), "pi_host_label"),
+            pi_host_kind: optionValue(parsed.args, "--pi-host-kind") ?? "real_pi_host",
+            session_kind: requiredOption(optionValue(parsed.args, "--session-kind"), "session_kind"),
+            timeout_ms: numberOptionValue(parsed.args, "--timeout-ms"),
+            commands: parsePiRealPiRuntimeProbeCommands(parsed.args)
+          },
+          ctx
+        )
+      );
+      return;
+    }
+    if (action === "run-codex-api-probe") {
+      const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.piCodexApiProbe");
+      if (!tool) {
+        throw new Error("Pi/Codex Codex API probe tool is not registered");
+      }
+      await notifyRuntimeResult(
+        ctx,
+        await executeRuntimeToolWithHostConfirmation(
+          client,
+          tool,
+          {
+            project_root: projectRootFrom(options, parsed.args),
+            project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+            actor: actorFrom(options, parsed.args),
+            validation_id: optionValue(parsed.args, "--validation-id")
+          },
+          ctx
+        )
+      );
+      return;
+    }
+    if (action === "review") {
+      const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.piCodexLifecycleReview");
+      if (!tool) {
+        throw new Error("Pi/Codex lifecycle review tool is not registered");
+      }
+      await notifyRuntimeResult(
+        ctx,
+        await executeRuntimeToolWithHostConfirmation(
+          client,
+          tool,
+          {
+            project_root: projectRootFrom(options, parsed.args),
+            project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+            actor: actorFrom(options, parsed.args),
+            review_id: optionValue(parsed.args, "--review-id"),
+            install_session_evidence: parsePiCodexLifecycleInstallSessionEvidence(parsed.args),
+            codex_evidence: parsePiCodexLifecycleCodexEvidence(parsed.args)
+          },
+          ctx
+        )
+      );
+      return;
+    }
+    throw new Error(`unsupported lifecycle-control action: ${action}`);
   }
   if (subcommand === "lifecycle-walkthrough") {
     await notifyRuntimeResult(

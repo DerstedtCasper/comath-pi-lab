@@ -179,6 +179,7 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.release.piCodexApiProbe",
       "comath.release.piRealPiRuntimeProbe",
       "comath.release.piCodexLifecycleWalkthrough",
+      "comath.release.piCodexLifecycleControl",
       "comath.agent.profileList",
       "comath.agent.profileGet",
       "comath.agent.runForProfile",
