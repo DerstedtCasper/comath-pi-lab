@@ -150,6 +150,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleControl",
   "comath.release.piCodexLifecycleSession",
   "comath.release.piCodexLifecycleOperatorSession",
+  "comath.release.piCodexLifecycleOperatorTransportRecovery",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -407,6 +408,8 @@ function requireToolExecutionConfirmation(name: string, input: Record<string, un
 
 const privilegedProofAuthorityPattern =
   /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/gi;
+const publicTransportOverclaimPattern =
+  /\b(?:long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided)\b/gi;
 
 const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
 const secretEchoPattern =
@@ -417,6 +420,7 @@ function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
     return value
       .replace(privilegedProofAuthorityPattern, "unverified_formal_status")
+      .replace(publicTransportOverclaimPattern, "bounded_transport_checkpoint_only")
       .replace(hostPathEchoPattern, "[redacted_host_path]")
       .replace(secretEchoPattern, "[redacted_secret]");
   }
@@ -450,6 +454,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleControl" ||
     name === "comath.release.piCodexLifecycleSession" ||
     name === "comath.release.piCodexLifecycleOperatorSession" ||
+    name === "comath.release.piCodexLifecycleOperatorTransportRecovery" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -483,6 +488,12 @@ const PI_LIFECYCLE_OPERATOR_SESSION_STEPS = [
   "codex_api_account_network_probe",
   "lifecycle_evidence_intake",
   "readiness_review"
+] as const;
+const PI_LIFECYCLE_OPERATOR_TRANSPORT_KINDS = [
+  "operator_polling_checkpoint",
+  "bounded_sse_snapshot",
+  "manual_terminal_resume",
+  "unknown"
 ] as const;
 
 function publicOperatorText(value: string): string {
@@ -1400,6 +1411,34 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.piCodexLifecycleOperatorTransportRecovery") {
+    const sessionManifestPath = readString(input, "session_manifest_path", { optional: true });
+    const observedRoute = readString(input, "observed_route", { optional: true });
+    const transportKind = readString(input, "transport_kind", { optional: true });
+    const lastSeenEventId = readString(input, "last_seen_event_id", { optional: true });
+    const reconnectReason = readString(input, "reconnect_reason", { optional: true });
+    const clientEpoch = readNumber(input, "client_epoch");
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/operator-transport-recovery", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        session_id: readString(input, "session_id"),
+        transport_recovery_id: readString(input, "transport_recovery_id"),
+        ...(sessionManifestPath === undefined ? {} : { session_manifest_path: publicOperatorText(sessionManifestPath) }),
+        ...(observedRoute === undefined ? {} : { observed_route: publicOperatorText(observedRoute) }),
+        ...(transportKind === undefined ? {} : { transport_kind: transportKind }),
+        ...(input.requested_cursor === undefined
+          ? {}
+          : { requested_cursor: sanitizePublicProofAuthorityValue(input.requested_cursor) }),
+        ...(clientEpoch === undefined ? {} : { client_epoch: clientEpoch }),
+        ...(lastSeenEventId === undefined ? {} : { last_seen_event_id: publicOperatorText(lastSeenEventId) }),
+        ...(reconnectReason === undefined ? {} : { reconnect_reason: publicOperatorText(reconnectReason) })
+      })
+    );
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -2195,6 +2234,32 @@ export function createComathTools(): ToolDescriptor[] {
         },
         last_result_summary: { type: "object" }
       })
+    },
+    {
+      name: "comath.release.piCodexLifecycleOperatorTransportRecovery",
+      description:
+        "Persist a service-owned Pi/Codex lifecycle operator transport recovery checkpoint through comathd without Pi direct writes.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "actor", "session_id", "transport_recovery_id"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        actor: stringProp,
+        session_id: stringProp,
+        transport_recovery_id: stringProp,
+        session_manifest_path: stringProp,
+        observed_route: stringProp,
+        transport_kind: { type: "string", enum: [...PI_LIFECYCLE_OPERATOR_TRANSPORT_KINDS] },
+        requested_cursor: {
+          type: "object",
+          properties: {
+            operator_event_cursor: stringProp,
+            stdout_cursor: stringProp,
+            stderr_cursor: stringProp
+          }
+        },
+        last_seen_event_id: stringProp,
+        reconnect_reason: stringProp
+      })
     }
   ].map((tool) =>
     tool.mutates
@@ -2390,6 +2455,20 @@ function parseLifecycleOperatorSessionArtifact(value: string): Record<string, un
   return {
     kind: requiredOption(value.slice(0, separator), "artifact_kind"),
     path: requiredOption(value.slice(separator + 1), "artifact_path")
+  };
+}
+
+function parseLifecycleOperatorTransportCursor(args: string[]): Record<string, unknown> | undefined {
+  const operatorEventCursor = optionValue(args, "--operator-event-cursor");
+  const stdoutCursor = optionValue(args, "--stdout-cursor");
+  const stderrCursor = optionValue(args, "--stderr-cursor");
+  if (operatorEventCursor === undefined && stdoutCursor === undefined && stderrCursor === undefined) {
+    return undefined;
+  }
+  return {
+    ...(operatorEventCursor === undefined ? {} : { operator_event_cursor: operatorEventCursor }),
+    ...(stdoutCursor === undefined ? {} : { stdout_cursor: stdoutCursor }),
+    ...(stderrCursor === undefined ? {} : { stderr_cursor: stderrCursor })
   };
 }
 
@@ -3409,6 +3488,40 @@ async function handleReleaseCommand(
             optionValue(parsed.args, "--last-result-summary") === undefined
               ? undefined
               : { summary: optionValue(parsed.args, "--last-result-summary") }
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-operator-transport-recovery") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.piCodexLifecycleOperatorTransportRecovery"
+    );
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle operator transport recovery tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          session_id: requiredOption(optionValue(parsed.args, "--session-id"), "session_id"),
+          transport_recovery_id: requiredOption(
+            optionValue(parsed.args, "--transport-recovery-id"),
+            "transport_recovery_id"
+          ),
+          session_manifest_path: optionValue(parsed.args, "--session-manifest-path"),
+          observed_route: optionValue(parsed.args, "--observed-route"),
+          requested_cursor: parseLifecycleOperatorTransportCursor(parsed.args),
+          client_epoch: numberOptionValue(parsed.args, "--client-epoch"),
+          last_seen_event_id: optionValue(parsed.args, "--last-seen-event-id"),
+          reconnect_reason: optionValue(parsed.args, "--reconnect-reason"),
+          transport_kind: optionValue(parsed.args, "--transport-kind")
         },
         ctx
       )
