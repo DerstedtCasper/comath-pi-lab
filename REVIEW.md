@@ -1,3 +1,29 @@
+# Goal 3 Task 155 / Pi Lifecycle Operator Controls
+
+Scope: upgrade the Task154 read-only lifecycle walkthrough into bounded Pi operator controls that can plan/status locally and route selected lifecycle actions through existing host-confirmed service tools, without letting Pi write `.comath/`, carry secrets, overclaim proof authority, or certify GA.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed Task154 was the latest completed task before opening Task155.
+- Audited the Task147 lifecycle review consumer, Task151 Codex API probe consumer, Task153 real-Pi runtime probe consumer, Task154 lifecycle walkthrough, runtime-registration metadata, and Pi release-command dispatch pattern.
+- Added `goal3-task155-pi-lifecycle-operator-controls.test.mjs`.
+- RED showed `comath.release.piCodexLifecycleControl` was not registered in the Pi extension.
+- Added the read-only `comath.release.piCodexLifecycleControl` tool, local operator-control plan/status generator, `/cm:release lifecycle-control` command, runtime-registration subcommand metadata, default package test wiring, Phase6 tool exposure guard, and Phase26 executable-tool guard.
+- The control surface exposes `plan` and `status` without service calls or host confirmation, and routes `run-real-pi-runtime-probe`, `run-codex-api-probe`, and `review` through the existing host-confirmed lifecycle tools. Public outputs are sanitized and retain `proof_authority: "none"`, `can_promote_claim: false`, `can_certify_ga: false`, and `direct_trusted_state_mutation: false`.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task155-pi-lifecycle-operator-controls.test.mjs` failed because `comath.release.piCodexLifecycleControl` was not registered.
+- GREEN focused test exited 0: Task155 Pi lifecycle operator controls.
+- GREEN adjacent tests exited 0: Task147 Pi/Codex lifecycle consumer, Task151 Pi/Codex API probe consumer, Task153 Pi real-Pi runtime probe consumer, Task154 Pi lifecycle operator walkthrough, Phase6 extension, and Phase26 Pi runtime registration.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension typecheck`, `corepack pnpm --filter @comath/pi-extension test`, and `node scripts/phase0-smoke.mjs`.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task155 is a Pi-side bounded operator UX/composition task. It does not create new service evidence producers, run a real Pi host by itself, provide persistent operator sessions, bypass host confirmation, promote claims, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. Persistent operator sessions with recovery semantics, end-to-end guided real-Pi execution, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 154 / Pi Lifecycle Operator Walkthrough
 
 Scope: add a read-only Pi operator walkthrough for the Task146-153 lifecycle evidence/probe chain, without calling `comathd`, writing `.comath/`, carrying secrets, overclaiming proof authority, or certifying GA.
