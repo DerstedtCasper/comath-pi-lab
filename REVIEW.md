@@ -1,3 +1,31 @@
+# Goal 3 Task 157 / Pi Lifecycle Operator Session Persistence
+
+Scope: add service-owned Pi/Codex lifecycle operator-session manifest persistence so a bounded operator session can write a sanitized `.comath/release/pi-codex-lifecycle/<session_id>/operator-session-manifest.json`, route to the next lifecycle action, and remain non-authoritative without claiming durable transport, real-Pi execution, or GA.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task156's next step as authoritative.
+- Used the read-only explorer result to choose the smallest safe Task157 slice: service-owned durable operator-session manifests rather than indefinite transport, OS isolation, broad Lean replay, or full guided real-Pi execution.
+- Added `goal3-task157-pi-codex-operator-session-persistence.test.mjs`.
+- RED showed `../../dist/index.js` did not export `persistPiCodexLifecycleOperatorSession`.
+- Added `persistPiCodexLifecycleOperatorSession`, `POST /release/pi-codex-lifecycle/operator-session`, and the `pi_codex_lifecycle_operator_session_persistence` capability.
+- The manifest writer validates session ids and project ids, canonicalizes artifact references, records `release.pi_codex_lifecycle_operator_session_persisted`, and preserves `proof_authority: "none"`, `durable_transport_provided: false`, `pi_direct_write_allowed: false`, `can_promote_claim: false`, and `can_certify_ga: false`.
+- Code review found that raw `project_id`, actor/cursor fields, assignment-style secrets, bearer tokens, and poisoned `created_at` values could leak or be trusted too early. Added regressions and fixed validation/scrubbing before commit.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task157-pi-codex-operator-session-persistence.test.mjs` failed because `persistPiCodexLifecycleOperatorSession` was not exported.
+- Leak-regression RED: the focused Task157 test failed on unsanitized API secret material before the review fixes.
+- GREEN focused test exited 0: Task157 Pi/Codex operator-session persistence.
+- GREEN adjacent tests exited 0: Task148 lifecycle evidence intake, Task149 durable-service lifecycle probe, Task150 Codex API account/network probe, Task152 real-Pi runtime probe, and Task146 lifecycle readiness.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task157 discovered by the default comathd runner.
+- Post-doc gates exited 0: `node scripts/phase0-smoke.mjs` with 33 required entries and 33 invariants, `git diff --check` with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task157 persists a service-owned operator-session manifest and audit event. It does not provide indefinite WebSocket/SSE/terminal transport, cross-process operator transport recovery, real Pi execution by itself, Pi consumer wiring for this new route, OS-level adapter isolation, proof authority, claim promotion, or GA certification.
+
+Residual risks: Goal 3 remains incomplete. Pi consumer wiring for the service-owned session persistence route, end-to-end guided real-Pi execution, durable long-lived operator transport, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 156 / Pi Lifecycle Operator Session Recovery
 
 Scope: add a read-only Pi lifecycle session recovery surface that records operator-supplied session ids, completed lifecycle steps, log cursors, and sanitized last-result summaries so a Pi host can resume with the next host-confirmed lifecycle-control command, without calling `comathd`, writing `.comath/`, claiming durable transport, or weakening Lean Authority v3 boundaries.
