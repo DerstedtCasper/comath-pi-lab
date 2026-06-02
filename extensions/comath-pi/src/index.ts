@@ -149,6 +149,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleWalkthrough",
   "comath.release.piCodexLifecycleControl",
   "comath.release.piCodexLifecycleSession",
+  "comath.release.piCodexLifecycleOperatorSession",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -408,7 +409,9 @@ const privilegedProofAuthorityPattern =
   /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/gi;
 
 const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
-const secretEchoPattern = /\b(?:COMATH_CODEX_API_KEY|sk-[A-Za-z0-9._-]+)\b/gi;
+const secretEchoPattern =
+  /\b(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token)\s*[:=]\s*[A-Za-z0-9._-]+|Authorization:\s*Bearer\s*[A-Za-z0-9._-]+|\bsk-[A-Za-z0-9._-]+\b/gi;
+const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
 
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
@@ -422,7 +425,11 @@ function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, sanitizePublicProofAuthorityValue(item)])
+      Object.entries(value as Record<string, unknown>).map(([key, item]) =>
+        secretObjectKeyPattern.test(key)
+          ? ["[redacted_secret_key]", "[redacted_secret]"]
+          : [sanitizePublicProofAuthorityValue(key) as string, sanitizePublicProofAuthorityValue(item)]
+      )
     );
   }
   return value;
@@ -442,6 +449,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleWalkthrough" ||
     name === "comath.release.piCodexLifecycleControl" ||
     name === "comath.release.piCodexLifecycleSession" ||
+    name === "comath.release.piCodexLifecycleOperatorSession" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -463,6 +471,18 @@ const PI_LIFECYCLE_SESSION_STEP_IDS = [
   "run-real-pi-runtime-probe",
   "run-codex-api-probe",
   "review"
+] as const;
+const PI_LIFECYCLE_OPERATOR_SESSION_STATUSES = [
+  "recoverable_operator_session",
+  "blocked_operator_session",
+  "completed_operator_session"
+] as const;
+const PI_LIFECYCLE_OPERATOR_SESSION_STEPS = [
+  "real_pi_install_runtime_probe",
+  "durable_service_lifecycle_probe",
+  "codex_api_account_network_probe",
+  "lifecycle_evidence_intake",
+  "readiness_review"
 ] as const;
 
 function publicOperatorText(value: string): string {
@@ -614,6 +634,22 @@ function readLifecycleSessionSteps(input: Record<string, unknown>): Array<typeof
     }
   }
   return [...new Set(steps)] as Array<typeof PI_LIFECYCLE_SESSION_STEP_IDS[number]>;
+}
+
+function sanitizeLifecycleOperatorSessionArtifacts(value: unknown): Record<string, string>[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((artifact) => {
+    if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
+      throw new Error("operator-session artifact_paths must be objects");
+    }
+    const record = artifact as Record<string, unknown>;
+    return {
+      kind: publicOperatorText(readString(record, "kind")),
+      path: publicOperatorText(readString(record, "path"))
+    };
+  });
 }
 
 function buildPiCodexLifecycleSession(input: Record<string, unknown>): Record<string, unknown> {
@@ -1339,6 +1375,29 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
 
   if (name === "comath.release.piCodexLifecycleSession") {
     return publicToolResult(name, Promise.resolve(buildPiCodexLifecycleSession(input)));
+  }
+
+  if (name === "comath.release.piCodexLifecycleOperatorSession") {
+    const sessionKind = readString(input, "session_kind", { optional: true });
+    const operatorCursor = readString(input, "operator_cursor", { optional: true });
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/operator-session", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        session_id: readString(input, "session_id"),
+        pi_host_label: readString(input, "pi_host_label"),
+        session_status: readString(input, "session_status"),
+        ...(sessionKind === undefined ? {} : { session_kind: sessionKind }),
+        ...(operatorCursor === undefined ? {} : { operator_cursor: publicOperatorText(operatorCursor) }),
+        ...(Array.isArray(input.completed_steps) ? { completed_steps: input.completed_steps.map(String) } : {}),
+        ...(Array.isArray(input.artifact_paths) ? { artifact_paths: sanitizeLifecycleOperatorSessionArtifacts(input.artifact_paths) } : {}),
+        ...(input.last_result_summary === undefined
+          ? {}
+          : { last_result_summary: sanitizePublicProofAuthorityValue(input.last_result_summary) })
+      })
+    );
   }
 
   throw new Error(`unsupported comath tool: ${name}`);
@@ -2104,6 +2163,38 @@ export function createComathTools(): ToolDescriptor[] {
         stderr_cursor: stringProp,
         last_result_summary: stringProp
       })
+    },
+    {
+      name: "comath.release.piCodexLifecycleOperatorSession",
+      description:
+        "Persist a service-owned Pi/Codex lifecycle operator-session manifest through comathd without Pi direct writes.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "actor", "session_id", "pi_host_label", "session_status"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        actor: stringProp,
+        session_id: stringProp,
+        pi_host_label: stringProp,
+        session_status: { type: "string", enum: [...PI_LIFECYCLE_OPERATOR_SESSION_STATUSES] },
+        session_kind: { type: "string", enum: [...PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS] },
+        operator_cursor: stringProp,
+        completed_steps: {
+          type: "array",
+          items: { type: "string", enum: [...PI_LIFECYCLE_OPERATOR_SESSION_STEPS] }
+        },
+        artifact_paths: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["kind", "path"],
+            properties: {
+              kind: stringProp,
+              path: stringProp
+            }
+          }
+        },
+        last_result_summary: { type: "object" }
+      })
     }
   ].map((tool) =>
     tool.mutates
@@ -2291,6 +2382,17 @@ function parseSurfaceSpec(value: string): Record<string, unknown> {
   };
 }
 
+function parseLifecycleOperatorSessionArtifact(value: string): Record<string, unknown> {
+  const separator = value.indexOf("=");
+  if (separator <= 0 || separator === value.length - 1) {
+    throw new Error("operator-session artifact must use kind=path");
+  }
+  return {
+    kind: requiredOption(value.slice(0, separator), "artifact_kind"),
+    path: requiredOption(value.slice(separator + 1), "artifact_path")
+  };
+}
+
 function parsePiCodexLifecycleInstallSessionEvidence(args: string[]): Record<string, unknown> {
   return {
     session_kind: requiredOption(optionValue(args, "--session-kind"), "session_kind"),
@@ -2365,7 +2467,7 @@ async function requirePiHostConfirmation(
   }
   const allowed = await confirm(
     "Confirm CoMath mutation",
-    `Allow ${target} to mutate trusted CoMath state through comathd? ${JSON.stringify(params)}`
+    `Allow ${target} to mutate trusted CoMath state through comathd? ${JSON.stringify(sanitizePublicProofAuthorityValue(params))}`
   );
   if (allowed !== true) {
     throw new Error(`mutation rejected by Pi host confirmation for ${target}`);
@@ -3279,6 +3381,37 @@ async function handleReleaseCommand(
         stderr_cursor: optionValue(parsed.args, "--stderr-cursor"),
         last_result_summary: optionValue(parsed.args, "--last-result-summary")
       })
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-operator-session") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.piCodexLifecycleOperatorSession");
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle operator-session persistence tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          session_id: requiredOption(optionValue(parsed.args, "--session-id"), "session_id"),
+          pi_host_label: requiredOption(optionValue(parsed.args, "--pi-host-label"), "pi_host_label"),
+          session_status: requiredOption(optionValue(parsed.args, "--session-status"), "session_status"),
+          session_kind: optionValue(parsed.args, "--session-kind"),
+          operator_cursor: optionValue(parsed.args, "--operator-cursor"),
+          completed_steps: optionValues(parsed.args, "--completed-step"),
+          artifact_paths: optionValues(parsed.args, "--artifact").map(parseLifecycleOperatorSessionArtifact),
+          last_result_summary:
+            optionValue(parsed.args, "--last-result-summary") === undefined
+              ? undefined
+              : { summary: optionValue(parsed.args, "--last-result-summary") }
+        },
+        ctx
+      )
     );
     return;
   }

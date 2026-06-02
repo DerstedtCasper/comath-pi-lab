@@ -199,7 +199,8 @@ function commandMetadata(command: string): Pick<
         "real-pi-runtime-probe",
         "lifecycle-walkthrough",
         "lifecycle-control",
-        "lifecycle-session"
+        "lifecycle-session",
+        "lifecycle-operator-session"
       ],
       dispatch_tool: "comath.release.publicArchiveReview",
       mutates: true,
