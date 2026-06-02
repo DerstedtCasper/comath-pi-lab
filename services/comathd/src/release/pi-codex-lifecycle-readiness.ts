@@ -1017,7 +1017,8 @@ function sanitizeOperatorSessionText(value: string): string {
       .replace(operatorSessionEnvSecretPattern, "<secret>")
       .replace(operatorSessionBearerSecretPattern, "<secret>")
       .replace(operatorSessionSecretPattern, "<secret>")
-      .replace(operatorSessionProofSuccessPattern, "unverified_formal_status"),
+      .replace(operatorSessionProofSuccessPattern, "unverified_formal_status")
+      .replace(operatorTransportOverclaimPattern, "bounded_transport_checkpoint_only"),
     "utf8"
   )
     .subarray(0, lifecycleProbeOutputLimit)

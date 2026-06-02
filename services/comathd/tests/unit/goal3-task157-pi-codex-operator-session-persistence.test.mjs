@@ -18,6 +18,8 @@ const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task157-operator-se
 const privilegedPublicTerms =
   /clean_replay_passed|completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence/i;
 const secretTerms = /COMATH_CODEX_API_KEY|OPENAI_API_KEY|Authorization:\s*Bearer|api_key|token=|plain-token|sk-/i;
+const transportOverclaimTerms =
+  /long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided/i;
 
 try {
   const init = initProject({ name: "Goal3 Task157 Operator Session Project", root_path: projectRoot });
@@ -41,15 +43,15 @@ try {
   const opened = persistPiCodexLifecycleOperatorSession(projectRoot, {
     project_id: projectId,
     session_id: "LIFE-OP-SESSION-0157",
-    actor: `goal3-task157-test ${projectRoot}\\actor-secret.txt OPENAI_API_KEY=plain-token formal_proof_verified`,
+    actor: `goal3-task157-test ${projectRoot}\\actor-secret.txt OPENAI_API_KEY=plain-token formal_proof_verified durable transport provided`,
     pi_host_label: "pi-host-lab-01",
     session_status: "recoverable_operator_session",
     session_kind: "real_pi_host_manual_install",
-    operator_cursor: "stdout:0/stderr:0 Authorization: Bearer plain-token",
+    operator_cursor: "stdout:0/stderr:0 Authorization: Bearer plain-token terminal transport recovered live",
     completed_steps: ["real_pi_install_runtime_probe"],
     artifact_paths: [{ kind: "runtime_registration_snapshot", path: artifactInputPath }],
     last_result_summary: {
-      summary: `${projectRoot}\\secret.txt sk-task157-secret lean_kernel_clean_replay`,
+      summary: `${projectRoot}\\secret.txt sk-task157-secret lean_kernel_clean_replay indefinite SSE open`,
       route: "/release/pi-codex-lifecycle/real-pi-runtime-probe"
     }
   });
@@ -78,6 +80,11 @@ try {
   assert.equal(JSON.stringify(opened).includes(projectRoot), false, "session result must not expose host paths");
   assert.doesNotMatch(JSON.stringify(opened), secretTerms, "session result must not expose API secrets");
   assert.doesNotMatch(JSON.stringify(opened), privilegedPublicTerms, "session result must not overclaim proof authority");
+  assert.doesNotMatch(
+    JSON.stringify(opened),
+    transportOverclaimTerms,
+    "session result must not overclaim live or durable operator transport"
+  );
 
   const persistedPath = join(projectRoot, opened.session_manifest_path);
   assert.equal(existsSync(persistedPath), true, "operator session must persist a service-owned manifest");
@@ -92,6 +99,11 @@ try {
   assert.equal(JSON.stringify(persisted).includes(projectRoot), false, "persisted manifest must scrub host paths");
   assert.doesNotMatch(JSON.stringify(persisted), secretTerms, "persisted manifest must scrub secrets");
   assert.doesNotMatch(JSON.stringify(persisted), privilegedPublicTerms, "persisted manifest must scrub proof-success vocabulary");
+  assert.doesNotMatch(
+    JSON.stringify(persisted),
+    transportOverclaimTerms,
+    "persisted manifest must scrub live or durable transport overclaims"
+  );
 
   assert.throws(
     () =>
@@ -211,6 +223,11 @@ try {
   assert.equal(JSON.stringify(events).includes(projectRoot), false, "operator session audit events must scrub host paths");
   assert.doesNotMatch(JSON.stringify(events), secretTerms, "operator session audit events must scrub secrets");
   assert.doesNotMatch(JSON.stringify(events), privilegedPublicTerms, "operator session audit events must scrub proof-success vocabulary");
+  assert.doesNotMatch(
+    JSON.stringify(events),
+    transportOverclaimTerms,
+    "operator session audit events must scrub live or durable transport overclaims"
+  );
   assert.equal(
     events.some(
       (event) =>
