@@ -1,3 +1,30 @@
+# Goal 3 Task 166 / Guided Real-Pi Host Chain Binding
+
+Scope: harden the Task164-165 guided real-Pi execution chain so a promoted lifecycle evidence record cannot mix a Task152 real-Pi runtime snapshot from one Pi host with Task157/159/162 operator-session, recovery, and lease artifacts from another host, and cannot accept an explicit Pi host label that contradicts the bound artifact chain.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task165's next step as authoritative.
+- Audited Task152 real-Pi runtime snapshots, Task157 operator-session manifests, Task159 recovery checkpoints, Task162 bounded transport leases, Task164 guided execution service chaining, and Task165 Pi consumer sanitizer/host-confirmation wiring.
+- Added `goal3-task166-guided-real-pi-host-chain-binding.test.mjs`.
+- RED showed `recordPiCodexLifecycleGuidedRealPiExecution()` accepted a host-01 runtime snapshot together with a host-02 operator-session chain.
+- Review-regression RED showed aligned runtime/session artifacts could still be recorded with a contradictory explicit `pi_host_label`.
+- Hardened the guided-execution runtime snapshot reader to require `pi_host_label`, then required runtime snapshot, operator-session manifest, and optional explicit guided-execution host label to bind the same host before writing a guided execution artifact.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task166-guided-real-pi-host-chain-binding.test.mjs` failed because the runtime/session host mismatch did not throw.
+- Review-regression RED: after temporarily removing the explicit-input host-label branch, the same focused test failed because input host-label spoofing did not throw.
+- GREEN focused test exited 0: Task166 guided real-Pi host chain binding.
+- GREEN adjacent tests exited 0: Task164 guided real-Pi execution, Task162 operator transport lease, Task157 operator-session persistence, and Task152 real-Pi install/runtime-registration probe.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task166 discovered by the default comathd runner.
+- Smoke/diff/runtime-state checks exited 0: `node scripts/phase0-smoke.mjs`, `git diff --check` with LF/CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task166 is a service-side artifact-chain hardening for guided real-Pi execution records. It does not add durable long-lived WebSocket/SSE/terminal transport, execute an uncontrolled external real Pi host in tests, add OS-level adapter isolation, promote claims, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. Durable long-lived operator transport, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 165 / Pi Guided Real-Pi Execution Consumer
 
 Scope: expose the Task164 service-owned guided real-Pi execution evidence route through Pi tooling and `/cm:release lifecycle-guided-real-pi-execution`, while preserving host confirmation, no direct Pi `.comath/` writes, public sanitizer boundaries, non-authority semantics, and no durable long-lived transport or GA-certification claims.

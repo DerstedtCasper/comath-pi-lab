@@ -1873,7 +1873,7 @@ function readGuidedRealPiRuntimeRegistrationSnapshot(
   projectId: string,
   probeId: string,
   runtimeRegistrationPath: string
-): PiCodexRealPiRuntimeProbeRegistrationArtifact {
+): { artifact: PiCodexRealPiRuntimeProbeRegistrationArtifact; piHostLabel: string } {
   const absolutePath = assertPathAllowed(projectRoot, runtimeRegistrationPath, {
     purpose: "read",
     resolveRealpath: true
@@ -1917,11 +1917,21 @@ function readGuidedRealPiRuntimeRegistrationSnapshot(
       code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_RUNTIME_INVALID_BOUNDARY"
     });
   }
+  const piHostLabel = typeof parsed.pi_host_label === "string" ? assertPiHostLabel(parsed.pi_host_label) : undefined;
+  if (piHostLabel === undefined) {
+    throw new ComathError("Pi/Codex guided real-Pi execution runtime registration lacks host binding", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_RUNTIME_INVALID_BOUNDARY"
+    });
+  }
   return {
-    kind: "runtime_registration_snapshot",
-    path: projectRelativePath(projectRoot, absolutePath),
-    sha256: sha256Bytes(content),
-    size_bytes: content.byteLength
+    piHostLabel,
+    artifact: {
+      kind: "runtime_registration_snapshot",
+      path: projectRelativePath(projectRoot, absolutePath),
+      sha256: sha256Bytes(content),
+      size_bytes: content.byteLength
+    }
   };
 }
 
@@ -2272,7 +2282,8 @@ export function recordPiCodexLifecycleGuidedRealPiExecution(
   const leaseId = assertOperatorTransportLeaseId(input.transport_lease_id);
   const outcome = assertGuidedRealPiExecutionOutcome(input.execution_outcome);
   const piHostLabel = input.pi_host_label === undefined ? undefined : assertPiHostLabel(input.pi_host_label);
-  const runtimeRegistrationArtifact = readGuidedRealPiRuntimeRegistrationSnapshot(
+  const { artifact: runtimeRegistrationArtifact, piHostLabel: runtimeRegistrationPiHostLabel } =
+    readGuidedRealPiRuntimeRegistrationSnapshot(
     projectRoot,
     projectId,
     realPiRuntimeProbeId,
@@ -2284,7 +2295,7 @@ export function recordPiCodexLifecycleGuidedRealPiExecution(
     sessionId,
     input.session_manifest_path
   );
-  const { artifact: sessionManifestArtifact } = readOperatorTransportSessionManifest(
+  const { manifest, artifact: sessionManifestArtifact } = readOperatorTransportSessionManifest(
     projectRoot,
     projectId,
     sessionId,
@@ -2318,7 +2329,9 @@ export function recordPiCodexLifecycleGuidedRealPiExecution(
     lease.session_manifest_path !== sessionManifestPath ||
     lease.session_manifest_artifact.sha256 !== sessionManifestArtifact.sha256 ||
     lease.transport_recovery_path !== recoveryPath ||
-    lease.transport_recovery_artifact.sha256 !== transportRecoveryArtifact.sha256
+    lease.transport_recovery_artifact.sha256 !== transportRecoveryArtifact.sha256 ||
+    manifest.pi_host_label !== runtimeRegistrationPiHostLabel ||
+    (piHostLabel !== undefined && piHostLabel !== runtimeRegistrationPiHostLabel)
   ) {
     throw new ComathError("Pi/Codex guided real-Pi execution artifacts do not share a single lifecycle chain", {
       statusCode: 400,
