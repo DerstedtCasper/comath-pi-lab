@@ -1,3 +1,30 @@
+# Goal 3 Task 180 / Comprehensive Provider Helper Chain Check-Debug
+
+Scope: run the every-third-task comprehensive check-debug loop over the Task175-179 adapter OS-isolation provider-runner/helper/host-validation/collection chain, including readiness gate semantics, service routes, Pi/public payload boundaries, public wording, and runtime cleanliness.
+
+Work performed:
+
+- Re-read the Goal 3 required context set, including the v2 no-reinvent audit, v2 open formal workbench design, and v2 agent prompt protocol.
+- Treated Task179's next step as authoritative and did not open a new feature frontier before the check-debug loop.
+- Used three read-only explorer subagents to review service source/tests, route/Pi payload boundaries, public wording/default test discovery, and runtime cleanliness.
+- Audited `services/comathd/src/agents/agent-adapter-os-isolation.ts`, `services/comathd/src/api/server.ts`, `extensions/comath-pi/src/index.ts`, Task167/168/170/171/172/175/176/177/178/179 tests, Phase43/Phase44 tests, README/TODO/AGENTS, adapter contracts, GA release criteria, and threat model.
+- Found no concrete high-risk product-code defect requiring repair in this loop.
+- Recorded the remaining future-risk boundary: if provider-runner/helper/host-validation/helper-execution/helper-collection service routes later become Pi tools, they must be mutating, host-confirmed, public-result-sanitized, and unable to accept caller success-shaped evidence.
+
+Verification evidence:
+
+- Fresh build exited 0: `corepack pnpm --filter @comath/comathd build`.
+- Fresh package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`; the full comathd test matrix completed in about 123 seconds after the shorter 124-second tool budget timed out.
+- Focused Task175, Task176, Task177, Task178, Task179 tests exited 0.
+- Adjacent service regressions exited 0: Task167 readiness, Task168 probe, Task170 configured-host collection, Task171 sandbox launch, Task172 sandbox execution, Phase43 adapter package, and Phase44 Codex external invocation.
+- Pi/package checks exited 0: `corepack pnpm --filter @comath/pi-extension build`, `corepack pnpm --filter @comath/pi-extension typecheck`, `corepack pnpm --filter @comath/pi-extension test`, Task169 Pi adapter OS-isolation probe consumer, and Task173 Pi sandbox-execution consumer.
+- Static scans confirmed provider-runner/helper routes are public-sanitized, helper execution gates config resolution/spawn behind a matching service-owned host-validation artifact, helper collection requires service-owned collection callbacks plus exit/stdout/stderr/transcript hash matches, readiness review accepts only canonical collected probe/evidence artifacts, and current Pi exposes only the already host-confirmed probe/sandbox-execution consumer routes.
+- Runtime cleanliness checks during the read-only audit reported clean `main`, `git diff --check` with no output, `node scripts/phase0-smoke.mjs` with 33 required entries and 33 invariants, and `Test-Path -LiteralPath .comath` as `False`. Post-edit checks also kept `phase0-smoke` and `.comath` clean; `git diff --check` exited 0 with only Windows LF-to-CRLF working-copy warnings.
+
+Boundary notes: Task180 is a check-debug task, not a new authority expansion. Provider-runner manifests, host-validation manifests, host-validation-bound helper executions, provider-helper collection wrappers, route payloads, helper exit status, and Pi consumer output remain non-authoritative release-readiness/operator material with `proof_authority="none"` and `can_certify_ga=false`. Only canonical service-owned OS-isolation probe/evidence artifacts can feed the readiness review, and even those do not become mathematical proof authority.
+
+Residual risks: Goal 3 remains incomplete. Task180 does not implement production helper binaries for OCI/Nix/Firejail/Windows AppContainer/macOS hosts, does not provide broad cross-platform OS-enforced adapter execution, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete nontrivial theorem synthesis, does not provide fully interactive end-to-end real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 179 / Agent Adapter OS-Isolation Provider Helper Execution Host-Validation Binding
 
 Scope: harden Task176 provider-helper execution so a helper process cannot be configured or spawned unless the request binds to a prior append-only Task178 host-validation manifest that was service-owned, validated, and exactly bound to the same runner/launch/provider artifact chain.
