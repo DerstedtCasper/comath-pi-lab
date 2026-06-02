@@ -1,3 +1,35 @@
+# Goal 3 Task 174 / Comprehensive Check-Debug Loop After OS-Isolation Sandbox/Pi Boundary
+
+Scope: perform the every-third-task comprehensive check-debug loop over Tasks171-173, focusing on adapter OS-isolation sandbox-launch preflight, sandbox execution probe bridge, Pi release consumer wiring, readiness-gate evidence boundaries, public wording, Pi thin-client constraints, and runtime cleanliness.
+
+Work performed:
+
+- Re-read the full Goal 3 required context set and confirmed `main` was clean before opening Task174.
+- Treated the tracker rule "Every third task is a large comprehensive check-debug loop" as authoritative, so Task174 stayed an audit/verification slice rather than a production provider sandbox-runner implementation.
+- Used two read-only explorer subagents for Task174 scoping and trust-boundary review; both reported no target-scope defects, and the main session independently verified the same surfaces.
+- Audited Task171 preflight, Task172 execution probe, Task173 Pi consumer, Task167 readiness review, Task170 collector evidence path, README/TODO/AGENTS/docs wording, Pi runtime registration, and Pi write/import boundaries.
+- No product-code repair was required.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- Focused service regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task170 adapter OS-isolation host collection, Task171 adapter OS-isolation sandbox launch, and Task172 adapter OS-isolation sandbox execution.
+- Focused Pi regressions exited 0: Task169 Pi adapter OS-isolation probe consumer, Task173 Pi adapter OS-isolation sandbox execution consumer, and Task165 Pi guided real-Pi execution consumer.
+- Pi package-cwd guards exited 0: `node tests/phase6-extension.test.mjs` and `node tests/phase26-pi-runtime-registration.test.mjs` from `extensions/comath-pi`.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/pi-extension typecheck`, `corepack pnpm --filter @comath/comathd test`, and `corepack pnpm --filter @comath/pi-extension test`.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Static scans found no Pi source use of `writeFile`, `appendFile`, `mkdir`, `rmSync`, or `.comath` runtime-write patterns. The only Pi source hits for `services/comathd/src` were subagent write-scope template strings, not imports.
+
+Boundary notes:
+
+- Task171 still records only service-owned provider preflight and cannot satisfy OS-isolation readiness by itself.
+- Task172 still rejects route/Pi/caller-supplied execution booleans, stdout/stderr hashes, and success-shaped metadata as collected OS-enforcement evidence. Only an internal service-owned execution probe callback can feed canonical Task170 collector evidence.
+- Task173 remains host-confirmed Pi consumer wiring through `comathd`; it strips `confirmation_id`, sanitizes proof/GA/OS-enforcement/transport overclaims, and does not write trusted runtime state directly.
+- Readiness and release docs still state these surfaces are non-authoritative release evidence or operator UX, not proof authority, GA certification, durable long-lived transport, or a production cross-platform OS sandbox runner.
+
+Residual risks: Goal 3 remains incomplete. Production provider-specific sandbox runners beyond injected probe collection, broad cross-platform OS-enforced adapter execution, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 173 / Pi Agent Adapter OS-Isolation Sandbox Execution Probe Consumer
 
 Scope: expose the Task172 service-owned sandbox execution probe route through Pi release tooling and `/cm:release agent-adapter-os-isolation-sandbox-execution`, while preserving host confirmation, Pi thin-client boundaries, public sanitizer behavior, and non-authority semantics.
