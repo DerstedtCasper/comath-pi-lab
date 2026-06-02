@@ -83,7 +83,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_codex_production_codex_api_account_network_probe",
       "pi_codex_real_pi_install_runtime_probe",
       "pi_codex_lifecycle_operator_session_persistence",
-      "pi_codex_lifecycle_operator_transport_recovery"
+      "pi_codex_lifecycle_operator_transport_recovery",
+      "pi_codex_lifecycle_operator_transport_lease"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

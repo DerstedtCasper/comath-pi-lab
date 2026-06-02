@@ -1,3 +1,30 @@
+# Goal 3 Task 162 / Pi-Codex Operator Transport Lease
+
+Scope: add a service-owned bounded Pi/Codex lifecycle operator transport lease after Task159 recovery checkpointing and Task160 Pi recovery consumer wiring, without claiming durable long-lived WebSocket/SSE/terminal transport, Pi direct `.comath/` writes, proof authority, or GA certification.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task161's next step as authoritative.
+- Continued the existing uncommitted Task162 worktree state rather than overwriting it.
+- Added `goal3-task162-pi-codex-operator-transport-lease.test.mjs`.
+- Added `openPiCodexLifecycleOperatorTransportLease`, `POST /release/pi-codex-lifecycle/operator-transport-lease`, and the `pi_codex_lifecycle_operator_transport_lease` capability.
+- The lease opener requires an existing Task157 operator-session manifest and Task159 operator-transport recovery checkpoint, verifies project/session/path/hash binding, rejects poisoned recovery checkpoints, writes a service-owned `.comath/release/pi-codex-lifecycle/<lease_id>/operator-transport-lease.json`, records audit evidence, and preserves original session/recovery artifacts.
+- Review hardening added an append-only lease-id guard so duplicate lease ids fail closed with `PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_ALREADY_EXISTS` instead of overwriting the existing service artifact.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- The existing uncommitted Task162 service test was verified after handoff; the original RED for that pre-existing work was not available in this continuation.
+- Review-regression RED was observed in this continuation: after adding the duplicate lease-id assertion, `node services/comathd/tests/unit/goal3-task162-pi-codex-operator-transport-lease.test.mjs` failed because duplicate leases did not throw and could overwrite the existing artifact.
+- GREEN focused test exited 0: Task162 Pi/Codex operator transport lease.
+- GREEN adjacent tests exited 0: Task157 operator-session persistence, Task159 operator transport recovery, and Task146 lifecycle readiness.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task162 discovered by the default comathd runner.
+- Post-code `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task162 is a bounded service-owned lease artifact for operator transport continuity after a recovery checkpoint. It sets `live_transport_open=true` only for the bounded lease window and keeps `bounded_live_transport_lease_provided=true`, `durable_transport_provided=false`, `indefinite_stream_open=false`, `long_lived_websocket_provided=false`, `long_lived_sse_provided=false`, `proof_authority=none`, and `can_certify_ga=false`. It does not provide indefinite WebSocket/SSE/terminal sessions, Pi consumer wiring for the new lease route, end-to-end guided real-Pi execution, OS-level adapter isolation, proof authority, claim promotion, or GA certification.
+
+Residual risks: Goal 3 remains incomplete. Pi-facing lease consumer wiring, real durable long-lived operator transport, end-to-end guided real-Pi execution, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 159 / Pi-Codex Operator Transport Recovery
 
 Scope: add service-owned Pi/Codex lifecycle operator transport recovery checkpointing after Task158 operator-session persistence, without claiming live long-lived WebSocket/SSE/terminal transport, Pi direct `.comath/` writes, proof authority, or GA certification.

@@ -525,6 +525,82 @@ type PiCodexLifecycleOperatorTransportRecoveryBody = Omit<
   "transport_recovery_artifact"
 >;
 
+export type PiCodexLifecycleOperatorTransportLeaseKind =
+  | "bounded_live_polling_lease"
+  | "bounded_live_sse_lease"
+  | "manual_terminal_polling_lease"
+  | "unknown";
+
+export type PiCodexLifecycleOperatorTransportLeaseInput = {
+  project_id: string;
+  session_id: string;
+  actor: string;
+  transport_recovery_id: string;
+  transport_lease_id?: string;
+  session_manifest_path?: string;
+  transport_recovery_path?: string;
+  lease_route?: string;
+  requested_cursor?: Partial<PiCodexLifecycleOperatorTransportRecoveryCursor>;
+  client_epoch?: number;
+  heartbeat_interval_ms?: number;
+  lease_ttl_ms?: number;
+  last_seen_event_id?: string;
+  open_reason?: string;
+  transport_kind?: PiCodexLifecycleOperatorTransportLeaseKind;
+};
+
+export type PiCodexLifecycleOperatorTransportLeaseArtifact = {
+  kind: "operator_transport_lease";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexLifecycleOperatorTransportLease = {
+  schema_version: "comath.pi_codex_lifecycle_operator_transport_lease.v1";
+  transport_lease_id: string;
+  transport_recovery_id: string;
+  project_id: string;
+  session_id: string;
+  actor: string;
+  lease_started_at: string;
+  lease_expires_at: string;
+  lease_status: "bounded_operator_transport_lease_open";
+  transport_kind: PiCodexLifecycleOperatorTransportLeaseKind;
+  lease_route: string;
+  requested_cursor: PiCodexLifecycleOperatorTransportRecoveryCursor;
+  client_epoch: number;
+  heartbeat_interval_ms: number;
+  lease_ttl_ms: number;
+  heartbeat_required: true;
+  last_seen_event_id: string;
+  open_reason: string;
+  session_manifest_path: string;
+  session_manifest_artifact: PiCodexLifecycleOperatorSessionManifestArtifact;
+  transport_recovery_path: string;
+  transport_recovery_artifact: PiCodexLifecycleOperatorTransportRecoveryArtifact;
+  next_recommended_route: string;
+  transport_lease_path: string;
+  transport_lease_artifact: PiCodexLifecycleOperatorTransportLeaseArtifact;
+  durable_recovery_checkpoint_required: true;
+  bounded_live_transport_lease_provided: true;
+  durable_transport_provided: false;
+  live_transport_open: true;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexLifecycleOperatorTransportLeaseBody = Omit<
+  PiCodexLifecycleOperatorTransportLease,
+  "transport_lease_artifact"
+>;
+
 const defaultInstallSessionEvidence: PiCodexLifecycleInstallSessionEvidence = {
   session_kind: "unknown",
   pi_host_kind: "unknown",
@@ -665,6 +741,22 @@ function assertOperatorTransportRecoveryId(value: string | undefined): string {
   return recoveryId;
 }
 
+function assertOperatorTransportLeaseId(value: string | undefined): string {
+  const leaseId = value ?? `LIFE-TRANSPORT-LEASE-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (
+    !/^[A-Za-z0-9._-]+$/.test(leaseId) ||
+    leaseId === "." ||
+    leaseId === ".." ||
+    leaseId.split(".").some((segment) => segment.length === 0)
+  ) {
+    throw new ComathError("invalid Pi/Codex lifecycle operator transport lease id", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_INVALID_ID"
+    });
+  }
+  return leaseId;
+}
+
 function assertOperatorSessionProjectId(value: string): string {
   if (/^[A-Z]+-\d{4,}$/.test(value)) {
     return value;
@@ -693,6 +785,24 @@ function assertOperatorTransportKind(
   });
 }
 
+function assertOperatorTransportLeaseKind(
+  value: PiCodexLifecycleOperatorTransportLeaseInput["transport_kind"]
+): PiCodexLifecycleOperatorTransportLeaseKind {
+  const kind = value ?? "unknown";
+  if (
+    kind === "bounded_live_polling_lease" ||
+    kind === "bounded_live_sse_lease" ||
+    kind === "manual_terminal_polling_lease" ||
+    kind === "unknown"
+  ) {
+    return kind;
+  }
+  throw new ComathError("invalid Pi/Codex lifecycle operator transport lease kind", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_INVALID_KIND"
+  });
+}
+
 function assertOperatorTransportClientEpoch(value: number | undefined): number {
   const epoch = value ?? 0;
   if (Number.isInteger(epoch) && epoch >= 0 && epoch <= Number.MAX_SAFE_INTEGER) {
@@ -701,6 +811,21 @@ function assertOperatorTransportClientEpoch(value: number | undefined): number {
   throw new ComathError("invalid Pi/Codex lifecycle operator transport client epoch", {
     statusCode: 400,
     code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_INVALID_CLIENT_EPOCH"
+  });
+}
+
+function assertOperatorTransportLeaseDuration(
+  value: number | undefined,
+  defaultValue: number,
+  code: string
+): number {
+  const duration = value ?? defaultValue;
+  if (Number.isInteger(duration) && duration > 0 && duration <= 300_000) {
+    return duration;
+  }
+  throw new ComathError("invalid Pi/Codex lifecycle operator transport lease duration", {
+    statusCode: 400,
+    code
   });
 }
 
@@ -1289,6 +1414,12 @@ function operatorTransportRecoveryPath(recoveryId: string): string {
   );
 }
 
+function operatorTransportLeasePath(leaseId: string): string {
+  return normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", leaseId, "operator-transport-lease.json")
+  );
+}
+
 function readOperatorSessionCreatedAt(projectRoot: string, sessionManifestPath: string, fallback: string): string {
   const absolutePath = assertPathAllowed(projectRoot, sessionManifestPath, { purpose: "read" });
   if (!existsSync(absolutePath)) {
@@ -1345,6 +1476,29 @@ function resolveOperatorTransportSessionManifestPath(
   throw new ComathError("Pi/Codex lifecycle operator transport recovery session manifest path does not match session id", {
     statusCode: 400,
     code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_SESSION_PATH_MISMATCH"
+  });
+}
+
+function resolveOperatorTransportRecoveryPath(
+  projectRoot: string,
+  recoveryId: string,
+  recoveryPath: string | undefined
+): string {
+  const expectedPath = operatorTransportRecoveryPath(recoveryId);
+  if (recoveryPath === undefined) {
+    return expectedPath;
+  }
+  const absolutePath = assertPathAllowed(projectRoot, recoveryPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  const relativePath = projectRelativePath(projectRoot, absolutePath);
+  if (relativePath === expectedPath) {
+    return relativePath;
+  }
+  throw new ComathError("Pi/Codex lifecycle operator transport lease recovery path does not match recovery id", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_RECOVERY_PATH_MISMATCH"
   });
 }
 
@@ -1429,6 +1583,87 @@ function readOperatorTransportSessionManifest(
     artifact: {
       kind: "operator_session_manifest",
       path: sessionManifestPath,
+      sha256: sha256Bytes(content),
+      size_bytes: content.byteLength
+    }
+  };
+}
+
+function assertOperatorTransportRecoveryBoundary(recovery: PiCodexLifecycleOperatorTransportRecoveryBody): void {
+  if (
+    recovery.proof_authority !== "none" ||
+    recovery.can_promote_claim !== false ||
+    recovery.can_certify_ga !== false ||
+    recovery.durable_recovery_checkpoint_provided !== true ||
+    recovery.durable_transport_provided !== false ||
+    recovery.live_transport_open !== false ||
+    recovery.indefinite_stream_open !== false ||
+    recovery.long_lived_websocket_provided !== false ||
+    recovery.long_lived_sse_provided !== false ||
+    recovery.pi_direct_write_allowed !== false ||
+    recovery.direct_trusted_state_mutation !== false
+  ) {
+    throw new ComathError("Pi/Codex lifecycle operator transport recovery violates non-authority boundaries", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_RECOVERY_INVALID_BOUNDARY"
+    });
+  }
+}
+
+function readOperatorTransportRecoveryCheckpoint(
+  projectRoot: string,
+  projectId: string,
+  sessionId: string,
+  recoveryId: string,
+  recoveryPath: string
+): {
+  recovery: PiCodexLifecycleOperatorTransportRecoveryBody;
+  artifact: PiCodexLifecycleOperatorTransportRecoveryArtifact;
+} {
+  const absolutePath = assertPathAllowed(projectRoot, recoveryPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath)) {
+    throw new ComathError("Pi/Codex lifecycle operator transport recovery checkpoint is required before lease opening", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_RECOVERY_MISSING"
+    });
+  }
+  if (!statSync(absolutePath).isFile()) {
+    throw new ComathError("Pi/Codex lifecycle operator transport recovery checkpoint must be a file", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_RECOVERY_NOT_FILE"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  let parsed: PiCodexLifecycleOperatorTransportRecoveryBody;
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexLifecycleOperatorTransportRecoveryBody;
+  } catch {
+    throw new ComathError("Pi/Codex lifecycle operator transport recovery checkpoint JSON is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_RECOVERY_INVALID_JSON"
+    });
+  }
+  if (
+    parsed.schema_version !== "comath.pi_codex_lifecycle_operator_transport_recovery.v1" ||
+    parsed.project_id !== projectId ||
+    parsed.session_id !== sessionId ||
+    parsed.transport_recovery_id !== recoveryId ||
+    parsed.transport_recovery_path !== recoveryPath
+  ) {
+    throw new ComathError("Pi/Codex lifecycle operator transport recovery checkpoint does not bind the requested lease", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_RECOVERY_MISMATCH"
+    });
+  }
+  assertOperatorTransportRecoveryBoundary(parsed);
+  return {
+    recovery: parsed,
+    artifact: {
+      kind: "operator_transport_recovery",
+      path: recoveryPath,
       sha256: sha256Bytes(content),
       size_bytes: content.byteLength
     }
@@ -1587,6 +1822,152 @@ export function recoverPiCodexLifecycleOperatorTransport(
       durable_recovery_checkpoint_provided: true,
       durable_transport_provided: false,
       live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
+export function openPiCodexLifecycleOperatorTransportLease(
+  projectRoot: string,
+  input: PiCodexLifecycleOperatorTransportLeaseInput
+): PiCodexLifecycleOperatorTransportLease {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const sessionId = assertOperatorSessionId(input.session_id);
+  const recoveryId = assertOperatorTransportRecoveryId(input.transport_recovery_id);
+  const leaseId = assertOperatorTransportLeaseId(input.transport_lease_id);
+  const transportKind = assertOperatorTransportLeaseKind(input.transport_kind);
+  const clientEpoch = assertOperatorTransportClientEpoch(input.client_epoch);
+  const leaseTtlMs = assertOperatorTransportLeaseDuration(
+    input.lease_ttl_ms,
+    60_000,
+    "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_INVALID_TTL"
+  );
+  const heartbeatIntervalMs = assertOperatorTransportLeaseDuration(
+    input.heartbeat_interval_ms,
+    Math.min(15_000, leaseTtlMs),
+    "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_INVALID_HEARTBEAT"
+  );
+  if (heartbeatIntervalMs > leaseTtlMs) {
+    throw new ComathError("Pi/Codex lifecycle operator transport lease heartbeat exceeds TTL", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_INVALID_HEARTBEAT"
+    });
+  }
+  const sessionManifestPath = resolveOperatorTransportSessionManifestPath(
+    projectRoot,
+    sessionId,
+    input.session_manifest_path
+  );
+  const { manifest, artifact: sessionManifestArtifact } = readOperatorTransportSessionManifest(
+    projectRoot,
+    projectId,
+    sessionId,
+    sessionManifestPath
+  );
+  const recoveryPath = resolveOperatorTransportRecoveryPath(projectRoot, recoveryId, input.transport_recovery_path);
+  const { recovery, artifact: recoveryArtifact } = readOperatorTransportRecoveryCheckpoint(
+    projectRoot,
+    projectId,
+    sessionId,
+    recoveryId,
+    recoveryPath
+  );
+  if (
+    recovery.session_manifest_path !== sessionManifestPath ||
+    recovery.session_manifest_artifact.sha256 !== sessionManifestArtifact.sha256 ||
+    recovery.client_epoch > clientEpoch
+  ) {
+    throw new ComathError("Pi/Codex lifecycle operator transport recovery is stale for requested lease", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_RECOVERY_MISMATCH"
+    });
+  }
+  const startedAt = new Date();
+  const transportLeasePath = operatorTransportLeasePath(leaseId);
+  const body: PiCodexLifecycleOperatorTransportLeaseBody = {
+    schema_version: "comath.pi_codex_lifecycle_operator_transport_lease.v1",
+    transport_lease_id: leaseId,
+    transport_recovery_id: recoveryId,
+    project_id: projectId,
+    session_id: sessionId,
+    actor: sanitizeOperatorTransportText(input.actor),
+    lease_started_at: startedAt.toISOString(),
+    lease_expires_at: new Date(startedAt.getTime() + leaseTtlMs).toISOString(),
+    lease_status: "bounded_operator_transport_lease_open",
+    transport_kind: transportKind,
+    lease_route: sanitizeOperatorTransportText(input.lease_route ?? recovery.observed_route),
+    requested_cursor: sanitizeOperatorTransportCursor(input.requested_cursor ?? recovery.requested_cursor),
+    client_epoch: clientEpoch,
+    heartbeat_interval_ms: heartbeatIntervalMs,
+    lease_ttl_ms: leaseTtlMs,
+    heartbeat_required: true,
+    last_seen_event_id: sanitizeOperatorTransportText(input.last_seen_event_id ?? recovery.last_seen_event_id),
+    open_reason: sanitizeOperatorTransportText(input.open_reason ?? "bounded_operator_transport_lease_requested"),
+    session_manifest_path: sessionManifestPath,
+    session_manifest_artifact: sessionManifestArtifact,
+    transport_recovery_path: recoveryPath,
+    transport_recovery_artifact: recoveryArtifact,
+    next_recommended_route: sanitizeOperatorSessionText(manifest.next_recommended_route),
+    transport_lease_path: transportLeasePath,
+    durable_recovery_checkpoint_required: true,
+    bounded_live_transport_lease_provided: true,
+    durable_transport_provided: false,
+    live_transport_open: true,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const artifactText = canonicalJson(body);
+  const absoluteLeasePath = assertPathAllowed(projectRoot, transportLeasePath, { purpose: "runtime-write" });
+  if (existsSync(absoluteLeasePath)) {
+    throw new ComathError("Pi/Codex lifecycle operator transport lease already exists", {
+      statusCode: 409,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_ALREADY_EXISTS"
+    });
+  }
+  mkdirSync(dirname(absoluteLeasePath), { recursive: true });
+  writeFileSync(absoluteLeasePath, artifactText, "utf8");
+  const result: PiCodexLifecycleOperatorTransportLease = {
+    ...body,
+    transport_lease_artifact: {
+      kind: "operator_transport_lease",
+      path: transportLeasePath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_lifecycle_operator_transport_lease_opened",
+    actor: sanitizeOperatorTransportText(input.actor),
+    target_id: projectId,
+    payload: {
+      transport_lease_id: leaseId,
+      transport_recovery_id: recoveryId,
+      session_id: sessionId,
+      transport_kind: transportKind,
+      session_manifest_path: sessionManifestPath,
+      transport_recovery_path: recoveryPath,
+      transport_lease_path: transportLeasePath,
+      heartbeat_interval_ms: heartbeatIntervalMs,
+      lease_ttl_ms: leaseTtlMs,
+      durable_recovery_checkpoint_required: true,
+      bounded_live_transport_lease_provided: true,
+      durable_transport_provided: false,
+      live_transport_open: true,
       indefinite_stream_open: false,
       long_lived_websocket_provided: false,
       long_lived_sse_provided: false,
