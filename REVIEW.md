@@ -1,3 +1,31 @@
+# Goal 3 Task 158 / Pi Operator Session Persistence Consumer
+
+Scope: expose the Task157 service-owned Pi/Codex lifecycle operator-session manifest persistence route through Pi tooling and `/cm:release lifecycle-operator-session`, while preserving host confirmation, no direct Pi `.comath/` writes, non-authority semantics, and public secret/host-path/proof-vocabulary scrubbing.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task157's next step as authoritative.
+- Used a read-only explorer to confirm Task158 should be Pi-extension consumer wiring only, leaving the Task157 service route unchanged.
+- Added `goal3-task158-pi-operator-session-persistence-consumer.test.mjs`.
+- RED showed `comath.release.piCodexLifecycleOperatorSession` was not registered.
+- Added the mutating `comath.release.piCodexLifecycleOperatorSession` tool, `POST /release/pi-codex-lifecycle/operator-session` dispatch, `/cm:release lifecycle-operator-session`, runtime-registration subcommand metadata, Phase6 and Phase26 exposure checks, and default Pi package test wiring.
+- The Pi consumer strips `confirmation_id`, requires Pi host confirmation, forwards only service-owned operator-session payload fields, uses Task157 service step ids, and sanitizes actor/cursor/summary/artifact text before public output or service dispatch.
+- Code review found raw confirmation prompt leakage, verbatim `artifact_paths` forwarding, and secret-ish object-key leakage in `last_result_summary`. Added regression coverage and fixed confirmation prompt scrubbing, artifact ref field scrubbing, and object-key secret redaction before commit.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task158-pi-operator-session-persistence-consumer.test.mjs` failed because `comath.release.piCodexLifecycleOperatorSession` was not registered.
+- Review-regression RED: the focused Task158 test failed before the review fixes because raw `D:/research/project/.../OPENAI_API_KEY=plain-token.json` artifact paths and `api_key: plain-token` summary fields were still forwarded.
+- GREEN focused test exited 0: Task158 Pi operator-session persistence consumer.
+- GREEN adjacent tests exited 0: Task153 real-Pi runtime probe consumer, Task155 lifecycle operator controls, Task156 lifecycle session recovery, Task157 service operator-session persistence, Phase6 extension, and Phase26 Pi runtime registration.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension typecheck` and `corepack pnpm --filter @comath/pi-extension test`, with Task158 discovered by the default Pi extension runner.
+- Post-code gates exited 0: `node scripts/phase0-smoke.mjs` with 33 required entries and 33 invariants, `git diff --check` with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task158 is Pi-facing consumer wiring for Task157 service persistence. It does not provide indefinite WebSocket/SSE/terminal operator transport, cross-process transport recovery, an end-to-end guided real-Pi session, OS-level adapter isolation, proof authority, claim promotion, or GA certification.
+
+Residual risks: Goal 3 remains incomplete. Durable long-lived operator transport/recovery, end-to-end guided real-Pi execution, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 157 / Pi Lifecycle Operator Session Persistence
 
 Scope: add service-owned Pi/Codex lifecycle operator-session manifest persistence so a bounded operator session can write a sanitized `.comath/release/pi-codex-lifecycle/<session_id>/operator-session-manifest.json`, route to the next lifecycle action, and remain non-authoritative without claiming durable transport, real-Pi execution, or GA.
