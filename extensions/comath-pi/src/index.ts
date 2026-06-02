@@ -153,6 +153,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleOperatorTransportRecovery",
   "comath.release.piCodexLifecycleOperatorTransportLease",
   "comath.release.piCodexLifecycleGuidedRealPiExecution",
+  "comath.release.agentAdapterOsIsolationProbe",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -463,6 +464,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleOperatorTransportRecovery" ||
     name === "comath.release.piCodexLifecycleOperatorTransportLease" ||
     name === "comath.release.piCodexLifecycleGuidedRealPiExecution" ||
+    name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -507,6 +509,15 @@ const PI_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_KINDS = [
   "bounded_live_polling_lease",
   "bounded_sse_snapshot_lease",
   "manual_terminal_resume_lease",
+  "unknown"
+] as const;
+const AGENT_ADAPTER_OS_ISOLATION_PROVIDERS = [
+  "oci_container",
+  "nix_sandbox",
+  "firejail",
+  "windows_appcontainer",
+  "macos_sandbox_exec",
+  "service_process_boundary",
   "unknown"
 ] as const;
 
@@ -1530,6 +1541,25 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.agentAdapterOsIsolationProbe") {
+    const requestedProvider = readString(input, "requested_provider", { optional: true });
+    return publicToolResult(
+      name,
+      client.post("/agent/adapter/package/os-isolation-probe", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        probe_id: readString(input, "probe_id"),
+        adapter_id: readString(input, "adapter_id"),
+        backend: readString(input, "backend"),
+        ...(requestedProvider === undefined ? {} : { requested_provider: requestedProvider }),
+        ...(input.probe_environment === undefined
+          ? {}
+          : { probe_environment: sanitizePublicProofAuthorityValue(input.probe_environment) })
+      })
+    );
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -2433,6 +2463,35 @@ export function createComathTools(): ToolDescriptor[] {
             enum: ["operator_guided_run_observed", "replayable_release_blocker_recorded"]
           },
           next_recommended_route: stringProp
+        }
+      )
+    },
+    {
+      name: "comath.release.agentAdapterOsIsolationProbe",
+      description:
+        "Record service-owned agent adapter OS-isolation probe evidence through comathd without Pi direct writes, proof authority, GA certification, or sandbox enforcement claims.",
+      mutates: true,
+      input_schema: objectSchema(
+        ["project_root", "project_id", "actor", "probe_id", "adapter_id", "backend"],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          actor: stringProp,
+          probe_id: stringProp,
+          adapter_id: stringProp,
+          backend: agentAdapterBackendProp,
+          requested_provider: {
+            type: "string",
+            enum: [...AGENT_ADAPTER_OS_ISOLATION_PROVIDERS]
+          },
+          probe_environment: {
+            type: "object",
+            properties: {
+              provider_available: { type: "boolean" },
+              platform: stringProp,
+              notes: stringProp
+            }
+          }
         }
       )
     }
@@ -3783,6 +3842,35 @@ async function handleReleaseCommand(
           final_operator_cursor: parseLifecycleOperatorTransportCursor(parsed.args),
           execution_outcome: optionValue(parsed.args, "--execution-outcome"),
           next_recommended_route: optionValue(parsed.args, "--next-recommended-route")
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "agent-adapter-os-isolation-probe") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.agentAdapterOsIsolationProbe");
+    if (!tool) {
+      throw new Error("agent adapter OS-isolation probe tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          probe_id: requiredOption(optionValue(parsed.args, "--probe-id"), "probe_id"),
+          adapter_id: requiredOption(optionValue(parsed.args, "--adapter-id") ?? optionValue(parsed.args, "--adapter"), "adapter_id"),
+          backend: requiredOption(optionValue(parsed.args, "--backend"), "backend"),
+          requested_provider: optionValue(parsed.args, "--requested-provider"),
+          probe_environment: {
+            provider_available: booleanOptionValue(parsed.args, "--provider-available"),
+            platform: optionValue(parsed.args, "--platform"),
+            notes: optionValue(parsed.args, "--probe-note")
+          }
         },
         ctx
       )

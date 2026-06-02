@@ -1,3 +1,27 @@
+# Goal 3 Task 169 / Pi Agent Adapter OS-Isolation Probe Consumer
+
+Scope: expose the Task168 service-owned adapter OS-isolation probe route through Pi release tooling and `/cm:release agent-adapter-os-isolation-probe`, while preserving host confirmation, Pi thin-client boundaries, public sanitizer behavior, and non-authority semantics.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task168's next step as authoritative.
+- Added `goal3-task169-pi-agent-adapter-os-isolation-probe-consumer.test.mjs`.
+- Added `comath.release.agentAdapterOsIsolationProbe` to Pi tool descriptors, runtime executable tool registration, runtime-registration metadata, and `/cm:release agent-adapter-os-isolation-probe` command dispatch.
+- The Pi consumer strips `confirmation_id`, forwards only through `comathd` route `/agent/adapter/package/os-isolation-probe`, sanitizes actor/probe-environment/result text for host paths, secrets, proof-success vocabulary, and long-lived transport overclaims, and keeps `.comath/` writes service-owned.
+- Wired Task169 into the default `@comath/pi-extension` test chain and updated Phase6/Phase26 registration guards.
+
+Verification evidence:
+
+- TDD RED: after adding Task169 test and before implementation, `node extensions/comath-pi/tests/goal3-task169-pi-agent-adapter-os-isolation-probe-consumer.test.mjs` failed because `comath.release.agentAdapterOsIsolationProbe` was not registered.
+- GREEN focused test exited 0: Task169 Pi adapter OS-isolation probe consumer.
+- GREEN adjacent focused tests exited 0: Task165 Pi guided real-Pi execution consumer and Task168 service adapter OS-isolation probe.
+- GREEN package-cwd guards exited 0: Phase6 extension and Phase26 Pi runtime registration. Initial direct repo-root runs of those package-cwd tests failed because they read `process.cwd()/package.json`; rerunning from `extensions/comath-pi` produced the valid result.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension build`, `corepack pnpm --filter @comath/pi-extension typecheck`, and `corepack pnpm --filter @comath/pi-extension test`, with Task169 discovered by the default Pi extension runner.
+
+Boundary notes: Task169 is Pi-facing consumer wiring for the service-owned Task168 probe artifact producer. It does not execute adapters inside OCI/Nix/Firejail/AppContainer/macOS sandbox, enforce kernel/firewall network denial, promote mathematical claims, certify GA, or provide durable long-lived operator transport.
+
+Residual risks: Goal 3 remains incomplete. Actual OS-enforced adapter execution/probe collection on a configured host, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 168 / Agent Adapter OS-Isolation Probe Artifact Producer
 
 Scope: add a service-owned, append-only adapter OS-isolation probe artifact producer that can supply Task167 readiness-review evidence while staying honest that this slice does not execute adapters inside an OS-enforced sandbox.
