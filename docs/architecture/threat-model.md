@@ -53,11 +53,16 @@ Child processes may write outside scope, run shell strings, or consume unbounded
 
 Provider-specific sandbox launch manifests may be mistaken for executed isolation evidence. Mitigation: sandbox-launch preflight records only a service-owned provider-command contract, keeps command overrides and caller-supplied success metadata untrusted, and cannot satisfy the adapter OS-isolation readiness gate. Readiness still requires a later service-owned collected execution probe with bound stdout/stderr/transcript hashes and OS-enforcement checks.
 
+### Sandbox Execution Probe Confusion
+
+Sandbox execution route payloads may be mistaken for a production OS sandbox runner or for collected OS-enforcement evidence. Mitigation: sandbox execution probe manifests must bind an existing ready sandbox-launch preflight, reject caller-supplied success-shaped execution metadata, and feed readiness only through an internal service-owned execution probe callback that writes canonical Task170 probe/evidence artifacts. The bridge remains release-readiness evidence with `proof_authority=none`; it does not certify GA or guarantee broad provider support.
+
 ## Residual Risks
 
 - Pattern-based secret scanning is not full DLP.
 - Service-level network-denial metadata is not equivalent to OS/kernel-enforced network isolation.
 - Adapter sandbox-launch preflight is not equivalent to actually executing adapters inside an OS-enforced sandbox.
+- Adapter sandbox-execution probe bridging is not equivalent to a production provider-specific sandbox runner across OCI/Nix/Firejail/AppContainer/macOS providers.
 - Injected-client Codex API tests are not live production account validation.
 - Goal 3 positive acceptance breadth is representative unless the full 100-task matrix is clean-replayed.
 - Documentation must continue to distinguish implemented trust gates from final global GA completion.

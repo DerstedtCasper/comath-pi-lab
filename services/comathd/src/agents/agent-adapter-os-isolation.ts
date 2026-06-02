@@ -118,6 +118,32 @@ export type AgentAdapterOsIsolationSandboxLaunchOptions = {
   launcher_probe?: AgentAdapterOsIsolationSandboxLaunchProbe;
 };
 
+export type AgentAdapterOsIsolationSandboxExecutionProbeInput = {
+  project_root: string;
+  project_id: string;
+  execution_id: string;
+  launch_id: string;
+  launch_path: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+  launcher_binary_sha256: string;
+  platform?: string;
+};
+
+export type AgentAdapterOsIsolationSandboxExecutionCollection = AgentAdapterOsIsolationProbeCollection & {
+  probe_source?: "service_owned_sandbox_execution_probe" | "operator_attested" | "unknown";
+  diagnostics?: string[];
+};
+
+export type AgentAdapterOsIsolationSandboxExecutionProbe = (
+  input: AgentAdapterOsIsolationSandboxExecutionProbeInput
+) => AgentAdapterOsIsolationSandboxExecutionCollection | null | undefined;
+
+export type AgentAdapterOsIsolationSandboxExecutionOptions = {
+  execution_probe?: AgentAdapterOsIsolationSandboxExecutionProbe;
+};
+
 export type AgentAdapterOsIsolationSandboxLaunchStatus =
   | "ready_for_service_owned_os_sandbox_execution"
   | "blocked_sandbox_provider_unsupported"
@@ -137,6 +163,35 @@ export type AgentAdapterOsIsolationSandboxLaunchInput = {
     provider_available?: boolean;
     launcher_binary_sha256?: string;
     command_override?: string;
+  };
+};
+
+export type AgentAdapterOsIsolationSandboxExecutionStatus =
+  | "sandbox_execution_probe_collected"
+  | "blocked_sandbox_launch_preflight_missing"
+  | "blocked_sandbox_launch_binding_mismatch"
+  | "blocked_sandbox_execution_probe_not_collected";
+
+export type AgentAdapterOsIsolationSandboxExecutionInput = {
+  project_id: string;
+  execution_id?: string;
+  launch_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend?: AgentAdapterBackend;
+  actor: string;
+  requested_provider?: string;
+  execution_environment?: {
+    platform?: string;
+    notes?: string;
+    process_isolation_enforced?: boolean;
+    filesystem_scope_enforced?: boolean;
+    network_isolation_enforced?: boolean;
+    no_new_privileges?: boolean;
+    escape_prevention?: boolean;
+    adapter_process_exit_code?: number;
+    stdout_sha256?: string;
+    stderr_sha256?: string;
+    transcript_sha256?: string;
   };
 };
 
@@ -333,6 +388,50 @@ export type AgentAdapterOsIsolationSandboxLaunch = {
   can_certify_ga: false;
 };
 
+export type AgentAdapterOsIsolationLaunchArtifact = {
+  kind: "agent_adapter_os_isolation_sandbox_launch";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type AgentAdapterOsIsolationSandboxExecution = {
+  schema_version: "comath.agent_adapter_os_isolation_sandbox_execution.v1";
+  execution_id: string;
+  project_id: string;
+  launch_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  created_at: string;
+  ok: boolean;
+  execution_status: AgentAdapterOsIsolationSandboxExecutionStatus;
+  requested_provider: string;
+  provider: AgentAdapterOsIsolationProvider;
+  execution_path: string;
+  launch_artifact: AgentAdapterOsIsolationLaunchArtifact | null;
+  probe: AgentAdapterOsIsolationProbe | null;
+  execution_probe: {
+    probe_source: "service_owned_sandbox_execution_probe" | "missing";
+    diagnostics: string[];
+  };
+  adapter_execution_isolation: {
+    required_for_ga: true;
+    current_boundary: AgentAdapterOsIsolationBoundary;
+    os_enforced: boolean;
+    provider: AgentAdapterOsIsolationProvider;
+    claims_runtime_enforcement: false;
+    proof_authority: "none";
+  };
+  blocker_certificate: {
+    blocker_code: AgentAdapterOsIsolationSandboxExecutionStatus;
+    replayable_next_action: string;
+    proof_authority: "none";
+  } | null;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
 const osEnforcedProviders = new Set<AgentAdapterOsIsolationProvider>([
   "oci_container",
   "nix_sandbox",
@@ -392,6 +491,19 @@ function assertSandboxLaunchId(value: string | undefined): string {
   throw new ComathError("invalid adapter OS-isolation sandbox launch id", {
     statusCode: 400,
     code: "AGENT_ADAPTER_OS_ISOLATION_SANDBOX_LAUNCH_ID_INVALID"
+  });
+}
+
+function assertSandboxExecutionId(value: string | undefined): string {
+  if (!value) {
+    return `ADAPTER-OSISO-EXEC-${Date.now()}`;
+  }
+  if (/^[A-Z0-9][A-Z0-9_-]{2,96}$/.test(value)) {
+    return value;
+  }
+  throw new ComathError("invalid adapter OS-isolation sandbox execution id", {
+    statusCode: 400,
+    code: "AGENT_ADAPTER_OS_ISOLATION_SANDBOX_EXECUTION_ID_INVALID"
   });
 }
 
@@ -634,6 +746,37 @@ function sandboxLaunchPath(launchId: string): string {
   return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", launchId, "sandbox-launch.json"));
 }
 
+function sandboxExecutionPath(executionId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", executionId, "sandbox-execution.json"));
+}
+
+function readSandboxLaunchArtifact(
+  projectRoot: string,
+  launchId: string
+): { artifact: AgentAdapterOsIsolationLaunchArtifact; launch: AgentAdapterOsIsolationSandboxLaunch } | null {
+  const path = sandboxLaunchPath(launchId);
+  const absolutePath = assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    return null;
+  }
+  const bytes = readFileSync(absolutePath);
+  let parsed: AgentAdapterOsIsolationSandboxLaunch;
+  try {
+    parsed = JSON.parse(bytes.toString("utf8")) as AgentAdapterOsIsolationSandboxLaunch;
+  } catch {
+    return null;
+  }
+  return {
+    artifact: {
+      kind: "agent_adapter_os_isolation_sandbox_launch",
+      path,
+      sha256: sha256Text(bytes.toString("utf8")),
+      size_bytes: bytes.byteLength
+    },
+    launch: parsed
+  };
+}
+
 function normalizeRequestedProvider(value: string | undefined): {
   requestedProvider: string;
   knownProvider: AgentAdapterOsIsolationProvider | null;
@@ -728,6 +871,82 @@ function classifySandboxLaunch(input: {
     return { status: "blocked_sandbox_launcher_preflight_missing", provider: input.knownProvider };
   }
   return { status: "ready_for_service_owned_os_sandbox_execution", provider: input.knownProvider };
+}
+
+function sandboxLaunchIsReadyForExecution(
+  launchBundle: { launch: AgentAdapterOsIsolationSandboxLaunch } | null
+): boolean {
+  const launch = launchBundle?.launch;
+  return Boolean(
+    launch &&
+      launch.schema_version === "comath.agent_adapter_os_isolation_sandbox_launch.v1" &&
+      launch.ok === true &&
+      launch.launch_status === "ready_for_service_owned_os_sandbox_execution" &&
+      launch.sandbox_launch_ready === true &&
+      launch.launcher_preflight.probe_source === "service_owned_launcher_preflight" &&
+      isSha256(launch.launcher_preflight.launcher_binary_sha256) &&
+      osEnforcedProviders.has(launch.provider)
+  );
+}
+
+function sandboxLaunchMatchesExecutionInput(input: {
+  launchBundle: { launch: AgentAdapterOsIsolationSandboxLaunch } | null;
+  projectId: string;
+  launchId: string;
+  adapterId: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+}): boolean {
+  const launch = input.launchBundle?.launch;
+  return Boolean(
+    launch &&
+      launch.project_id === input.projectId &&
+      launch.launch_id === input.launchId &&
+      launch.adapter_id === input.adapterId &&
+      launch.backend === input.backend &&
+      launch.provider === input.provider
+  );
+}
+
+function executionCollectionForProbe(
+  collection: AgentAdapterOsIsolationSandboxExecutionCollection | undefined
+): AgentAdapterOsIsolationProbeCollection | undefined {
+  if (collection?.probe_source !== "service_owned_sandbox_execution_probe") {
+    return undefined;
+  }
+  return {
+    collection_source: collection.collection_source,
+    process_isolation_enforced: collection.process_isolation_enforced,
+    filesystem_scope_enforced: collection.filesystem_scope_enforced,
+    network_isolation_enforced: collection.network_isolation_enforced,
+    no_new_privileges: collection.no_new_privileges,
+    escape_prevention: collection.escape_prevention,
+    adapter_process_exit_code: collection.adapter_process_exit_code,
+    stdout_sha256: collection.stdout_sha256,
+    stderr_sha256: collection.stderr_sha256,
+    transcript_sha256: collection.transcript_sha256,
+    notes: sanitizeDiagnostics(collection.diagnostics).join(" ")
+  };
+}
+
+function executionStatusFromProbe(
+  probe: AgentAdapterOsIsolationProbe | null,
+  fallbackStatus: AgentAdapterOsIsolationSandboxExecutionStatus
+): AgentAdapterOsIsolationSandboxExecutionStatus {
+  if (!probe) {
+    return fallbackStatus;
+  }
+  return probe.ok ? "sandbox_execution_probe_collected" : "blocked_sandbox_execution_probe_not_collected";
+}
+
+function executionReplayableNextAction(status: AgentAdapterOsIsolationSandboxExecutionStatus): string {
+  if (status === "blocked_sandbox_launch_preflight_missing") {
+    return "Run a service-owned provider sandbox-launch preflight before attempting sandbox execution evidence collection.";
+  }
+  if (status === "blocked_sandbox_launch_binding_mismatch") {
+    return "Re-run sandbox execution with the exact adapter, backend, project, and provider bound by the ready sandbox-launch preflight manifest.";
+  }
+  return "Run a service-owned sandbox execution probe on a host with the configured OS provider so canonical OS-isolation evidence can be collected.";
 }
 
 function collectionBoolean(
@@ -891,6 +1110,149 @@ export function prepareAgentAdapterOsIsolationSandboxLaunch(
     }
   });
   return launch;
+}
+
+export function runAgentAdapterOsIsolationSandboxExecutionProbe(
+  projectRoot: string,
+  input: AgentAdapterOsIsolationSandboxExecutionInput,
+  options: AgentAdapterOsIsolationSandboxExecutionOptions = {}
+): AgentAdapterOsIsolationSandboxExecution {
+  getAgentAdapterPackage(input.adapter_id);
+  const executionId = assertSandboxExecutionId(input.execution_id);
+  const backend = assertBackend(input.backend);
+  const path = sandboxExecutionPath(executionId);
+  const absoluteExecutionPath = assertPathAllowed(projectRoot, path, { purpose: "runtime-write" });
+  if (existsSync(absoluteExecutionPath)) {
+    throw new ComathError("adapter OS-isolation sandbox execution already exists", {
+      statusCode: 409,
+      code: "AGENT_ADAPTER_OS_ISOLATION_SANDBOX_EXECUTION_ALREADY_EXISTS"
+    });
+  }
+
+  const launchBundle = readSandboxLaunchArtifact(projectRoot, input.launch_id);
+  const launchReady = sandboxLaunchIsReadyForExecution(launchBundle);
+  const { requestedProvider, knownProvider } = normalizeRequestedProvider(
+    input.requested_provider ?? launchBundle?.launch.requested_provider
+  );
+  const provider = launchBundle?.launch.provider ?? knownProvider ?? "unknown";
+  const launchMatches = sandboxLaunchMatchesExecutionInput({
+    launchBundle,
+    projectId: input.project_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+
+  const readyLaunchBundle = launchReady && launchMatches ? launchBundle : null;
+  const collection = readyLaunchBundle
+    ? options.execution_probe?.({
+        project_root: projectRoot,
+        project_id: input.project_id,
+        execution_id: executionId,
+        launch_id: input.launch_id,
+        launch_path: readyLaunchBundle.launch.launch_path,
+        adapter_id: input.adapter_id,
+        backend,
+        provider,
+        launcher_binary_sha256: readyLaunchBundle.launch.launcher_preflight.launcher_binary_sha256 as string,
+        platform: input.execution_environment?.platform
+      }) ?? undefined
+    : undefined;
+  const probe = readyLaunchBundle
+    ? probeAgentAdapterOsIsolation(projectRoot, {
+        project_id: input.project_id,
+        probe_id: executionId,
+        adapter_id: input.adapter_id,
+        backend,
+        actor: input.actor,
+        requested_provider: provider,
+        probe_environment: {
+          provider_available: true,
+          platform: input.execution_environment?.platform,
+          notes: input.execution_environment?.notes
+        }
+      }, {
+        collector: () => executionCollectionForProbe(collection)
+      })
+    : null;
+  const fallbackStatus: AgentAdapterOsIsolationSandboxExecutionStatus = !launchReady
+    ? "blocked_sandbox_launch_preflight_missing"
+    : "blocked_sandbox_launch_binding_mismatch";
+  const executionStatus = executionStatusFromProbe(probe, fallbackStatus);
+  const ok = executionStatus === "sandbox_execution_probe_collected";
+  const diagnostics = [
+    input.execution_environment?.platform ? `platform=${sanitizeProbeText(input.execution_environment.platform)}` : undefined,
+    input.execution_environment?.notes ? sanitizeProbeText(input.execution_environment.notes) : undefined,
+    ...sanitizeDiagnostics(collection?.diagnostics),
+    ok
+      ? "Service-owned sandbox execution probe collected OS-enforcement evidence."
+      : "No service-owned sandbox execution probe collection was accepted."
+  ].filter((entry): entry is string => Boolean(entry));
+  const execution: AgentAdapterOsIsolationSandboxExecution = {
+    schema_version: "comath.agent_adapter_os_isolation_sandbox_execution.v1",
+    execution_id: executionId,
+    project_id: input.project_id,
+    launch_id: input.launch_id,
+    adapter_id: input.adapter_id,
+    backend,
+    created_at: new Date().toISOString(),
+    ok,
+    execution_status: executionStatus,
+    requested_provider: sanitizeProbeText(requestedProvider) || "unknown",
+    provider,
+    execution_path: path,
+    launch_artifact: launchBundle?.artifact ?? null,
+    probe,
+    execution_probe: {
+      probe_source: collection?.probe_source === "service_owned_sandbox_execution_probe"
+        ? "service_owned_sandbox_execution_probe"
+        : "missing",
+      diagnostics
+    },
+    adapter_execution_isolation: {
+      required_for_ga: true,
+      current_boundary: ok ? "os_enforced" : "process_boundary_only",
+      os_enforced: ok,
+      provider,
+      claims_runtime_enforcement: false,
+      proof_authority: "none"
+    },
+    blocker_certificate: ok
+      ? null
+      : {
+          blocker_code: executionStatus,
+          replayable_next_action: executionReplayableNextAction(executionStatus),
+          proof_authority: "none"
+        },
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+
+  mkdirSync(dirname(absoluteExecutionPath), { recursive: true });
+  writeFileSync(absoluteExecutionPath, canonicalJson(execution), "utf8");
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_adapter.os_isolation_sandbox_execution_probed",
+    actor: sanitizeReviewText(input.actor),
+    target_id: input.project_id,
+    payload: {
+      execution_id: executionId,
+      launch_id: input.launch_id,
+      adapter_id: input.adapter_id,
+      backend,
+      ok,
+      execution_status: executionStatus,
+      provider,
+      probe_id: probe?.probe_id ?? null,
+      evidence_path: probe?.evidence_path ?? null,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return execution;
 }
 
 export function probeAgentAdapterOsIsolation(

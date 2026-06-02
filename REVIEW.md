@@ -1,3 +1,38 @@
+# Goal 3 Task 172 / Agent Adapter OS-Isolation Sandbox Execution Probe Bridge
+
+Scope: add a service-owned bridge from a ready Task171 sandbox-launch preflight to canonical Task170 OS-isolation probe/evidence collection, while preserving the boundary that route/Pi/caller metadata cannot self-certify executed OS isolation, mathematical proof authority, or GA readiness.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and treated Task171's next step as authoritative.
+- Continued the existing uncommitted Task172 worktree state instead of overwriting it.
+- Added `goal3-task172-agent-adapter-os-isolation-sandbox-execution.test.mjs`.
+- Added `runAgentAdapterOsIsolationSandboxExecutionProbe()` and `POST /agent/adapter/package/os-isolation-sandbox-execution`.
+- Added `agent_adapter_os_isolation_sandbox_execution_probe` to the service capability ledger.
+- The execution manifest writes `.comath/release/agent-adapter-os-isolation/<execution_id>/sandbox-execution.json`, binds project id, adapter id, backend, provider, execution id, and launch id, records the bound sandbox-launch artifact hash, links the canonical Task170 probe/evidence artifact when collected, and remains `proof_authority: none` with `can_promote_claim=false` and `can_certify_ga=false`.
+- Updated README, TODO, AGENTS, adapter contracts, GA release criteria, threat model, and Goal 3 tracker wording to distinguish this probe bridge from a production provider-specific sandbox runner.
+
+Boundary hardening:
+
+- Caller-supplied `execution_environment` booleans, process exit code, stdout/stderr/transcript hashes, route payloads, and success-shaped metadata cannot produce collected OS-enforcement evidence.
+- The sandbox execution bridge requires an existing ready service-owned sandbox-launch preflight whose project, adapter, backend, provider, and launch id exactly match the execution request.
+- A route caller without the internal `execution_probe` callback receives blocker evidence even when a ready preflight exists.
+- Only an internal callback with `probe_source: service_owned_sandbox_execution_probe` can feed the existing Task170 collector path, which then writes canonical evidence consumed by the Task167 readiness gate.
+- Execution manifests are append-only by `execution_id`, scrub host paths/secrets in service results and persisted artifacts, and audit `agent_adapter.os_isolation_sandbox_execution_probed` with non-authority semantics.
+
+Verification evidence:
+
+- The original RED for the existing uncommitted Task172 test/code was not available in this continuation.
+- Fresh initial verification before documentation closeout: `corepack pnpm --filter @comath/comathd build` exited 0; `node services/comathd/tests/unit/goal3-task172-agent-adapter-os-isolation-sandbox-execution.test.mjs` exited 0.
+- GREEN focused regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task170 adapter OS-isolation host collection, Task171 adapter OS-isolation sandbox launch, Task172 adapter OS-isolation sandbox execution, Phase43 agent adapter package, and Phase44 Codex external invocation.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task172 discovered by the default comathd runner.
+- Root/smoke gates exited 0: `node scripts/phase0-smoke.mjs` with 33 required entries and 33 invariants, `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test`, including Pi package tests, Phase45 install-session e2e, Task125 Pi research-loop public UX authority, and Phase17 integrity evaluation.
+- Post-code checks exited 0 or clean: `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath .comath` returned `False`; `git ls-files -o --exclude-standard` showed only the new Task172 test before commit.
+
+Boundary notes: Task172 bridges ready preflight manifests to service-owned sandbox execution probe evidence. It does not implement a production provider-specific runner for OCI/Nix/Firejail/Windows AppContainer/macOS sandbox-exec, does not guarantee kernel/firewall isolation on this workstation, does not promote mathematical claims, does not certify GA, and does not provide durable long-lived operator transport.
+
+Residual risks: Goal 3 remains incomplete. Production provider-specific sandbox runner implementation beyond injected probe collection, Pi-facing sandbox execution consumer wiring, broad cross-platform OS-enforced adapter execution, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 171 / Agent Adapter OS-Isolation Sandbox Launch Preflight
 
 Scope: add a service-owned provider-specific sandbox-launch preflight manifest for adapter OS-isolation work, while preserving the Task167-170 boundary that preflight is not collected execution evidence, not readiness-review evidence, not proof authority, and not GA certification.

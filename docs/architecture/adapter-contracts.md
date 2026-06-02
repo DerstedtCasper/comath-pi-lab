@@ -55,6 +55,8 @@ Agent adapter package launch metadata records whether an adapter currently runs 
 
 Provider-specific sandbox launch preflight is a separate service-owned manifest. It may record that a configured provider such as OCI, Nix, Firejail, Windows AppContainer, or macOS `sandbox-exec` is ready for a future service-owned execution probe, but it does not by itself record adapter execution, kernel/firewall isolation, or GA readiness. Preflight manifests must keep `shell=false`, `network_policy=disabled`, `command_override_allowed=false`, `caller_supplied_success_allowed=false`, `proof_authority="none"`, and `can_certify_ga=false`.
 
+Sandbox execution probe manifests bridge that preflight to canonical OS-isolation evidence. They may bind a ready sandbox-launch manifest to a service-owned execution probe and then emit the same collected probe/evidence artifacts consumed by the readiness gate. Route callers and Pi payloads still cannot submit success-shaped execution metadata; only an internal service-owned execution probe callback can produce collected evidence. This bridge is release-readiness evidence, not mathematical proof authority, GA certification, or a guarantee that every supported provider has a production runner on the current host.
+
 Caller-supplied request fields, Pi payloads, operator attestations, contract-only metadata, package launch metadata, and health-probe text cannot satisfy the OS-isolation readiness gate. They remain blocker evidence or diagnostics with `proof_authority: "none"`, `can_promote_claim: false`, and `can_certify_ga: false`.
 
 ## Literature And Ingestion Adapters
