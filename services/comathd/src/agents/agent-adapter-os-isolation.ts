@@ -208,6 +208,39 @@ export type AgentAdapterOsIsolationProviderHelperExecutionOptions = {
   provider_helper_config_resolver?: AgentAdapterOsIsolationProviderHelperConfigResolver;
 };
 
+export type AgentAdapterOsIsolationProviderHelperHostValidatorInput = {
+  project_root: string;
+  project_id: string;
+  host_validation_id: string;
+  runner_id: string;
+  runner_path: string;
+  launch_id: string;
+  launch_path: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+  runner_binary_sha256: string;
+  platform?: string;
+};
+
+export type AgentAdapterOsIsolationProviderHelperHostValidationProbe = {
+  validation_source?: "service_owned_provider_helper_host_validator" | "operator_attested" | "unknown";
+  helper_host_ready?: boolean;
+  helper_program?: string;
+  helper_binary_sha256?: string;
+  helper_version?: string;
+  supported_platforms?: string[];
+  diagnostics?: string[];
+};
+
+export type AgentAdapterOsIsolationProviderHelperHostValidator = (
+  input: AgentAdapterOsIsolationProviderHelperHostValidatorInput
+) => AgentAdapterOsIsolationProviderHelperHostValidationProbe | null | undefined;
+
+export type AgentAdapterOsIsolationProviderHelperHostValidationOptions = {
+  provider_helper_host_validator?: AgentAdapterOsIsolationProviderHelperHostValidator;
+};
+
 export type AgentAdapterOsIsolationProviderHelperCollectionProbeInput = {
   project_root: string;
   project_id: string;
@@ -285,6 +318,14 @@ export type AgentAdapterOsIsolationProviderHelperExecutionStatus =
   | "blocked_provider_helper_launch_failed"
   | "blocked_provider_helper_execution_failed";
 
+export type AgentAdapterOsIsolationProviderHelperHostValidationStatus =
+  | "provider_helper_host_validated"
+  | "blocked_provider_runner_manifest_missing"
+  | "blocked_provider_runner_binding_mismatch"
+  | "blocked_provider_helper_host_not_validated"
+  | "blocked_provider_helper_host_binary_mismatch"
+  | "blocked_provider_helper_host_platform_mismatch";
+
 export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "provider_helper_os_evidence_collected"
   | "blocked_provider_helper_execution_missing"
@@ -351,6 +392,27 @@ export type AgentAdapterOsIsolationProviderHelperExecutionInput = {
     helper_exit_code?: number;
     stdout_sha256?: string;
     stderr_sha256?: string;
+    command_override?: string;
+    argv_override?: string[];
+    env_override?: Record<string, string>;
+  };
+};
+
+export type AgentAdapterOsIsolationProviderHelperHostValidationInput = {
+  project_id: string;
+  host_validation_id?: string;
+  runner_id: string;
+  launch_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend?: AgentAdapterBackend;
+  actor: string;
+  requested_provider?: string;
+  host_environment?: {
+    platform?: string;
+    notes?: string;
+    helper_host_ready?: boolean;
+    helper_binary_sha256?: string;
+    helper_version?: string;
     command_override?: string;
     argv_override?: string[];
     env_override?: Record<string, string>;
@@ -751,6 +813,63 @@ export type AgentAdapterOsIsolationProviderHelperExecutionArtifact = {
   size_bytes: number;
 };
 
+export type AgentAdapterOsIsolationProviderHelperHostValidation = {
+  schema_version: "comath.agent_adapter_os_isolation_provider_helper_host_validation.v1";
+  host_validation_id: string;
+  project_id: string;
+  runner_id: string;
+  launch_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  created_at: string;
+  ok: boolean;
+  host_validation_status: AgentAdapterOsIsolationProviderHelperHostValidationStatus;
+  requested_provider: string;
+  provider: AgentAdapterOsIsolationProvider;
+  provider_helper_host_ready: boolean;
+  host_validation_path: string;
+  launch_artifact: AgentAdapterOsIsolationLaunchArtifact | null;
+  runner_artifact: AgentAdapterOsIsolationProviderRunnerArtifact | null;
+  provider_helper_host_validation: {
+    validation_source: "service_owned_provider_helper_host_validator" | "missing";
+    helper_host_ready: boolean;
+    helper_binary_sha256: string | null;
+    runner_binary_sha256: string | null;
+    hashes_match_provider_runner: boolean;
+    helper_version: string | null;
+    supported_platforms: string[];
+    platform: string | null;
+    platform_supported: boolean;
+    shell: false;
+    network_policy: "disabled";
+    no_new_privileges_required: true;
+    command_override_allowed: false;
+    environment_override_allowed: false;
+    caller_supplied_success_allowed: false;
+    fixed_args_template: string[];
+    fixed_args_template_sha256: string;
+    environment_policy: AgentAdapterOsIsolationProviderRunner["provider_runner_contract"]["environment_policy"];
+    diagnostics: string[];
+    proof_authority: "none";
+  };
+  adapter_execution_isolation: {
+    required_for_ga: true;
+    current_boundary: AgentAdapterOsIsolationBoundary;
+    os_enforced: false;
+    provider: AgentAdapterOsIsolationProvider;
+    claims_runtime_enforcement: false;
+    proof_authority: "none";
+  };
+  blocker_certificate: {
+    blocker_code: AgentAdapterOsIsolationProviderHelperHostValidationStatus;
+    replayable_next_action: string;
+    proof_authority: "none";
+  } | null;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
 export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
   schema_version: "comath.agent_adapter_os_isolation_provider_helper_collection.v1";
   collection_id: string;
@@ -896,6 +1015,19 @@ function assertProviderHelperExecutionId(value: string | undefined): string {
   throw new ComathError("invalid adapter OS-isolation provider helper execution id", {
     statusCode: 400,
     code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HELPER_EXECUTION_ID_INVALID"
+  });
+}
+
+function assertProviderHelperHostValidationId(value: string | undefined): string {
+  if (!value) {
+    return `ADAPTER-OSISO-HELPER-HOST-${Date.now()}`;
+  }
+  if (/^[A-Z0-9][A-Z0-9_-]{2,96}$/.test(value)) {
+    return value;
+  }
+  throw new ComathError("invalid adapter OS-isolation provider helper host validation id", {
+    statusCode: 400,
+    code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HELPER_HOST_VALIDATION_ID_INVALID"
   });
 }
 
@@ -1161,6 +1293,10 @@ function providerRunnerPath(runnerId: string): string {
 
 function providerHelperExecutionPath(helperExecutionId: string): string {
   return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", helperExecutionId, "provider-helper-execution.json"));
+}
+
+function providerHelperHostValidationPath(hostValidationId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", hostValidationId, "provider-helper-host-validation.json"));
 }
 
 function providerHelperCollectionPath(collectionId: string): string {
@@ -1665,6 +1801,47 @@ function defaultProviderHelperConfigResolver(
   };
 }
 
+function defaultProviderHelperHostValidator(
+  input: AgentAdapterOsIsolationProviderHelperHostValidatorInput
+): AgentAdapterOsIsolationProviderHelperHostValidationProbe {
+  const providerEnvVar = providerHelperProgramEnvVar(input.provider);
+  const configuredProgram = process.env[providerEnvVar] ?? process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER;
+  if (!configuredProgram) {
+    return {
+      validation_source: "service_owned_provider_helper_host_validator",
+      helper_host_ready: false,
+      diagnostics: [
+        `${input.provider} provider helper host is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
+        `Set ${providerEnvVar} to an absolute service-owned helper executable before validating this host.`
+      ]
+    };
+  }
+  if (!isAbsolute(configuredProgram)) {
+    return {
+      validation_source: "service_owned_provider_helper_host_validator",
+      helper_host_ready: false,
+      diagnostics: [`${providerEnvVar} must be an absolute path.`]
+    };
+  }
+  if (!existsSync(configuredProgram) || !statSync(configuredProgram).isFile()) {
+    return {
+      validation_source: "service_owned_provider_helper_host_validator",
+      helper_host_ready: false,
+      diagnostics: [`${providerEnvVar} does not point to an existing file.`]
+    };
+  }
+  const helperHash = sha256FileSync(configuredProgram);
+  return {
+    validation_source: "service_owned_provider_helper_host_validator",
+    helper_host_ready: true,
+    helper_program: configuredProgram,
+    helper_binary_sha256: helperHash.sha256,
+    helper_version: `${input.provider}-helper-env-configured`,
+    supported_platforms: [process.platform],
+    diagnostics: [`${providerEnvVar} resolved to a service-owned helper executable for host validation.`]
+  };
+}
+
 function sha256Bytes(bytes: Buffer | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -1694,6 +1871,63 @@ function providerHelperConfigAccepted(config: AgentAdapterOsIsolationProviderHel
       existsSync(config.helper_program) &&
       statSync(config.helper_program).isFile()
   );
+}
+
+function sanitizeSupportedPlatforms(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      value
+        .filter((entry): entry is string => typeof entry === "string" && entry.length > 0 && entry.length <= 64)
+        .map((entry) => sanitizeProbeText(entry))
+        .filter(Boolean)
+    )
+  );
+}
+
+function providerHelperHostReplayableNextAction(
+  status: AgentAdapterOsIsolationProviderHelperHostValidationStatus
+): string {
+  if (status === "blocked_provider_runner_manifest_missing") {
+    return "Prepare a ready service-owned provider-runner manifest before validating the provider-helper host.";
+  }
+  if (status === "blocked_provider_runner_binding_mismatch") {
+    return "Validate the provider-helper host with the exact project, adapter, backend, provider, launch, and runner bindings.";
+  }
+  if (status === "blocked_provider_helper_host_binary_mismatch") {
+    return "Reconfigure the service-owned provider helper host so the validated helper binary hash matches the ready provider-runner manifest.";
+  }
+  if (status === "blocked_provider_helper_host_platform_mismatch") {
+    return "Run host validation on a platform explicitly supported by the service-owned provider helper validator.";
+  }
+  return "Configure and run a service-owned provider-helper host validator; caller-supplied host readiness, argv, env, or hashes cannot validate the host.";
+}
+
+function providerHelperHostValidationStatus(input: {
+  runnerReady: boolean;
+  runnerMatches: boolean;
+  validationSourceAccepted: boolean;
+  helperHostReady: boolean;
+  hashesMatchRunner: boolean;
+  platformSupported: boolean;
+}): AgentAdapterOsIsolationProviderHelperHostValidationStatus {
+  if (!input.runnerReady) {
+    return "blocked_provider_runner_manifest_missing";
+  }
+  if (!input.runnerMatches) {
+    return "blocked_provider_runner_binding_mismatch";
+  }
+  if (input.validationSourceAccepted && input.helperHostReady && !input.platformSupported) {
+    return "blocked_provider_helper_host_platform_mismatch";
+  }
+  if (input.validationSourceAccepted && input.helperHostReady && !input.hashesMatchRunner) {
+    return "blocked_provider_helper_host_binary_mismatch";
+  }
+  return input.validationSourceAccepted && input.helperHostReady && input.hashesMatchRunner && input.platformSupported
+    ? "provider_helper_host_validated"
+    : "blocked_provider_helper_host_not_validated";
 }
 
 function providerHelperReplayableNextAction(status: AgentAdapterOsIsolationProviderHelperExecutionStatus): string {
@@ -2199,6 +2433,220 @@ export function prepareAgentAdapterOsIsolationProviderRunner(
     }
   });
   return runner;
+}
+
+export function validateAgentAdapterOsIsolationProviderHelperHost(
+  projectRoot: string,
+  input: AgentAdapterOsIsolationProviderHelperHostValidationInput,
+  options: AgentAdapterOsIsolationProviderHelperHostValidationOptions = {}
+): AgentAdapterOsIsolationProviderHelperHostValidation {
+  getAgentAdapterPackage(input.adapter_id);
+  const hostValidationId = assertProviderHelperHostValidationId(input.host_validation_id);
+  const backend = assertBackend(input.backend);
+  const path = providerHelperHostValidationPath(hostValidationId);
+  const absoluteHostValidationPath = assertPathAllowed(projectRoot, path, { purpose: "runtime-write" });
+  if (existsSync(absoluteHostValidationPath)) {
+    throw new ComathError("adapter OS-isolation provider helper host validation already exists", {
+      statusCode: 409,
+      code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HELPER_HOST_VALIDATION_ALREADY_EXISTS"
+    });
+  }
+
+  const runnerBundle = readProviderRunnerArtifact(projectRoot, input.runner_id);
+  const launchBundle = readSandboxLaunchArtifact(projectRoot, input.launch_id);
+  const runnerReady = providerRunnerIsReadyForHelperExecution(runnerBundle);
+  const { requestedProvider, knownProvider } = normalizeRequestedProvider(
+    input.requested_provider ?? runnerBundle?.runner.requested_provider
+  );
+  const provider = runnerBundle?.runner.provider ?? knownProvider ?? "unknown";
+  const runnerMatches = providerRunnerMatchesHelperInput({
+    runnerBundle,
+    projectId: input.project_id,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+  const launchReady = sandboxLaunchIsReadyForExecution(launchBundle);
+  const launchMatches = sandboxLaunchMatchesExecutionInput({
+    launchBundle,
+    projectId: input.project_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+  const bindingMatches = runnerMatches && launchReady && launchMatches;
+  const readyRunnerBundle = runnerReady && bindingMatches ? runnerBundle : null;
+  const requestedPlatform = sanitizeProbeText(input.host_environment?.platform ?? process.platform) || process.platform;
+  const environmentPolicy = readyRunnerBundle?.runner.provider_runner_contract.environment_policy ?? providerRunnerEnvironmentPolicy(provider);
+  const fixedArgs = providerHelperFixedArgs({
+    helperExecutionId: hostValidationId,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+
+  const validation = readyRunnerBundle
+    ? (options.provider_helper_host_validator ?? defaultProviderHelperHostValidator)({
+        project_root: projectRoot,
+        project_id: input.project_id,
+        host_validation_id: hostValidationId,
+        runner_id: input.runner_id,
+        runner_path: readyRunnerBundle.runner.runner_path,
+        launch_id: input.launch_id,
+        launch_path: readyRunnerBundle.runner.launch_artifact?.path ?? launchBundle?.artifact.path ?? "",
+        adapter_id: input.adapter_id,
+        backend,
+        provider,
+        runner_binary_sha256: readyRunnerBundle.runner.provider_runner_resolution.runner_binary_sha256 as string,
+        platform: requestedPlatform
+      }) ?? undefined
+    : undefined;
+  const validationSourceAccepted = validation?.validation_source === "service_owned_provider_helper_host_validator";
+  const helperProgram = validationSourceAccepted &&
+    typeof validation?.helper_program === "string" &&
+    isAbsolute(validation.helper_program) &&
+    existsSync(validation.helper_program) &&
+    statSync(validation.helper_program).isFile()
+    ? validation.helper_program
+    : null;
+  const helperHash = helperProgram ? sha256FileSync(helperProgram) : null;
+  const declaredHelperHash = isSha256(validation?.helper_binary_sha256)
+    ? validation.helper_binary_sha256.toLowerCase()
+    : null;
+  const helperBinarySha256 = helperHash?.sha256 ?? declaredHelperHash;
+  const runnerBinarySha256 = readyRunnerBundle?.runner.provider_runner_resolution.runner_binary_sha256 ?? null;
+  const declaredHashMatchesProgram = Boolean(
+    helperHash && (!declaredHelperHash || declaredHelperHash === helperHash.sha256.toLowerCase())
+  );
+  const hashesMatchProviderRunner = Boolean(
+    validationSourceAccepted &&
+      helperHash &&
+      declaredHashMatchesProgram &&
+      isSha256(runnerBinarySha256) &&
+      helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase()
+  );
+  const supportedPlatforms = sanitizeSupportedPlatforms(validation?.supported_platforms);
+  const platformSupported = Boolean(
+    validationSourceAccepted &&
+      supportedPlatforms.length > 0 &&
+      supportedPlatforms.includes(requestedPlatform)
+  );
+  const helperHostReady = Boolean(
+    validationSourceAccepted &&
+      validation?.helper_host_ready === true &&
+      helperHash &&
+      osEnforcedProviders.has(provider)
+  );
+  const status = providerHelperHostValidationStatus({
+    runnerReady,
+    runnerMatches: bindingMatches,
+    validationSourceAccepted,
+    helperHostReady,
+    hashesMatchRunner: hashesMatchProviderRunner,
+    platformSupported
+  });
+  const ok = status === "provider_helper_host_validated";
+  const diagnostics = [
+    requestedPlatform ? `platform=${requestedPlatform}` : undefined,
+    input.host_environment?.notes ? sanitizeProbeText(input.host_environment.notes) : undefined,
+    ...sanitizeDiagnostics(validation?.diagnostics),
+    ok
+      ? "Service-owned provider-helper host validator accepted the helper host configuration."
+      : "No service-owned provider-helper host validation was accepted as OS-enforcement or readiness evidence."
+  ].filter((entry): entry is string => Boolean(entry));
+
+  const hostValidation: AgentAdapterOsIsolationProviderHelperHostValidation = {
+    schema_version: "comath.agent_adapter_os_isolation_provider_helper_host_validation.v1",
+    host_validation_id: hostValidationId,
+    project_id: input.project_id,
+    runner_id: input.runner_id,
+    launch_id: input.launch_id,
+    adapter_id: input.adapter_id,
+    backend,
+    created_at: new Date().toISOString(),
+    ok,
+    host_validation_status: status,
+    requested_provider: sanitizeProbeText(requestedProvider) || "unknown",
+    provider,
+    provider_helper_host_ready: ok,
+    host_validation_path: path,
+    launch_artifact: launchBundle?.artifact ?? null,
+    runner_artifact: runnerBundle?.artifact ?? null,
+    provider_helper_host_validation: {
+      validation_source: validationSourceAccepted ? "service_owned_provider_helper_host_validator" : "missing",
+      helper_host_ready: helperHostReady,
+      helper_binary_sha256: helperBinarySha256,
+      runner_binary_sha256: isSha256(runnerBinarySha256) ? runnerBinarySha256.toLowerCase() : null,
+      hashes_match_provider_runner: hashesMatchProviderRunner,
+      helper_version: validationSourceAccepted && typeof validation?.helper_version === "string"
+        ? sanitizeProbeText(validation.helper_version)
+        : null,
+      supported_platforms: supportedPlatforms,
+      platform: requestedPlatform,
+      platform_supported: platformSupported,
+      shell: false,
+      network_policy: "disabled",
+      no_new_privileges_required: true,
+      command_override_allowed: false,
+      environment_override_allowed: false,
+      caller_supplied_success_allowed: false,
+      fixed_args_template: fixedArgs,
+      fixed_args_template_sha256: sha256Text(canonicalJson(fixedArgs)),
+      environment_policy: environmentPolicy,
+      diagnostics,
+      proof_authority: "none"
+    },
+    adapter_execution_isolation: {
+      required_for_ga: true,
+      current_boundary: "process_boundary_only",
+      os_enforced: false,
+      provider,
+      claims_runtime_enforcement: false,
+      proof_authority: "none"
+    },
+    blocker_certificate: ok
+      ? null
+      : {
+          blocker_code: status,
+          replayable_next_action: providerHelperHostReplayableNextAction(status),
+          proof_authority: "none"
+        },
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+
+  mkdirSync(dirname(absoluteHostValidationPath), { recursive: true });
+  writeFileSync(absoluteHostValidationPath, canonicalJson(hostValidation), "utf8");
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_adapter.os_isolation_provider_helper_host_validated",
+    actor: sanitizeReviewText(input.actor),
+    target_id: input.project_id,
+    payload: {
+      host_validation_id: hostValidationId,
+      runner_id: input.runner_id,
+      launch_id: input.launch_id,
+      adapter_id: input.adapter_id,
+      backend,
+      ok,
+      host_validation_status: status,
+      provider,
+      provider_helper_host_ready: ok,
+      helper_binary_sha256: helperBinarySha256,
+      runner_binary_sha256: isSha256(runnerBinarySha256) ? runnerBinarySha256.toLowerCase() : null,
+      hashes_match_provider_runner: hashesMatchProviderRunner,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return hostValidation;
 }
 
 export function runAgentAdapterOsIsolationProviderHelperExecution(

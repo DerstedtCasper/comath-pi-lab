@@ -1,3 +1,31 @@
+# Goal 3 Task 178 / Agent Adapter OS-Isolation Provider Helper Host Validation
+
+Scope: add a service-owned provider-helper host-validation manifest after Task175 provider-runner contracts, without allowing route payloads, helper-host-ready booleans, caller-supplied hashes, or supported-platform claims to become readiness evidence, OS-enforcement evidence, proof authority, or GA certification.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and treated Task177's next step as authoritative.
+- Used one read-only explorer subagent to check the Task178 frontier and OS-isolation residual blocker.
+- Added `goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs`.
+- Added `validateAgentAdapterOsIsolationProviderHelperHost()` and `POST /agent/adapter/package/os-isolation-provider-helper-host-validation`.
+- Added `agent_adapter_os_isolation_provider_helper_host_validation` to the service capability ledger.
+- Provider-helper host-validation manifests write `.comath/release/agent-adapter-os-isolation/<host_validation_id>/provider-helper-host-validation.json`, require a ready Task175 provider-runner manifest and Task171 sandbox-launch artifact binding, and record service-owned helper binary hash, runner binary hash, supported platforms, fixed argv template hash, environment-policy hash, diagnostics, and non-authority metadata.
+- The route/default path cannot receive a validator and therefore records blocker evidence even when caller payloads submit success-shaped host-ready booleans, binary hashes, version strings, command overrides, argv, or env.
+- Only a service-owned `provider_helper_host_validator` callback can mark the helper host validated. Binary hash mismatches and platform mismatches fail closed, and validated host manifests still remain rejected by the readiness gate.
+- Updated README, TODO, AGENTS, adapter contracts, GA release criteria, threat model, and Goal 3 tracker wording to keep provider-helper host validation non-authoritative.
+
+Verification evidence:
+
+- TDD RED: after adding Task178 test and before implementation, `corepack pnpm --filter @comath/comathd build` exited 0, then `node services/comathd/tests/unit/goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs` failed because `../../dist/index.js` did not export `validateAgentAdapterOsIsolationProviderHelperHost`.
+- GREEN focused test exited 0: Task178 provider-helper host validation.
+- GREEN adjacent focused regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task170 configured-host collection, Task172 sandbox execution probe, Task175 provider-runner contract, Task176 provider-helper execution, Task177 provider-helper collection, Phase43 adapter package, and Phase44 Codex external invocation. An initial mistyped Phase44 filename produced `MODULE_NOT_FOUND`; rerunning the actual `phase44-codex-cli-external-invocation.test.mjs` exited 0.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task178 discovered by the default runner.
+- Post-code `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath .comath` returned `False`; `git ls-files -o --exclude-standard` showed only the new Task178 test before commit.
+
+Boundary notes: Task178 validates service-owned provider-helper host configuration and hash/platform binding before helper execution can be reasoned about, but it does not execute the adapter, does not collect canonical OS-enforcement evidence, does not satisfy Task167 readiness by itself, does not promote mathematical claims, does not certify GA, and does not provide durable long-lived operator transport.
+
+Residual risks: Goal 3 remains incomplete. Task178 still does not implement production helper binaries for every OCI/Nix/Firejail/Windows AppContainer/macOS host, does not bind Task176 helper execution to a prior host-validation artifact, does not guarantee kernel/firewall isolation on this workstation, does not provide broad cross-platform OS-enforced adapter execution, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete nontrivial theorem synthesis, does not provide fully interactive end-to-end real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 177 / Agent Adapter OS-Isolation Provider Helper Collection
 
 Scope: add a service-owned provider-helper collection bridge after Task176 helper execution attempts, without allowing helper exit status, route payloads, wrapper manifests, or caller-supplied hashes to become readiness evidence unless canonical Task170 probe/evidence artifacts are written by an internal service-owned collector.

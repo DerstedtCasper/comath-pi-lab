@@ -73,6 +73,7 @@ import {
   prepareAgentAdapterOsIsolationProviderRunner,
   prepareAgentAdapterOsIsolationSandboxLaunch,
   runAgentAdapterOsIsolationSandboxExecutionProbe,
+  validateAgentAdapterOsIsolationProviderHelperHost,
   validateExternalCodexCliInstallation,
   cancelAgentRunFromOperator,
   getAgentProfile,
@@ -329,6 +330,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         return {
           runner: sanitizePublicFormalAuthorityVocabulary(
             prepareAgentAdapterOsIsolationProviderRunner(body.project_root, body)
+          )
+        };
+      }
+    ],
+    [
+      "POST /agent/adapter/package/os-isolation-provider-helper-host-validation",
+      (payload) => {
+        const body = payload as Parameters<typeof validateAgentAdapterOsIsolationProviderHelperHost>[1] & { project_root: string };
+        return {
+          host_validation: sanitizePublicFormalAuthorityVocabulary(
+            validateAgentAdapterOsIsolationProviderHelperHost(body.project_root, body)
           )
         };
       }
