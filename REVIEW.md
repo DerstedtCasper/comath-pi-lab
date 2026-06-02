@@ -1,3 +1,30 @@
+# Goal 3 Task 164 / Pi-Codex Guided Real-Pi Execution Evidence
+
+Scope: add a service-owned guided real-Pi execution evidence chain that binds Task152 real-Pi runtime artifacts, Task157 operator-session manifests, Task159 operator transport recovery checkpoints, and Task162 bounded operator transport leases without claiming proof authority, GA certification, durable long-lived transport, or Pi direct `.comath/` writes.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task163's next step as authoritative.
+- Audited Task152 real-Pi install/runtime-registration probe artifacts, Task157 service-owned operator-session persistence, Task159 transport recovery checkpointing, Task162 bounded transport leases, Task163 Pi lease consumer wording, and current lifecycle/operator residual blockers.
+- Added `goal3-task164-pi-guided-real-pi-execution.test.mjs`.
+- RED showed `recordPiCodexLifecycleGuidedRealPiExecution` was not exported.
+- Added `recordPiCodexLifecycleGuidedRealPiExecution`, `POST /release/pi-codex-lifecycle/guided-real-pi-execution`, and the `pi_codex_lifecycle_guided_real_pi_execution` capability.
+- The guided execution recorder verifies the Task152 runtime snapshot is real-Pi, runtime-registered, host-confirmed, non-authoritative, and bound to the requested project/probe; verifies Task157/159/162 artifact chain hashes and non-authority boundaries; writes an append-only guided execution artifact; and sanitizes host paths, secrets, proof-success vocabulary, and long-lived/durable transport overclaims from result, artifact, route response, and audit payloads.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task164-pi-guided-real-pi-execution.test.mjs` failed because `../../dist/index.js` did not provide `recordPiCodexLifecycleGuidedRealPiExecution`.
+- GREEN focused test exited 0: Task164 Pi guided real-Pi execution.
+- GREEN adjacent tests exited 0: Task152 real-Pi install/runtime-registration probe, Task157 operator-session persistence, Task159 operator transport recovery, and Task162 operator transport lease.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- Package gate exited 0: `corepack pnpm --filter @comath/comathd test`, with Task164 discovered by the default comathd runner.
+- Root gates exited 0: `node scripts/phase0-smoke.mjs`, `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test`, including comathd, Pi package, Phase45 e2e, Task125 Pi research-loop public UX authority, and Phase17 integrity evaluation.
+
+Boundary notes: Task164 records a service-owned guided real-Pi execution evidence chain. It does not add a Pi-facing consumer for the new route, provide durable long-lived WebSocket/SSE/terminal transport, execute an uncontrolled external real Pi host in tests, add OS-level adapter isolation, promote claims, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. Pi-facing guided execution consumer wiring, durable long-lived operator transport, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 163 / Pi Operator Transport Lease Consumer
 
 Scope: expose the Task162 service-owned bounded operator transport lease route through Pi tooling and `/cm:release lifecycle-operator-transport-lease`, while preserving host confirmation, no direct Pi `.comath/` writes, public sanitizer boundaries, non-authority semantics, and bounded lease wording.

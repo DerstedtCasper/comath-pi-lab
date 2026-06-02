@@ -58,6 +58,7 @@ import {
   probePiCodexProductionCodexAccountNetwork,
   probePiCodexDurableServiceLifecycle,
   probePiCodexRealPiInstallRuntimeRegistration,
+  recordPiCodexLifecycleGuidedRealPiExecution,
   recoverPiCodexLifecycleOperatorTransport,
   reviewPiCodexLifecycleReadiness
 } from "../release/pi-codex-lifecycle-readiness.js";
@@ -358,6 +359,15 @@ async function route(method: string, path: string, body: unknown, context: Route
       (payload) => {
         const body = payload as Parameters<typeof reviewGoal3PublicArchiveSurfaces>[1] & { project_root: string };
         return reviewGoal3PublicArchiveSurfaces(body.project_root, body);
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/guided-real-pi-execution",
+      (payload) => {
+        const body = payload as Parameters<typeof recordPiCodexLifecycleGuidedRealPiExecution>[1] & { project_root: string };
+        return {
+          execution: recordPiCodexLifecycleGuidedRealPiExecution(body.project_root, body)
+        };
       }
     ],
     [
