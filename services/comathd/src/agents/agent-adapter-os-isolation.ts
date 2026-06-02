@@ -27,10 +27,13 @@ export type AgentAdapterOsIsolationProvider =
 
 export type AgentAdapterOsIsolationEvidence = {
   schema_version?: string;
+  kind?: "agent_adapter_os_isolation_evidence";
   adapter_id?: string;
   backend?: AgentAdapterBackend;
   provider?: AgentAdapterOsIsolationProvider;
   evidence_source?: "service_owned_probe" | "operator_attested" | "contract_only" | "unknown";
+  probe_id?: string;
+  probe_status?: AgentAdapterOsIsolationProbeStatus;
   process_isolation_enforced?: boolean;
   filesystem_scope_enforced?: boolean;
   network_isolation_enforced?: boolean;
@@ -38,9 +41,32 @@ export type AgentAdapterOsIsolationEvidence = {
   escape_prevention?: boolean;
   host_path_leak_free?: boolean;
   secret_free?: boolean;
+  notes?: string;
   proof_authority?: unknown;
   can_promote_claim?: unknown;
   can_certify_ga?: unknown;
+};
+
+export type AgentAdapterOsIsolationProbeEnvironment = {
+  provider_available?: boolean;
+  platform?: string;
+  notes?: string;
+};
+
+export type AgentAdapterOsIsolationProbeStatus =
+  | "blocked_os_isolation_provider_unsupported"
+  | "blocked_os_isolation_provider_not_os_enforced"
+  | "blocked_os_isolation_provider_unavailable"
+  | "blocked_os_isolation_probe_not_collected";
+
+export type AgentAdapterOsIsolationProbeInput = {
+  project_id: string;
+  probe_id?: string;
+  adapter_id: AgentAdapterPackageId;
+  backend?: AgentAdapterBackend;
+  actor: string;
+  requested_provider?: string;
+  probe_environment?: AgentAdapterOsIsolationProbeEnvironment;
 };
 
 export type AgentAdapterOsIsolationReviewInput = {
@@ -111,6 +137,61 @@ export type AgentAdapterOsIsolationReview = {
   can_certify_ga: false;
 };
 
+export type AgentAdapterOsIsolationProbe = {
+  schema_version: "comath.agent_adapter_os_isolation_probe.v1";
+  probe_id: string;
+  project_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  created_at: string;
+  ok: false;
+  probe_status: AgentAdapterOsIsolationProbeStatus;
+  requested_provider: string;
+  observed_provider: AgentAdapterOsIsolationProvider;
+  provider_available: boolean;
+  probe_path: string;
+  evidence_path: string;
+  evidence_artifact: AgentAdapterOsIsolationEvidenceArtifact;
+  evidence: Required<Pick<AgentAdapterOsIsolationEvidence,
+    | "schema_version"
+    | "kind"
+    | "adapter_id"
+    | "backend"
+    | "provider"
+    | "evidence_source"
+    | "process_isolation_enforced"
+    | "filesystem_scope_enforced"
+    | "network_isolation_enforced"
+    | "no_new_privileges"
+    | "escape_prevention"
+    | "host_path_leak_free"
+    | "secret_free"
+    | "proof_authority"
+    | "can_promote_claim"
+    | "can_certify_ga"
+  >> & {
+    probe_id: string;
+    probe_status: AgentAdapterOsIsolationProbeStatus;
+    notes: string;
+  };
+  adapter_execution_isolation: {
+    required_for_ga: true;
+    current_boundary: AgentAdapterOsIsolationBoundary;
+    os_enforced: false;
+    provider: AgentAdapterOsIsolationProvider;
+    claims_runtime_enforcement: false;
+    proof_authority: "none";
+  };
+  blocker_certificate: {
+    blocker_code: AgentAdapterOsIsolationProbeStatus;
+    replayable_next_action: string;
+    proof_authority: "none";
+  };
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
 const osEnforcedProviders = new Set<AgentAdapterOsIsolationProvider>([
   "oci_container",
   "nix_sandbox",
@@ -118,6 +199,14 @@ const osEnforcedProviders = new Set<AgentAdapterOsIsolationProvider>([
   "windows_appcontainer",
   "macos_sandbox_exec"
 ]);
+
+const allProviders = new Set<AgentAdapterOsIsolationProvider>([
+  ...osEnforcedProviders,
+  "service_process_boundary",
+  "unknown"
+]);
+
+const supportedBackends = new Set<AgentAdapterBackend>(["bundled", "external", "codex-api"]);
 
 const secretPattern = /(?:Authorization\s*:\s*Bearer\s+[^\s,;}"']+|(?:api[_-]?key|token|secret|password)\s*[=:]\s*[^\s,;}"']+)/i;
 const secretScrubPattern = /(?:Authorization\s*:\s*Bearer\s+[^\s,;}"']+|(?:api[_-]?key|token|secret|password)\s*[=:]\s*[^\s,;}"']+)/gi;
@@ -139,8 +228,36 @@ function assertReviewId(value: string | undefined): string {
   });
 }
 
+function assertProbeId(value: string | undefined): string {
+  if (!value) {
+    return `ADAPTER-OSISO-PROBE-${Date.now()}`;
+  }
+  if (/^[A-Z0-9][A-Z0-9_-]{2,96}$/.test(value)) {
+    return value;
+  }
+  throw new ComathError("invalid adapter OS-isolation probe id", {
+    statusCode: 400,
+    code: "AGENT_ADAPTER_OS_ISOLATION_PROBE_ID_INVALID"
+  });
+}
+
+function assertBackend(value: AgentAdapterBackend | undefined): AgentAdapterBackend {
+  const backend = value ?? "bundled";
+  if (supportedBackends.has(backend)) {
+    return backend;
+  }
+  throw new ComathError("unsupported adapter backend for OS-isolation probe", {
+    statusCode: 400,
+    code: "AGENT_ADAPTER_OS_ISOLATION_PROBE_BACKEND_UNSUPPORTED"
+  });
+}
+
 function sanitizeReviewText(value: string): string {
   return scrubHostPaths(value).replace(secretScrubPattern, "<secret>");
+}
+
+function sanitizeProbeText(value: unknown): string {
+  return sanitizeReviewText(typeof value === "string" ? value : "").slice(0, 2048);
 }
 
 function projectRelativePath(projectRoot: string, absolutePath: string): string {
@@ -297,6 +414,43 @@ function reviewPath(reviewId: string): string {
   return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", reviewId, "review.json"));
 }
 
+function probePath(probeId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", probeId, "probe.json"));
+}
+
+function probeEvidencePath(probeId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", probeId, "evidence.json"));
+}
+
+function normalizeRequestedProvider(value: string | undefined): {
+  requestedProvider: string;
+  knownProvider: AgentAdapterOsIsolationProvider | null;
+} {
+  const requestedProvider = value ?? "unknown";
+  return {
+    requestedProvider,
+    knownProvider: allProviders.has(requestedProvider as AgentAdapterOsIsolationProvider)
+      ? requestedProvider as AgentAdapterOsIsolationProvider
+      : null
+  };
+}
+
+function classifyProbe(input: {
+  knownProvider: AgentAdapterOsIsolationProvider | null;
+  providerAvailable: boolean;
+}): { status: AgentAdapterOsIsolationProbeStatus; observedProvider: AgentAdapterOsIsolationProvider } {
+  if (!input.knownProvider || input.knownProvider === "unknown") {
+    return { status: "blocked_os_isolation_provider_unsupported", observedProvider: "unknown" };
+  }
+  if (!osEnforcedProviders.has(input.knownProvider)) {
+    return { status: "blocked_os_isolation_provider_not_os_enforced", observedProvider: input.knownProvider };
+  }
+  if (!input.providerAvailable) {
+    return { status: "blocked_os_isolation_provider_unavailable", observedProvider: "service_process_boundary" };
+  }
+  return { status: "blocked_os_isolation_probe_not_collected", observedProvider: input.knownProvider };
+}
+
 export function defaultAgentAdapterOsIsolationMetadata(): AgentAdapterOsIsolationMetadata {
   return {
     required_for_ga: true,
@@ -305,6 +459,124 @@ export function defaultAgentAdapterOsIsolationMetadata(): AgentAdapterOsIsolatio
     evidence_required: true,
     proof_authority: "none"
   };
+}
+
+export function probeAgentAdapterOsIsolation(
+  projectRoot: string,
+  input: AgentAdapterOsIsolationProbeInput
+): AgentAdapterOsIsolationProbe {
+  getAgentAdapterPackage(input.adapter_id);
+  const probeId = assertProbeId(input.probe_id);
+  const backend = assertBackend(input.backend);
+  const path = probePath(probeId);
+  const evidencePath = probeEvidencePath(probeId);
+  const absoluteProbePath = assertPathAllowed(projectRoot, path, { purpose: "runtime-write" });
+  const absoluteEvidencePath = assertPathAllowed(projectRoot, evidencePath, { purpose: "runtime-write" });
+  if (existsSync(absoluteProbePath) || existsSync(absoluteEvidencePath)) {
+    throw new ComathError("adapter OS-isolation probe already exists", {
+      statusCode: 409,
+      code: "AGENT_ADAPTER_OS_ISOLATION_PROBE_ALREADY_EXISTS"
+    });
+  }
+
+  const providerAvailable = input.probe_environment?.provider_available === true;
+  const { requestedProvider, knownProvider } = normalizeRequestedProvider(input.requested_provider);
+  const classified = classifyProbe({ knownProvider, providerAvailable });
+  const notes = [
+    input.probe_environment?.platform ? `platform=${sanitizeProbeText(input.probe_environment.platform)}` : undefined,
+    input.probe_environment?.notes ? sanitizeProbeText(input.probe_environment.notes) : undefined,
+    "No OS-enforced adapter execution was launched by this probe artifact producer."
+  ]
+    .filter((entry): entry is string => Boolean(entry))
+    .join(" ");
+
+  const evidence: AgentAdapterOsIsolationProbe["evidence"] = {
+    schema_version: "comath.agent_adapter_os_isolation_evidence.v1",
+    kind: "agent_adapter_os_isolation_evidence",
+    probe_id: probeId,
+    probe_status: classified.status,
+    adapter_id: input.adapter_id,
+    backend,
+    provider: classified.observedProvider,
+    evidence_source: "service_owned_probe",
+    process_isolation_enforced: false,
+    filesystem_scope_enforced: false,
+    network_isolation_enforced: false,
+    no_new_privileges: false,
+    escape_prevention: false,
+    host_path_leak_free: true,
+    secret_free: true,
+    notes,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const evidenceText = canonicalJson(evidence);
+  const evidenceArtifact: AgentAdapterOsIsolationEvidenceArtifact = {
+    kind: "agent_adapter_os_isolation_evidence",
+    path: evidencePath,
+    sha256: sha256Text(evidenceText),
+    size_bytes: Buffer.byteLength(evidenceText, "utf8")
+  };
+  const probe: AgentAdapterOsIsolationProbe = {
+    schema_version: "comath.agent_adapter_os_isolation_probe.v1",
+    probe_id: probeId,
+    project_id: input.project_id,
+    adapter_id: input.adapter_id,
+    backend,
+    created_at: new Date().toISOString(),
+    ok: false,
+    probe_status: classified.status,
+    requested_provider: sanitizeProbeText(requestedProvider) || "unknown",
+    observed_provider: classified.observedProvider,
+    provider_available: providerAvailable,
+    probe_path: path,
+    evidence_path: evidencePath,
+    evidence_artifact: evidenceArtifact,
+    evidence,
+    adapter_execution_isolation: {
+      required_for_ga: true,
+      current_boundary: "process_boundary_only",
+      os_enforced: false,
+      provider: classified.observedProvider,
+      claims_runtime_enforcement: false,
+      proof_authority: "none"
+    },
+    blocker_certificate: {
+      blocker_code: classified.status,
+      replayable_next_action: "Run a service-owned OS-enforced adapter execution probe on a host with a configured sandbox provider, then submit the resulting evidence artifact to the readiness review gate.",
+      proof_authority: "none"
+    },
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+
+  mkdirSync(dirname(absoluteEvidencePath), { recursive: true });
+  writeFileSync(absoluteEvidencePath, evidenceText, "utf8");
+  mkdirSync(dirname(absoluteProbePath), { recursive: true });
+  writeFileSync(absoluteProbePath, canonicalJson(probe), "utf8");
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_adapter.os_isolation_probed",
+    actor: sanitizeReviewText(input.actor),
+    target_id: input.project_id,
+    payload: {
+      probe_id: probeId,
+      adapter_id: input.adapter_id,
+      backend,
+      ok: false,
+      probe_status: classified.status,
+      requested_provider: probe.requested_provider,
+      observed_provider: classified.observedProvider,
+      provider_available: providerAvailable,
+      evidence_path: evidencePath,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return probe;
 }
 
 export function reviewAgentAdapterOsIsolationReadiness(

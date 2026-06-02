@@ -73,6 +73,7 @@ import {
   getAgentProfile,
   formatAgentRunLogSseSession,
   listAgentAdapterPackages,
+  probeAgentAdapterOsIsolation,
   readAgentRunOperatorPanel,
   listAgentProfiles,
   formatAgentRunLogSseSnapshot,
@@ -315,6 +316,17 @@ async function route(method: string, path: string, body: unknown, context: Route
     [
       "GET /agent/adapter/package/list",
       () => ({ packages: listAgentAdapterPackages() })
+    ],
+    [
+      "POST /agent/adapter/package/os-isolation-probe",
+      (payload) => {
+        const body = payload as Parameters<typeof probeAgentAdapterOsIsolation>[1] & { project_root: string };
+        return {
+          probe: sanitizePublicFormalAuthorityVocabulary(
+            probeAgentAdapterOsIsolation(body.project_root, body)
+          )
+        };
+      }
     ],
     [
       "POST /agent/adapter/package/os-isolation-review",

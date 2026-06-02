@@ -1,3 +1,27 @@
+# Goal 3 Task 168 / Agent Adapter OS-Isolation Probe Artifact Producer
+
+Scope: add a service-owned, append-only adapter OS-isolation probe artifact producer that can supply Task167 readiness-review evidence while staying honest that this slice does not execute adapters inside an OS-enforced sandbox.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task167's next step as authoritative.
+- Added `goal3-task168-agent-adapter-os-isolation-probe.test.mjs`.
+- Added `probeAgentAdapterOsIsolation()` and `POST /agent/adapter/package/os-isolation-probe`.
+- Added the `agent_adapter_os_isolation_service_probe` status capability.
+- The probe writes `.comath/release/agent-adapter-os-isolation/<probe_id>/probe.json` and `evidence.json`, marks the evidence as `service_owned_probe`, binds adapter id/backend/probe id, scrubs host-path and secret-like text, records audit evidence, and remains non-authoritative.
+- The probe deliberately emits blocker evidence for unsupported, unavailable, non-OS-enforced, or uncollected sandbox providers instead of claiming runtime sandbox enforcement from request metadata.
+
+Verification evidence:
+
+- TDD RED: after adding Task168 test and before implementation, `node services/comathd/tests/unit/goal3-task168-agent-adapter-os-isolation-probe.test.mjs` failed because `../../dist/index.js` did not export `probeAgentAdapterOsIsolation`.
+- GREEN focused test exited 0: Task168 agent adapter OS-isolation probe.
+- GREEN adjacent focused tests exited 0: Task167 adapter OS-isolation readiness, Phase43 agent adapter package, Phase44 Codex external invocation, Phase51 Codex API backend, Phase52 Codex API retry telemetry, and Phase53 installed Codex CLI validation. A first adjacent Phase44 command used the wrong filename and failed with `MODULE_NOT_FOUND`; the correct Phase44 test was then run and exited 0.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task168 discovered by the default comathd runner.
+
+Boundary notes: Task168 records service-owned OS-isolation blocker/probe artifacts. It does not run adapters inside OCI/Nix/Firejail/AppContainer/macOS sandbox, does not enforce kernel/firewall network denial, does not promote mathematical claims, and does not certify GA.
+
+Residual risks: Goal 3 remains incomplete. Actual OS-enforced adapter execution/probe collection, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 167 / Agent Adapter OS-Isolation Readiness Gate
 
 Scope: add a service-owned release-readiness review gate for agent adapter OS-enforced isolation evidence, while keeping adapter package execution honest about its current `process_boundary_only` launcher boundary and preserving `proof_authority=none`.
