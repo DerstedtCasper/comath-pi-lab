@@ -151,6 +151,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleSession",
   "comath.release.piCodexLifecycleOperatorSession",
   "comath.release.piCodexLifecycleOperatorTransportRecovery",
+  "comath.release.piCodexLifecycleOperatorTransportLease",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -455,6 +456,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleSession" ||
     name === "comath.release.piCodexLifecycleOperatorSession" ||
     name === "comath.release.piCodexLifecycleOperatorTransportRecovery" ||
+    name === "comath.release.piCodexLifecycleOperatorTransportLease" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -493,6 +495,12 @@ const PI_LIFECYCLE_OPERATOR_TRANSPORT_KINDS = [
   "operator_polling_checkpoint",
   "bounded_sse_snapshot",
   "manual_terminal_resume",
+  "unknown"
+] as const;
+const PI_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_KINDS = [
+  "bounded_live_polling_lease",
+  "bounded_sse_snapshot_lease",
+  "manual_terminal_resume_lease",
   "unknown"
 ] as const;
 
@@ -1439,6 +1447,41 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.piCodexLifecycleOperatorTransportLease") {
+    const sessionManifestPath = readString(input, "session_manifest_path", { optional: true });
+    const transportRecoveryPath = readString(input, "transport_recovery_path", { optional: true });
+    const leaseRoute = readString(input, "lease_route", { optional: true });
+    const transportKind = readString(input, "transport_kind", { optional: true });
+    const lastSeenEventId = readString(input, "last_seen_event_id", { optional: true });
+    const openReason = readString(input, "open_reason", { optional: true });
+    const clientEpoch = readNumber(input, "client_epoch");
+    const heartbeatIntervalMs = readNumber(input, "heartbeat_interval_ms");
+    const leaseTtlMs = readNumber(input, "lease_ttl_ms");
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/operator-transport-lease", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        session_id: readString(input, "session_id"),
+        transport_recovery_id: readString(input, "transport_recovery_id"),
+        transport_lease_id: readString(input, "transport_lease_id"),
+        ...(sessionManifestPath === undefined ? {} : { session_manifest_path: publicOperatorText(sessionManifestPath) }),
+        ...(transportRecoveryPath === undefined ? {} : { transport_recovery_path: publicOperatorText(transportRecoveryPath) }),
+        ...(leaseRoute === undefined ? {} : { lease_route: publicOperatorText(leaseRoute) }),
+        ...(transportKind === undefined ? {} : { transport_kind: transportKind }),
+        ...(input.requested_cursor === undefined
+          ? {}
+          : { requested_cursor: sanitizePublicProofAuthorityValue(input.requested_cursor) }),
+        ...(clientEpoch === undefined ? {} : { client_epoch: clientEpoch }),
+        ...(heartbeatIntervalMs === undefined ? {} : { heartbeat_interval_ms: heartbeatIntervalMs }),
+        ...(leaseTtlMs === undefined ? {} : { lease_ttl_ms: leaseTtlMs }),
+        ...(lastSeenEventId === undefined ? {} : { last_seen_event_id: publicOperatorText(lastSeenEventId) }),
+        ...(openReason === undefined ? {} : { open_reason: publicOperatorText(openReason) })
+      })
+    );
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -2260,6 +2303,39 @@ export function createComathTools(): ToolDescriptor[] {
         last_seen_event_id: stringProp,
         reconnect_reason: stringProp
       })
+    },
+    {
+      name: "comath.release.piCodexLifecycleOperatorTransportLease",
+      description:
+        "Open a service-owned bounded Pi/Codex lifecycle operator transport lease through comathd without Pi direct writes or long-lived transport claims.",
+      mutates: true,
+      input_schema: objectSchema(
+        ["project_root", "project_id", "actor", "session_id", "transport_recovery_id", "transport_lease_id"],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          actor: stringProp,
+          session_id: stringProp,
+          transport_recovery_id: stringProp,
+          transport_lease_id: stringProp,
+          session_manifest_path: stringProp,
+          transport_recovery_path: stringProp,
+          lease_route: stringProp,
+          transport_kind: { type: "string", enum: [...PI_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_KINDS] },
+          requested_cursor: {
+            type: "object",
+            properties: {
+              operator_event_cursor: stringProp,
+              stdout_cursor: stringProp,
+              stderr_cursor: stringProp
+            }
+          },
+          heartbeat_interval_ms: { type: "number", minimum: 0 },
+          lease_ttl_ms: { type: "number", minimum: 0 },
+          last_seen_event_id: stringProp,
+          open_reason: stringProp
+        }
+      )
     }
   ].map((tool) =>
     tool.mutates
@@ -3521,6 +3597,42 @@ async function handleReleaseCommand(
           client_epoch: numberOptionValue(parsed.args, "--client-epoch"),
           last_seen_event_id: optionValue(parsed.args, "--last-seen-event-id"),
           reconnect_reason: optionValue(parsed.args, "--reconnect-reason"),
+          transport_kind: optionValue(parsed.args, "--transport-kind")
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-operator-transport-lease") {
+    const tool = createComathTools().find((descriptor) => descriptor.name === "comath.release.piCodexLifecycleOperatorTransportLease");
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle operator transport lease tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          session_id: requiredOption(optionValue(parsed.args, "--session-id"), "session_id"),
+          transport_recovery_id: requiredOption(
+            optionValue(parsed.args, "--transport-recovery-id"),
+            "transport_recovery_id"
+          ),
+          transport_lease_id: requiredOption(optionValue(parsed.args, "--transport-lease-id"), "transport_lease_id"),
+          session_manifest_path: optionValue(parsed.args, "--session-manifest-path"),
+          transport_recovery_path: optionValue(parsed.args, "--transport-recovery-path"),
+          lease_route: optionValue(parsed.args, "--lease-route"),
+          requested_cursor: parseLifecycleOperatorTransportCursor(parsed.args),
+          client_epoch: numberOptionValue(parsed.args, "--client-epoch"),
+          heartbeat_interval_ms: numberOptionValue(parsed.args, "--heartbeat-interval-ms"),
+          lease_ttl_ms: numberOptionValue(parsed.args, "--lease-ttl-ms"),
+          last_seen_event_id: optionValue(parsed.args, "--last-seen-event-id"),
+          open_reason: optionValue(parsed.args, "--open-reason"),
           transport_kind: optionValue(parsed.args, "--transport-kind")
         },
         ctx

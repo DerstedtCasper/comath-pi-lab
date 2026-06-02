@@ -201,7 +201,8 @@ function commandMetadata(command: string): Pick<
         "lifecycle-control",
         "lifecycle-session",
         "lifecycle-operator-session",
-        "lifecycle-operator-transport-recovery"
+        "lifecycle-operator-transport-recovery",
+        "lifecycle-operator-transport-lease"
       ],
       dispatch_tool: "comath.release.publicArchiveReview",
       mutates: true,

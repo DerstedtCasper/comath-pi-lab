@@ -1,3 +1,30 @@
+# Goal 3 Task 163 / Pi Operator Transport Lease Consumer
+
+Scope: expose the Task162 service-owned bounded operator transport lease route through Pi tooling and `/cm:release lifecycle-operator-transport-lease`, while preserving host confirmation, no direct Pi `.comath/` writes, public sanitizer boundaries, non-authority semantics, and bounded lease wording.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task162's next step as authoritative.
+- Audited the Task158/160 Pi consumer patterns, Task162 service route `POST /release/pi-codex-lifecycle/operator-transport-lease`, runtime-registration metadata, public sanitizer behavior, and lifecycle/operator residual blockers.
+- Added `goal3-task163-pi-operator-transport-lease-consumer.test.mjs`.
+- RED showed `comath.release.piCodexLifecycleOperatorTransportLease` was not registered.
+- Added the mutating `comath.release.piCodexLifecycleOperatorTransportLease` tool, host-confirmed runtime execution, route dispatch to the Task162 service endpoint, `/cm:release lifecycle-operator-transport-lease`, runtime-registration subcommand metadata, Phase6/Phase26 exposure guards, and default Pi package test wiring.
+- The Pi consumer strips `confirmation_id`, keeps `.comath/` writes owned by `comathd`, forwards bounded lease fields only through the service route, and sanitizes host-path, secret, proof-success, and long-lived transport overclaim text before request, confirmation prompt, and notification exposure.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task163-pi-operator-transport-lease-consumer.test.mjs` failed because `comath.release.piCodexLifecycleOperatorTransportLease` was not registered.
+- GREEN focused test exited 0: Task163 Pi operator transport lease consumer.
+- GREEN adjacent tests exited 0: Task158 Pi operator-session persistence consumer, Task160 Pi operator transport recovery consumer, Task162 service operator transport lease, Phase6 extension, and Phase26 Pi runtime registration.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension typecheck` and `corepack pnpm --filter @comath/pi-extension test`, with Task163 discovered by the default Pi extension runner.
+- Root gates exited 0: `node scripts/phase0-smoke.mjs`, `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test`, including comathd, Pi package, Phase45 e2e, Task125 Pi research-loop public UX authority, and Phase17 integrity evaluation.
+- Post-code `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task163 is Pi-facing consumer wiring for a bounded service-owned lease artifact. It does not provide durable long-lived WebSocket/SSE/terminal transport, end-to-end guided real-Pi execution, OS-level adapter isolation, proof authority, claim promotion, or GA certification.
+
+Residual risks: Goal 3 remains incomplete. Durable long-lived operator transport, end-to-end guided real-Pi execution, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 162 / Pi-Codex Operator Transport Lease
 
 Scope: add a service-owned bounded Pi/Codex lifecycle operator transport lease after Task159 recovery checkpointing and Task160 Pi recovery consumer wiring, without claiming durable long-lived WebSocket/SSE/terminal transport, Pi direct `.comath/` writes, proof authority, or GA certification.
