@@ -68,6 +68,7 @@ import {
   createAgentRunForProfile,
   executeAgentAdapterPackage,
   executeProfileAgentRun,
+  prepareAgentAdapterOsIsolationProviderRunner,
   prepareAgentAdapterOsIsolationSandboxLaunch,
   runAgentAdapterOsIsolationSandboxExecutionProbe,
   validateExternalCodexCliInstallation,
@@ -318,6 +319,17 @@ async function route(method: string, path: string, body: unknown, context: Route
     [
       "GET /agent/adapter/package/list",
       () => ({ packages: listAgentAdapterPackages() })
+    ],
+    [
+      "POST /agent/adapter/package/os-isolation-provider-runner",
+      (payload) => {
+        const body = payload as Parameters<typeof prepareAgentAdapterOsIsolationProviderRunner>[1] & { project_root: string };
+        return {
+          runner: sanitizePublicFormalAuthorityVocabulary(
+            prepareAgentAdapterOsIsolationProviderRunner(body.project_root, body)
+          )
+        };
+      }
     ],
     [
       "POST /agent/adapter/package/os-isolation-sandbox-launch",

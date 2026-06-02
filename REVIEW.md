@@ -1,3 +1,33 @@
+# Goal 3 Task 175 / Agent Adapter OS-Isolation Provider Runner Contract
+
+Scope: add a service-owned provider-runner contract/unavailable-blocker layer between Task171 sandbox-launch preflight and Task172 sandbox execution probe, without claiming executed OS isolation or allowing caller-supplied runner metadata to become evidence.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and treated Task174's next step as authoritative.
+- Used one read-only explorer subagent for Task175 scoping; it recommended a provider-runner contract plus fail-closed Windows AppContainer unavailable path rather than an overclaiming sandbox success surface.
+- Added `goal3-task175-agent-adapter-os-isolation-provider-runner.test.mjs`.
+- Added `prepareAgentAdapterOsIsolationProviderRunner()` and `POST /agent/adapter/package/os-isolation-provider-runner`.
+- Added `agent_adapter_os_isolation_provider_runner_contract` to the service capability ledger.
+- Provider-runner manifests write `.comath/release/agent-adapter-os-isolation/<runner_id>/provider-runner.json`, bind the ready Task171 launch artifact, adapter id, backend, provider, launcher hash, fixed provider argv template, and service-owned environment policy.
+- Default route/service behavior records `blocked_provider_runner_unavailable` when no service-owned provider helper is configured.
+- Caller command, argv, env, runner hashes, and success-shaped metadata are ignored for readiness, sanitized from public output, and cannot resolve a provider runner.
+- Updated README, TODO, AGENTS, adapter contracts, GA release criteria, threat model, and Goal 3 tracker wording to keep provider-runner contracts non-authoritative.
+
+Verification evidence:
+
+- TDD RED: after adding Task175 test and before implementation, `node services/comathd/tests/unit/goal3-task175-agent-adapter-os-isolation-provider-runner.test.mjs` failed because `../../dist/index.js` did not export `prepareAgentAdapterOsIsolationProviderRunner`.
+- GREEN focused test exited 0: Task175 provider runner contract.
+- GREEN adjacent focused regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task170 configured-host collection, Task171 sandbox launch preflight, Task172 sandbox execution probe bridge, Phase43 adapter package, and Phase44 external invocation.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task175 discovered by the default runner. The first comathd test command hit a 120s tool timeout; rerunning with a 300s timeout exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task175 prepares a provider runner contract and unavailable blocker. It still does not execute adapters through OCI/Nix/Firejail/Windows AppContainer/macOS helpers, does not collect OS-enforcement evidence, does not satisfy readiness by itself, does not promote mathematical claims, does not certify GA, and does not provide durable long-lived operator transport.
+
+Residual risks: Goal 3 remains incomplete. Actual provider helper execution, broad cross-platform OS-enforced adapter execution, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 174 / Comprehensive Check-Debug Loop After OS-Isolation Sandbox/Pi Boundary
 
 Scope: perform the every-third-task comprehensive check-debug loop over Tasks171-173, focusing on adapter OS-isolation sandbox-launch preflight, sandbox execution probe bridge, Pi release consumer wiring, readiness-gate evidence boundaries, public wording, Pi thin-client constraints, and runtime cleanliness.
