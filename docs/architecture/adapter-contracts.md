@@ -53,6 +53,8 @@ Any Lean source from a backend must be rechecked by the service-owned LeanRunner
 
 Agent adapter package launch metadata records whether an adapter currently runs behind `process_boundary_only` or has service-owned OS-isolation evidence. A release-readiness review may accept OS-enforced isolation only when the evidence is produced by a `comathd` service-owned collector and is bound to adapter id, backend, provider, probe id, stdout/stderr/transcript hashes, process isolation, filesystem scope, network isolation, no-new-privileges, and escape-prevention checks.
 
+Provider-specific sandbox launch preflight is a separate service-owned manifest. It may record that a configured provider such as OCI, Nix, Firejail, Windows AppContainer, or macOS `sandbox-exec` is ready for a future service-owned execution probe, but it does not by itself record adapter execution, kernel/firewall isolation, or GA readiness. Preflight manifests must keep `shell=false`, `network_policy=disabled`, `command_override_allowed=false`, `caller_supplied_success_allowed=false`, `proof_authority="none"`, and `can_certify_ga=false`.
+
 Caller-supplied request fields, Pi payloads, operator attestations, contract-only metadata, package launch metadata, and health-probe text cannot satisfy the OS-isolation readiness gate. They remain blocker evidence or diagnostics with `proof_authority: "none"`, `can_promote_claim: false`, and `can_certify_ga: false`.
 
 ## Literature And Ingestion Adapters

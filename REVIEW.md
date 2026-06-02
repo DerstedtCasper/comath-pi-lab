@@ -1,3 +1,33 @@
+# Goal 3 Task 171 / Agent Adapter OS-Isolation Sandbox Launch Preflight
+
+Scope: add a service-owned provider-specific sandbox-launch preflight manifest for adapter OS-isolation work, while preserving the Task167-170 boundary that preflight is not collected execution evidence, not readiness-review evidence, not proof authority, and not GA certification.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and treated Task170's next step as authoritative.
+- Added `goal3-task171-agent-adapter-os-isolation-sandbox-launch.test.mjs`.
+- Added `prepareAgentAdapterOsIsolationSandboxLaunch()` and `POST /agent/adapter/package/os-isolation-sandbox-launch`.
+- Added `agent_adapter_os_isolation_sandbox_launch_preflight` to the service capability ledger.
+- The preflight manifest writes `.comath/release/agent-adapter-os-isolation/<launch_id>/sandbox-launch.json`, binds adapter id/backend/provider, records a provider command contract with `shell=false`, `network_policy=disabled`, `command_override_allowed=false`, and `caller_supplied_success_allowed=false`, and remains `proof_authority: none` with `can_promote_claim=false` and `can_certify_ga=false`.
+- Updated README, TODO, adapter contracts, GA release criteria, and threat model to document that sandbox-launch preflight is distinct from collected OS-enforced adapter execution evidence.
+
+Boundary hardening:
+
+- Caller-supplied `launcher_environment` metadata, launcher hashes, command overrides, Pi/request payloads, and success-shaped fields cannot make a route result ready or satisfy the Task167 readiness review.
+- A ready preflight can be produced only through an internal service-owned `launcher_probe` callback. Even then it only marks readiness for a future service-owned OS-sandbox execution probe; `adapter_execution_isolation.os_enforced` remains false until collected execution evidence is produced through the Task170 collector path and accepted by the readiness gate.
+- Preflight manifests are append-only by `launch_id`, scrub host paths/secrets, and audit `agent_adapter.os_isolation_sandbox_launch_preflighted` with non-authority semantics.
+
+Verification evidence:
+
+- TDD RED: after adding Task171 test and before implementation, `node services/comathd/tests/unit/goal3-task171-agent-adapter-os-isolation-sandbox-launch.test.mjs` failed because `../../dist/index.js` did not provide `prepareAgentAdapterOsIsolationSandboxLaunch`.
+- GREEN focused test exited 0: Task171 adapter OS-isolation sandbox launch.
+- GREEN adjacent focused regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task170 adapter OS-isolation host collection, Phase43 agent adapter package, and Phase44 Codex external invocation. An initial Phase44 command used the old wrong filename and failed with `MODULE_NOT_FOUND`; the correct `phase44-codex-cli-external-invocation.test.mjs` then exited 0.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task171 discovered by the default comathd runner.
+
+Boundary notes: Task171 adds a service-owned preflight contract for provider-specific sandbox launch preparation. It does not run adapters inside OCI/Nix/Firejail/AppContainer/macOS sandbox, does not guarantee kernel/firewall isolation on this workstation, does not promote mathematical claims, does not certify GA, and does not provide durable long-lived operator transport.
+
+Residual risks: Goal 3 remains incomplete. Actual service-owned sandbox execution runners, broad cross-platform OS-enforced adapter execution, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 170 / Agent Adapter OS-Isolation Host Collection Contract
 
 Scope: extend the Task168 adapter OS-isolation probe producer so configured-host OS-enforcement collection can be recorded through a service-owned collector contract, while preserving the Task167 readiness boundary that caller-supplied request metadata, Pi payloads, operator attestations, and package metadata cannot self-certify OS isolation.

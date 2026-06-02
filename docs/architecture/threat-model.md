@@ -49,11 +49,15 @@ Snapshots, logs, adapter outputs, and evidence packs may expose host paths, API 
 
 Child processes may write outside scope, run shell strings, or consume unbounded resources. Mitigation: allowlisted realpaths, `shell:false`, scoped cwd/log paths, writer locks, rpm limits, timeouts, byte caps, cancellation, and future OS-level isolation before stronger production claims.
 
+### Sandbox Preflight Confusion
+
+Provider-specific sandbox launch manifests may be mistaken for executed isolation evidence. Mitigation: sandbox-launch preflight records only a service-owned provider-command contract, keeps command overrides and caller-supplied success metadata untrusted, and cannot satisfy the adapter OS-isolation readiness gate. Readiness still requires a later service-owned collected execution probe with bound stdout/stderr/transcript hashes and OS-enforcement checks.
+
 ## Residual Risks
 
 - Pattern-based secret scanning is not full DLP.
 - Service-level network-denial metadata is not equivalent to OS/kernel-enforced network isolation.
+- Adapter sandbox-launch preflight is not equivalent to actually executing adapters inside an OS-enforced sandbox.
 - Injected-client Codex API tests are not live production account validation.
 - Goal 3 positive acceptance breadth is representative unless the full 100-task matrix is clean-replayed.
 - Documentation must continue to distinguish implemented trust gates from final global GA completion.
-
