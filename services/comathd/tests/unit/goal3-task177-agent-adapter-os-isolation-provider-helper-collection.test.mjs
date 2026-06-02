@@ -12,7 +12,8 @@ import {
   prepareAgentAdapterOsIsolationSandboxLaunch,
   readAuditEvents,
   reviewAgentAdapterOsIsolationReadiness,
-  runAgentAdapterOsIsolationProviderHelperExecution
+  runAgentAdapterOsIsolationProviderHelperExecution,
+  validateAgentAdapterOsIsolationProviderHelperHost
 } from "../../dist/index.js";
 
 function sha256File(path) {
@@ -147,9 +148,45 @@ try {
   });
   assert.equal(readyRunner.ok, true, "ready provider-runner manifest is required before provider helper execution");
 
+  const readyHost = validateAgentAdapterOsIsolationProviderHelperHost(projectRoot, {
+    project_id: projectId,
+    host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0177-READY",
+    runner_id: readyRunner.runner_id,
+    launch_id: launch.launch_id,
+    adapter_id: "codex-cli",
+    backend: "external",
+    actor: `${projectRoot} token=host-secret`,
+    requested_provider: "windows_appcontainer",
+    host_environment: {
+      platform: "win32",
+      notes: `${projectRoot} password=host-secret`
+    }
+  }, {
+    provider_helper_host_validator: (hostInput) => {
+      assert.equal(hostInput.project_root, projectRoot);
+      assert.equal(hostInput.project_id, projectId);
+      assert.equal(hostInput.host_validation_id, "ADAPTER-OSISO-HELPER-HOST-0177-READY");
+      assert.equal(hostInput.runner_id, readyRunner.runner_id);
+      assert.equal(hostInput.launch_id, launch.launch_id);
+      assert.equal(hostInput.provider, "windows_appcontainer");
+      assert.equal(hostInput.runner_binary_sha256, helperBinarySha256);
+      return {
+        validation_source: "service_owned_provider_helper_host_validator",
+        helper_host_ready: true,
+        helper_program: process.execPath,
+        helper_binary_sha256: helperBinarySha256,
+        helper_version: "node-provider-helper-test",
+        supported_platforms: ["win32"],
+        diagnostics: [`${projectRoot} host validation diagnostic must be scrubbed`, "helper host ready"]
+      };
+    }
+  });
+  assert.equal(readyHost.ok, true, "ready provider-helper host validation is required before provider helper collection fixtures");
+
   const helperExecution = runAgentAdapterOsIsolationProviderHelperExecution(projectRoot, {
     project_id: projectId,
     helper_execution_id: "ADAPTER-OSISO-HELPER-0177-READY",
+    host_validation_id: readyHost.host_validation_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
     adapter_id: "codex-cli",
@@ -181,12 +218,14 @@ try {
   });
   assert.equal(helperExecution.ok, true, "Task177 positive path starts from a real service-owned helper execution attempt");
   assert.equal(helperExecution.helper_execution_status, "provider_helper_execution_attempted");
+  assert.equal(helperExecution.provider_helper_host_validation_binding.bound, true);
 
   const failedHelperScript = join(projectRoot, "task177-provider-helper-failed.mjs");
   writeFileSync(failedHelperScript, "console.error('provider helper failed'); process.exit(2);\n", "utf8");
   const failedHelperExecution = runAgentAdapterOsIsolationProviderHelperExecution(projectRoot, {
     project_id: projectId,
     helper_execution_id: "ADAPTER-OSISO-HELPER-0177-FAILED",
+    host_validation_id: readyHost.host_validation_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
     adapter_id: "codex-cli",

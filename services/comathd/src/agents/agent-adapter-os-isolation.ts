@@ -313,6 +313,9 @@ export type AgentAdapterOsIsolationProviderHelperExecutionStatus =
   | "provider_helper_execution_attempted"
   | "blocked_provider_runner_manifest_missing"
   | "blocked_provider_runner_binding_mismatch"
+  | "blocked_provider_helper_host_validation_missing"
+  | "blocked_provider_helper_host_validation_not_validated"
+  | "blocked_provider_helper_host_validation_binding_mismatch"
   | "blocked_provider_helper_not_configured"
   | "blocked_provider_helper_binary_mismatch"
   | "blocked_provider_helper_launch_failed"
@@ -379,6 +382,7 @@ export type AgentAdapterOsIsolationProviderRunnerInput = {
 export type AgentAdapterOsIsolationProviderHelperExecutionInput = {
   project_id: string;
   helper_execution_id?: string;
+  host_validation_id?: string;
   runner_id: string;
   launch_id: string;
   adapter_id: AgentAdapterPackageId;
@@ -749,6 +753,7 @@ export type AgentAdapterOsIsolationProviderRunnerArtifact = {
 export type AgentAdapterOsIsolationProviderHelperExecution = {
   schema_version: "comath.agent_adapter_os_isolation_provider_helper_execution.v1";
   helper_execution_id: string;
+  host_validation_id: string | null;
   project_id: string;
   runner_id: string;
   launch_id: string;
@@ -763,6 +768,20 @@ export type AgentAdapterOsIsolationProviderHelperExecution = {
   helper_execution_path: string;
   launch_artifact: AgentAdapterOsIsolationLaunchArtifact | null;
   runner_artifact: AgentAdapterOsIsolationProviderRunnerArtifact | null;
+  host_validation_artifact: AgentAdapterOsIsolationProviderHelperHostValidationArtifact | null;
+  provider_helper_host_validation_binding: {
+    bound: boolean;
+    host_validation_id: string | null;
+    host_validation_status: AgentAdapterOsIsolationProviderHelperHostValidationStatus | null;
+    validation_source: "service_owned_provider_helper_host_validator" | "missing";
+    helper_binary_sha256: string | null;
+    runner_binary_sha256: string | null;
+    hashes_match_provider_runner: boolean;
+    platform: string | null;
+    platform_supported: boolean;
+    diagnostics: string[];
+    proof_authority: "none";
+  };
   provider_helper_execution: {
     helper_source: "service_owned_provider_helper_config" | "missing";
     helper_configured: boolean;
@@ -808,6 +827,13 @@ export type AgentAdapterOsIsolationProviderHelperExecution = {
 
 export type AgentAdapterOsIsolationProviderHelperExecutionArtifact = {
   kind: "agent_adapter_os_isolation_provider_helper_execution";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type AgentAdapterOsIsolationProviderHelperHostValidationArtifact = {
+  kind: "agent_adapter_os_isolation_provider_helper_host_validation";
   path: string;
   sha256: string;
   size_bytes: number;
@@ -1384,6 +1410,36 @@ function readProviderHelperExecutionArtifact(
   };
 }
 
+function readProviderHelperHostValidationArtifact(
+  projectRoot: string,
+  hostValidationId: string
+): {
+  artifact: AgentAdapterOsIsolationProviderHelperHostValidationArtifact;
+  hostValidation: AgentAdapterOsIsolationProviderHelperHostValidation;
+} | null {
+  const path = providerHelperHostValidationPath(hostValidationId);
+  const absolutePath = assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    return null;
+  }
+  const bytes = readFileSync(absolutePath);
+  let parsed: AgentAdapterOsIsolationProviderHelperHostValidation;
+  try {
+    parsed = JSON.parse(bytes.toString("utf8")) as AgentAdapterOsIsolationProviderHelperHostValidation;
+  } catch {
+    return null;
+  }
+  return {
+    artifact: {
+      kind: "agent_adapter_os_isolation_provider_helper_host_validation",
+      path,
+      sha256: sha256Text(bytes.toString("utf8")),
+      size_bytes: bytes.byteLength
+    },
+    hostValidation: parsed
+  };
+}
+
 function normalizeRequestedProvider(value: string | undefined): {
   requestedProvider: string;
   knownProvider: AgentAdapterOsIsolationProvider | null;
@@ -1937,6 +1993,15 @@ function providerHelperReplayableNextAction(status: AgentAdapterOsIsolationProvi
   if (status === "blocked_provider_runner_binding_mismatch") {
     return "Run provider helper execution with the exact project, adapter, backend, provider, launch, and runner bound by the ready provider-runner manifest.";
   }
+  if (status === "blocked_provider_helper_host_validation_missing") {
+    return "Run service-owned provider-helper host validation and pass its append-only host_validation_id before executing the provider helper.";
+  }
+  if (status === "blocked_provider_helper_host_validation_not_validated") {
+    return "Retry provider helper execution only after the referenced host-validation manifest is provider_helper_host_validated by a service-owned validator.";
+  }
+  if (status === "blocked_provider_helper_host_validation_binding_mismatch") {
+    return "Bind provider helper execution to a host-validation manifest with the exact project, adapter, backend, provider, launch, runner, artifact hashes, and helper binary hash.";
+  }
   if (status === "blocked_provider_helper_not_configured") {
     return "Configure a service-owned OS sandbox provider helper executable; caller-supplied command, argv, env, or success metadata cannot configure it.";
   }
@@ -1955,6 +2020,9 @@ function providerHelperReplayableNextAction(status: AgentAdapterOsIsolationProvi
 function helperExecutionStatus(input: {
   runnerReady: boolean;
   runnerMatches: boolean;
+  hostValidationPresent: boolean;
+  hostValidationValidated: boolean;
+  hostValidationMatches: boolean;
   configAccepted: boolean;
   helperHashMatches: boolean;
   launchFailed: boolean;
@@ -1965,6 +2033,15 @@ function helperExecutionStatus(input: {
   }
   if (!input.runnerMatches) {
     return "blocked_provider_runner_binding_mismatch";
+  }
+  if (!input.hostValidationPresent) {
+    return "blocked_provider_helper_host_validation_missing";
+  }
+  if (!input.hostValidationValidated) {
+    return "blocked_provider_helper_host_validation_not_validated";
+  }
+  if (!input.hostValidationMatches) {
+    return "blocked_provider_helper_host_validation_binding_mismatch";
   }
   if (!input.configAccepted) {
     return "blocked_provider_helper_not_configured";
@@ -1981,6 +2058,78 @@ function helperExecutionStatus(input: {
   return "provider_helper_execution_attempted";
 }
 
+function providerHelperHostValidationIsExecutable(
+  hostValidationBundle: { hostValidation: AgentAdapterOsIsolationProviderHelperHostValidation } | null
+): boolean {
+  const hostValidation = hostValidationBundle?.hostValidation;
+  return Boolean(
+    hostValidation &&
+      hostValidation.schema_version === "comath.agent_adapter_os_isolation_provider_helper_host_validation.v1" &&
+      hostValidation.ok === true &&
+      hostValidation.host_validation_status === "provider_helper_host_validated" &&
+      hostValidation.provider_helper_host_ready === true &&
+      hostValidation.provider_helper_host_validation.validation_source === "service_owned_provider_helper_host_validator" &&
+      hostValidation.provider_helper_host_validation.hashes_match_provider_runner === true &&
+      hostValidation.provider_helper_host_validation.platform_supported === true &&
+      hostValidation.provider_helper_host_validation.shell === false &&
+      hostValidation.provider_helper_host_validation.network_policy === "disabled" &&
+      hostValidation.provider_helper_host_validation.command_override_allowed === false &&
+      hostValidation.provider_helper_host_validation.environment_override_allowed === false &&
+      hostValidation.provider_helper_host_validation.caller_supplied_success_allowed === false &&
+      hostValidation.proof_authority === "none" &&
+      hostValidation.can_promote_claim === false &&
+      hostValidation.can_certify_ga === false &&
+      osEnforcedProviders.has(hostValidation.provider)
+  );
+}
+
+function providerHelperHostValidationMatchesExecutionInput(input: {
+  hostValidationBundle: {
+    artifact: AgentAdapterOsIsolationProviderHelperHostValidationArtifact;
+    hostValidation: AgentAdapterOsIsolationProviderHelperHostValidation;
+  } | null;
+  runnerBundle: { artifact: AgentAdapterOsIsolationProviderRunnerArtifact; runner: AgentAdapterOsIsolationProviderRunner } | null;
+  launchBundle: { artifact: AgentAdapterOsIsolationLaunchArtifact; launch: AgentAdapterOsIsolationSandboxLaunch } | null;
+  projectId: string;
+  hostValidationId: string | null;
+  runnerId: string;
+  launchId: string;
+  adapterId: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+}): boolean {
+  const hostValidation = input.hostValidationBundle?.hostValidation;
+  const runnerArtifact = input.runnerBundle?.artifact;
+  const runner = input.runnerBundle?.runner;
+  const launchArtifact = input.launchBundle?.artifact;
+  if (!hostValidation || !runnerArtifact || !runner || !launchArtifact || !input.hostValidationId) {
+    return false;
+  }
+  const runnerBinarySha256 = runner.provider_runner_resolution.runner_binary_sha256;
+  return Boolean(
+    hostValidation.project_id === input.projectId &&
+      hostValidation.host_validation_id === input.hostValidationId &&
+      hostValidation.runner_id === input.runnerId &&
+      hostValidation.launch_id === input.launchId &&
+      hostValidation.adapter_id === input.adapterId &&
+      hostValidation.backend === input.backend &&
+      hostValidation.provider === input.provider &&
+      hostValidation.runner_artifact?.path === runnerArtifact.path &&
+      hostValidation.runner_artifact?.sha256 === runnerArtifact.sha256 &&
+      hostValidation.runner_artifact?.size_bytes === runnerArtifact.size_bytes &&
+      hostValidation.launch_artifact?.path === launchArtifact.path &&
+      hostValidation.launch_artifact?.sha256 === launchArtifact.sha256 &&
+      hostValidation.launch_artifact?.size_bytes === launchArtifact.size_bytes &&
+      isSha256(hostValidation.provider_helper_host_validation.helper_binary_sha256) &&
+      isSha256(hostValidation.provider_helper_host_validation.runner_binary_sha256) &&
+      isSha256(runnerBinarySha256) &&
+      hostValidation.provider_helper_host_validation.runner_binary_sha256.toLowerCase() ===
+        runnerBinarySha256.toLowerCase() &&
+      hostValidation.provider_helper_host_validation.helper_binary_sha256.toLowerCase() ===
+        runnerBinarySha256.toLowerCase()
+  );
+}
+
 function providerHelperExecutionIsCollectable(
   helperBundle: { helperExecution: AgentAdapterOsIsolationProviderHelperExecution } | null
 ): boolean {
@@ -1991,6 +2140,16 @@ function providerHelperExecutionIsCollectable(
       helperExecution.ok === true &&
       helperExecution.helper_execution_status === "provider_helper_execution_attempted" &&
       helperExecution.provider_helper_attempted === true &&
+      helperExecution.host_validation_artifact &&
+      helperExecution.host_validation_artifact.kind === "agent_adapter_os_isolation_provider_helper_host_validation" &&
+      isSha256(helperExecution.host_validation_artifact.sha256) &&
+      helperExecution.provider_helper_host_validation_binding.bound === true &&
+      helperExecution.provider_helper_host_validation_binding.validation_source === "service_owned_provider_helper_host_validator" &&
+      helperExecution.provider_helper_host_validation_binding.host_validation_status === "provider_helper_host_validated" &&
+      helperExecution.provider_helper_host_validation_binding.hashes_match_provider_runner === true &&
+      helperExecution.provider_helper_host_validation_binding.platform_supported === true &&
+      isSha256(helperExecution.provider_helper_host_validation_binding.helper_binary_sha256) &&
+      isSha256(helperExecution.provider_helper_host_validation_binding.runner_binary_sha256) &&
       helperExecution.provider_helper_execution.helper_source === "service_owned_provider_helper_config" &&
       helperExecution.provider_helper_execution.helper_exit_code === 0 &&
       helperExecution.provider_helper_execution.shell === false &&
@@ -2683,7 +2842,37 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
   });
   const readyRunnerBundle = runnerReady && runnerMatches ? runnerBundle : null;
   const launchBundle = readSandboxLaunchArtifact(projectRoot, input.launch_id);
-  const config = readyRunnerBundle
+  const hostValidationId = input.host_validation_id ?? null;
+  const hostValidationBundle = hostValidationId
+    ? readProviderHelperHostValidationArtifact(projectRoot, hostValidationId)
+    : null;
+  const hostValidation = hostValidationBundle?.hostValidation;
+  const hostValidationPresent = Boolean(hostValidationId && hostValidationBundle);
+  const hostValidationValidated = providerHelperHostValidationIsExecutable(hostValidationBundle);
+  const hostValidationMatches = providerHelperHostValidationMatchesExecutionInput({
+    hostValidationBundle,
+    runnerBundle,
+    launchBundle,
+    projectId: input.project_id,
+    hostValidationId,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+  const hostValidationBindingAccepted = hostValidationPresent && hostValidationValidated && hostValidationMatches;
+  const hostValidationBindingDiagnostics = [
+    hostValidationId ? `host_validation_id=${sanitizeProbeText(hostValidationId)}` : "host_validation_id=missing",
+    hostValidation?.host_validation_status
+      ? `host_validation_status=${sanitizeProbeText(hostValidation.host_validation_status)}`
+      : undefined,
+    ...sanitizeDiagnostics(hostValidation?.provider_helper_host_validation.diagnostics),
+    hostValidationBindingAccepted
+      ? "Service-owned provider-helper execution is bound to a validated host-validation manifest."
+      : "Provider-helper execution is blocked until a matching service-owned host-validation manifest is supplied."
+  ].filter((entry): entry is string => Boolean(entry));
+  const config = readyRunnerBundle && hostValidationBindingAccepted
     ? (options.provider_helper_config_resolver ?? defaultProviderHelperConfigResolver)({
         project_root: projectRoot,
         project_id: input.project_id,
@@ -2725,7 +2914,7 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
       helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase()
   );
   const helperArgsPrefix = configAccepted ? sanitizeHelperArgsPrefix(config?.helper_args_prefix) : [];
-  const shouldSpawn = Boolean(configAccepted && helperHashMatches && helperProgram);
+  const shouldSpawn = Boolean(hostValidationBindingAccepted && configAccepted && helperHashMatches && helperProgram);
   const spawned = shouldSpawn
     ? spawnSync(helperProgram as string, [...helperArgsPrefix, ...fixedArgs], {
         cwd: projectRoot,
@@ -2749,6 +2938,9 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
   const status = helperExecutionStatus({
     runnerReady,
     runnerMatches,
+    hostValidationPresent,
+    hostValidationValidated,
+    hostValidationMatches,
     configAccepted,
     helperHashMatches,
     launchFailed,
@@ -2759,6 +2951,7 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
   const transcriptSha256 = shouldSpawn
     ? sha256Text(canonicalJson({
         helper_execution_id: helperExecutionId,
+        host_validation_id: hostValidationId,
         runner_id: input.runner_id,
         launch_id: input.launch_id,
         helper_binary_sha256: helperHash?.sha256 ?? null,
@@ -2774,6 +2967,7 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
   const diagnostics = [
     input.helper_environment?.platform ? `platform=${sanitizeProbeText(input.helper_environment.platform)}` : undefined,
     input.helper_environment?.notes ? sanitizeProbeText(input.helper_environment.notes) : undefined,
+    ...hostValidationBindingDiagnostics,
     ...sanitizeDiagnostics(config?.diagnostics),
     spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined,
     ok
@@ -2784,6 +2978,7 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
   const helperExecution: AgentAdapterOsIsolationProviderHelperExecution = {
     schema_version: "comath.agent_adapter_os_isolation_provider_helper_execution.v1",
     helper_execution_id: helperExecutionId,
+    host_validation_id: hostValidationId,
     project_id: input.project_id,
     runner_id: input.runner_id,
     launch_id: input.launch_id,
@@ -2798,6 +2993,27 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
     helper_execution_path: path,
     launch_artifact: readyRunnerBundle?.runner.launch_artifact ?? launchBundle?.artifact ?? null,
     runner_artifact: runnerBundle?.artifact ?? null,
+    host_validation_artifact: hostValidationBundle?.artifact ?? null,
+    provider_helper_host_validation_binding: {
+      bound: hostValidationBindingAccepted,
+      host_validation_id: hostValidationId,
+      host_validation_status: hostValidation?.host_validation_status ?? null,
+      validation_source:
+        hostValidation?.provider_helper_host_validation.validation_source === "service_owned_provider_helper_host_validator"
+          ? "service_owned_provider_helper_host_validator"
+          : "missing",
+      helper_binary_sha256: isSha256(hostValidation?.provider_helper_host_validation.helper_binary_sha256)
+        ? hostValidation.provider_helper_host_validation.helper_binary_sha256.toLowerCase()
+        : null,
+      runner_binary_sha256: isSha256(hostValidation?.provider_helper_host_validation.runner_binary_sha256)
+        ? hostValidation.provider_helper_host_validation.runner_binary_sha256.toLowerCase()
+        : null,
+      hashes_match_provider_runner: hostValidation?.provider_helper_host_validation.hashes_match_provider_runner === true,
+      platform: hostValidation?.provider_helper_host_validation.platform ?? null,
+      platform_supported: hostValidation?.provider_helper_host_validation.platform_supported === true,
+      diagnostics: hostValidationBindingDiagnostics,
+      proof_authority: "none"
+    },
     provider_helper_execution: {
       helper_source: configAccepted ? "service_owned_provider_helper_config" : "missing",
       helper_configured: configAccepted,
@@ -2852,12 +3068,15 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
     target_id: input.project_id,
     payload: {
       helper_execution_id: helperExecutionId,
+      host_validation_id: hostValidationId,
       runner_id: input.runner_id,
       launch_id: input.launch_id,
       adapter_id: input.adapter_id,
       backend,
       ok,
       helper_execution_status: status,
+      host_validation_status: hostValidation?.host_validation_status ?? null,
+      host_validation_bound: hostValidationBindingAccepted,
       provider,
       provider_helper_attempted: attempted,
       helper_exit_code: attempted ? exitCode : null,

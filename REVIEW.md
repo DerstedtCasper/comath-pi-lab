@@ -1,3 +1,31 @@
+# Goal 3 Task 179 / Agent Adapter OS-Isolation Provider Helper Execution Host-Validation Binding
+
+Scope: harden Task176 provider-helper execution so a helper process cannot be configured or spawned unless the request binds to a prior append-only Task178 host-validation manifest that was service-owned, validated, and exactly bound to the same runner/launch/provider artifact chain.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and treated Task178's next step as authoritative.
+- Used one read-only explorer subagent to check the Task179 frontier and OS-isolation residual blocker.
+- Added `goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs`.
+- Added `host_validation_id` to provider-helper execution inputs and persisted helper execution manifests.
+- Added service-owned host-validation artifact reading and binding checks before the helper config resolver or helper process can run.
+- Added fail-closed execution statuses for missing host-validation artifacts, unvalidated host-validation artifacts, and host-validation binding mismatches.
+- Hardened helper collection so only host-validation-bound successful helper executions are collectable into canonical Task170 probe/evidence artifacts.
+- Updated Task176 and Task177 regressions so their positive helper execution fixtures first create validated Task178 host-validation manifests.
+- Updated README, TODO, AGENTS, adapter contracts, GA release criteria, threat model, and Goal 3 tracker wording to keep host-bound helper execution non-authoritative.
+
+Verification evidence:
+
+- TDD RED: after adding Task179 test and before implementation, `node services/comathd/tests/unit/goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs` failed because old helper execution still returned `provider_helper_execution_attempted` without a `host_validation_id`.
+- GREEN focused tests exited 0: Task179 host-validation-bound helper execution, Task176 provider-helper execution, Task177 provider-helper collection, and Task178 provider-helper host validation.
+- GREEN adjacent focused regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task170 configured-host collection, Task172 sandbox execution probe, Task175 provider-runner contract, Phase43 agent adapter package, and Phase44 Codex external invocation.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task179 discovered by the default comathd runner.
+- Post-code `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath .comath` returned `False`; `git ls-files -o --exclude-standard` showed only the new Task179 test before tracker update.
+
+Boundary notes: Task179 prevents caller/route payloads or helper config resolvers from making provider-helper execution proceed without a matching service-owned host-validation artifact. Host-bound helper execution is still not collected OS-enforcement evidence, not readiness evidence, not mathematical proof authority, not GA certification, and not a production cross-platform sandbox runner.
+
+Residual risks: Goal 3 remains incomplete. Task179 still does not implement production helper binaries for every OCI/Nix/Firejail/Windows AppContainer/macOS host, does not guarantee kernel/firewall isolation on this workstation, does not provide broad cross-platform OS-enforced adapter execution, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete nontrivial theorem synthesis, does not provide fully interactive end-to-end real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 178 / Agent Adapter OS-Isolation Provider Helper Host Validation
 
 Scope: add a service-owned provider-helper host-validation manifest after Task175 provider-runner contracts, without allowing route payloads, helper-host-ready booleans, caller-supplied hashes, or supported-platform claims to become readiness evidence, OS-enforcement evidence, proof authority, or GA certification.

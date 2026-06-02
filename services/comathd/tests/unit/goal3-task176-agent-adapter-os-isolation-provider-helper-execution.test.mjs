@@ -11,7 +11,8 @@ import {
   prepareAgentAdapterOsIsolationSandboxLaunch,
   readAuditEvents,
   reviewAgentAdapterOsIsolationReadiness,
-  runAgentAdapterOsIsolationProviderHelperExecution
+  runAgentAdapterOsIsolationProviderHelperExecution,
+  validateAgentAdapterOsIsolationProviderHelperHost
 } from "../../dist/index.js";
 
 function sha256File(path) {
@@ -178,8 +179,8 @@ try {
   assert.equal(callerOnlyRoute.status, 200, JSON.stringify(callerOnlyRoute.body));
   assert.equal(
     callerOnlyRoute.body.helper_execution.helper_execution_status,
-    "blocked_provider_helper_not_configured",
-    "route callers cannot self-configure the provider helper"
+    "blocked_provider_helper_host_validation_missing",
+    "route callers cannot self-configure or self-validate the provider helper host"
   );
   assert.equal(callerOnlyRoute.body.helper_execution.provider_helper_attempted, false);
   assert.equal(callerOnlyRoute.body.helper_execution.can_certify_ga, false);
@@ -188,9 +189,45 @@ try {
   assert.equal(JSON.stringify(callerOnlyRoute.body).includes("unsafe-route-helper"), false, "route response must not echo caller command overrides");
   assert.equal(JSON.stringify(callerOnlyRoute.body).includes("--unsafe"), false, "route response must not echo caller argv overrides");
 
+  const readyHost = validateAgentAdapterOsIsolationProviderHelperHost(projectRoot, {
+    project_id: projectId,
+    host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0176-READY",
+    runner_id: readyRunner.runner_id,
+    launch_id: launch.launch_id,
+    adapter_id: "codex-cli",
+    backend: "external",
+    actor: `${projectRoot} token=host-secret`,
+    requested_provider: "windows_appcontainer",
+    host_environment: {
+      platform: "win32",
+      notes: `${projectRoot} password=host-secret`
+    }
+  }, {
+    provider_helper_host_validator: (hostInput) => {
+      assert.equal(hostInput.project_root, projectRoot);
+      assert.equal(hostInput.project_id, projectId);
+      assert.equal(hostInput.host_validation_id, "ADAPTER-OSISO-HELPER-HOST-0176-READY");
+      assert.equal(hostInput.runner_id, readyRunner.runner_id);
+      assert.equal(hostInput.launch_id, launch.launch_id);
+      assert.equal(hostInput.provider, "windows_appcontainer");
+      assert.equal(hostInput.runner_binary_sha256, helperBinarySha256);
+      return {
+        validation_source: "service_owned_provider_helper_host_validator",
+        helper_host_ready: true,
+        helper_program: process.execPath,
+        helper_binary_sha256: helperBinarySha256,
+        helper_version: "node-provider-helper-test",
+        supported_platforms: ["win32"],
+        diagnostics: [`${projectRoot} host validation diagnostic must be scrubbed`, "helper host ready"]
+      };
+    }
+  });
+  assert.equal(readyHost.ok, true, "ready provider-helper host validation is required before helper execution");
+
   const helperExecution = runAgentAdapterOsIsolationProviderHelperExecution(projectRoot, {
     project_id: projectId,
     helper_execution_id: "ADAPTER-OSISO-HELPER-0176-READY",
+    host_validation_id: readyHost.host_validation_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
     adapter_id: "codex-cli",
@@ -236,6 +273,9 @@ try {
   assert.equal(helperExecution.schema_version, "comath.agent_adapter_os_isolation_provider_helper_execution.v1");
   assert.equal(helperExecution.ok, true, "service-owned provider helper should be executed as a real child process");
   assert.equal(helperExecution.helper_execution_status, "provider_helper_execution_attempted");
+  assert.equal(helperExecution.host_validation_artifact.path, readyHost.host_validation_path);
+  assert.equal(helperExecution.provider_helper_host_validation_binding.bound, true);
+  assert.equal(helperExecution.provider_helper_host_validation_binding.host_validation_status, "provider_helper_host_validated");
   assert.equal(helperExecution.launch_artifact.path, launch.launch_path);
   assert.equal(helperExecution.runner_artifact.path, readyRunner.runner_path);
   assert.equal(helperExecution.provider, "windows_appcontainer");
