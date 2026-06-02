@@ -78,6 +78,7 @@ import {
   formatAgentRunLogSseSnapshot,
   probeAgentAdapterHealth,
   readAgentRunLogs,
+  reviewAgentAdapterOsIsolationReadiness,
   streamAgentRunLogs,
   validateAgentProfiles
 } from "../agents/index.js";
@@ -314,6 +315,32 @@ async function route(method: string, path: string, body: unknown, context: Route
     [
       "GET /agent/adapter/package/list",
       () => ({ packages: listAgentAdapterPackages() })
+    ],
+    [
+      "POST /agent/adapter/package/os-isolation-review",
+      (payload) => {
+        const body = payload as {
+          project_root: string;
+          project_id: string;
+          review_id?: string;
+          adapter_id: string;
+          backend?: "bundled" | "external" | "codex-api";
+          evidence_path?: string;
+          actor: string;
+        };
+        return {
+          review: sanitizePublicFormalAuthorityVocabulary(
+            reviewAgentAdapterOsIsolationReadiness(body.project_root, {
+              project_id: body.project_id,
+              review_id: body.review_id,
+              adapter_id: body.adapter_id as Parameters<typeof reviewAgentAdapterOsIsolationReadiness>[1]["adapter_id"],
+              backend: body.backend,
+              evidence_path: body.evidence_path,
+              actor: body.actor
+            })
+          )
+        };
+      }
     ],
     ["POST /project/init", (payload) => initProject(payload as { name?: string; root_path: string })],
     [

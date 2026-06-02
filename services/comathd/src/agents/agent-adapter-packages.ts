@@ -6,6 +6,7 @@ import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
 import type { AgentRun } from "../types/schemas.js";
 import { assertAgentRunWriteAllowed, startAgentRun, submitAgentRunReport } from "./agent-run-store.js";
+import type { AgentAdapterOsIsolationMetadata } from "./agent-adapter-os-isolation.js";
 import { createAgentRunScheduler, type AgentRunProcessResult, type AgentRunProcessStatus } from "./agent-run-scheduler.js";
 import {
   buildAgentProfileLaunch,
@@ -30,6 +31,7 @@ export type AgentAdapterPackage = {
   default_rpm: number;
   supported_profiles: AgentProfileId[];
   proof_authority: "none";
+  os_isolation: AgentAdapterOsIsolationMetadata;
   lifecycle: {
     health_args: string[];
     launch_prefix_args: string[];
@@ -186,6 +188,13 @@ function packageRegistry(): AgentAdapterPackage[] {
         "math-integrity-auditor"
       ],
       proof_authority: "none",
+      os_isolation: {
+        required_for_ga: true,
+        os_enforced: false,
+        current_boundary: "process_boundary_only",
+        evidence_required: true,
+        proof_authority: "none"
+      },
       lifecycle: {
         health_args: ["--adapter-package", "codex-cli", "--health"],
         launch_prefix_args: ["--adapter-package", "codex-cli"]
@@ -198,6 +207,7 @@ function clonePackage(pkg: AgentAdapterPackage): AgentAdapterPackage {
   return {
     ...pkg,
     supported_profiles: [...pkg.supported_profiles],
+    os_isolation: { ...pkg.os_isolation },
     lifecycle: {
       health_args: [...pkg.lifecycle.health_args],
       launch_prefix_args: [...pkg.lifecycle.launch_prefix_args]
@@ -974,7 +984,10 @@ export function buildAgentAdapterPackageLaunch(
     COMATH_ADAPTER_PACKAGE_ID: pkg.id,
     COMATH_ADAPTER_PACKAGE_KIND: pkg.kind,
     COMATH_CODEX_ADAPTER_BACKEND: backend,
-    COMATH_PROOF_AUTHORITY: "none"
+    COMATH_PROOF_AUTHORITY: "none",
+    COMATH_AGENT_ADAPTER_OS_ISOLATION_ENFORCED: String(pkg.os_isolation.os_enforced),
+    COMATH_AGENT_ADAPTER_OS_ISOLATION_BOUNDARY: pkg.os_isolation.current_boundary,
+    COMATH_AGENT_ADAPTER_OS_ISOLATION_REQUIRED_FOR_GA: String(pkg.os_isolation.required_for_ga)
   };
   if (backend === "external" && externalCodex) {
     launch.launch_input.command.env.COMATH_CODEX_EXTERNAL_PROGRAM = externalCodex.program;
@@ -1001,6 +1014,9 @@ export function buildAgentAdapterPackageLaunch(
       external_program_configured: Boolean(externalCodex),
       codex_api_configured: codexApiConfigured,
       rpm: launch.scheduler_options.rpm,
+      os_isolation_required_for_ga: pkg.os_isolation.required_for_ga,
+      os_isolation_enforced: pkg.os_isolation.os_enforced,
+      os_isolation_boundary: pkg.os_isolation.current_boundary,
       proof_authority: pkg.proof_authority
     }
   });

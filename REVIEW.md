@@ -1,3 +1,30 @@
+# Goal 3 Task 167 / Agent Adapter OS-Isolation Readiness Gate
+
+Scope: add a service-owned release-readiness review gate for agent adapter OS-enforced isolation evidence, while keeping adapter package execution honest about its current `process_boundary_only` launcher boundary and preserving `proof_authority=none`.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task166's next step as authoritative.
+- Continued the existing uncommitted Task167 worktree state rather than overwriting it.
+- Added `goal3-task167-agent-adapter-os-isolation-readiness.test.mjs` and `agent-adapter-os-isolation.ts`.
+- Added adapter package `os_isolation` metadata to `codex-cli`, launch environment metadata (`COMATH_AGENT_ADAPTER_OS_ISOLATION_*`), launch audit metadata, service capability exposure, and `POST /agent/adapter/package/os-isolation-review`.
+- The review gate requires project-local JSON evidence and checks OS-enforced provider class, process/filesystem/network/no-new-privileges/escape-prevention booleans, adapter/backend binding, service-owned probe source, host-path/secret cleanliness, and non-authority semantics.
+- Review hardening made readiness review manifests append-only by `review_id`, rejects cross-adapter/backend/operator-attested evidence, and scrubs audit actor text for host paths and secret-like material.
+
+Verification evidence:
+
+- The existing uncommitted Task167 service test was verified after handoff; the original RED for that pre-existing work was not available in this continuation.
+- Review-regression RED: after adding append-only coverage, the focused Task167 test failed because duplicate `review_id` calls did not throw.
+- GREEN focused test exited 0: Task167 agent adapter OS-isolation readiness.
+- GREEN adjacent focused tests exited 0: Phase43 agent adapter package, Phase44 Codex external invocation, Phase51 Codex API backend, Phase52 Codex API retry telemetry, Phase53 installed Codex CLI validation, Task162 operator transport lease, Task164 guided real-Pi execution, and Task166 guided real-Pi host-chain binding.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task167 discovered by the default comathd runner.
+- Root gates exited 0: `node scripts/phase0-smoke.mjs`, `corepack pnpm build`, `corepack pnpm typecheck`, and `corepack pnpm test`, including Pi package tests, Phase45 install-session e2e, Task125 Pi public UX authority, and Phase17 integrity evaluation.
+- Post-code checks exited 0: `git diff --check` with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`; `git ls-files -o --exclude-standard` showed only the two new Task167 source/test files before commit.
+
+Boundary notes: Task167 is a readiness/evidence gate. It does not execute adapters inside OCI/Nix/Firejail/AppContainer/macOS sandbox, enforce kernel/firewall network denial, promote mathematical claims, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. Actual OS-enforced adapter execution/probe collection, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 166 / Guided Real-Pi Host Chain Binding
 
 Scope: harden the Task164-165 guided real-Pi execution chain so a promoted lifecycle evidence record cannot mix a Task152 real-Pi runtime snapshot from one Pi host with Task157/159/162 operator-session, recovery, and lease artifacts from another host, and cannot accept an explicit Pi host label that contradicts the bound artifact chain.

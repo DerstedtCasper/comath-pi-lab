@@ -1,0 +1,395 @@
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { appendAuditEvent } from "../audit/jsonl-writer.js";
+import { ComathError } from "../errors.js";
+import { assertPathAllowed } from "../security/path-policy.js";
+import { canonicalJson, scrubHostPaths, sha256Text } from "../verification/runner-contracts.js";
+import { getAgentAdapterPackage, type AgentAdapterBackend, type AgentAdapterPackageId } from "./agent-adapter-packages.js";
+
+export type AgentAdapterOsIsolationBoundary = "process_boundary_only" | "os_enforced";
+
+export type AgentAdapterOsIsolationMetadata = {
+  required_for_ga: true;
+  os_enforced: boolean;
+  current_boundary: AgentAdapterOsIsolationBoundary;
+  evidence_required: true;
+  proof_authority: "none";
+};
+
+export type AgentAdapterOsIsolationProvider =
+  | "oci_container"
+  | "nix_sandbox"
+  | "firejail"
+  | "windows_appcontainer"
+  | "macos_sandbox_exec"
+  | "service_process_boundary"
+  | "unknown";
+
+export type AgentAdapterOsIsolationEvidence = {
+  schema_version?: string;
+  adapter_id?: string;
+  backend?: AgentAdapterBackend;
+  provider?: AgentAdapterOsIsolationProvider;
+  evidence_source?: "service_owned_probe" | "operator_attested" | "contract_only" | "unknown";
+  process_isolation_enforced?: boolean;
+  filesystem_scope_enforced?: boolean;
+  network_isolation_enforced?: boolean;
+  no_new_privileges?: boolean;
+  escape_prevention?: boolean;
+  host_path_leak_free?: boolean;
+  secret_free?: boolean;
+  proof_authority?: unknown;
+  can_promote_claim?: unknown;
+  can_certify_ga?: unknown;
+};
+
+export type AgentAdapterOsIsolationReviewInput = {
+  project_id: string;
+  review_id?: string;
+  adapter_id: AgentAdapterPackageId;
+  backend?: AgentAdapterBackend;
+  actor: string;
+  evidence_path?: string;
+};
+
+export type AgentAdapterOsIsolationReviewVeto = {
+  code: string;
+  message: string;
+};
+
+export type AgentAdapterOsIsolationReviewCheck = {
+  ok: boolean;
+  required: true;
+  observed: string | boolean | null;
+};
+
+export type AgentAdapterOsIsolationEvidenceArtifact = {
+  kind: "agent_adapter_os_isolation_evidence";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type AgentAdapterOsIsolationReview = {
+  schema_version: "comath.agent_adapter_os_isolation_readiness.v1";
+  review_id: string;
+  project_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  created_at: string;
+  ok: boolean;
+  readiness_status:
+    | "ready_for_os_isolation_release_review"
+    | "blocked_missing_os_enforced_adapter_isolation";
+  review_path: string;
+  evidence_artifact: AgentAdapterOsIsolationEvidenceArtifact | null;
+  checks: {
+    evidence_artifact_bound: AgentAdapterOsIsolationReviewCheck;
+    provider_os_enforced: AgentAdapterOsIsolationReviewCheck;
+    process_isolation: AgentAdapterOsIsolationReviewCheck;
+    filesystem_isolation: AgentAdapterOsIsolationReviewCheck;
+    network_isolation: AgentAdapterOsIsolationReviewCheck;
+    no_new_privileges: AgentAdapterOsIsolationReviewCheck;
+    escape_prevention: AgentAdapterOsIsolationReviewCheck;
+    adapter_binding: AgentAdapterOsIsolationReviewCheck;
+    backend_binding: AgentAdapterOsIsolationReviewCheck;
+    service_owned_probe: AgentAdapterOsIsolationReviewCheck;
+    host_path_secret_free: AgentAdapterOsIsolationReviewCheck;
+    non_authority: AgentAdapterOsIsolationReviewCheck;
+  };
+  adapter_execution_isolation: {
+    required_for_ga: true;
+    current_boundary: AgentAdapterOsIsolationBoundary;
+    os_enforced: boolean;
+    provider: AgentAdapterOsIsolationProvider | null;
+    claims_runtime_enforcement: false;
+    proof_authority: "none";
+  };
+  vetoes: AgentAdapterOsIsolationReviewVeto[];
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+const osEnforcedProviders = new Set<AgentAdapterOsIsolationProvider>([
+  "oci_container",
+  "nix_sandbox",
+  "firejail",
+  "windows_appcontainer",
+  "macos_sandbox_exec"
+]);
+
+const secretPattern = /(?:Authorization\s*:\s*Bearer\s+[^\s,;}"']+|(?:api[_-]?key|token|secret|password)\s*[=:]\s*[^\s,;}"']+)/i;
+const secretScrubPattern = /(?:Authorization\s*:\s*Bearer\s+[^\s,;}"']+|(?:api[_-]?key|token|secret|password)\s*[=:]\s*[^\s,;}"']+)/gi;
+
+function normalizeRelativePath(value: string): string {
+  return value.replace(/\\/g, "/");
+}
+
+function assertReviewId(value: string | undefined): string {
+  if (!value) {
+    return `ADAPTER-OSISO-${Date.now()}`;
+  }
+  if (/^[A-Z0-9][A-Z0-9_-]{2,96}$/.test(value)) {
+    return value;
+  }
+  throw new ComathError("invalid adapter OS-isolation review id", {
+    statusCode: 400,
+    code: "AGENT_ADAPTER_OS_ISOLATION_REVIEW_ID_INVALID"
+  });
+}
+
+function sanitizeReviewText(value: string): string {
+  return scrubHostPaths(value).replace(secretScrubPattern, "<secret>");
+}
+
+function projectRelativePath(projectRoot: string, absolutePath: string): string {
+  return normalizeRelativePath(relative(resolve(projectRoot), absolutePath));
+}
+
+function readEvidenceArtifact(
+  projectRoot: string,
+  path: string
+): { artifact: AgentAdapterOsIsolationEvidenceArtifact; text: string; evidence: AgentAdapterOsIsolationEvidence } {
+  const absolutePath = assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true });
+  if (!existsSync(absolutePath)) {
+    throw new ComathError("adapter OS-isolation evidence artifact is missing", {
+      statusCode: 400,
+      code: "AGENT_ADAPTER_OS_ISOLATION_EVIDENCE_MISSING"
+    });
+  }
+  if (!statSync(absolutePath).isFile()) {
+    throw new ComathError("adapter OS-isolation evidence artifact is not a file", {
+      statusCode: 400,
+      code: "AGENT_ADAPTER_OS_ISOLATION_EVIDENCE_NOT_FILE"
+    });
+  }
+  const bytes = readFileSync(absolutePath);
+  const text = bytes.toString("utf8");
+  let parsed: AgentAdapterOsIsolationEvidence;
+  try {
+    parsed = JSON.parse(text) as AgentAdapterOsIsolationEvidence;
+  } catch {
+    throw new ComathError("adapter OS-isolation evidence artifact must be JSON", {
+      statusCode: 400,
+      code: "AGENT_ADAPTER_OS_ISOLATION_EVIDENCE_INVALID_JSON"
+    });
+  }
+  return {
+    artifact: {
+      kind: "agent_adapter_os_isolation_evidence",
+      path: projectRelativePath(projectRoot, absolutePath),
+      sha256: sha256Text(text),
+      size_bytes: bytes.byteLength
+    },
+    text,
+    evidence: parsed
+  };
+}
+
+function check(ok: boolean, observed: string | boolean | null): AgentAdapterOsIsolationReviewCheck {
+  return { ok, required: true, observed };
+}
+
+function evidenceOverclaimsAuthority(evidence: AgentAdapterOsIsolationEvidence): boolean {
+  return (
+    evidence.proof_authority !== undefined && evidence.proof_authority !== "none" ||
+    evidence.can_promote_claim === true ||
+    evidence.can_certify_ga === true
+  );
+}
+
+function evidenceAdapterMatches(
+  evidence: AgentAdapterOsIsolationEvidence | undefined,
+  adapterId: AgentAdapterPackageId
+): boolean {
+  return Boolean(evidence && evidence.adapter_id === adapterId);
+}
+
+function evidenceBackendMatches(
+  evidence: AgentAdapterOsIsolationEvidence | undefined,
+  backend: AgentAdapterBackend
+): boolean {
+  return Boolean(evidence && evidence.backend === backend);
+}
+
+function evidenceIsServiceOwnedProbe(evidence: AgentAdapterOsIsolationEvidence | undefined): boolean {
+  return Boolean(evidence && evidence.evidence_source === "service_owned_probe");
+}
+
+function evidenceLeaksHostPathOrSecret(text: string, evidence: AgentAdapterOsIsolationEvidence): boolean {
+  return (
+    scrubHostPaths(text) !== text ||
+    secretPattern.test(text) ||
+    evidence.host_path_leak_free === false ||
+    evidence.secret_free === false
+  );
+}
+
+function buildVetoes(input: {
+  evidencePresent: boolean;
+  checks: AgentAdapterOsIsolationReview["checks"];
+  evidence?: AgentAdapterOsIsolationEvidence;
+  text?: string;
+}): AgentAdapterOsIsolationReviewVeto[] {
+  const vetoes: AgentAdapterOsIsolationReviewVeto[] = [];
+  if (!input.evidencePresent) {
+    vetoes.push({
+      code: "adapter_os_isolation_evidence_missing",
+      message: "OS-enforced adapter isolation evidence is required before this adapter can satisfy GA release readiness."
+    });
+  }
+  if (!input.checks.provider_os_enforced.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_provider_not_os_enforced",
+      message: "The recorded provider is not an OS-enforced isolation boundary."
+    });
+  }
+  if (!input.checks.process_isolation.ok) {
+    vetoes.push({ code: "adapter_os_process_isolation_missing", message: "Process isolation was not enforced." });
+  }
+  if (!input.checks.filesystem_isolation.ok) {
+    vetoes.push({ code: "adapter_os_filesystem_isolation_missing", message: "Filesystem scope isolation was not enforced." });
+  }
+  if (!input.checks.network_isolation.ok) {
+    vetoes.push({ code: "adapter_os_network_isolation_missing", message: "Network isolation was not enforced." });
+  }
+  if (!input.checks.no_new_privileges.ok) {
+    vetoes.push({ code: "adapter_os_no_new_privileges_missing", message: "No-new-privileges isolation was not enforced." });
+  }
+  if (!input.checks.escape_prevention.ok) {
+    vetoes.push({ code: "adapter_os_escape_prevention_missing", message: "Escape-prevention evidence was not present." });
+  }
+  if (!input.checks.adapter_binding.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_evidence_adapter_mismatch",
+      message: "OS-isolation evidence was not bound to the reviewed adapter package."
+    });
+  }
+  if (!input.checks.backend_binding.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_evidence_backend_mismatch",
+      message: "OS-isolation evidence was not bound to the reviewed adapter backend."
+    });
+  }
+  if (!input.checks.service_owned_probe.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_evidence_not_service_owned_probe",
+      message: "OS-isolation release-readiness evidence must come from a service-owned probe."
+    });
+  }
+  if (!input.checks.host_path_secret_free.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_evidence_leaks_host_path_or_secret",
+      message: "OS-isolation evidence leaked host paths or secret-like material."
+    });
+  }
+  if (!input.checks.non_authority.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_evidence_overclaims_authority",
+      message: "OS-isolation evidence attempted to claim proof authority, claim promotion, or GA certification."
+    });
+  }
+  return vetoes;
+}
+
+function reviewPath(reviewId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", reviewId, "review.json"));
+}
+
+export function defaultAgentAdapterOsIsolationMetadata(): AgentAdapterOsIsolationMetadata {
+  return {
+    required_for_ga: true,
+    os_enforced: false,
+    current_boundary: "process_boundary_only",
+    evidence_required: true,
+    proof_authority: "none"
+  };
+}
+
+export function reviewAgentAdapterOsIsolationReadiness(
+  projectRoot: string,
+  input: AgentAdapterOsIsolationReviewInput
+): AgentAdapterOsIsolationReview {
+  getAgentAdapterPackage(input.adapter_id);
+  const reviewId = assertReviewId(input.review_id);
+  const backend = input.backend ?? "bundled";
+  const path = reviewPath(reviewId);
+  const absoluteReviewPath = assertPathAllowed(projectRoot, path, { purpose: "runtime-write" });
+  if (existsSync(absoluteReviewPath)) {
+    throw new ComathError("adapter OS-isolation readiness review already exists", {
+      statusCode: 409,
+      code: "AGENT_ADAPTER_OS_ISOLATION_REVIEW_ALREADY_EXISTS"
+    });
+  }
+  const evidenceBundle = input.evidence_path ? readEvidenceArtifact(projectRoot, input.evidence_path) : undefined;
+  const evidence = evidenceBundle?.evidence;
+  const provider = evidence?.provider ?? null;
+  const providerOsEnforced = provider ? osEnforcedProviders.has(provider) : false;
+  const hostPathSecretFree = evidenceBundle ? !evidenceLeaksHostPathOrSecret(evidenceBundle.text, evidence as AgentAdapterOsIsolationEvidence) : false;
+  const nonAuthority = evidence ? !evidenceOverclaimsAuthority(evidence) : false;
+  const checks: AgentAdapterOsIsolationReview["checks"] = {
+    evidence_artifact_bound: check(Boolean(evidenceBundle), evidenceBundle ? evidenceBundle.artifact.path : null),
+    provider_os_enforced: check(providerOsEnforced, provider),
+    process_isolation: check(evidence?.process_isolation_enforced === true, evidence?.process_isolation_enforced ?? null),
+    filesystem_isolation: check(evidence?.filesystem_scope_enforced === true, evidence?.filesystem_scope_enforced ?? null),
+    network_isolation: check(evidence?.network_isolation_enforced === true, evidence?.network_isolation_enforced ?? null),
+    no_new_privileges: check(evidence?.no_new_privileges === true, evidence?.no_new_privileges ?? null),
+    escape_prevention: check(evidence?.escape_prevention === true, evidence?.escape_prevention ?? null),
+    adapter_binding: check(evidenceAdapterMatches(evidence, input.adapter_id), evidence?.adapter_id ?? null),
+    backend_binding: check(evidenceBackendMatches(evidence, backend), evidence?.backend ?? null),
+    service_owned_probe: check(evidenceIsServiceOwnedProbe(evidence), evidence?.evidence_source ?? null),
+    host_path_secret_free: check(hostPathSecretFree, hostPathSecretFree),
+    non_authority: check(nonAuthority, nonAuthority)
+  };
+  const vetoes = buildVetoes({ evidencePresent: Boolean(evidenceBundle), checks, evidence, text: evidenceBundle?.text });
+  const ok = vetoes.length === 0;
+  const review: AgentAdapterOsIsolationReview = {
+    schema_version: "comath.agent_adapter_os_isolation_readiness.v1",
+    review_id: reviewId,
+    project_id: input.project_id,
+    adapter_id: input.adapter_id,
+    backend,
+    created_at: new Date().toISOString(),
+    ok,
+    readiness_status: ok ? "ready_for_os_isolation_release_review" : "blocked_missing_os_enforced_adapter_isolation",
+    review_path: path,
+    evidence_artifact: evidenceBundle?.artifact ?? null,
+    checks,
+    adapter_execution_isolation: {
+      required_for_ga: true,
+      current_boundary: ok ? "os_enforced" : "process_boundary_only",
+      os_enforced: ok,
+      provider,
+      claims_runtime_enforcement: false,
+      proof_authority: "none"
+    },
+    vetoes,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  mkdirSync(dirname(absoluteReviewPath), { recursive: true });
+  writeFileSync(absoluteReviewPath, canonicalJson(review), "utf8");
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_adapter.os_isolation_reviewed",
+    actor: sanitizeReviewText(input.actor),
+    target_id: input.project_id,
+    payload: {
+      review_id: reviewId,
+      adapter_id: input.adapter_id,
+      backend,
+      ok,
+      readiness_status: review.readiness_status,
+      evidence_path: evidenceBundle?.artifact.path ?? null,
+      provider,
+      os_enforced: ok,
+      veto_codes: vetoes.map((veto) => veto.code),
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return review;
+}

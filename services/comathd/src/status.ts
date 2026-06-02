@@ -75,6 +75,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_run_operator_panel",
       "agent_run_operator_cancel",
       "agent_adapter_package_registry",
+      "agent_adapter_os_isolation_readiness_gate",
       "codex_cli_external_adapter_invocation",
       "codex_api_adapter_backend",
       "codex_api_retry_telemetry",
