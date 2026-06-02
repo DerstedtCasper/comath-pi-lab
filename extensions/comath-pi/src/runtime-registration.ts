@@ -198,7 +198,8 @@ function commandMetadata(command: string): Pick<
         "codex-api-probe",
         "real-pi-runtime-probe",
         "lifecycle-walkthrough",
-        "lifecycle-control"
+        "lifecycle-control",
+        "lifecycle-session"
       ],
       dispatch_tool: "comath.release.publicArchiveReview",
       mutates: true,

@@ -148,6 +148,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piRealPiRuntimeProbe",
   "comath.release.piCodexLifecycleWalkthrough",
   "comath.release.piCodexLifecycleControl",
+  "comath.release.piCodexLifecycleSession",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -440,6 +441,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piRealPiRuntimeProbe" ||
     name === "comath.release.piCodexLifecycleWalkthrough" ||
     name === "comath.release.piCodexLifecycleControl" ||
+    name === "comath.release.piCodexLifecycleSession" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -456,6 +458,12 @@ const PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS = [
 ] as const;
 
 const PI_LIFECYCLE_CONTROL_PLAN_ACTIONS = ["plan", "status"] as const;
+const PI_LIFECYCLE_SESSION_ACTIONS = ["plan", "status", "resume-plan"] as const;
+const PI_LIFECYCLE_SESSION_STEP_IDS = [
+  "run-real-pi-runtime-probe",
+  "run-codex-api-probe",
+  "review"
+] as const;
 
 function publicOperatorText(value: string): string {
   return sanitizePublicProofAuthorityValue(value) as string;
@@ -580,6 +588,141 @@ function readLifecycleControlPlanAction(input: Record<string, unknown>): typeof 
     return value as typeof PI_LIFECYCLE_CONTROL_PLAN_ACTIONS[number];
   }
   throw new Error("action must be plan or status");
+}
+
+function readLifecycleSessionAction(input: Record<string, unknown>): typeof PI_LIFECYCLE_SESSION_ACTIONS[number] {
+  const value = readString(input, "action");
+  if ((PI_LIFECYCLE_SESSION_ACTIONS as readonly string[]).includes(value)) {
+    return value as typeof PI_LIFECYCLE_SESSION_ACTIONS[number];
+  }
+  throw new Error("action must be plan, status, or resume-plan");
+}
+
+function readLifecycleSessionSteps(input: Record<string, unknown>): Array<typeof PI_LIFECYCLE_SESSION_STEP_IDS[number]> {
+  const value = input.completed_steps;
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error("completed_steps must be an array");
+  }
+  const steps = value.map(String);
+  const allowed = new Set<string>(PI_LIFECYCLE_SESSION_STEP_IDS);
+  for (const step of steps) {
+    if (!allowed.has(step)) {
+      throw new Error(`unsupported completed lifecycle session step: ${step}`);
+    }
+  }
+  return [...new Set(steps)] as Array<typeof PI_LIFECYCLE_SESSION_STEP_IDS[number]>;
+}
+
+function buildPiCodexLifecycleSession(input: Record<string, unknown>): Record<string, unknown> {
+  const projectId = publicOperatorText(readString(input, "project_id"));
+  const actor = publicOperatorText(readString(input, "actor"));
+  const piHostLabel = publicOperatorText(readString(input, "pi_host_label"));
+  const sessionId = publicOperatorText(readString(input, "session_id"));
+  const action = readLifecycleSessionAction(input);
+  const sessionKind = readLifecycleWalkthroughSessionKind(input);
+  const probeId = optionalPublicOperatorText(input, "probe_id", `${projectId}-REAL-PI-RUNTIME`);
+  const validationId = optionalPublicOperatorText(input, "validation_id", `${projectId}-CODEX-API`);
+  const reviewId = optionalPublicOperatorText(input, "review_id", `${projectId}-LIFECYCLE-REVIEW`);
+  const completedSteps = readLifecycleSessionSteps(input);
+  const completed = new Set<string>(completedSteps);
+  const nextStep =
+    PI_LIFECYCLE_SESSION_STEP_IDS.find((step) => !completed.has(step)) ??
+    PI_LIFECYCLE_SESSION_STEP_IDS[PI_LIFECYCLE_SESSION_STEP_IDS.length - 1];
+  const walkthrough = buildPiCodexLifecycleWalkthrough({
+    project_id: projectId,
+    actor,
+    pi_host_label: piHostLabel,
+    session_kind: sessionKind,
+    probe_id: probeId,
+    validation_id: validationId,
+    review_id: reviewId
+  });
+  const control = buildPiCodexLifecycleControl({
+    project_id: projectId,
+    actor,
+    pi_host_label: piHostLabel,
+    action: "plan",
+    session_kind: sessionKind,
+    probe_id: probeId,
+    validation_id: validationId,
+    review_id: reviewId
+  });
+  const commandTemplates = new Map(
+    (walkthrough.command_templates as Array<Record<string, unknown>>).map((template) => [
+      String(template.subcommand),
+      String(template.command)
+    ])
+  );
+  const controlActions = new Map(
+    (control.control_actions as Array<Record<string, unknown>>).map((controlAction) => [
+      String(controlAction.action_id),
+      controlAction
+    ])
+  );
+  const nextCommandByAction: Record<typeof PI_LIFECYCLE_SESSION_STEP_IDS[number], string> = {
+    "run-real-pi-runtime-probe":
+      commandTemplates
+        .get("real-pi-runtime-probe")
+        ?.replace("/cm:release real-pi-runtime-probe", "/cm:release lifecycle-control run-real-pi-runtime-probe") ??
+      `/cm:release lifecycle-control run-real-pi-runtime-probe --project-id ${projectId}`,
+    "run-codex-api-probe":
+      `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
+    review:
+      commandTemplates.get("pi-codex-lifecycle")?.replace("/cm:release pi-codex-lifecycle", "/cm:release lifecycle-control review") ??
+      `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
+  };
+  const nextControlAction = controlActions.get(nextStep);
+
+  return {
+    schema_version: "comath.pi.lifecycle.operator_session.v1",
+    project_id: projectId,
+    actor,
+    pi_host_label: piHostLabel,
+    session_id: sessionId,
+    action,
+    session_kind: sessionKind,
+    probe_id: probeId,
+    validation_id: validationId,
+    review_id: reviewId,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    direct_trusted_state_mutation: false,
+    service_authority: "comathd_only",
+    session_recovery_policy: {
+      pi_tool_readonly: true,
+      writes_comath_state: false,
+      calls_comathd: false,
+      long_lived_transport_claimed: false,
+      executes_lifecycle_actions: false,
+      executing_actions_requires_lifecycle_control_confirmation: true
+    },
+    cursors: {
+      stdout_cursor: optionalPublicOperatorText(input, "stdout_cursor", "not_provided"),
+      stderr_cursor: optionalPublicOperatorText(input, "stderr_cursor", "not_provided")
+    },
+    completed_steps: completedSteps,
+    current_step: optionalPublicOperatorText(input, "current_step", nextStep),
+    last_result_summary: optionalPublicOperatorText(input, "last_result_summary", "not_provided"),
+    recovery_plan: {
+      next_action: {
+        action_id: nextStep,
+        label: publicOperatorText(String(nextControlAction?.label ?? nextStep)),
+        command: publicOperatorText(nextCommandByAction[nextStep]),
+        requires_host_confirmation: true,
+        auto_executes: false
+      },
+      command_templates: publicOperatorText(JSON.stringify(walkthrough.command_templates)),
+      boundary_notes: [
+        "This session object is local Pi recovery guidance, not a durable service session.",
+        "It does not open an indefinite WebSocket, SSE stream, or terminal transport.",
+        "Use lifecycle-control to execute any lifecycle action through Pi host confirmation."
+      ]
+    }
+  };
 }
 
 function buildPiCodexLifecycleControl(input: Record<string, unknown>): Record<string, unknown> {
@@ -1192,6 +1335,10 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
 
   if (name === "comath.release.piCodexLifecycleControl") {
     return publicToolResult(name, Promise.resolve(buildPiCodexLifecycleControl(input)));
+  }
+
+  if (name === "comath.release.piCodexLifecycleSession") {
+    return publicToolResult(name, Promise.resolve(buildPiCodexLifecycleSession(input)));
   }
 
   throw new Error(`unsupported comath tool: ${name}`);
@@ -1931,6 +2078,31 @@ export function createComathTools(): ToolDescriptor[] {
         probe_id: stringProp,
         validation_id: stringProp,
         review_id: stringProp
+      })
+    },
+    {
+      name: "comath.release.piCodexLifecycleSession",
+      description:
+        "Render read-only Pi lifecycle operator session recovery plans without claiming durable transport or trusted-state mutation.",
+      mutates: false,
+      input_schema: objectSchema(["project_id", "actor", "pi_host_label", "session_id", "action"], {
+        project_id: stringProp,
+        actor: stringProp,
+        pi_host_label: stringProp,
+        session_id: stringProp,
+        action: { type: "string", enum: [...PI_LIFECYCLE_SESSION_ACTIONS] },
+        session_kind: { type: "string", enum: [...PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS] },
+        probe_id: stringProp,
+        validation_id: stringProp,
+        review_id: stringProp,
+        current_step: stringProp,
+        completed_steps: {
+          type: "array",
+          items: { type: "string", enum: [...PI_LIFECYCLE_SESSION_STEP_IDS] }
+        },
+        stdout_cursor: stringProp,
+        stderr_cursor: stringProp,
+        last_result_summary: stringProp
       })
     }
   ].map((tool) =>
@@ -3086,6 +3258,29 @@ async function handleReleaseCommand(
       return;
     }
     throw new Error(`unsupported lifecycle-control action: ${action}`);
+  }
+  if (subcommand === "lifecycle-session") {
+    const action = requiredOption(optionValue(parsed.args, "--action") ?? firstPositional(parsed.args), "action");
+    await notifyRuntimeResult(
+      ctx,
+      await executeComathTool(client, "comath.release.piCodexLifecycleSession", {
+        project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+        actor: actorFrom(options, parsed.args),
+        pi_host_label: requiredOption(optionValue(parsed.args, "--pi-host-label"), "pi_host_label"),
+        session_id: requiredOption(optionValue(parsed.args, "--session-id"), "session_id"),
+        action,
+        session_kind: optionValue(parsed.args, "--session-kind"),
+        probe_id: optionValue(parsed.args, "--probe-id"),
+        validation_id: optionValue(parsed.args, "--validation-id"),
+        review_id: optionValue(parsed.args, "--review-id"),
+        current_step: optionValue(parsed.args, "--current-step"),
+        completed_steps: optionValues(parsed.args, "--completed-step"),
+        stdout_cursor: optionValue(parsed.args, "--stdout-cursor"),
+        stderr_cursor: optionValue(parsed.args, "--stderr-cursor"),
+        last_result_summary: optionValue(parsed.args, "--last-result-summary")
+      })
+    );
+    return;
   }
   if (subcommand === "lifecycle-walkthrough") {
     await notifyRuntimeResult(
