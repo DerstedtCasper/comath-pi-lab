@@ -61,12 +61,16 @@ Sandbox execution route and Pi consumer payloads may be mistaken for a productio
 
 Provider-runner contract manifests may be mistaken for executed sandboxing because they contain fixed argv templates and environment policy. Mitigation: provider-runner manifests require a ready service-owned sandbox-launch preflight, reject caller command/argv/env/hash/success metadata, record unavailable blockers when no service-owned helper is configured, and cannot satisfy readiness without later canonical collected probe/evidence artifacts.
 
+### Provider Helper Execution Confusion
+
+Provider-helper execution attempt manifests may be mistaken for collected OS-enforcement evidence because they record a service-owned helper process exit code and stdout/stderr/transcript hashes. Mitigation: helper execution manifests require a ready provider-runner manifest, a service-owned helper configuration, a runner-binary hash match, `shell=false`, fixed argv, a non-inherited fixed environment, and hash-only output recording. Caller-supplied helper command, argv, env, exit codes, stdout/stderr hashes, and route payloads are ignored. A helper exit code of 0 records only an attempted helper execution and cannot satisfy readiness without later canonical Task170/Task172 collected probe/evidence artifacts.
+
 ## Residual Risks
 
 - Pattern-based secret scanning is not full DLP.
 - Service-level network-denial metadata is not equivalent to OS/kernel-enforced network isolation.
 - Adapter sandbox-launch preflight is not equivalent to actually executing adapters inside an OS-enforced sandbox.
-- Adapter provider-runner contracts, sandbox-execution probe bridging, and Pi consumer wiring are not equivalent to actually executing adapters through production OCI/Nix/Firejail/AppContainer/macOS helpers across hosts.
+- Adapter provider-runner contracts, provider-helper execution attempts, sandbox-execution probe bridging, and Pi consumer wiring are not equivalent to collected OS-enforcement evidence across production OCI/Nix/Firejail/AppContainer/macOS helpers and hosts.
 - Injected-client Codex API tests are not live production account validation.
 - Goal 3 positive acceptance breadth is representative unless the full 100-task matrix is clean-replayed.
 - Documentation must continue to distinguish implemented trust gates from final global GA completion.

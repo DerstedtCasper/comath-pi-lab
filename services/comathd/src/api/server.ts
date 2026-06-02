@@ -68,6 +68,7 @@ import {
   createAgentRunForProfile,
   executeAgentAdapterPackage,
   executeProfileAgentRun,
+  runAgentAdapterOsIsolationProviderHelperExecution,
   prepareAgentAdapterOsIsolationProviderRunner,
   prepareAgentAdapterOsIsolationSandboxLaunch,
   runAgentAdapterOsIsolationSandboxExecutionProbe,
@@ -327,6 +328,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         return {
           runner: sanitizePublicFormalAuthorityVocabulary(
             prepareAgentAdapterOsIsolationProviderRunner(body.project_root, body)
+          )
+        };
+      }
+    ],
+    [
+      "POST /agent/adapter/package/os-isolation-provider-helper-execution",
+      (payload) => {
+        const body = payload as Parameters<typeof runAgentAdapterOsIsolationProviderHelperExecution>[1] & { project_root: string };
+        return {
+          helper_execution: sanitizePublicFormalAuthorityVocabulary(
+            runAgentAdapterOsIsolationProviderHelperExecution(body.project_root, body)
           )
         };
       }

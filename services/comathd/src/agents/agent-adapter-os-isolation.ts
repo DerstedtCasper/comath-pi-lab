@@ -1,5 +1,7 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
 import { assertPathAllowed } from "../security/path-policy.js";
@@ -173,6 +175,39 @@ export type AgentAdapterOsIsolationProviderRunnerOptions = {
   provider_runner_resolver?: AgentAdapterOsIsolationProviderRunnerResolver;
 };
 
+export type AgentAdapterOsIsolationProviderHelperConfigResolverInput = {
+  project_root: string;
+  project_id: string;
+  helper_execution_id: string;
+  runner_id: string;
+  runner_path: string;
+  launch_id: string;
+  launch_path: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+  runner_binary_sha256: string;
+  platform?: string;
+};
+
+export type AgentAdapterOsIsolationProviderHelperConfig = {
+  config_source?: "service_owned_provider_helper_config" | "operator_attested" | "unknown";
+  helper_available?: boolean;
+  helper_program?: string;
+  helper_args_prefix?: string[];
+  helper_version?: string;
+  timeout_ms?: number;
+  diagnostics?: string[];
+};
+
+export type AgentAdapterOsIsolationProviderHelperConfigResolver = (
+  input: AgentAdapterOsIsolationProviderHelperConfigResolverInput
+) => AgentAdapterOsIsolationProviderHelperConfig | null | undefined;
+
+export type AgentAdapterOsIsolationProviderHelperExecutionOptions = {
+  provider_helper_config_resolver?: AgentAdapterOsIsolationProviderHelperConfigResolver;
+};
+
 export type AgentAdapterOsIsolationSandboxLaunchStatus =
   | "ready_for_service_owned_os_sandbox_execution"
   | "blocked_sandbox_provider_unsupported"
@@ -207,6 +242,15 @@ export type AgentAdapterOsIsolationProviderRunnerStatus =
   | "blocked_provider_runner_binding_mismatch"
   | "blocked_provider_runner_unavailable"
   | "blocked_provider_runner_not_resolved";
+
+export type AgentAdapterOsIsolationProviderHelperExecutionStatus =
+  | "provider_helper_execution_attempted"
+  | "blocked_provider_runner_manifest_missing"
+  | "blocked_provider_runner_binding_mismatch"
+  | "blocked_provider_helper_not_configured"
+  | "blocked_provider_helper_binary_mismatch"
+  | "blocked_provider_helper_launch_failed"
+  | "blocked_provider_helper_execution_failed";
 
 export type AgentAdapterOsIsolationSandboxExecutionInput = {
   project_id: string;
@@ -244,6 +288,28 @@ export type AgentAdapterOsIsolationProviderRunnerInput = {
     notes?: string;
     provider_runner_available?: boolean;
     runner_binary_sha256?: string;
+    command_override?: string;
+    argv_override?: string[];
+    env_override?: Record<string, string>;
+  };
+};
+
+export type AgentAdapterOsIsolationProviderHelperExecutionInput = {
+  project_id: string;
+  helper_execution_id?: string;
+  runner_id: string;
+  launch_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend?: AgentAdapterBackend;
+  actor: string;
+  requested_provider?: string;
+  helper_environment?: {
+    platform?: string;
+    notes?: string;
+    helper_available?: boolean;
+    helper_exit_code?: number;
+    stdout_sha256?: string;
+    stderr_sha256?: string;
     command_override?: string;
     argv_override?: string[];
     env_override?: Record<string, string>;
@@ -545,6 +611,73 @@ export type AgentAdapterOsIsolationProviderRunner = {
   can_certify_ga: false;
 };
 
+export type AgentAdapterOsIsolationProviderRunnerArtifact = {
+  kind: "agent_adapter_os_isolation_provider_runner";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type AgentAdapterOsIsolationProviderHelperExecution = {
+  schema_version: "comath.agent_adapter_os_isolation_provider_helper_execution.v1";
+  helper_execution_id: string;
+  project_id: string;
+  runner_id: string;
+  launch_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  created_at: string;
+  ok: boolean;
+  helper_execution_status: AgentAdapterOsIsolationProviderHelperExecutionStatus;
+  requested_provider: string;
+  provider: AgentAdapterOsIsolationProvider;
+  provider_helper_attempted: boolean;
+  helper_execution_path: string;
+  launch_artifact: AgentAdapterOsIsolationLaunchArtifact | null;
+  runner_artifact: AgentAdapterOsIsolationProviderRunnerArtifact | null;
+  provider_helper_execution: {
+    helper_source: "service_owned_provider_helper_config" | "missing";
+    helper_configured: boolean;
+    helper_binary_sha256: string | null;
+    helper_version: string | null;
+    helper_exit_code: number | null;
+    helper_signal: string | null;
+    timed_out: boolean;
+    stdout_sha256: string | null;
+    stderr_sha256: string | null;
+    transcript_sha256: string | null;
+    stdout_size_bytes: number;
+    stderr_size_bytes: number;
+    shell: false;
+    network_policy: "disabled";
+    no_new_privileges_required: true;
+    command_override_allowed: false;
+    environment_override_allowed: false;
+    caller_supplied_success_allowed: false;
+    fixed_args_template: string[];
+    fixed_args_template_sha256: string;
+    environment_policy: AgentAdapterOsIsolationProviderRunner["provider_runner_contract"]["environment_policy"];
+    diagnostics: string[];
+    proof_authority: "none";
+  };
+  adapter_execution_isolation: {
+    required_for_ga: true;
+    current_boundary: AgentAdapterOsIsolationBoundary;
+    os_enforced: false;
+    provider: AgentAdapterOsIsolationProvider;
+    claims_runtime_enforcement: false;
+    proof_authority: "none";
+  };
+  blocker_certificate: {
+    blocker_code: AgentAdapterOsIsolationProviderHelperExecutionStatus;
+    replayable_next_action: string;
+    proof_authority: "none";
+  };
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
 const osEnforcedProviders = new Set<AgentAdapterOsIsolationProvider>([
   "oci_container",
   "nix_sandbox",
@@ -630,6 +763,19 @@ function assertProviderRunnerId(value: string | undefined): string {
   throw new ComathError("invalid adapter OS-isolation provider runner id", {
     statusCode: 400,
     code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_RUNNER_ID_INVALID"
+  });
+}
+
+function assertProviderHelperExecutionId(value: string | undefined): string {
+  if (!value) {
+    return `ADAPTER-OSISO-HELPER-${Date.now()}`;
+  }
+  if (/^[A-Z0-9][A-Z0-9_-]{2,96}$/.test(value)) {
+    return value;
+  }
+  throw new ComathError("invalid adapter OS-isolation provider helper execution id", {
+    statusCode: 400,
+    code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HELPER_EXECUTION_ID_INVALID"
   });
 }
 
@@ -880,6 +1026,10 @@ function providerRunnerPath(runnerId: string): string {
   return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", runnerId, "provider-runner.json"));
 }
 
+function providerHelperExecutionPath(helperExecutionId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", helperExecutionId, "provider-helper-execution.json"));
+}
+
 function readSandboxLaunchArtifact(
   projectRoot: string,
   launchId: string
@@ -904,6 +1054,33 @@ function readSandboxLaunchArtifact(
       size_bytes: bytes.byteLength
     },
     launch: parsed
+  };
+}
+
+function readProviderRunnerArtifact(
+  projectRoot: string,
+  runnerId: string
+): { artifact: AgentAdapterOsIsolationProviderRunnerArtifact; runner: AgentAdapterOsIsolationProviderRunner } | null {
+  const path = providerRunnerPath(runnerId);
+  const absolutePath = assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    return null;
+  }
+  const bytes = readFileSync(absolutePath);
+  let parsed: AgentAdapterOsIsolationProviderRunner;
+  try {
+    parsed = JSON.parse(bytes.toString("utf8")) as AgentAdapterOsIsolationProviderRunner;
+  } catch {
+    return null;
+  }
+  return {
+    artifact: {
+      kind: "agent_adapter_os_isolation_provider_runner",
+      path,
+      sha256: sha256Text(bytes.toString("utf8")),
+      size_bytes: bytes.byteLength
+    },
+    runner: parsed
   };
 }
 
@@ -1158,7 +1335,11 @@ function providerRunnerEnvironmentPolicy(provider: AgentAdapterOsIsolationProvid
     "COMATH_ADAPTER_BACKEND",
     "COMATH_ADAPTER_ID",
     "COMATH_OS_ISOLATION_PROVIDER",
-    "COMATH_RUNNER_NETWORK"
+    "COMATH_RUNNER_NETWORK",
+    "COMATH_PROOF_AUTHORITY",
+    "COMATH_PROVIDER_RUNNER_ID",
+    "COMATH_SANDBOX_LAUNCH_ID",
+    "COMATH_PROJECT_ID"
   ];
   const material = {
     provider,
@@ -1172,6 +1353,234 @@ function providerRunnerEnvironmentPolicy(provider: AgentAdapterOsIsolationProvid
     env_override_allowed: false,
     env_policy_sha256: sha256Text(canonicalJson(material))
   };
+}
+
+function providerRunnerIsReadyForHelperExecution(
+  runnerBundle: { runner: AgentAdapterOsIsolationProviderRunner } | null
+): boolean {
+  const runner = runnerBundle?.runner;
+  return Boolean(
+    runner &&
+      runner.schema_version === "comath.agent_adapter_os_isolation_provider_runner.v1" &&
+      runner.ok === true &&
+      runner.runner_status === "ready_for_service_owned_provider_runner" &&
+      runner.provider_runner_ready === true &&
+      runner.provider_runner_resolution.resolution_source === "service_owned_provider_runner_resolver" &&
+      isSha256(runner.provider_runner_resolution.runner_binary_sha256) &&
+      runner.provider_runner_contract.shell === false &&
+      runner.provider_runner_contract.network_policy === "disabled" &&
+      runner.provider_runner_contract.command_override_allowed === false &&
+      runner.provider_runner_contract.environment_override_allowed === false &&
+      runner.provider_runner_contract.caller_supplied_success_allowed === false &&
+      osEnforcedProviders.has(runner.provider)
+  );
+}
+
+function providerRunnerMatchesHelperInput(input: {
+  runnerBundle: { runner: AgentAdapterOsIsolationProviderRunner } | null;
+  projectId: string;
+  runnerId: string;
+  launchId: string;
+  adapterId: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+}): boolean {
+  const runner = input.runnerBundle?.runner;
+  return Boolean(
+    runner &&
+      runner.project_id === input.projectId &&
+      runner.runner_id === input.runnerId &&
+      runner.launch_id === input.launchId &&
+      runner.adapter_id === input.adapterId &&
+      runner.backend === input.backend &&
+      runner.provider === input.provider
+  );
+}
+
+function providerHelperEnv(input: {
+  projectId: string;
+  runnerId: string;
+  launchId: string;
+  adapterId: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+}): Record<string, string> {
+  return {
+    COMATH_ADAPTER_BACKEND: input.backend,
+    COMATH_ADAPTER_ID: input.adapterId,
+    COMATH_OS_ISOLATION_PROVIDER: input.provider,
+    COMATH_RUNNER_NETWORK: "disabled",
+    COMATH_PROOF_AUTHORITY: "none",
+    COMATH_PROVIDER_RUNNER_ID: input.runnerId,
+    COMATH_SANDBOX_LAUNCH_ID: input.launchId,
+    COMATH_PROJECT_ID: input.projectId
+  };
+}
+
+function providerHelperFixedArgs(input: {
+  helperExecutionId: string;
+  runnerId: string;
+  launchId: string;
+  adapterId: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+}): string[] {
+  return [
+    "--provider",
+    input.provider,
+    "--runner-id",
+    input.runnerId,
+    "--launch-id",
+    input.launchId,
+    "--helper-execution-id",
+    input.helperExecutionId,
+    "--adapter-id",
+    input.adapterId,
+    "--backend",
+    input.backend,
+    "--network-policy",
+    "disabled",
+    "--proof-authority",
+    "none"
+  ];
+}
+
+function providerHelperProgramEnvVar(provider: AgentAdapterOsIsolationProvider): string {
+  switch (provider) {
+    case "oci_container":
+      return "COMATH_AGENT_ADAPTER_OSISO_OCI_HELPER";
+    case "nix_sandbox":
+      return "COMATH_AGENT_ADAPTER_OSISO_NIX_HELPER";
+    case "firejail":
+      return "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_HELPER";
+    case "windows_appcontainer":
+      return "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER";
+    case "macos_sandbox_exec":
+      return "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER";
+    default:
+      return "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER";
+  }
+}
+
+function defaultProviderHelperConfigResolver(
+  input: AgentAdapterOsIsolationProviderHelperConfigResolverInput
+): AgentAdapterOsIsolationProviderHelperConfig {
+  const providerEnvVar = providerHelperProgramEnvVar(input.provider);
+  const configuredProgram = process.env[providerEnvVar] ?? process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER;
+  if (!configuredProgram) {
+    return {
+      config_source: "service_owned_provider_helper_config",
+      helper_available: false,
+      diagnostics: [
+        `${input.provider} provider helper is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
+        `Set ${providerEnvVar} to an absolute service-owned helper executable before attempting provider helper execution.`
+      ]
+    };
+  }
+  if (!isAbsolute(configuredProgram)) {
+    return {
+      config_source: "service_owned_provider_helper_config",
+      helper_available: false,
+      diagnostics: [`${providerEnvVar} must be an absolute path.`]
+    };
+  }
+  if (!existsSync(configuredProgram) || !statSync(configuredProgram).isFile()) {
+    return {
+      config_source: "service_owned_provider_helper_config",
+      helper_available: false,
+      diagnostics: [`${providerEnvVar} does not point to an existing file.`]
+    };
+  }
+  return {
+    config_source: "service_owned_provider_helper_config",
+    helper_available: true,
+    helper_program: configuredProgram,
+    helper_version: `${input.provider}-helper-env-configured`,
+    timeout_ms: 10_000,
+    diagnostics: [`${providerEnvVar} resolved to a service-owned helper executable.`]
+  };
+}
+
+function sha256Bytes(bytes: Buffer | string): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function sha256FileSync(path: string): { sha256: string; size_bytes: number } {
+  const bytes = readFileSync(path);
+  return { sha256: sha256Bytes(bytes), size_bytes: bytes.byteLength };
+}
+
+function sanitizeHelperArgsPrefix(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.length <= 4096);
+}
+
+function normalizeHelperTimeoutMs(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 120_000 ? value : 10_000;
+}
+
+function providerHelperConfigAccepted(config: AgentAdapterOsIsolationProviderHelperConfig | undefined): boolean {
+  return Boolean(
+    config?.config_source === "service_owned_provider_helper_config" &&
+      config.helper_available === true &&
+      typeof config.helper_program === "string" &&
+      isAbsolute(config.helper_program) &&
+      existsSync(config.helper_program) &&
+      statSync(config.helper_program).isFile()
+  );
+}
+
+function providerHelperReplayableNextAction(status: AgentAdapterOsIsolationProviderHelperExecutionStatus): string {
+  if (status === "blocked_provider_runner_manifest_missing") {
+    return "Prepare a ready service-owned provider-runner manifest before executing the provider helper.";
+  }
+  if (status === "blocked_provider_runner_binding_mismatch") {
+    return "Run provider helper execution with the exact project, adapter, backend, provider, launch, and runner bound by the ready provider-runner manifest.";
+  }
+  if (status === "blocked_provider_helper_not_configured") {
+    return "Configure a service-owned OS sandbox provider helper executable; caller-supplied command, argv, env, or success metadata cannot configure it.";
+  }
+  if (status === "blocked_provider_helper_binary_mismatch") {
+    return "Reconfigure the service-owned provider helper so its executable hash matches the ready provider-runner manifest.";
+  }
+  if (status === "blocked_provider_helper_launch_failed") {
+    return "Repair the service-owned provider helper launch path or host configuration, then retry provider helper execution.";
+  }
+  if (status === "blocked_provider_helper_execution_failed") {
+    return "Inspect the provider helper stderr hash/output under service control, repair the helper or sandbox profile, then retry.";
+  }
+  return "Provider helper execution was attempted. Run a canonical service-owned OS-isolation collection probe before treating this as readiness evidence.";
+}
+
+function helperExecutionStatus(input: {
+  runnerReady: boolean;
+  runnerMatches: boolean;
+  configAccepted: boolean;
+  helperHashMatches: boolean;
+  launchFailed: boolean;
+  exitCode: number | null;
+}): AgentAdapterOsIsolationProviderHelperExecutionStatus {
+  if (!input.runnerReady) {
+    return "blocked_provider_runner_manifest_missing";
+  }
+  if (!input.runnerMatches) {
+    return "blocked_provider_runner_binding_mismatch";
+  }
+  if (!input.configAccepted) {
+    return "blocked_provider_helper_not_configured";
+  }
+  if (!input.helperHashMatches) {
+    return "blocked_provider_helper_binary_mismatch";
+  }
+  if (input.launchFailed) {
+    return "blocked_provider_helper_launch_failed";
+  }
+  if (input.exitCode !== 0) {
+    return "blocked_provider_helper_execution_failed";
+  }
+  return "provider_helper_execution_attempted";
 }
 
 function collectionBoolean(
@@ -1479,6 +1888,228 @@ export function prepareAgentAdapterOsIsolationProviderRunner(
     }
   });
   return runner;
+}
+
+export function runAgentAdapterOsIsolationProviderHelperExecution(
+  projectRoot: string,
+  input: AgentAdapterOsIsolationProviderHelperExecutionInput,
+  options: AgentAdapterOsIsolationProviderHelperExecutionOptions = {}
+): AgentAdapterOsIsolationProviderHelperExecution {
+  getAgentAdapterPackage(input.adapter_id);
+  const helperExecutionId = assertProviderHelperExecutionId(input.helper_execution_id);
+  const backend = assertBackend(input.backend);
+  const path = providerHelperExecutionPath(helperExecutionId);
+  const absoluteHelperExecutionPath = assertPathAllowed(projectRoot, path, { purpose: "runtime-write" });
+  if (existsSync(absoluteHelperExecutionPath)) {
+    throw new ComathError("adapter OS-isolation provider helper execution already exists", {
+      statusCode: 409,
+      code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HELPER_EXECUTION_ALREADY_EXISTS"
+    });
+  }
+
+  const runnerBundle = readProviderRunnerArtifact(projectRoot, input.runner_id);
+  const runnerReady = providerRunnerIsReadyForHelperExecution(runnerBundle);
+  const { requestedProvider, knownProvider } = normalizeRequestedProvider(
+    input.requested_provider ?? runnerBundle?.runner.requested_provider
+  );
+  const provider = runnerBundle?.runner.provider ?? knownProvider ?? "unknown";
+  const runnerMatches = providerRunnerMatchesHelperInput({
+    runnerBundle,
+    projectId: input.project_id,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+  const readyRunnerBundle = runnerReady && runnerMatches ? runnerBundle : null;
+  const launchBundle = readSandboxLaunchArtifact(projectRoot, input.launch_id);
+  const config = readyRunnerBundle
+    ? (options.provider_helper_config_resolver ?? defaultProviderHelperConfigResolver)({
+        project_root: projectRoot,
+        project_id: input.project_id,
+        helper_execution_id: helperExecutionId,
+        runner_id: input.runner_id,
+        runner_path: readyRunnerBundle.runner.runner_path,
+        launch_id: input.launch_id,
+        launch_path: readyRunnerBundle.runner.launch_artifact?.path ?? launchBundle?.artifact.path ?? "",
+        adapter_id: input.adapter_id,
+        backend,
+        provider,
+        runner_binary_sha256: readyRunnerBundle.runner.provider_runner_resolution.runner_binary_sha256 as string,
+        platform: input.helper_environment?.platform
+      }) ?? undefined
+    : undefined;
+  const configAccepted = providerHelperConfigAccepted(config);
+  const fixedArgs = providerHelperFixedArgs({
+    helperExecutionId,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+  const env = providerHelperEnv({
+    projectId: input.project_id,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+  const helperProgram = configAccepted ? config?.helper_program as string : null;
+  const helperHash = helperProgram ? sha256FileSync(helperProgram) : null;
+  const runnerBinarySha256 = readyRunnerBundle?.runner.provider_runner_resolution.runner_binary_sha256;
+  const helperHashMatches = Boolean(
+    helperHash &&
+      isSha256(runnerBinarySha256) &&
+      helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase()
+  );
+  const helperArgsPrefix = configAccepted ? sanitizeHelperArgsPrefix(config?.helper_args_prefix) : [];
+  const shouldSpawn = Boolean(configAccepted && helperHashMatches && helperProgram);
+  const spawned = shouldSpawn
+    ? spawnSync(helperProgram as string, [...helperArgsPrefix, ...fixedArgs], {
+        cwd: projectRoot,
+        env,
+        encoding: "utf8",
+        shell: false,
+        timeout: normalizeHelperTimeoutMs(config?.timeout_ms)
+      })
+    : undefined;
+  const stdout = typeof spawned?.stdout === "string" ? spawned.stdout : "";
+  const stderr = typeof spawned?.stderr === "string" ? spawned.stderr : "";
+  const stdoutSha256 = shouldSpawn ? sha256Bytes(stdout) : null;
+  const stderrSha256 = shouldSpawn ? sha256Bytes(stderr) : null;
+  const stdoutSize = shouldSpawn ? Buffer.byteLength(stdout, "utf8") : 0;
+  const stderrSize = shouldSpawn ? Buffer.byteLength(stderr, "utf8") : 0;
+  const exitCode = typeof spawned?.status === "number" ? spawned.status : null;
+  const signal = typeof spawned?.signal === "string" ? spawned.signal : null;
+  const spawnError = spawned?.error as (Error & { code?: string }) | undefined;
+  const launchFailed = Boolean(spawnError);
+  const timedOut = spawnError?.code === "ETIMEDOUT";
+  const status = helperExecutionStatus({
+    runnerReady,
+    runnerMatches,
+    configAccepted,
+    helperHashMatches,
+    launchFailed,
+    exitCode
+  });
+  const ok = status === "provider_helper_execution_attempted";
+  const attempted = shouldSpawn && !launchFailed && exitCode !== null;
+  const transcriptSha256 = shouldSpawn
+    ? sha256Text(canonicalJson({
+        helper_execution_id: helperExecutionId,
+        runner_id: input.runner_id,
+        launch_id: input.launch_id,
+        helper_binary_sha256: helperHash?.sha256 ?? null,
+        helper_exit_code: exitCode,
+        helper_signal: signal,
+        stdout_sha256: stdoutSha256,
+        stderr_sha256: stderrSha256,
+        stdout_size_bytes: stdoutSize,
+        stderr_size_bytes: stderrSize
+      }))
+    : null;
+  const environmentPolicy = readyRunnerBundle?.runner.provider_runner_contract.environment_policy ?? providerRunnerEnvironmentPolicy(provider);
+  const diagnostics = [
+    input.helper_environment?.platform ? `platform=${sanitizeProbeText(input.helper_environment.platform)}` : undefined,
+    input.helper_environment?.notes ? sanitizeProbeText(input.helper_environment.notes) : undefined,
+    ...sanitizeDiagnostics(config?.diagnostics),
+    spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined,
+    ok
+      ? "Service-owned provider helper process executed with fixed argv/env and hash-bound runner binary."
+      : "No service-owned provider helper execution evidence was accepted as readiness evidence."
+  ].filter((entry): entry is string => Boolean(entry));
+
+  const helperExecution: AgentAdapterOsIsolationProviderHelperExecution = {
+    schema_version: "comath.agent_adapter_os_isolation_provider_helper_execution.v1",
+    helper_execution_id: helperExecutionId,
+    project_id: input.project_id,
+    runner_id: input.runner_id,
+    launch_id: input.launch_id,
+    adapter_id: input.adapter_id,
+    backend,
+    created_at: new Date().toISOString(),
+    ok,
+    helper_execution_status: status,
+    requested_provider: sanitizeProbeText(requestedProvider) || "unknown",
+    provider,
+    provider_helper_attempted: attempted,
+    helper_execution_path: path,
+    launch_artifact: readyRunnerBundle?.runner.launch_artifact ?? launchBundle?.artifact ?? null,
+    runner_artifact: runnerBundle?.artifact ?? null,
+    provider_helper_execution: {
+      helper_source: configAccepted ? "service_owned_provider_helper_config" : "missing",
+      helper_configured: configAccepted,
+      helper_binary_sha256: helperHash?.sha256 ?? null,
+      helper_version: configAccepted && typeof config?.helper_version === "string"
+        ? sanitizeProbeText(config.helper_version)
+        : null,
+      helper_exit_code: attempted ? exitCode : null,
+      helper_signal: attempted ? signal : null,
+      timed_out: timedOut,
+      stdout_sha256: attempted ? stdoutSha256 : null,
+      stderr_sha256: attempted ? stderrSha256 : null,
+      transcript_sha256: attempted ? transcriptSha256 : null,
+      stdout_size_bytes: attempted ? stdoutSize : 0,
+      stderr_size_bytes: attempted ? stderrSize : 0,
+      shell: false,
+      network_policy: "disabled",
+      no_new_privileges_required: true,
+      command_override_allowed: false,
+      environment_override_allowed: false,
+      caller_supplied_success_allowed: false,
+      fixed_args_template: fixedArgs,
+      fixed_args_template_sha256: sha256Text(canonicalJson(fixedArgs)),
+      environment_policy: environmentPolicy,
+      diagnostics,
+      proof_authority: "none"
+    },
+    adapter_execution_isolation: {
+      required_for_ga: true,
+      current_boundary: "process_boundary_only",
+      os_enforced: false,
+      provider,
+      claims_runtime_enforcement: false,
+      proof_authority: "none"
+    },
+    blocker_certificate: {
+      blocker_code: status,
+      replayable_next_action: providerHelperReplayableNextAction(status),
+      proof_authority: "none"
+    },
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+
+  mkdirSync(dirname(absoluteHelperExecutionPath), { recursive: true });
+  writeFileSync(absoluteHelperExecutionPath, canonicalJson(helperExecution), "utf8");
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_adapter.os_isolation_provider_helper_executed",
+    actor: sanitizeReviewText(input.actor),
+    target_id: input.project_id,
+    payload: {
+      helper_execution_id: helperExecutionId,
+      runner_id: input.runner_id,
+      launch_id: input.launch_id,
+      adapter_id: input.adapter_id,
+      backend,
+      ok,
+      helper_execution_status: status,
+      provider,
+      provider_helper_attempted: attempted,
+      helper_exit_code: attempted ? exitCode : null,
+      stdout_sha256: attempted ? stdoutSha256 : null,
+      stderr_sha256: attempted ? stderrSha256 : null,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return helperExecution;
 }
 
 export function runAgentAdapterOsIsolationSandboxExecutionProbe(

@@ -1,3 +1,33 @@
+# Goal 3 Task 176 / Agent Adapter OS-Isolation Provider Helper Execution
+
+Scope: add a service-owned provider-helper execution attempt layer after Task175 provider-runner contracts, without treating helper exit status or stdout/stderr hashes as collected OS-enforcement evidence, readiness evidence, mathematical proof authority, or GA certification.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and treated Task175's next step as authoritative.
+- Added `goal3-task176-agent-adapter-os-isolation-provider-helper-execution.test.mjs`.
+- Added `runAgentAdapterOsIsolationProviderHelperExecution()` and `POST /agent/adapter/package/os-isolation-provider-helper-execution`.
+- Added `agent_adapter_os_isolation_provider_helper_execution` to the service capability ledger.
+- Provider-helper execution manifests write `.comath/release/agent-adapter-os-isolation/<helper_execution_id>/provider-helper-execution.json`, require a ready Task175 provider-runner manifest, require matching project/adapter/backend/provider/launch/runner binding, require a service-owned helper configuration, and verify the helper executable hash against the ready runner manifest.
+- The helper is launched through `spawnSync()` with `shell=false`, fixed argv, a non-inherited fixed `COMATH_*` environment, bounded timeout, and hash-only stdout/stderr/transcript recording.
+- Default route/service behavior records `blocked_provider_helper_not_configured` when no service-owned helper executable is configured.
+- Caller command, argv, env, helper exit code, stdout/stderr hashes, and success-shaped metadata are ignored for readiness, sanitized from public output, and cannot configure or satisfy provider-helper execution.
+- Updated README, TODO, AGENTS, adapter contracts, GA release criteria, threat model, and Goal 3 tracker wording to keep provider-helper execution attempts non-authoritative.
+
+Verification evidence:
+
+- TDD RED: after adding Task176 test and before implementation, `node services/comathd/tests/unit/goal3-task176-agent-adapter-os-isolation-provider-helper-execution.test.mjs` failed because `../../dist/index.js` did not export `runAgentAdapterOsIsolationProviderHelperExecution`.
+- GREEN focused test exited 0: Task176 provider helper execution.
+- GREEN adjacent focused regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task170 configured-host collection, Task171 sandbox launch preflight, Task172 sandbox execution probe bridge, Task175 provider-runner contract, Phase43 adapter package, and Phase44 external invocation.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task176 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task176 executes a configured service-owned provider helper process and records its exit/hash envelope. It still does not collect canonical OS-enforcement evidence, does not satisfy adapter OS-isolation readiness by itself, does not guarantee kernel/firewall isolation on this workstation, does not promote mathematical claims, does not certify GA, and does not provide durable long-lived operator transport.
+
+Residual risks: Goal 3 remains incomplete. Canonical OS-enforcement collection after provider-helper execution, broad cross-platform OS-enforced adapter execution, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 175 / Agent Adapter OS-Isolation Provider Runner Contract
 
 Scope: add a service-owned provider-runner contract/unavailable-blocker layer between Task171 sandbox-launch preflight and Task172 sandbox execution probe, without claiming executed OS isolation or allowing caller-supplied runner metadata to become evidence.
