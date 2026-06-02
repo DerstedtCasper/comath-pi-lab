@@ -1,3 +1,28 @@
+# Goal 3 Task 156 / Pi Lifecycle Operator Session Recovery
+
+Scope: add a read-only Pi lifecycle session recovery surface that records operator-supplied session ids, completed lifecycle steps, log cursors, and sanitized last-result summaries so a Pi host can resume with the next host-confirmed lifecycle-control command, without calling `comathd`, writing `.comath/`, claiming durable transport, or weakening Lean Authority v3 boundaries.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and confirmed Task155 was the latest completed task before opening Task156.
+- Used the read-only explorer result to choose the smallest safe Task156 slice: Pi-side lifecycle session recovery planning rather than OS isolation, broad Lean replay, or service-owned durable-session manifests.
+- Added `goal3-task156-pi-lifecycle-operator-session.test.mjs`.
+- RED showed `comath.release.piCodexLifecycleSession` was not registered in the Pi extension.
+- Added the read-only `comath.release.piCodexLifecycleSession` tool, `/cm:release lifecycle-session` command, runtime-registration subcommand metadata, default package test wiring, Phase6 tool exposure guard, and Phase26 executable-tool guard.
+- The session surface exposes `plan`, `status`, and `resume-plan`, preserves `proof_authority: "none"`, `can_promote_claim: false`, `can_certify_ga: false`, and `direct_trusted_state_mutation: false`, and returns only recovery guidance whose next action must be executed through Task155 `lifecycle-control` host confirmation.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task156-pi-lifecycle-operator-session.test.mjs` failed because `comath.release.piCodexLifecycleSession` was not registered.
+- GREEN focused test exited 0: Task156 Pi lifecycle operator session recovery.
+- GREEN adjacent tests exited 0: Task154 Pi lifecycle operator walkthrough, Task155 Pi lifecycle operator controls, Phase47 agent log subscription snapshots, Phase50 bounded log sessions, Phase6 extension, and Phase26 Pi runtime registration.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension typecheck`, `corepack pnpm --filter @comath/pi-extension test`, and `node scripts/phase0-smoke.mjs`.
+
+Boundary notes: Task156 is a Pi-side read-only recovery-planning task. It does not create service-owned lifecycle evidence, persist a session manifest, open an indefinite WebSocket/SSE/terminal transport, run a real Pi host by itself, bypass host confirmation, promote claims, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. Durable persistent operator sessions, end-to-end guided real-Pi execution, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 155 / Pi Lifecycle Operator Controls
 
 Scope: upgrade the Task154 read-only lifecycle walkthrough into bounded Pi operator controls that can plan/status locally and route selected lifecycle actions through existing host-confirmed service tools, without letting Pi write `.comath/`, carry secrets, overclaim proof authority, or certify GA.
