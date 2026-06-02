@@ -1,3 +1,32 @@
+# Goal 3 Task 170 / Agent Adapter OS-Isolation Host Collection Contract
+
+Scope: extend the Task168 adapter OS-isolation probe producer so configured-host OS-enforcement collection can be recorded through a service-owned collector contract, while preserving the Task167 readiness boundary that caller-supplied request metadata, Pi payloads, operator attestations, and package metadata cannot self-certify OS isolation.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context, v2 no-reinvent and open formal workbench docs, agent prompt protocol, AGENTS, README, TODO, REVIEW, runbook, module boundaries, and current repo state before selecting Task170.
+- Added `goal3-task170-agent-adapter-os-isolation-host-collection.test.mjs`.
+- Extended `probeAgentAdapterOsIsolation()` with an optional service-owned `collector` callback, `os_isolation_probe_collected` evidence shape, and readiness-time binding to the canonical collected probe manifest.
+- Added `agent_adapter_os_isolation_host_probe_collection` to the service capability ledger.
+- Preserved fail-closed default route/Pi semantics: ordinary `/agent/adapter/package/os-isolation-probe` requests cannot submit successful OS-enforcement evidence through request fields.
+- Updated README, TODO, adapter contracts, and GA release criteria to document the collector boundary and keep proof/GA authority false.
+
+Boundary hardening:
+
+- Initial GREEN would have allowed request-supplied `execution_collected` metadata to be rewritten as service-owned evidence. Self-review identified this as a trust-boundary bug because it could satisfy the Task167 readiness gate without a real service-owned collector. The implementation was revised so only the internal collector callback can produce collected OS-enforcement evidence; route callers still get blocker evidence unless a future service host runner invokes the collector path. A second hardening pass made the readiness gate require binding to the canonical collected probe manifest and evidence hash, so hand-written JSON that merely claims `service_owned_probe` cannot pass.
+
+Verification evidence:
+
+- TDD RED: after adding Task170 test and before implementation, `node services/comathd/tests/unit/goal3-task170-agent-adapter-os-isolation-host-collection.test.mjs` failed because `agent_adapter_os_isolation_host_probe_collection` was not advertised.
+- GREEN focused test exited 0: Task170 agent adapter OS-isolation host collection.
+- GREEN adjacent focused regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Phase43 agent adapter package, and Phase44 Codex external invocation.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task170 discovered by the default comathd runner.
+- Smoke/diff/runtime-state checks exited 0: `node scripts/phase0-smoke.mjs`, `git diff --check` with LF/CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task170 records configured-host collection evidence only through a service-owned collector contract. It does not add a production cross-platform sandbox launcher, does not guarantee kernel/firewall isolation on this workstation, does not promote mathematical claims, does not certify GA, and does not provide durable long-lived operator transport.
+
+Residual risks: Goal 3 remains incomplete. Production host-specific sandbox launchers, broad cross-platform OS-enforced adapter execution, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 169 / Pi Agent Adapter OS-Isolation Probe Consumer
 
 Scope: expose the Task168 service-owned adapter OS-isolation probe route through Pi release tooling and `/cm:release agent-adapter-os-isolation-probe`, while preserving host confirmation, Pi thin-client boundaries, public sanitizer behavior, and non-authority semantics.

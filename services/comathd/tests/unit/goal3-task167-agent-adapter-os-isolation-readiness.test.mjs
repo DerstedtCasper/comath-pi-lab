@@ -115,12 +115,15 @@ try {
   assert.equal(contractReview.vetoes.some((veto) => veto.code === "adapter_os_isolation_provider_not_os_enforced"), true);
   assert.equal(contractReview.vetoes.some((veto) => veto.code === "adapter_os_process_isolation_missing"), true);
 
-  const realEvidence = writeEvidence(projectRoot, ".comath/release/agent-adapter-os-isolation/input/oci-evidence.json", {
+  const manualServiceOwnedEvidence = writeEvidence(projectRoot, ".comath/release/agent-adapter-os-isolation/input/oci-evidence.json", {
     schema_version: "comath.agent_adapter_os_isolation_evidence.v1",
     adapter_id: "codex-cli",
     backend: "bundled",
     provider: "oci_container",
     evidence_source: "service_owned_probe",
+    probe_id: "ADAPTER-OSISO-0167-MANUAL",
+    probe_status: "os_isolation_probe_collected",
+    collection_source: "service_owned_os_probe",
     process_isolation_enforced: true,
     filesystem_scope_enforced: true,
     network_isolation_enforced: true,
@@ -138,20 +141,26 @@ try {
     adapter_id: "codex-cli",
     backend: "bundled",
     actor: "goal3-task167-test",
-    evidence_path: realEvidence.relativePath
+    evidence_path: manualServiceOwnedEvidence.relativePath
   });
-  assert.equal(readyReview.ok, true);
-  assert.equal(readyReview.readiness_status, "ready_for_os_isolation_release_review");
+  assert.equal(readyReview.ok, false, "manual service-owned-looking JSON cannot satisfy OS-isolation readiness");
+  assert.equal(readyReview.readiness_status, "blocked_missing_os_enforced_adapter_isolation");
   assert.equal(readyReview.checks.provider_os_enforced.ok, true);
   assert.equal(readyReview.checks.network_isolation.ok, true);
-  assert.equal(readyReview.adapter_execution_isolation.os_enforced, true);
+  assert.equal(readyReview.checks.collected_probe_binding.ok, false);
+  assert.equal(
+    readyReview.vetoes.some((veto) => veto.code === "adapter_os_isolation_collected_probe_binding_missing"),
+    true,
+    "release readiness requires a canonical collected probe manifest, not hand-written JSON"
+  );
+  assert.equal(readyReview.adapter_execution_isolation.os_enforced, false);
   assert.equal(readyReview.adapter_execution_isolation.claims_runtime_enforcement, false);
   assert.equal(readyReview.proof_authority, "none");
   assert.equal(readyReview.can_certify_ga, false);
   assert.equal(existsSync(join(projectRoot, readyReview.review_path)), true);
   const persisted = JSON.parse(readFileSync(join(projectRoot, readyReview.review_path), "utf8"));
   assert.equal(JSON.stringify(persisted).includes(projectRoot), false, "review manifest must not echo host paths");
-  assert.equal(persisted.evidence_artifact.sha256, sha256Text(realEvidence.text));
+  assert.equal(persisted.evidence_artifact.sha256, sha256Text(manualServiceOwnedEvidence.text));
 
   assert.throws(
     () =>
@@ -161,7 +170,7 @@ try {
         adapter_id: "codex-cli",
         backend: "bundled",
         actor: "goal3-task167-test",
-        evidence_path: realEvidence.relativePath
+        evidence_path: manualServiceOwnedEvidence.relativePath
       }),
     (error) => error?.code === "AGENT_ADAPTER_OS_ISOLATION_REVIEW_ALREADY_EXISTS",
     "adapter OS-isolation readiness reviews must be append-only by review id"
@@ -260,11 +269,15 @@ try {
       adapter_id: "codex-cli",
       backend: "bundled",
       actor: "goal3-task167-route-test",
-      evidence_path: realEvidence.relativePath
+      evidence_path: manualServiceOwnedEvidence.relativePath
     }
   });
   assert.equal(routeResponse.status, 200, JSON.stringify(routeResponse.body));
-  assert.equal(routeResponse.body.review.ok, true);
+  assert.equal(routeResponse.body.review.ok, false);
+  assert.equal(
+    routeResponse.body.review.vetoes.some((veto) => veto.code === "adapter_os_isolation_collected_probe_binding_missing"),
+    true
+  );
   assert.equal(routeResponse.body.review.can_certify_ga, false);
   assert.equal(JSON.stringify(routeResponse.body).includes(projectRoot), false, "route response must not echo host paths");
 
@@ -274,7 +287,7 @@ try {
       (event) =>
         event.event_type === "agent_adapter.os_isolation_reviewed" &&
         event.payload.review_id === "ADAPTER-OSISO-0167-READY" &&
-        event.payload.ok === true &&
+        event.payload.ok === false &&
         event.payload.proof_authority === "none" &&
         event.payload.can_certify_ga === false
     ),

@@ -49,6 +49,12 @@ Backend output must be an AgentCandidatePack or strict JSON equivalent with:
 
 Any Lean source from a backend must be rechecked by the service-owned LeanRunner and final replay gate.
 
+## Agent Adapter OS Isolation
+
+Agent adapter package launch metadata records whether an adapter currently runs behind `process_boundary_only` or has service-owned OS-isolation evidence. A release-readiness review may accept OS-enforced isolation only when the evidence is produced by a `comathd` service-owned collector and is bound to adapter id, backend, provider, probe id, stdout/stderr/transcript hashes, process isolation, filesystem scope, network isolation, no-new-privileges, and escape-prevention checks.
+
+Caller-supplied request fields, Pi payloads, operator attestations, contract-only metadata, package launch metadata, and health-probe text cannot satisfy the OS-isolation readiness gate. They remain blocker evidence or diagnostics with `proof_authority: "none"`, `can_promote_claim: false`, and `can_certify_ga: false`.
+
 ## Literature And Ingestion Adapters
 
 Providers may include arXiv, Semantic Scholar, OpenAlex, Crossref, Unpaywall, Jina Reader/Search, AnySearch, local PDF, local TeX, local Markdown, BibTeX, and Zotero-compatible metadata.
@@ -85,4 +91,3 @@ They cannot promote `formally_checked` unless their certificate is formalized an
 ## Adapter Configuration Sample
 
 See `config/comath.sample.json` for a non-secret configuration shape. Live credentials must stay in service-owned environment variables or local secret stores and must not appear in Pi payloads, evidence packs, or committed config samples.
-
