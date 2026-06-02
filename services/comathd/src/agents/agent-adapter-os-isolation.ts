@@ -1625,12 +1625,41 @@ function isServiceOwnedProviderRunnerResolution(
 function defaultProviderRunnerResolver(
   input: AgentAdapterOsIsolationProviderRunnerResolverInput
 ): AgentAdapterOsIsolationProviderRunnerResolution {
+  const providerEnvVar = providerHelperProgramEnvVar(input.provider);
+  const configuredProgram = process.env[providerEnvVar] ?? process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER;
+  if (!configuredProgram) {
+    return {
+      resolution_source: "service_owned_provider_runner_resolver",
+      runner_available: false,
+      diagnostics: [
+        `${input.provider} provider runner helper is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
+        `Set ${providerEnvVar} to an absolute service-owned helper executable before collecting provider execution evidence.`
+      ]
+    };
+  }
+  if (!isAbsolute(configuredProgram)) {
+    return {
+      resolution_source: "service_owned_provider_runner_resolver",
+      runner_available: false,
+      diagnostics: [`${providerEnvVar} must be an absolute path.`]
+    };
+  }
+  if (!existsSync(configuredProgram) || !statSync(configuredProgram).isFile()) {
+    return {
+      resolution_source: "service_owned_provider_runner_resolver",
+      runner_available: false,
+      diagnostics: [`${providerEnvVar} does not point to an existing file.`]
+    };
+  }
+  const helperHash = sha256FileSync(configuredProgram);
   return {
     resolution_source: "service_owned_provider_runner_resolver",
-    runner_available: false,
+    runner_available: true,
+    runner_binary_sha256: helperHash.sha256,
+    runner_version: `${input.provider}-helper-env-configured`,
     diagnostics: [
-      `${input.provider} provider runner helper is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
-      "Configure a service-owned OS sandbox runner helper before collecting provider execution evidence."
+      `${providerEnvVar} resolved to a service-owned provider helper executable for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
+      "Configured helper assets prepare only a provider runner contract; canonical OS-enforcement evidence still requires service-owned collection."
     ]
   };
 }

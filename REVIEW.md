@@ -1,3 +1,26 @@
+# Goal 3 Task 181 / Configured Windows AppContainer Provider Helper Asset
+
+Scope: add the next smallest production-helper implementation slice after Task180 by letting a host-configured, service-owned Windows AppContainer helper executable flow through the default provider-runner and helper-host validation path, without turning helper configuration, helper host validation, or route payloads into OS-enforcement evidence, readiness evidence, proof authority, real-Pi execution, broad provider support, or GA certification.
+
+Work performed:
+
+- Treated Task180's next step as authoritative and selected the production-helper residual blocker rather than durable transport, Lean replay breadth, or real-Pi UX.
+- Added a Task181 regression covering the default route/resolver path with `COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER`.
+- Hardened the default provider-runner resolver so an absolute service-owned helper executable can prepare a hash-bound provider-runner contract after a ready sandbox-launch preflight.
+- Kept caller command, argv, env, hash, helper-ready booleans, and success-shaped route payloads untrusted.
+- Preserved the Task178 default host validator and Task179 execution binding semantics: the configured helper asset can be host-validated and later executed only through service-owned hash-bound manifests.
+- Updated config samples and release-hardening docs to describe the environment variable as host configuration, not evidence.
+
+Verification evidence:
+
+- TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, `node services/comathd/tests/unit/goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs` failed because the capability ledger did not advertise `agent_adapter_os_isolation_configured_provider_helper_asset`.
+- GREEN focused test exited 0: Task181 configured provider-helper asset.
+- Adjacent focused regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task170 configured-host collection, Task171 sandbox launch, Task172 sandbox execution, Task175 provider-runner contract, Task176 provider-helper execution, Task177 provider-helper collection, Task178 provider-helper host validation, Task179 host-validation-bound helper execution, Phase43 adapter package, and Phase44 Codex external invocation.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task181 discovered by the default comathd runner.
+- Post-doc checks exited 0: `node scripts/phase0-smoke.mjs`, config sample JSON parsing, and `git diff --check` with only Windows LF-to-CRLF working-copy warnings. `Test-Path -LiteralPath .comath` returned `False`; the only untracked file before staging was the new Task181 test.
+
+Boundary notes: Task181 does not implement a full AppContainer runner, does not execute the adapter under AppContainer, does not collect canonical OS-enforcement evidence, does not expose helper/provider routes through Pi tools, and does not broaden provider support beyond the configured Windows AppContainer helper asset path. Provider-runner and host-validation manifests remain `proof_authority="none"`, `can_promote_claim=false`, and `can_certify_ga=false`; readiness still requires canonical service-owned collected probe/evidence artifacts.
+
 # Goal 3 Task 180 / Comprehensive Provider Helper Chain Check-Debug
 
 Scope: run the every-third-task comprehensive check-debug loop over the Task175-179 adapter OS-isolation provider-runner/helper/host-validation/collection chain, including readiness gate semantics, service routes, Pi/public payload boundaries, public wording, and runtime cleanliness.

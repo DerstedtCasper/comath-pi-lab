@@ -100,6 +100,8 @@ Pi/Codex lifecycle release evidence now has service-owned non-authoritative prod
 
 Task180 revalidated the Task175-179 provider-helper chain, public route sanitization, current Pi probe/sandbox-execution consumers, and readiness boundary without adding a new authority surface or closing the remaining production-helper, durable-transport, broad OS-enforced execution, Lean replay, or real-Pi blockers.
 
+Task181 adds the first default configured-provider helper asset path for the Windows AppContainer family: a service-owned absolute helper executable can be declared through `COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER`, allowing the default provider-runner and helper-host validation path to bind the helper binary hash without accepting caller command, argv, env, hash, or success metadata. This remains a runner/host-validation asset only; it is not canonical collected OS-enforcement evidence, readiness evidence, mathematical proof authority, broad provider support, real-Pi execution, or GA certification.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)

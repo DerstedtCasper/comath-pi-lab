@@ -61,6 +61,8 @@ Sandbox execution route and Pi consumer payloads may be mistaken for a productio
 
 Provider-runner contract manifests may be mistaken for executed sandboxing because they contain fixed argv templates and environment policy. Mitigation: provider-runner manifests require a ready service-owned sandbox-launch preflight, reject caller command/argv/env/hash/success metadata, record unavailable blockers when no service-owned helper is configured, and cannot satisfy readiness without later canonical collected probe/evidence artifacts.
 
+Configured provider-helper asset environment variables may be mistaken for broad OS sandbox support. Mitigation: the Windows AppContainer helper path must be an absolute service-owned executable configured in the host environment, and public manifests record only the helper binary hash, fixed argv/env policy, and non-secret diagnostics. The configured asset does not prove AppContainer enforcement, does not expose the helper path to Pi payloads, and cannot satisfy readiness without later canonical collected probe/evidence artifacts.
+
 ### Provider Helper Host Validation Confusion
 
 Provider-helper host-validation manifests may be mistaken for executed sandboxing because they bind a service-owned helper binary hash, supported platform list, and fixed environment policy. Mitigation: host-validation manifests require a ready provider-runner manifest, reject caller helper-host-ready booleans, command/argv/env/hash/version metadata, record blockers for missing validators, binary mismatches, and platform mismatches, and cannot satisfy readiness without later canonical collected probe/evidence artifacts.

@@ -38,6 +38,18 @@
       { "id": "z3", "provider": "z3", "enabled": false }
     ]
   },
+  "agentAdapterOsIsolation": {
+    "providerHelpers": [
+      {
+        "provider": "windows_appcontainer",
+        "enabled": false,
+        "configuredByEnv": "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER",
+        "fallbackConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
+        "proofAuthority": "none",
+        "canCertifyGa": false
+      }
+    ]
+  },
   "evidencePack": {
     "includeFullPdfs": false,
     "includeCopyrightedText": false,
