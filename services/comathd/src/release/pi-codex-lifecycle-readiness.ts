@@ -455,6 +455,76 @@ type PiCodexLifecycleOperatorSessionManifestBody = Omit<
   "session_manifest_artifact"
 >;
 
+export type PiCodexLifecycleOperatorTransportKind =
+  | "operator_polling_checkpoint"
+  | "bounded_sse_snapshot"
+  | "manual_terminal_resume"
+  | "unknown";
+
+export type PiCodexLifecycleOperatorTransportRecoveryCursor = {
+  operator_event_cursor: string;
+  stdout_cursor: string;
+  stderr_cursor: string;
+};
+
+export type PiCodexLifecycleOperatorTransportRecoveryInput = {
+  project_id: string;
+  session_id: string;
+  actor: string;
+  transport_recovery_id?: string;
+  session_manifest_path?: string;
+  observed_route?: string;
+  requested_cursor?: Partial<PiCodexLifecycleOperatorTransportRecoveryCursor>;
+  client_epoch?: number;
+  last_seen_event_id?: string;
+  reconnect_reason?: string;
+  transport_kind?: PiCodexLifecycleOperatorTransportKind;
+};
+
+export type PiCodexLifecycleOperatorTransportRecoveryArtifact = {
+  kind: "operator_transport_recovery";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexLifecycleOperatorTransportRecovery = {
+  schema_version: "comath.pi_codex_lifecycle_operator_transport_recovery.v1";
+  transport_recovery_id: string;
+  project_id: string;
+  session_id: string;
+  actor: string;
+  created_at: string;
+  recovery_status: "operator_transport_recovery_checkpoint_recorded";
+  transport_kind: PiCodexLifecycleOperatorTransportKind;
+  observed_route: string;
+  requested_cursor: PiCodexLifecycleOperatorTransportRecoveryCursor;
+  client_epoch: number;
+  last_seen_event_id: string;
+  reconnect_reason: string;
+  session_manifest_path: string;
+  session_manifest_artifact: PiCodexLifecycleOperatorSessionManifestArtifact;
+  next_recommended_route: string;
+  transport_recovery_path: string;
+  transport_recovery_artifact: PiCodexLifecycleOperatorTransportRecoveryArtifact;
+  durable_recovery_checkpoint_provided: true;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexLifecycleOperatorTransportRecoveryBody = Omit<
+  PiCodexLifecycleOperatorTransportRecovery,
+  "transport_recovery_artifact"
+>;
+
 const defaultInstallSessionEvidence: PiCodexLifecycleInstallSessionEvidence = {
   session_kind: "unknown",
   pi_host_kind: "unknown",
@@ -579,6 +649,22 @@ function assertOperatorSessionId(value: string | undefined): string {
   return sessionId;
 }
 
+function assertOperatorTransportRecoveryId(value: string | undefined): string {
+  const recoveryId = value ?? `LIFE-TRANSPORT-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (
+    !/^[A-Za-z0-9._-]+$/.test(recoveryId) ||
+    recoveryId === "." ||
+    recoveryId === ".." ||
+    recoveryId.split(".").some((segment) => segment.length === 0)
+  ) {
+    throw new ComathError("invalid Pi/Codex lifecycle operator transport recovery id", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_INVALID_ID"
+    });
+  }
+  return recoveryId;
+}
+
 function assertOperatorSessionProjectId(value: string): string {
   if (/^[A-Z]+-\d{4,}$/.test(value)) {
     return value;
@@ -586,6 +672,35 @@ function assertOperatorSessionProjectId(value: string): string {
   throw new ComathError("invalid Pi/Codex lifecycle operator session project id", {
     statusCode: 400,
     code: "PI_CODEX_LIFECYCLE_OPERATOR_SESSION_INVALID_PROJECT_ID"
+  });
+}
+
+function assertOperatorTransportKind(
+  value: PiCodexLifecycleOperatorTransportRecoveryInput["transport_kind"]
+): PiCodexLifecycleOperatorTransportKind {
+  const kind = value ?? "unknown";
+  if (
+    kind === "operator_polling_checkpoint" ||
+    kind === "bounded_sse_snapshot" ||
+    kind === "manual_terminal_resume" ||
+    kind === "unknown"
+  ) {
+    return kind;
+  }
+  throw new ComathError("invalid Pi/Codex lifecycle operator transport kind", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_INVALID_KIND"
+  });
+}
+
+function assertOperatorTransportClientEpoch(value: number | undefined): number {
+  const epoch = value ?? 0;
+  if (Number.isInteger(epoch) && epoch >= 0 && epoch <= Number.MAX_SAFE_INTEGER) {
+    return epoch;
+  }
+  throw new ComathError("invalid Pi/Codex lifecycle operator transport client epoch", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_INVALID_CLIENT_EPOCH"
   });
 }
 
@@ -935,6 +1050,9 @@ function sanitizeOperatorSessionValue(value: unknown, depth = 0): unknown {
   return sanitizeOperatorSessionText(String(value));
 }
 
+const operatorTransportOverclaimPattern =
+  /\b(?:long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided)\b/gi;
+
 function defaultLifecycleProbeRunner(
   command: PiCodexLifecycleServiceProbeRunnerCommand
 ): PiCodexLifecycleServiceProbeRunnerResult {
@@ -1158,6 +1276,18 @@ function nextOperatorSessionRoute(completedSteps: PiCodexLifecycleOperatorSessio
   return operatorSessionRouteByStep[nextStep];
 }
 
+function operatorSessionManifestPath(sessionId: string): string {
+  return normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", sessionId, "operator-session-manifest.json")
+  );
+}
+
+function operatorTransportRecoveryPath(recoveryId: string): string {
+  return normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", recoveryId, "operator-transport-recovery.json")
+  );
+}
+
 function readOperatorSessionCreatedAt(projectRoot: string, sessionManifestPath: string, fallback: string): string {
   const absolutePath = assertPathAllowed(projectRoot, sessionManifestPath, { purpose: "read" });
   if (!existsSync(absolutePath)) {
@@ -1174,6 +1304,136 @@ function readOperatorSessionCreatedAt(projectRoot: string, sessionManifestPath: 
   }
 }
 
+function sanitizeOperatorTransportText(value: unknown): string {
+  const sanitized =
+    typeof value === "string"
+      ? sanitizeOperatorSessionText(value)
+      : value === undefined
+        ? "not_provided"
+        : sanitizeOperatorSessionText(String(value));
+  return sanitized.replace(operatorTransportOverclaimPattern, "bounded_transport_checkpoint_only");
+}
+
+function sanitizeOperatorTransportCursor(
+  cursor: PiCodexLifecycleOperatorTransportRecoveryInput["requested_cursor"]
+): PiCodexLifecycleOperatorTransportRecoveryCursor {
+  return {
+    operator_event_cursor: sanitizeOperatorTransportText(cursor?.operator_event_cursor),
+    stdout_cursor: sanitizeOperatorTransportText(cursor?.stdout_cursor),
+    stderr_cursor: sanitizeOperatorTransportText(cursor?.stderr_cursor)
+  };
+}
+
+function resolveOperatorTransportSessionManifestPath(
+  projectRoot: string,
+  sessionId: string,
+  sessionManifestPath: string | undefined
+): string {
+  const expectedPath = operatorSessionManifestPath(sessionId);
+  if (sessionManifestPath === undefined) {
+    return expectedPath;
+  }
+  const absolutePath = assertPathAllowed(projectRoot, sessionManifestPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  const relativePath = projectRelativePath(projectRoot, absolutePath);
+  if (relativePath === expectedPath) {
+    return relativePath;
+  }
+  throw new ComathError("Pi/Codex lifecycle operator transport recovery session manifest path does not match session id", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_SESSION_PATH_MISMATCH"
+  });
+}
+
+function assertOperatorTransportSessionManifestBoundary(manifest: PiCodexLifecycleOperatorSessionManifestBody): void {
+  let completedSteps: PiCodexLifecycleOperatorSessionStep[];
+  try {
+    if (!Array.isArray(manifest.completed_steps)) {
+      throw new Error("completed_steps must be an array");
+    }
+    completedSteps = operatorSessionSteps(manifest.completed_steps as PiCodexLifecycleOperatorSessionStep[]);
+  } catch {
+    throw new ComathError("Pi/Codex lifecycle operator-session manifest has invalid completed steps", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_SESSION_INVALID_BOUNDARY"
+    });
+  }
+  if (
+    manifest.proof_authority !== "none" ||
+    manifest.can_promote_claim !== false ||
+    manifest.can_certify_ga !== false ||
+    manifest.durable_transport_provided !== false ||
+    manifest.pi_direct_write_allowed !== false ||
+    manifest.direct_trusted_state_mutation !== false ||
+    manifest.next_recommended_route !== nextOperatorSessionRoute(completedSteps)
+  ) {
+    throw new ComathError("Pi/Codex lifecycle operator-session manifest violates non-authority boundaries", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_SESSION_INVALID_BOUNDARY"
+    });
+  }
+}
+
+function readOperatorTransportSessionManifest(
+  projectRoot: string,
+  projectId: string,
+  sessionId: string,
+  sessionManifestPath: string
+): {
+  manifest: PiCodexLifecycleOperatorSessionManifestBody;
+  artifact: PiCodexLifecycleOperatorSessionManifestArtifact;
+} {
+  const absolutePath = assertPathAllowed(projectRoot, sessionManifestPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath)) {
+    throw new ComathError("Pi/Codex lifecycle operator-session manifest is required before transport recovery", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_SESSION_MISSING"
+    });
+  }
+  if (!statSync(absolutePath).isFile()) {
+    throw new ComathError("Pi/Codex lifecycle operator-session manifest must be a file", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_SESSION_NOT_FILE"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  let parsed: PiCodexLifecycleOperatorSessionManifestBody;
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexLifecycleOperatorSessionManifestBody;
+  } catch {
+    throw new ComathError("Pi/Codex lifecycle operator-session manifest JSON is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_SESSION_INVALID_JSON"
+    });
+  }
+  if (
+    parsed.schema_version !== "comath.pi_codex_lifecycle_operator_session.v1" ||
+    parsed.project_id !== projectId ||
+    parsed.session_id !== sessionId ||
+    parsed.session_manifest_path !== sessionManifestPath
+  ) {
+    throw new ComathError("Pi/Codex lifecycle operator-session manifest does not bind the requested recovery", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_RECOVERY_SESSION_MISMATCH"
+    });
+  }
+  assertOperatorTransportSessionManifestBoundary(parsed);
+  return {
+    manifest: parsed,
+    artifact: {
+      kind: "operator_session_manifest",
+      path: sessionManifestPath,
+      sha256: sha256Bytes(content),
+      size_bytes: content.byteLength
+    }
+  };
+}
+
 export function persistPiCodexLifecycleOperatorSession(
   projectRoot: string,
   input: PiCodexLifecycleOperatorSessionInput
@@ -1188,9 +1448,7 @@ export function persistPiCodexLifecycleOperatorSession(
     readLifecycleArtifact(projectRoot, artifact.kind, artifact.path)
   );
   const now = new Date().toISOString();
-  const sessionManifestPath = normalizeRelativePath(
-    join(".comath", "release", "pi-codex-lifecycle", sessionId, "operator-session-manifest.json")
-  );
+  const sessionManifestPath = operatorSessionManifestPath(sessionId);
   const createdAt = readOperatorSessionCreatedAt(projectRoot, sessionManifestPath, now);
   const body: PiCodexLifecycleOperatorSessionManifestBody = {
     schema_version: "comath.pi_codex_lifecycle_operator_session.v1",
@@ -1241,6 +1499,98 @@ export function persistPiCodexLifecycleOperatorSession(
       artifact_kinds: artifactRefs.map((artifact) => artifact.kind),
       durable_transport_provided: false,
       pi_direct_write_allowed: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
+export function recoverPiCodexLifecycleOperatorTransport(
+  projectRoot: string,
+  input: PiCodexLifecycleOperatorTransportRecoveryInput
+): PiCodexLifecycleOperatorTransportRecovery {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const sessionId = assertOperatorSessionId(input.session_id);
+  const recoveryId = assertOperatorTransportRecoveryId(input.transport_recovery_id);
+  const transportKind = assertOperatorTransportKind(input.transport_kind);
+  const clientEpoch = assertOperatorTransportClientEpoch(input.client_epoch);
+  const sessionManifestPath = resolveOperatorTransportSessionManifestPath(
+    projectRoot,
+    sessionId,
+    input.session_manifest_path
+  );
+  const { manifest, artifact: sessionManifestArtifact } = readOperatorTransportSessionManifest(
+    projectRoot,
+    projectId,
+    sessionId,
+    sessionManifestPath
+  );
+  const transportRecoveryPath = operatorTransportRecoveryPath(recoveryId);
+  const body: PiCodexLifecycleOperatorTransportRecoveryBody = {
+    schema_version: "comath.pi_codex_lifecycle_operator_transport_recovery.v1",
+    transport_recovery_id: recoveryId,
+    project_id: projectId,
+    session_id: sessionId,
+    actor: sanitizeOperatorTransportText(input.actor),
+    created_at: new Date().toISOString(),
+    recovery_status: "operator_transport_recovery_checkpoint_recorded",
+    transport_kind: transportKind,
+    observed_route: sanitizeOperatorTransportText(input.observed_route),
+    requested_cursor: sanitizeOperatorTransportCursor(input.requested_cursor),
+    client_epoch: clientEpoch,
+    last_seen_event_id: sanitizeOperatorTransportText(input.last_seen_event_id),
+    reconnect_reason: sanitizeOperatorTransportText(input.reconnect_reason),
+    session_manifest_path: sessionManifestPath,
+    session_manifest_artifact: sessionManifestArtifact,
+    next_recommended_route: sanitizeOperatorSessionText(manifest.next_recommended_route),
+    transport_recovery_path: transportRecoveryPath,
+    durable_recovery_checkpoint_provided: true,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const artifactText = canonicalJson(body);
+  const absoluteRecoveryPath = assertPathAllowed(projectRoot, transportRecoveryPath, { purpose: "runtime-write" });
+  mkdirSync(dirname(absoluteRecoveryPath), { recursive: true });
+  writeFileSync(absoluteRecoveryPath, artifactText, "utf8");
+  const result: PiCodexLifecycleOperatorTransportRecovery = {
+    ...body,
+    transport_recovery_artifact: {
+      kind: "operator_transport_recovery",
+      path: transportRecoveryPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_lifecycle_operator_transport_recovery_recorded",
+    actor: sanitizeOperatorTransportText(input.actor),
+    target_id: projectId,
+    payload: {
+      transport_recovery_id: recoveryId,
+      session_id: sessionId,
+      transport_kind: transportKind,
+      session_manifest_path: sessionManifestPath,
+      transport_recovery_path: transportRecoveryPath,
+      next_recommended_route: result.next_recommended_route,
+      durable_recovery_checkpoint_provided: true,
+      durable_transport_provided: false,
+      live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false

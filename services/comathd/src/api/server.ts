@@ -57,6 +57,7 @@ import {
   probePiCodexProductionCodexAccountNetwork,
   probePiCodexDurableServiceLifecycle,
   probePiCodexRealPiInstallRuntimeRegistration,
+  recoverPiCodexLifecycleOperatorTransport,
   reviewPiCodexLifecycleReadiness
 } from "../release/pi-codex-lifecycle-readiness.js";
 import {
@@ -356,6 +357,15 @@ async function route(method: string, path: string, body: unknown, context: Route
       (payload) => {
         const body = payload as Parameters<typeof reviewGoal3PublicArchiveSurfaces>[1] & { project_root: string };
         return reviewGoal3PublicArchiveSurfaces(body.project_root, body);
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/operator-transport-recovery",
+      (payload) => {
+        const body = payload as Parameters<typeof recoverPiCodexLifecycleOperatorTransport>[1] & { project_root: string };
+        return {
+          recovery: recoverPiCodexLifecycleOperatorTransport(body.project_root, body)
+        };
       }
     ],
     [

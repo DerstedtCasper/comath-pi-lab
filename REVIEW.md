@@ -1,3 +1,30 @@
+# Goal 3 Task 159 / Pi-Codex Operator Transport Recovery
+
+Scope: add service-owned Pi/Codex lifecycle operator transport recovery checkpointing after Task158 operator-session persistence, without claiming live long-lived WebSocket/SSE/terminal transport, Pi direct `.comath/` writes, proof authority, or GA certification.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task158's next step as authoritative.
+- Continued the existing uncommitted Task159 worktree state rather than overwriting it.
+- Added `goal3-task159-pi-codex-operator-transport-recovery.test.mjs`.
+- Added `recoverPiCodexLifecycleOperatorTransport`, `POST /release/pi-codex-lifecycle/operator-transport-recovery`, and the `pi_codex_lifecycle_operator_transport_recovery` capability.
+- The recovery checkpoint requires an existing Task157 operator-session manifest, verifies session/project/path binding, rejects poisoned non-authority boundary fields, writes a service-owned `.comath/release/pi-codex-lifecycle/<recovery_id>/operator-transport-recovery.json`, records audit evidence, and preserves the original operator-session completed steps and route.
+- Review hardening added complete non-authority fields to audit payloads and scrubbed transport overclaim text from public recovery fields and audit actor text.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- TDD RED: `node services/comathd/tests/unit/goal3-task159-pi-codex-operator-transport-recovery.test.mjs` failed because recovery audit payloads did not carry all non-authority transport boundary fields.
+- Review-regression RED: the focused Task159 test failed after adding `long-lived SSE` to the actor, proving actor/audit text still needed transport-overclaim scrubbing.
+- GREEN focused test exited 0: Task159 Pi/Codex operator transport recovery.
+- GREEN adjacent tests exited 0: Task146 lifecycle readiness, Task148 lifecycle evidence intake, Task149 durable service lifecycle probe, Task150 Codex API account/network probe, Task157 service operator-session persistence, and Task158 Pi operator-session persistence consumer.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd typecheck` and `corepack pnpm --filter @comath/comathd test`, with Task159 discovered by the default comathd runner.
+- Post-code gates exited 0: `node scripts/phase0-smoke.mjs` with 33 required entries and 33 invariants, `git diff --check` with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath .comath` returned `False`.
+
+Boundary notes: Task159 is durable checkpointing for operator transport recovery, not live transport. It does not provide indefinite WebSocket/SSE/terminal sessions, end-to-end guided real-Pi execution, OS-level adapter isolation, proof authority, claim promotion, or GA certification.
+
+Residual risks: Goal 3 remains incomplete. Live durable long-lived operator transport, end-to-end guided real-Pi execution, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, and final GA audit remain open.
+
 # Goal 3 Task 158 / Pi Operator Session Persistence Consumer
 
 Scope: expose the Task157 service-owned Pi/Codex lifecycle operator-session manifest persistence route through Pi tooling and `/cm:release lifecycle-operator-session`, while preserving host confirmation, no direct Pi `.comath/` writes, non-authority semantics, and public secret/host-path/proof-vocabulary scrubbing.
