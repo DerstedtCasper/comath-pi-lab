@@ -1,3 +1,27 @@
+# Goal 3 Task 173 / Pi Agent Adapter OS-Isolation Sandbox Execution Probe Consumer
+
+Scope: expose the Task172 service-owned sandbox execution probe route through Pi release tooling and `/cm:release agent-adapter-os-isolation-sandbox-execution`, while preserving host confirmation, Pi thin-client boundaries, public sanitizer behavior, and non-authority semantics.
+
+Work performed:
+
+- Re-read the Goal 3 required context set and treated Task172's next step as authoritative.
+- Added `goal3-task173-pi-agent-adapter-os-isolation-sandbox-execution-consumer.test.mjs`.
+- Added `comath.release.agentAdapterOsIsolationSandboxExecutionProbe` to Pi tool descriptors, runtime executable tool registration, runtime-registration metadata, and `/cm:release agent-adapter-os-isolation-sandbox-execution` command dispatch.
+- The Pi consumer strips `confirmation_id`, forwards only through `comathd` route `/agent/adapter/package/os-isolation-sandbox-execution`, sanitizes actor/execution-environment/result text for host paths, secrets, proof-success vocabulary, OS-enforcement overclaims, and long-lived transport overclaims, and keeps `.comath/` writes service-owned.
+- Wired Task173 into the default `@comath/pi-extension` test chain and updated Phase6/Phase26 registration guards.
+
+Verification evidence:
+
+- TDD RED: after adding Task173 test and before implementation, `corepack pnpm --filter @comath/pi-extension build; node extensions/comath-pi/tests/goal3-task173-pi-agent-adapter-os-isolation-sandbox-execution-consumer.test.mjs` failed because `comath.release.agentAdapterOsIsolationSandboxExecutionProbe` was not registered.
+- GREEN focused test exited 0: Task173 Pi adapter OS-isolation sandbox execution consumer.
+- GREEN adjacent focused regressions exited 0: Task169 Pi adapter OS-isolation probe consumer, Task165 Pi guided real-Pi execution consumer, Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task171 adapter OS-isolation sandbox launch, and Task172 adapter OS-isolation sandbox execution.
+- Phase6 and Phase26 Pi runtime-registration guards exited 0 after rerunning them from `extensions/comath-pi`; the first direct commands used package-cwd tests with duplicated repo-relative paths and failed with `MODULE_NOT_FOUND`, then the corrected package-cwd commands passed.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension build`, `corepack pnpm --filter @comath/pi-extension typecheck`, and `corepack pnpm --filter @comath/pi-extension test`, with Task173 discovered by the default Pi extension runner.
+
+Boundary notes: Task173 is Pi-facing consumer wiring for the service-owned Task172 sandbox execution probe bridge. It does not run adapters inside OCI/Nix/Firejail/AppContainer/macOS sandbox, does not collect OS-enforcement evidence from Pi payloads, does not promote mathematical claims, does not certify GA, and does not provide durable long-lived operator transport.
+
+Residual risks: Goal 3 remains incomplete. Production provider-specific sandbox runner implementation beyond injected probe collection, broad cross-platform OS-enforced adapter execution, durable long-lived operator transport, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 172 / Agent Adapter OS-Isolation Sandbox Execution Probe Bridge
 
 Scope: add a service-owned bridge from a ready Task171 sandbox-launch preflight to canonical Task170 OS-isolation probe/evidence collection, while preserving the boundary that route/Pi/caller metadata cannot self-certify executed OS isolation, mathematical proof authority, or GA readiness.

@@ -33,6 +33,7 @@ Any one of these blocks a GA release:
 - Adapter OS-isolation readiness can be satisfied by caller-supplied request metadata, Pi payloads, operator attestations, contract-only metadata, or package launch metadata instead of service-owned collector evidence.
 - Adapter OS-isolation sandbox-launch preflight manifests can be treated as proof of executed OS isolation, as readiness-review evidence, or as GA certification without a later service-owned collected execution probe.
 - Adapter OS-isolation sandbox-execution route payloads, caller-supplied execution booleans, process exit codes, or stdout/stderr/transcript hashes can be treated as collected OS-enforcement evidence without an internal service-owned execution probe callback and canonical probe/evidence artifact.
+- Pi `/cm:release agent-adapter-os-isolation-sandbox-execution` payloads or tool outputs can be treated as collected OS-enforcement evidence, direct `.comath/` writes, production sandbox-runner evidence, or GA certification.
 - Adapter OS-isolation sandbox-execution probe manifests are described as a production provider-specific sandbox runner, broad cross-platform OS-enforced execution support, mathematical proof authority, or GA certification.
 - External Lean repositories can enter final replay without license, toolchain, commit, manifest, import, hash, and symlink checks.
 - Literature or RAG evidence lacks provider, retrieval timestamp, content hash, terms note, prompt-injection scan, and citation anchors.

@@ -204,7 +204,8 @@ function commandMetadata(command: string): Pick<
         "lifecycle-operator-transport-recovery",
         "lifecycle-operator-transport-lease",
         "lifecycle-guided-real-pi-execution",
-        "agent-adapter-os-isolation-probe"
+        "agent-adapter-os-isolation-probe",
+        "agent-adapter-os-isolation-sandbox-execution"
       ],
       dispatch_tool: "comath.release.publicArchiveReview",
       mutates: true,

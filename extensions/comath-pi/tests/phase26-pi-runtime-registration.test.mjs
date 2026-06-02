@@ -186,6 +186,7 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.release.piCodexLifecycleOperatorTransportLease",
       "comath.release.piCodexLifecycleGuidedRealPiExecution",
       "comath.release.agentAdapterOsIsolationProbe",
+      "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
       "comath.agent.profileList",
       "comath.agent.profileGet",
       "comath.agent.runForProfile",

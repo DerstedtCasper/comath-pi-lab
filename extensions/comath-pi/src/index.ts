@@ -154,6 +154,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleOperatorTransportLease",
   "comath.release.piCodexLifecycleGuidedRealPiExecution",
   "comath.release.agentAdapterOsIsolationProbe",
+  "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -419,7 +420,7 @@ const secretEchoPattern =
   /\b(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token)\s*[:=]\s*[A-Za-z0-9._-]+|Authorization:\s*Bearer\s*[A-Za-z0-9._-]+|\bsk-[A-Za-z0-9._-]+\b/gi;
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
 const publicFalseAuthorityKeyPattern =
-  /^(?:can_promote_claim|can_certify_ga|durable_transport_provided|indefinite_stream_open|long_lived_websocket_provided|long_lived_sse_provided)$/i;
+  /^(?:can_promote_claim|can_certify_ga|durable_transport_provided|indefinite_stream_open|long_lived_websocket_provided|long_lived_sse_provided|os_enforced)$/i;
 
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
@@ -465,6 +466,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleOperatorTransportLease" ||
     name === "comath.release.piCodexLifecycleGuidedRealPiExecution" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
+    name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -1560,6 +1562,26 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe") {
+    const requestedProvider = readString(input, "requested_provider", { optional: true });
+    return publicToolResult(
+      name,
+      client.post("/agent/adapter/package/os-isolation-sandbox-execution", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        execution_id: readString(input, "execution_id"),
+        launch_id: readString(input, "launch_id"),
+        adapter_id: readString(input, "adapter_id"),
+        backend: readString(input, "backend"),
+        ...(requestedProvider === undefined ? {} : { requested_provider: requestedProvider }),
+        ...(input.execution_environment === undefined
+          ? {}
+          : { execution_environment: sanitizePublicProofAuthorityValue(input.execution_environment) })
+      })
+    );
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -2490,6 +2512,44 @@ export function createComathTools(): ToolDescriptor[] {
               provider_available: { type: "boolean" },
               platform: stringProp,
               notes: stringProp
+            }
+          }
+        }
+      )
+    },
+    {
+      name: "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
+      description:
+        "Record service-owned agent adapter OS-isolation sandbox execution probe evidence through comathd without Pi direct writes, proof authority, GA certification, or caller-certified sandbox enforcement.",
+      mutates: true,
+      input_schema: objectSchema(
+        ["project_root", "project_id", "actor", "execution_id", "launch_id", "adapter_id", "backend"],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          actor: stringProp,
+          execution_id: stringProp,
+          launch_id: stringProp,
+          adapter_id: stringProp,
+          backend: agentAdapterBackendProp,
+          requested_provider: {
+            type: "string",
+            enum: [...AGENT_ADAPTER_OS_ISOLATION_PROVIDERS]
+          },
+          execution_environment: {
+            type: "object",
+            properties: {
+              platform: stringProp,
+              notes: stringProp,
+              process_isolation_enforced: { type: "boolean" },
+              filesystem_scope_enforced: { type: "boolean" },
+              network_isolation_enforced: { type: "boolean" },
+              no_new_privileges: { type: "boolean" },
+              escape_prevention: { type: "boolean" },
+              adapter_process_exit_code: numberProp,
+              stdout_sha256: stringProp,
+              stderr_sha256: stringProp,
+              transcript_sha256: stringProp
             }
           }
         }
@@ -3870,6 +3930,46 @@ async function handleReleaseCommand(
             provider_available: booleanOptionValue(parsed.args, "--provider-available"),
             platform: optionValue(parsed.args, "--platform"),
             notes: optionValue(parsed.args, "--probe-note")
+          }
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "agent-adapter-os-isolation-sandbox-execution") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe"
+    );
+    if (!tool) {
+      throw new Error("agent adapter OS-isolation sandbox execution probe tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          execution_id: requiredOption(optionValue(parsed.args, "--execution-id"), "execution_id"),
+          launch_id: requiredOption(optionValue(parsed.args, "--launch-id"), "launch_id"),
+          adapter_id: requiredOption(optionValue(parsed.args, "--adapter-id") ?? optionValue(parsed.args, "--adapter"), "adapter_id"),
+          backend: requiredOption(optionValue(parsed.args, "--backend"), "backend"),
+          requested_provider: optionValue(parsed.args, "--requested-provider"),
+          execution_environment: {
+            platform: optionValue(parsed.args, "--platform"),
+            notes: optionValue(parsed.args, "--execution-note"),
+            process_isolation_enforced: booleanOptionValue(parsed.args, "--process-isolation-enforced"),
+            filesystem_scope_enforced: booleanOptionValue(parsed.args, "--filesystem-scope-enforced"),
+            network_isolation_enforced: booleanOptionValue(parsed.args, "--network-isolation-enforced"),
+            no_new_privileges: booleanOptionValue(parsed.args, "--no-new-privileges"),
+            escape_prevention: booleanOptionValue(parsed.args, "--escape-prevention"),
+            adapter_process_exit_code: numberOptionValue(parsed.args, "--adapter-process-exit-code"),
+            stdout_sha256: optionValue(parsed.args, "--stdout-sha256"),
+            stderr_sha256: optionValue(parsed.args, "--stderr-sha256"),
+            transcript_sha256: optionValue(parsed.args, "--transcript-sha256")
           }
         },
         ctx
