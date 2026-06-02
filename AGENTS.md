@@ -209,6 +209,8 @@ Task185 adds a fixed CoMath provider-helper self-test contract to the default co
 
 Task186 hardens provider-helper self-test binding. The default host validator now accepts a configured helper self-test only when stdout binds the current project id, host-validation id, provider-runner id, and sandbox-launch id in addition to provider/backend/network/proof-authority. Generic reusable self-test success output must fail closed, and even a bound self-test remains host-validation metadata only: it cannot satisfy readiness, prove OS enforcement, certify GA, or affect mathematical proof authority.
 
+Task187 hardens provider-helper runtime attestation binding. A host-validation-bound helper execution can be collected into canonical OS-isolation probe/evidence only when helper stdout emits a runtime attestation that binds the current project id, helper-execution id, provider-runner id, sandbox-launch id, adapter, backend, provider, disabled network policy, and proof-authority boundary. Generic runtime success output must fail closed before the canonical probe writer is invoked, and even a bound runtime attestation remains execution/collection metadata only: it cannot satisfy readiness by itself, prove OS enforcement, certify GA, or affect mathematical proof authority.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

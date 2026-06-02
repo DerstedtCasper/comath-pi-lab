@@ -1,3 +1,28 @@
+# Goal 3 Task 187 / Provider Helper Runtime Attestation Binding
+
+Scope: harden the provider-helper execution-to-collection bridge so generic helper runtime success output cannot be upgraded into canonical OS-isolation evidence; the helper must emit a runtime attestation bound to the current project, helper execution, provider-runner, sandbox-launch, adapter, backend, provider, disabled network policy, and `proof_authority=none` before collection can invoke the canonical probe writer.
+
+Work performed:
+
+- Treated the existing uncommitted Task187 residue as the live frontier after Task186 instead of creating a new goal file or reopening older Goal 3 work.
+- Added `goal3-task187-agent-adapter-os-isolation-helper-runtime-attestation.test.mjs` covering a generic runtime attestation that must block collection, then a fully bound runtime attestation that permits the internal provider-helper collection callback to write canonical probe/evidence artifacts.
+- Added runtime-attestation parsing/binding metadata to provider-helper execution manifests and propagated bound status/hash into collection manifests and audit events.
+- Hardened `collectAgentAdapterOsIsolationProviderHelperExecutionEvidence()` so helper executions without current runtime-attestation binding return `blocked_provider_helper_runtime_attestation_missing` and do not invoke the canonical probe writer.
+- Updated adjacent configured-helper fixture scripts so existing helper execution/collection regressions satisfy the stronger runtime contract.
+- Added the `agent_adapter_os_isolation_provider_helper_runtime_attestation_binding` capability and synchronized README, AGENTS, TODO, adapter contracts, GA release criteria, threat model, phase0 smoke, and tracker wording.
+
+Verification evidence:
+
+- Task187 code/test residue was present at continuation start: the new Task187 test existed untracked and related implementation/adjacent fixture changes were already in the dirty worktree. Fresh GREEN verification after `corepack pnpm --filter @comath/comathd build` exited 0: `node services/comathd/tests/unit/goal3-task187-agent-adapter-os-isolation-helper-runtime-attestation.test.mjs` exited 0.
+- Documentation/smoke RED was observed after adding the smoke guard: `node scripts/phase0-smoke.mjs` exited 1 because GA release criteria did not list `goal3-task187-agent-adapter-os-isolation-helper-runtime-attestation.test.mjs`.
+- After updating release criteria and public boundary docs, `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Adjacent focused regressions exited 0: Task177 provider-helper collection, Task179 host-validation-bound helper execution, Task182 configured helper execution collection, Task184 cross-provider configured helper assets, and Task185 provider helper self-test contract.
+- Package/static gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, `git diff --check` with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath '.comath'` returned `False`.
+
+Boundary notes: Task187 does not ship real production helper binaries, does not prove Firejail/AppContainer/sandbox-exec/OCI/Nix OS enforcement, does not expose provider-helper routes through Pi tools, does not make helper execution manifests, runtime attestation, or collection wrapper manifests readiness evidence, does not broaden Lean/mathlib replay, does not complete real-Pi execution, and does not certify GA. Runtime attestation is a current-execution binding gate before collection only; the readiness gate still consumes only canonical service-owned probe/evidence artifacts, and all related artifacts keep `proof_authority="none"` and `can_certify_ga=false`.
+
+Residual risks: Goal 3 remains incomplete. Remaining high-risk frontiers include real provider helper binaries/host probes for one provider family, comprehensive revalidation loops, durable long-lived operator transport, broader live Lean/mathlib replay, and fully interactive real-Pi execution.
+
 # Goal 3 Task 186 / Provider Helper Self-Test Binding
 
 Scope: harden the default configured provider-helper self-test contract so a generic reusable success response cannot unlock host validation; the helper must bind the current project, host-validation, provider-runner, and sandbox-launch identifiers while preserving that self-test, host validation, helper execution, and wrapper manifests are not OS-enforcement evidence, proof authority, readiness evidence, broad provider support, real-Pi execution, or GA certification.

@@ -346,6 +346,7 @@ export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "blocked_provider_helper_execution_missing"
   | "blocked_provider_helper_execution_binding_mismatch"
   | "blocked_provider_helper_execution_not_attempted"
+  | "blocked_provider_helper_runtime_attestation_missing"
   | "blocked_provider_helper_collection_hash_mismatch"
   | "blocked_provider_helper_collection_not_collected";
 
@@ -807,6 +808,9 @@ export type AgentAdapterOsIsolationProviderHelperExecution = {
     stdout_sha256: string | null;
     stderr_sha256: string | null;
     transcript_sha256: string | null;
+    runtime_attestation_source: "helper_stdout_json" | "missing";
+    runtime_attestation_bound: boolean;
+    runtime_attestation_sha256: string | null;
     stdout_size_bytes: number;
     stderr_size_bytes: number;
     shell: false;
@@ -947,6 +951,8 @@ export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
     stdout_sha256: string | null;
     stderr_sha256: string | null;
     transcript_sha256: string | null;
+    runtime_attestation_bound: boolean;
+    runtime_attestation_sha256: string | null;
     diagnostics: string[];
     proof_authority: "none";
   };
@@ -2182,6 +2188,71 @@ function providerHelperSelfTestStdoutAccepted(
   }
 }
 
+function parseFirstJsonLine(stdout: string): Record<string, unknown> | null {
+  const firstLine = stdout.split(/\r?\n/).find((line) => line.trim().length > 0);
+  if (!firstLine) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(firstLine) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function providerHelperRuntimeAttestation(input: {
+  stdout: string;
+  projectId: string;
+  helperExecutionId: string;
+  runnerId: string;
+  launchId: string;
+  adapterId: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+}): {
+  source: "helper_stdout_json" | "missing";
+  bound: boolean;
+  sha256: string | null;
+} {
+  const parsed = parseFirstJsonLine(input.stdout);
+  const bound = Boolean(
+    parsed &&
+      parsed.comath_provider_helper_runtime_attestation === true &&
+      parsed.ok === true &&
+      parsed.provider === input.provider &&
+      parsed.network_policy === "disabled" &&
+      parsed.proof_authority === "none" &&
+      parsed.adapter === input.adapterId &&
+      parsed.backend === input.backend &&
+      parsed.project_id === input.projectId &&
+      parsed.helper_execution_id === input.helperExecutionId &&
+      parsed.runner_id === input.runnerId &&
+      parsed.launch_id === input.launchId
+  );
+  if (!bound || !parsed) {
+    return { source: parsed ? "helper_stdout_json" : "missing", bound: false, sha256: null };
+  }
+  return {
+    source: "helper_stdout_json",
+    bound: true,
+    sha256: sha256Text(canonicalJson({
+      comath_provider_helper_runtime_attestation: true,
+      provider: input.provider,
+      network_policy: "disabled",
+      proof_authority: "none",
+      adapter: input.adapterId,
+      backend: input.backend,
+      project_id: input.projectId,
+      helper_execution_id: input.helperExecutionId,
+      runner_id: input.runnerId,
+      launch_id: input.launchId
+    }))
+  };
+}
+
 function providerHelperSupportedPlatforms(provider: AgentAdapterOsIsolationProvider): string[] {
   switch (provider) {
     case "firejail":
@@ -2474,6 +2545,16 @@ function providerHelperExecutionIsCollectable(
   );
 }
 
+function providerHelperExecutionRuntimeAttestationBound(
+  helperExecution: AgentAdapterOsIsolationProviderHelperExecution | undefined
+): boolean {
+  return Boolean(
+    helperExecution?.provider_helper_execution.runtime_attestation_source === "helper_stdout_json" &&
+      helperExecution.provider_helper_execution.runtime_attestation_bound === true &&
+      isSha256(helperExecution.provider_helper_execution.runtime_attestation_sha256)
+  );
+}
+
 function providerHelperExecutionMatchesCollectionInput(input: {
   helperBundle: { helperExecution: AgentAdapterOsIsolationProviderHelperExecution } | null;
   runnerBundle: { artifact: AgentAdapterOsIsolationProviderRunnerArtifact; runner: AgentAdapterOsIsolationProviderRunner } | null;
@@ -2556,6 +2637,7 @@ function providerHelperCollectionForProbe(input: {
 function providerHelperCollectionStatus(input: {
   helperExecutionPresent: boolean;
   helperExecutionCollectable: boolean;
+  runtimeAttestationBound: boolean;
   bindingMatches: boolean;
   collectionPresent: boolean;
   collectionSourceAccepted: boolean;
@@ -2570,6 +2652,9 @@ function providerHelperCollectionStatus(input: {
   }
   if (!input.helperExecutionCollectable) {
     return "blocked_provider_helper_execution_not_attempted";
+  }
+  if (!input.runtimeAttestationBound) {
+    return "blocked_provider_helper_runtime_attestation_missing";
   }
   if (input.collectionPresent && input.collectionSourceAccepted && !input.hashesMatch) {
     return "blocked_provider_helper_collection_hash_mismatch";
@@ -2590,6 +2675,9 @@ function providerHelperCollectionReplayableNextAction(
   }
   if (status === "blocked_provider_helper_execution_not_attempted") {
     return "Repair the service-owned provider helper execution until it records a successful attempted helper process with hash-bound stdout/stderr/transcript material.";
+  }
+  if (status === "blocked_provider_helper_runtime_attestation_missing") {
+    return "Repair the service-owned provider helper so its runtime stdout attestation binds the current project, helper execution, runner, launch, adapter, backend, provider, network policy, and proof-authority boundary.";
   }
   if (status === "blocked_provider_helper_collection_hash_mismatch") {
     return "Re-run the service-owned provider-helper collection probe so exit/stdout/stderr/transcript hashes exactly match the helper execution manifest.";
@@ -3276,6 +3364,18 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
   const stderrSha256 = shouldSpawn ? sha256Bytes(stderr) : null;
   const stdoutSize = shouldSpawn ? Buffer.byteLength(stdout, "utf8") : 0;
   const stderrSize = shouldSpawn ? Buffer.byteLength(stderr, "utf8") : 0;
+  const runtimeAttestation = shouldSpawn
+    ? providerHelperRuntimeAttestation({
+        stdout,
+        projectId: input.project_id,
+        helperExecutionId,
+        runnerId: input.runner_id,
+        launchId: input.launch_id,
+        adapterId: input.adapter_id,
+        backend,
+        provider
+      })
+    : { source: "missing" as const, bound: false, sha256: null };
   const exitCode = typeof spawned?.status === "number" ? spawned.status : null;
   const signal = typeof spawned?.signal === "string" ? spawned.signal : null;
   const spawnError = spawned?.error as (Error & { code?: string }) | undefined;
@@ -3307,6 +3407,8 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
         helper_signal: signal,
         stdout_sha256: stdoutSha256,
         stderr_sha256: stderrSha256,
+        runtime_attestation_sha256: runtimeAttestation.sha256,
+        runtime_attestation_bound: runtimeAttestation.bound,
         stdout_size_bytes: stdoutSize,
         stderr_size_bytes: stderrSize
       }))
@@ -3318,6 +3420,9 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
     ...hostValidationBindingDiagnostics,
     ...sanitizeDiagnostics(config?.diagnostics),
     spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined,
+    attempted && runtimeAttestation.bound
+      ? "Provider helper runtime attestation binds the current project, helper execution, runner, launch, adapter, backend, provider, network policy, and proof authority."
+      : undefined,
     ok
       ? "Service-owned provider helper process executed with fixed argv/env and hash-bound runner binary."
       : "No service-owned provider helper execution evidence was accepted as readiness evidence."
@@ -3377,6 +3482,9 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
       stdout_sha256: attempted ? stdoutSha256 : null,
       stderr_sha256: attempted ? stderrSha256 : null,
       transcript_sha256: attempted ? transcriptSha256 : null,
+      runtime_attestation_source: attempted ? runtimeAttestation.source : "missing",
+      runtime_attestation_bound: attempted ? runtimeAttestation.bound : false,
+      runtime_attestation_sha256: attempted ? runtimeAttestation.sha256 : null,
       stdout_size_bytes: attempted ? stdoutSize : 0,
       stderr_size_bytes: attempted ? stderrSize : 0,
       shell: false,
@@ -3432,6 +3540,7 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
       helper_exit_code: attempted ? exitCode : null,
       stdout_sha256: attempted ? stdoutSha256 : null,
       stderr_sha256: attempted ? stderrSha256 : null,
+      runtime_attestation_bound: attempted ? runtimeAttestation.bound : false,
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false
@@ -3505,7 +3614,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       })
   );
 
-  const canCollectFromHelperExecution = bindingMatches && helperExecutionCollectable;
+  const runtimeAttestationBound = providerHelperExecutionRuntimeAttestationBound(helperExecution);
+  const canCollectFromHelperExecution = bindingMatches && helperExecutionCollectable && runtimeAttestationBound;
   const collection = canCollectFromHelperExecution
     ? options.provider_helper_collection_probe?.({
         project_root: projectRoot,
@@ -3554,6 +3664,7 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
   const status = providerHelperCollectionStatus({
     helperExecutionPresent: Boolean(helperExecution),
     helperExecutionCollectable,
+    runtimeAttestationBound,
     bindingMatches,
     collectionPresent: Boolean(collection),
     collectionSourceAccepted,
@@ -3595,6 +3706,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       stdout_sha256: helperExecution?.provider_helper_execution.stdout_sha256 ?? null,
       stderr_sha256: helperExecution?.provider_helper_execution.stderr_sha256 ?? null,
       transcript_sha256: helperExecution?.provider_helper_execution.transcript_sha256 ?? null,
+      runtime_attestation_bound: runtimeAttestationBound,
+      runtime_attestation_sha256: helperExecution?.provider_helper_execution.runtime_attestation_sha256 ?? null,
       diagnostics,
       proof_authority: "none"
     },
@@ -3638,6 +3751,7 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       probe_id: probe?.probe_id ?? null,
       evidence_path: probe?.evidence_path ?? null,
       hashes_match_helper_execution: hashesMatch,
+      runtime_attestation_bound: runtimeAttestationBound,
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false

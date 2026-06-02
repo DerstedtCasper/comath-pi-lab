@@ -370,6 +370,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task184-agent-adapter-os-isolation-cross-provider-helper-assets.test.mjs",
   "goal3-task185-agent-adapter-os-isolation-helper-self-test-contract.test.mjs",
   "goal3-task186-agent-adapter-os-isolation-self-test-binding.test.mjs",
+  "goal3-task187-agent-adapter-os-isolation-helper-runtime-attestation.test.mjs",
   "phase43-agent-adapter-package.test.mjs",
   "phase44-codex-cli-external-invocation.test.mjs"
 ];

@@ -110,6 +110,8 @@ Task185 adds a fixed CoMath provider-helper self-test contract to the default co
 
 Task186 hardens that self-test contract so a helper response must bind the current project id, host-validation id, provider-runner id, and sandbox-launch id before default host validation can unlock helper execution. A generic self-test response that merely reports provider/backend/network/proof-authority now fails closed. This remains host-validation metadata only; it does not prove OS enforcement, satisfy readiness, affect mathematical proof authority, or certify GA.
 
+Task187 hardens the runtime side of configured provider-helper execution. A helper execution can feed the provider-helper collection bridge only when the helper stdout emits a service-checked runtime attestation bound to the current project id, helper-execution id, provider-runner id, sandbox-launch id, adapter, backend, provider, disabled network policy, and `proof_authority=none`. Generic runtime success output now blocks collection before any canonical probe writer is invoked. This remains execution/collection metadata only; it does not prove OS enforcement, satisfy readiness by itself, affect mathematical proof authority, or certify GA.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)
