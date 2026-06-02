@@ -2171,7 +2171,11 @@ function providerHelperSelfTestStdoutAccepted(
       parsed.network_policy === "disabled" &&
       parsed.proof_authority === "none" &&
       parsed.adapter === input.adapter_id &&
-      parsed.backend === input.backend
+      parsed.backend === input.backend &&
+      parsed.project_id === input.project_id &&
+      parsed.host_validation_id === input.host_validation_id &&
+      parsed.runner_id === input.runner_id &&
+      parsed.launch_id === input.launch_id
     );
   } catch {
     return false;

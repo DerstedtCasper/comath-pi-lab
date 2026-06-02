@@ -207,6 +207,8 @@ Task184 expands configured helper asset contracts across OCI, Nix, Firejail, Win
 
 Task185 adds a fixed CoMath provider-helper self-test contract to the default configured-helper host-validation path. A configured helper must pass service-owned fixed argv/env self-test before host validation can unlock helper execution; self-test status and hashes remain host-validation metadata only and cannot satisfy readiness, prove OS enforcement, certify GA, or affect mathematical proof authority.
 
+Task186 hardens provider-helper self-test binding. The default host validator now accepts a configured helper self-test only when stdout binds the current project id, host-validation id, provider-runner id, and sandbox-launch id in addition to provider/backend/network/proof-authority. Generic reusable self-test success output must fail closed, and even a bound self-test remains host-validation metadata only: it cannot satisfy readiness, prove OS enforcement, certify GA, or affect mathematical proof authority.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

@@ -108,6 +108,8 @@ Task184 expands configured helper asset contracts across OCI, Nix, Firejail, Win
 
 Task185 adds a fixed CoMath provider-helper self-test contract to the default configured-helper host validator. A configured helper must respond to service-owned fixed argv/env before host validation can unlock helper execution; the manifest records only self-test hashes/status, helper executable hash, args-prefix hash/count, and non-secret diagnostics. This checks the helper protocol surface only: it is not collected OS-enforcement evidence, readiness evidence, proof authority, broad provider support, real-Pi execution, or GA certification.
 
+Task186 hardens that self-test contract so a helper response must bind the current project id, host-validation id, provider-runner id, and sandbox-launch id before default host validation can unlock helper execution. A generic self-test response that merely reports provider/backend/network/proof-authority now fails closed. This remains host-validation metadata only; it does not prove OS enforcement, satisfy readiness, affect mathematical proof authority, or certify GA.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)

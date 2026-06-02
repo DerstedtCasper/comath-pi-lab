@@ -1,3 +1,25 @@
+# Goal 3 Task 186 / Provider Helper Self-Test Binding
+
+Scope: harden the default configured provider-helper self-test contract so a generic reusable success response cannot unlock host validation; the helper must bind the current project, host-validation, provider-runner, and sandbox-launch identifiers while preserving that self-test, host validation, helper execution, and wrapper manifests are not OS-enforcement evidence, proof authority, readiness evidence, broad provider support, real-Pi execution, or GA certification.
+
+Work performed:
+
+- Treated Task185's next step and the existing uncommitted Task186 residue as the live frontier instead of creating a new goal file or reopening old Goal 3 tasks.
+- Added `goal3-task186-agent-adapter-os-isolation-self-test-binding.test.mjs` covering a generic self-test helper that returns provider/backend/network/proof-authority but no current run binding, then a bound helper that returns project id, host-validation id, provider-runner id, and sandbox-launch id.
+- Hardened `providerHelperSelfTestStdoutAccepted()` so the default host validator requires those current identifiers before helper host validation can pass.
+- Updated adjacent configured-helper fixture scripts so Task181/182/184/185 helper self-test responses satisfy the stronger binding contract.
+- Added the Task186 focused suite to phase0 smoke and GA release criteria so public release-hardening docs cannot lag the test matrix.
+
+Verification evidence:
+
+- TDD residue was present at handoff: the new Task186 test existed untracked and the implementation change was already in the dirty worktree. Fresh GREEN verification after `corepack pnpm --filter @comath/comathd build` exited 0: `node services/comathd/tests/unit/goal3-task186-agent-adapter-os-isolation-self-test-binding.test.mjs` exited 0.
+- Adjacent focused regressions exited 0: Task181 configured provider-helper asset, Task182 configured helper execution collection, Task184 cross-provider configured helper assets, and Task185 provider helper self-test contract.
+- Documentation/smoke RED was observed after the code test passed: `node scripts/phase0-smoke.mjs` exited 1 because GA release criteria did not list `goal3-task186-agent-adapter-os-isolation-self-test-binding.test.mjs`. After updating the release criteria, `node scripts/phase0-smoke.mjs` exited 0, `corepack pnpm --filter @comath/comathd typecheck` exited 0, `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, `Test-Path -LiteralPath '.comath'` returned `False`, and `corepack pnpm --filter @comath/comathd test` exited 0 with Task186 discovered by the default test runner.
+
+Boundary notes: Task186 does not ship real production helper binaries, does not prove Firejail/AppContainer/sandbox-exec/OCI/Nix OS enforcement, does not make host validation or helper execution readiness evidence, does not expose provider-helper routes through Pi tools, does not broaden Lean/mathlib replay, does not complete real-Pi execution, and does not certify GA. It only prevents generic reusable self-test success output from being accepted as a current host-validation binding.
+
+Residual risks: Goal 3 remains incomplete. Remaining high-risk frontiers include real provider helper binaries/host probes for one provider family, canonical collected OS-enforcement evidence, durable long-lived operator transport, broader live Lean/mathlib replay, and fully interactive real-Pi execution.
+
 # Goal 3 Task 185 / Provider Helper Self-Test Contract
 
 Scope: harden the default configured provider-helper host-validation path so an absolute helper executable and platform-compatible host are not enough: the helper must pass a fixed CoMath provider-helper self-test before host validation can unlock helper execution, while preserving that host validation, self-test status, helper execution, and wrapper manifests are not OS-enforcement evidence, proof authority, readiness evidence, broad provider support, real-Pi execution, or GA certification.
