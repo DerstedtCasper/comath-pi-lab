@@ -79,6 +79,26 @@ node services/comathd/tests/unit/goal3-task17-ga-acceptance-workflow.test.mjs
 node extensions/comath-pi/tests/goal3-task16-pi-goal-mode.test.mjs
 ```
 
+Also run focused release-hardening suites for the current adapter/Pi lifecycle boundary:
+
+```text
+node services/comathd/tests/unit/goal3-task167-agent-adapter-os-isolation-readiness.test.mjs
+node services/comathd/tests/unit/goal3-task168-agent-adapter-os-isolation-probe.test.mjs
+node services/comathd/tests/unit/goal3-task170-agent-adapter-os-isolation-host-collection.test.mjs
+node services/comathd/tests/unit/goal3-task171-agent-adapter-os-isolation-sandbox-launch.test.mjs
+node services/comathd/tests/unit/goal3-task172-agent-adapter-os-isolation-sandbox-execution.test.mjs
+node extensions/comath-pi/tests/goal3-task173-pi-agent-adapter-os-isolation-sandbox-execution-consumer.test.mjs
+node services/comathd/tests/unit/goal3-task175-agent-adapter-os-isolation-provider-runner.test.mjs
+node services/comathd/tests/unit/goal3-task176-agent-adapter-os-isolation-provider-helper-execution.test.mjs
+node services/comathd/tests/unit/goal3-task177-agent-adapter-os-isolation-provider-helper-collection.test.mjs
+node services/comathd/tests/unit/goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs
+node services/comathd/tests/unit/goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs
+node services/comathd/tests/unit/goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs
+node services/comathd/tests/unit/goal3-task182-agent-adapter-os-isolation-configured-helper-execution-collection.test.mjs
+node services/comathd/tests/unit/phase43-agent-adapter-package.test.mjs
+node services/comathd/tests/unit/phase44-codex-cli-external-invocation.test.mjs
+```
+
 ## Release Evidence Checklist
 
 Before a public GA announcement, attach evidence for:

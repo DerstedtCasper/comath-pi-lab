@@ -1,3 +1,30 @@
+# Goal 3 Task 183 / Comprehensive Configured Helper Chain Check-Debug
+
+Scope: run the comprehensive check-debug loop over Task181-182 configured helper asset/execution semantics, Task175-179 provider-runner/helper/host-validation/collection boundaries, Task167 readiness review, public wording, Pi/route payload boundaries, config sample semantics, and runtime cleanliness before selecting the next production-helper, durable-transport, Lean replay, or real-Pi frontier.
+
+Work performed:
+
+- Treated Task182's next step as authoritative and scoped Task183 as a check-debug loop, not a GA-completion claim.
+- Used two read-only explorer subagents: one reviewed service source/tests and one reviewed README/AGENTS/TODO/REVIEW/config/release docs.
+- Confirmed no live code path was found where helper paths, helper args, helper exit status, route payloads, caller metadata, wrapper manifests, or host-validation alone can satisfy OS-isolation readiness, certify GA, promote proof, or replace service-owned canonical collection evidence.
+- Added public wording/config smoke regressions to `scripts/phase0-smoke.mjs` for stale Task20 GA wording, Pi consumer output-as-readiness wording, undocumented fallback helper env vars, and missing release-hardening focused suites.
+- Repaired README, AGENTS, adapter contracts, GA release criteria, and config README so only canonical service-owned probe/evidence artifacts and readiness reviews can feed release gates; Pi-facing output can only initiate, route, display, or guide service-owned flows.
+- Documented `COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER` and `COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON` as generic host-only fallback handles with provider-specific precedence and hash/count-only persistence.
+- Added Task167/168/170/171/172/173/175/176/177/178/179/181/182 and Phase43/44 to the GA release-hardening focused suite list.
+
+Verification evidence:
+
+- TDD RED was observed before the documentation repair: `node scripts/phase0-smoke.mjs` exited 1 with failures for stale `final Task 20 audit` wording, missing release-hardening focused suites, Pi consumer output/readiness wording, and missing fallback helper env documentation.
+- After repair, `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Focused service tests exited 0 before the doc repair: Task167 readiness, Task175 provider-runner, Task176 provider-helper execution, Task177 provider-helper collection, Task178 provider-helper host validation, Task179 host-validation-bound helper execution, Task181 configured helper asset, Task182 configured helper execution/collection, Phase43 adapter package, and Phase44 Codex external invocation.
+- Package gates exited 0 after the smoke repair: `corepack pnpm --filter @comath/comathd test` and `corepack pnpm --filter @comath/pi-extension test`.
+- Root verification exited 0 after tracker/doc updates: `corepack pnpm test`, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- Static scans confirmed no direct Pi provider-helper route exposure under `extensions/comath-pi`, no tracked runtime `.comath`, no untracked files before tracker updates, and no earlier unfinished or pending-commit Goal 3 tracker item.
+
+Boundary notes: Task183 repairs audit/readiness wording and smoke coverage only. It does not implement a production AppContainer runner, does not prove OS enforcement from helper execution, does not expose provider-helper routes through Pi, does not produce broad provider support, does not broaden Lean/mathlib replay, does not complete real-Pi interaction, and does not certify GA.
+
+Residual risks: Goal 3 remains incomplete. The next frontier should continue toward the highest-risk remaining blocker, such as concrete production helper implementation/host validation for another OS sandbox family, durable long-lived operator transport, broader live Lean/mathlib replay, fully interactive real-Pi execution, or another comprehensive loop if the tracker cadence calls for it.
+
 # Goal 3 Task 182 / Configured Helper Execution And Collection Chain
 
 Scope: extend the Task181 configured Windows AppContainer helper asset into the default host-validated helper execution path by allowing a service-owned fixed helper args-prefix asset, while preserving the boundary that helper execution, helper exit status, public route payloads, and collection wrapper manifests are not readiness evidence, proof authority, real-Pi execution, broad provider support, or GA certification.

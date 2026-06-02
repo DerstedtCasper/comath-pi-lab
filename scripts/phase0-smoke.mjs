@@ -68,6 +68,7 @@ const goal3FinalGaAudit = readFileSync(join(root, "docs/progress/goal-3-final-ga
 const goal3TasksPath = join(root, "goal-3/tasks.md");
 const goal3Tasks = existsSync(goal3TasksPath) ? readFileSync(goal3TasksPath, "utf8") : "";
 const sampleConfig = readFileSync(join(root, "config/comath.sample.json"), "utf8");
+const configReadme = readFileSync(join(root, "config/README.md"), "utf8");
 const moduleBoundaries = readFileSync(join(root, "docs/architecture/module-boundaries.md"), "utf8");
 const securityReview = readFileSync(join(root, "SECURITY_REVIEW.md"), "utf8");
 const mathIntegrityReview = readFileSync(join(root, "MATH_INTEGRITY_REVIEW.md"), "utf8");
@@ -106,6 +107,10 @@ if (!readme.includes("Goal 3")) {
 
 if (!readme.includes("Lean4/mathlib")) {
   invariantFailures.push("README must name Lean4/mathlib as the final proof authority boundary");
+}
+
+if (/final Task 20 audit/i.test(readme)) {
+  invariantFailures.push("README must not describe current Goal 3 GA completion in terms of stale final Task 20 audit wording");
 }
 
 if (!acceptanceMatrix.includes("33 Proof obligation DAG planning")) {
@@ -346,6 +351,59 @@ if (
   !/FinalAuthorityPackagingV3|source report|generic Lean Authority v3 packaging/i.test(gaReleaseCriteria)
 ) {
   invariantFailures.push("GA release criteria must bind formally_checked release claims to Lean Authority v3 source-report/package evidence");
+}
+
+const releaseHardeningFocusedSuites = [
+  "goal3-task167-agent-adapter-os-isolation-readiness.test.mjs",
+  "goal3-task168-agent-adapter-os-isolation-probe.test.mjs",
+  "goal3-task170-agent-adapter-os-isolation-host-collection.test.mjs",
+  "goal3-task171-agent-adapter-os-isolation-sandbox-launch.test.mjs",
+  "goal3-task172-agent-adapter-os-isolation-sandbox-execution.test.mjs",
+  "goal3-task173-pi-agent-adapter-os-isolation-sandbox-execution-consumer.test.mjs",
+  "goal3-task175-agent-adapter-os-isolation-provider-runner.test.mjs",
+  "goal3-task176-agent-adapter-os-isolation-provider-helper-execution.test.mjs",
+  "goal3-task177-agent-adapter-os-isolation-provider-helper-collection.test.mjs",
+  "goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs",
+  "goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs",
+  "goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs",
+  "goal3-task182-agent-adapter-os-isolation-configured-helper-execution-collection.test.mjs",
+  "phase43-agent-adapter-package.test.mjs",
+  "phase44-codex-cli-external-invocation.test.mjs"
+];
+
+for (const testName of releaseHardeningFocusedSuites) {
+  if (!gaReleaseCriteria.includes(testName)) {
+    invariantFailures.push(`GA release criteria must list release-hardening focused suite ${testName}`);
+  }
+}
+
+const publicReadinessWordingDocs = [
+  [readme, "README.md"],
+  [adapterContracts, "docs/architecture/adapter-contracts.md"],
+  [readFileSync(join(root, "AGENTS.md"), "utf8"), "AGENTS.md"]
+];
+
+for (const [content, label] of publicReadinessWordingDocs) {
+  if (/consumer outputs?.{0,80}(?:can feed|release-readiness evidence)/is.test(content)) {
+    invariantFailures.push(`${label} must not imply Pi consumer outputs can feed readiness/release gates directly`);
+  }
+  if (/bridge and consumer are release-readiness evidence/i.test(content)) {
+    invariantFailures.push(`${label} must distinguish bridge manifests and Pi consumers from canonical service-owned readiness evidence`);
+  }
+}
+
+for (const envName of [
+  "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER",
+  "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
+  "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON"
+]) {
+  if (!sampleConfig.includes(envName)) {
+    invariantFailures.push(`sample config must expose ${envName} as a host-only configuration handle`);
+  }
+  if (!configReadme.includes(envName)) {
+    invariantFailures.push(`config README must explain ${envName} host-only helper configuration semantics`);
+  }
 }
 
 const publicArchiveContractDocs = [
