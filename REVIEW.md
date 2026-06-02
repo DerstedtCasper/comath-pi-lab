@@ -1,3 +1,30 @@
+# Goal 3 Task 165 / Pi Guided Real-Pi Execution Consumer
+
+Scope: expose the Task164 service-owned guided real-Pi execution evidence route through Pi tooling and `/cm:release lifecycle-guided-real-pi-execution`, while preserving host confirmation, no direct Pi `.comath/` writes, public sanitizer boundaries, non-authority semantics, and no durable long-lived transport or GA-certification claims.
+
+Work performed:
+
+- Re-read the Goal 3 tracker/context and treated Task164's next step as authoritative.
+- Audited the Task163 Pi consumer pattern, Task164 service route `POST /release/pi-codex-lifecycle/guided-real-pi-execution`, runtime-registration metadata, public sanitizer behavior, and lifecycle/operator residual blockers.
+- Added `goal3-task165-pi-guided-real-pi-execution-consumer.test.mjs`.
+- RED showed `comath.release.piCodexLifecycleGuidedRealPiExecution` was not registered.
+- Added the mutating `comath.release.piCodexLifecycleGuidedRealPiExecution` tool, host-confirmed runtime execution, route dispatch to the Task164 service endpoint, `/cm:release lifecycle-guided-real-pi-execution`, runtime-registration subcommand metadata, Phase6/Phase26 exposure guards, and default Pi package test wiring.
+- The Pi consumer strips `confirmation_id`, keeps `.comath/` writes owned by `comathd`, forwards guided-execution evidence-chain fields only through the service route, and sanitizes host-path, secret, proof-success, and long-lived transport overclaim text before request, confirmation prompt, and notification exposure.
+- Code-review hardening added a public-result boolean overclaim regression: even if a service response echoes `can_promote_claim=true`, `can_certify_ga=true`, or long-lived/durable transport booleans, Pi public results must surface those fields as `false`.
+
+Verification evidence:
+
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- TDD RED: `node extensions/comath-pi/tests/goal3-task165-pi-guided-real-pi-execution-consumer.test.mjs` failed because `comath.release.piCodexLifecycleGuidedRealPiExecution` was not registered.
+- Review-regression RED: after adding boolean overclaim assertions, the same focused test failed because `can_promote_claim=true` was still surfaced in the direct public result.
+- GREEN focused test exited 0: Task165 Pi guided real-Pi execution consumer.
+- GREEN adjacent tests exited 0: Task163 Pi operator transport lease consumer, Task164 service guided real-Pi execution, Phase6 extension, and Phase26 Pi runtime registration.
+- Package gates exited 0: `corepack pnpm --filter @comath/pi-extension typecheck` and `corepack pnpm --filter @comath/pi-extension test`, with Task165 discovered by the default Pi extension runner.
+
+Boundary notes: Task165 is Pi-facing consumer wiring for a service-owned guided execution evidence artifact. It does not provide durable long-lived WebSocket/SSE/terminal transport, execute an uncontrolled external real Pi host in tests, add OS-level adapter isolation, promote claims, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. Durable long-lived operator transport, OS-level adapter isolation, broader Lean/mathlib replay, nontrivial theorem synthesis, fully interactive end-to-end real-Pi execution, and final GA audit remain open.
+
 # Goal 3 Task 164 / Pi-Codex Guided Real-Pi Execution Evidence
 
 Scope: add a service-owned guided real-Pi execution evidence chain that binds Task152 real-Pi runtime artifacts, Task157 operator-session manifests, Task159 operator transport recovery checkpoints, and Task162 bounded operator transport leases without claiming proof authority, GA certification, durable long-lived transport, or Pi direct `.comath/` writes.

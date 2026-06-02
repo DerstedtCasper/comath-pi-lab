@@ -152,6 +152,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleOperatorSession",
   "comath.release.piCodexLifecycleOperatorTransportRecovery",
   "comath.release.piCodexLifecycleOperatorTransportLease",
+  "comath.release.piCodexLifecycleGuidedRealPiExecution",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -416,6 +417,8 @@ const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|
 const secretEchoPattern =
   /\b(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token)\s*[:=]\s*[A-Za-z0-9._-]+|Authorization:\s*Bearer\s*[A-Za-z0-9._-]+|\bsk-[A-Za-z0-9._-]+\b/gi;
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
+const publicFalseAuthorityKeyPattern =
+  /^(?:can_promote_claim|can_certify_ga|durable_transport_provided|indefinite_stream_open|long_lived_websocket_provided|long_lived_sse_provided)$/i;
 
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
@@ -433,6 +436,8 @@ function sanitizePublicProofAuthorityValue(value: unknown): unknown {
       Object.entries(value as Record<string, unknown>).map(([key, item]) =>
         secretObjectKeyPattern.test(key)
           ? ["[redacted_secret_key]", "[redacted_secret]"]
+          : publicFalseAuthorityKeyPattern.test(key)
+            ? [key, false]
           : [sanitizePublicProofAuthorityValue(key) as string, sanitizePublicProofAuthorityValue(item)]
       )
     );
@@ -457,6 +462,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleOperatorSession" ||
     name === "comath.release.piCodexLifecycleOperatorTransportRecovery" ||
     name === "comath.release.piCodexLifecycleOperatorTransportLease" ||
+    name === "comath.release.piCodexLifecycleGuidedRealPiExecution" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -1482,6 +1488,48 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.piCodexLifecycleGuidedRealPiExecution") {
+    const sessionManifestPath = readString(input, "session_manifest_path", { optional: true });
+    const transportRecoveryPath = readString(input, "transport_recovery_path", { optional: true });
+    const transportLeasePath = readString(input, "transport_lease_path", { optional: true });
+    const piHostLabel = readString(input, "pi_host_label", { optional: true });
+    const operatorCommandSummary = readString(input, "operator_command_summary", { optional: true });
+    const executionOutcome = readString(input, "execution_outcome", { optional: true });
+    const nextRecommendedRoute = readString(input, "next_recommended_route", { optional: true });
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/guided-real-pi-execution", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        execution_id: readString(input, "execution_id"),
+        real_pi_runtime_probe_id: readString(input, "real_pi_runtime_probe_id"),
+        pi_install_transcript_path: publicOperatorText(readString(input, "pi_install_transcript_path")),
+        runtime_registration_snapshot_path: publicOperatorText(
+          readString(input, "runtime_registration_snapshot_path")
+        ),
+        session_id: readString(input, "session_id"),
+        transport_recovery_id: readString(input, "transport_recovery_id"),
+        transport_lease_id: readString(input, "transport_lease_id"),
+        ...(sessionManifestPath === undefined ? {} : { session_manifest_path: publicOperatorText(sessionManifestPath) }),
+        ...(transportRecoveryPath === undefined ? {} : { transport_recovery_path: publicOperatorText(transportRecoveryPath) }),
+        ...(transportLeasePath === undefined ? {} : { transport_lease_path: publicOperatorText(transportLeasePath) }),
+        ...(piHostLabel === undefined ? {} : { pi_host_label: publicOperatorText(piHostLabel) }),
+        ...(Array.isArray(input.observed_routes)
+          ? { observed_routes: input.observed_routes.map((route) => publicOperatorText(String(route))) }
+          : {}),
+        ...(operatorCommandSummary === undefined
+          ? {}
+          : { operator_command_summary: publicOperatorText(operatorCommandSummary) }),
+        ...(input.final_operator_cursor === undefined
+          ? {}
+          : { final_operator_cursor: sanitizePublicProofAuthorityValue(input.final_operator_cursor) }),
+        ...(executionOutcome === undefined ? {} : { execution_outcome: executionOutcome }),
+        ...(nextRecommendedRoute === undefined ? {} : { next_recommended_route: publicOperatorText(nextRecommendedRoute) })
+      })
+    );
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -2334,6 +2382,57 @@ export function createComathTools(): ToolDescriptor[] {
           lease_ttl_ms: { type: "number", minimum: 0 },
           last_seen_event_id: stringProp,
           open_reason: stringProp
+        }
+      )
+    },
+    {
+      name: "comath.release.piCodexLifecycleGuidedRealPiExecution",
+      description:
+        "Record service-owned guided real-Pi execution evidence through comathd without Pi direct writes, proof authority, GA certification, or long-lived transport claims.",
+      mutates: true,
+      input_schema: objectSchema(
+        [
+          "project_root",
+          "project_id",
+          "actor",
+          "execution_id",
+          "real_pi_runtime_probe_id",
+          "pi_install_transcript_path",
+          "runtime_registration_snapshot_path",
+          "session_id",
+          "transport_recovery_id",
+          "transport_lease_id"
+        ],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          actor: stringProp,
+          execution_id: stringProp,
+          real_pi_runtime_probe_id: stringProp,
+          pi_install_transcript_path: stringProp,
+          runtime_registration_snapshot_path: stringProp,
+          session_id: stringProp,
+          session_manifest_path: stringProp,
+          transport_recovery_id: stringProp,
+          transport_recovery_path: stringProp,
+          transport_lease_id: stringProp,
+          transport_lease_path: stringProp,
+          pi_host_label: stringProp,
+          observed_routes: stringArrayProp,
+          operator_command_summary: stringProp,
+          final_operator_cursor: {
+            type: "object",
+            properties: {
+              operator_event_cursor: stringProp,
+              stdout_cursor: stringProp,
+              stderr_cursor: stringProp
+            }
+          },
+          execution_outcome: {
+            type: "string",
+            enum: ["operator_guided_run_observed", "replayable_release_blocker_recorded"]
+          },
+          next_recommended_route: stringProp
         }
       )
     }
@@ -3634,6 +3733,56 @@ async function handleReleaseCommand(
           last_seen_event_id: optionValue(parsed.args, "--last-seen-event-id"),
           open_reason: optionValue(parsed.args, "--open-reason"),
           transport_kind: optionValue(parsed.args, "--transport-kind")
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-guided-real-pi-execution") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.piCodexLifecycleGuidedRealPiExecution"
+    );
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle guided real-Pi execution tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          execution_id: requiredOption(optionValue(parsed.args, "--execution-id"), "execution_id"),
+          real_pi_runtime_probe_id: requiredOption(
+            optionValue(parsed.args, "--real-pi-runtime-probe-id"),
+            "real_pi_runtime_probe_id"
+          ),
+          pi_install_transcript_path: requiredOption(
+            optionValue(parsed.args, "--pi-install-transcript-path"),
+            "pi_install_transcript_path"
+          ),
+          runtime_registration_snapshot_path: requiredOption(
+            optionValue(parsed.args, "--runtime-registration-snapshot-path"),
+            "runtime_registration_snapshot_path"
+          ),
+          session_id: requiredOption(optionValue(parsed.args, "--session-id"), "session_id"),
+          session_manifest_path: optionValue(parsed.args, "--session-manifest-path"),
+          transport_recovery_id: requiredOption(
+            optionValue(parsed.args, "--transport-recovery-id"),
+            "transport_recovery_id"
+          ),
+          transport_recovery_path: optionValue(parsed.args, "--transport-recovery-path"),
+          transport_lease_id: requiredOption(optionValue(parsed.args, "--transport-lease-id"), "transport_lease_id"),
+          transport_lease_path: optionValue(parsed.args, "--transport-lease-path"),
+          pi_host_label: optionValue(parsed.args, "--pi-host-label"),
+          observed_routes: optionValues(parsed.args, "--observed-route"),
+          operator_command_summary: optionValue(parsed.args, "--operator-command-summary"),
+          final_operator_cursor: parseLifecycleOperatorTransportCursor(parsed.args),
+          execution_outcome: optionValue(parsed.args, "--execution-outcome"),
+          next_recommended_route: optionValue(parsed.args, "--next-recommended-route")
         },
         ctx
       )

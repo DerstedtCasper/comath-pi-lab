@@ -101,6 +101,7 @@ assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycle
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleOperatorSession"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleOperatorTransportRecovery"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleOperatorTransportLease"), true);
+assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleGuidedRealPiExecution"), true);
 assert.equal(
   tools.every((tool) => tool.input_schema && tool.input_schema.type === "object"),
   true
