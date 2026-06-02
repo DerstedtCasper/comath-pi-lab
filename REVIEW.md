@@ -1,3 +1,30 @@
+# Goal 3 Task 184 / Cross-Provider Configured Helper Assets And Platform Contract
+
+Scope: advance the Task183 residual production-helper frontier by expanding configured helper asset coverage beyond Windows-only wording and adding a default provider/helper host-platform contract that blocks platform-specific provider helpers on incompatible service-observed hosts.
+
+Work performed:
+
+- Treated Task183's next step as authoritative and selected the non-Windows provider helper host-validation gap rather than opening a new goal file.
+- Used two read-only explorer subagents. One recommended cross-provider helper config/smoke/doc coverage; the other identified the behavior gap that the default host validator accepted any configured helper executable for any provider/platform combination.
+- Added `goal3-task184-agent-adapter-os-isolation-cross-provider-helper-assets.test.mjs`.
+- Added `agent_adapter_os_isolation_cross_provider_configured_helper_assets` and `agent_adapter_os_isolation_provider_helper_platform_contract` capabilities.
+- Expanded `config/comath.sample.json`, `config/README.md`, and `scripts/phase0-smoke.mjs` so OCI, Nix, Firejail, Windows AppContainer, macOS `sandbox-exec`, and fallback helper/args-prefix env handles are all documented and smoke-guarded.
+- Hardened the default provider-helper host validator with service-observed platform compatibility: Windows AppContainer requires `win32`, Firejail requires `linux`, macOS `sandbox-exec` requires `darwin`, Nix is limited to Linux/macOS, and OCI remains host-configured for Linux/macOS/Windows.
+- Kept injected custom validators testable, while default host validation no longer treats caller-supplied `host_environment.platform` as an authorization source.
+- Updated README, AGENTS, adapter contracts, GA release criteria, and threat model to state that configured helper assets and platform contracts are host configuration only and cannot satisfy readiness, proof authority, broad provider support, or GA.
+
+Verification evidence:
+
+- TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, `node services/comathd/tests/unit/goal3-task184-agent-adapter-os-isolation-cross-provider-helper-assets.test.mjs` exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_cross_provider_configured_helper_assets`.
+- Focused Task184 exited 0 after implementation, covering an incompatible provider path that fails with `blocked_provider_helper_host_platform_mismatch` before helper execution, and a compatible provider path that still performs host validation, helper execution, internal collection, and readiness review through canonical evidence only.
+- Adjacent focused regressions exited 0: Task178 provider-helper host validation, Task179 host-validation-bound helper execution, Task181 configured provider-helper asset, Task182 configured helper execution/collection, and `node scripts/phase0-smoke.mjs`.
+- Package gate exited 0: `corepack pnpm --filter @comath/comathd test`, with Task184 discovered by the default test runner.
+- Root gate exited 0: `corepack pnpm test`, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task184 does not ship real production helper binaries, does not prove Firejail/AppContainer/sandbox-exec/OCI/Nix OS enforcement from helper configuration, does not expose provider-helper routes through Pi tools, does not make helper host validation or helper execution readiness evidence, does not broaden Lean/mathlib replay, does not complete real-Pi interaction, and does not certify GA. Only canonical service-owned probe/evidence artifacts and readiness reviews remain eligible for release gates, still with `proof_authority="none"` and `can_certify_ga=false`.
+
+Residual risks: Goal 3 remains incomplete. Remaining high-risk frontiers include concrete production helper implementations, durable long-lived operator transport, broader live Lean/mathlib replay, fully interactive real-Pi execution, and continued comprehensive check-debug loops as the tracker cadence requires.
+
 # Goal 3 Task 183 / Comprehensive Configured Helper Chain Check-Debug
 
 Scope: run the comprehensive check-debug loop over Task181-182 configured helper asset/execution semantics, Task175-179 provider-runner/helper/host-validation/collection boundaries, Task167 readiness review, public wording, Pi/route payload boundaries, config sample semantics, and runtime cleanliness before selecting the next production-helper, durable-transport, Lean replay, or real-Pi frontier.

@@ -75,6 +75,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_run_operator_panel",
       "agent_run_operator_cancel",
       "agent_adapter_package_registry",
+      "agent_adapter_os_isolation_cross_provider_configured_helper_assets",
+      "agent_adapter_os_isolation_provider_helper_platform_contract",
       "agent_adapter_os_isolation_configured_provider_helper_asset",
       "agent_adapter_os_isolation_configured_provider_helper_execution_asset",
       "agent_adapter_os_isolation_provider_helper_collection",

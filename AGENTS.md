@@ -203,6 +203,8 @@ Task182 adds a narrow configured helper execution asset path through `COMATH_AGE
 
 Task183 revalidates the Task175-182 provider-runner/helper/host-validation/collection/configured-helper chain and hardens public wording/config smoke checks. Stale Task20 GA wording, Pi-facing output-as-readiness wording, undocumented fallback helper env vars, and missing release-hardening focused suites must fail `node scripts/phase0-smoke.mjs`.
 
+Task184 expands configured helper asset contracts across OCI, Nix, Firejail, Windows AppContainer, and macOS `sandbox-exec` provider families. The default helper-host validator now uses the service-observed host platform and fails closed for platform-specific provider mismatches before helper execution; caller-supplied platform strings cannot authorize host validation. This remains host-configuration/platform-contract coverage only, not production helper binaries, collected OS-enforcement evidence, readiness evidence, proof authority, broad provider support, real-Pi execution, or GA certification.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

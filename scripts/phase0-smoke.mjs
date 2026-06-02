@@ -367,6 +367,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs",
   "goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs",
   "goal3-task182-agent-adapter-os-isolation-configured-helper-execution-collection.test.mjs",
+  "goal3-task184-agent-adapter-os-isolation-cross-provider-helper-assets.test.mjs",
   "phase43-agent-adapter-package.test.mjs",
   "phase44-codex-cli-external-invocation.test.mjs"
 ];
@@ -393,9 +394,17 @@ for (const [content, label] of publicReadinessWordingDocs) {
 }
 
 for (const envName of [
+  "COMATH_AGENT_ADAPTER_OSISO_OCI_HELPER",
+  "COMATH_AGENT_ADAPTER_OSISO_OCI_HELPER_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_NIX_HELPER",
+  "COMATH_AGENT_ADAPTER_OSISO_NIX_HELPER_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_HELPER",
+  "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_HELPER_ARGS_JSON",
   "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER",
-  "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
   "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER",
+  "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
   "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON"
 ]) {
   if (!sampleConfig.includes(envName)) {

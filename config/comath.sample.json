@@ -41,11 +41,59 @@
   "agentAdapterOsIsolation": {
     "providerHelpers": [
       {
+        "provider": "oci_container",
+        "enabled": false,
+        "configuredByEnv": "COMATH_AGENT_ADAPTER_OSISO_OCI_HELPER",
+        "fallbackConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
+        "argsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_OCI_HELPER_ARGS_JSON",
+        "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
+        "argsPrefixFormat": "json_string_array",
+        "executionAssetHashBound": true,
+        "proofAuthority": "none",
+        "canCertifyGa": false
+      },
+      {
+        "provider": "nix_sandbox",
+        "enabled": false,
+        "configuredByEnv": "COMATH_AGENT_ADAPTER_OSISO_NIX_HELPER",
+        "fallbackConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
+        "argsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_NIX_HELPER_ARGS_JSON",
+        "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
+        "argsPrefixFormat": "json_string_array",
+        "executionAssetHashBound": true,
+        "proofAuthority": "none",
+        "canCertifyGa": false
+      },
+      {
+        "provider": "firejail",
+        "enabled": false,
+        "configuredByEnv": "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_HELPER",
+        "fallbackConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
+        "argsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_HELPER_ARGS_JSON",
+        "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
+        "argsPrefixFormat": "json_string_array",
+        "executionAssetHashBound": true,
+        "proofAuthority": "none",
+        "canCertifyGa": false
+      },
+      {
         "provider": "windows_appcontainer",
         "enabled": false,
         "configuredByEnv": "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER",
         "fallbackConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
         "argsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER_ARGS_JSON",
+        "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
+        "argsPrefixFormat": "json_string_array",
+        "executionAssetHashBound": true,
+        "proofAuthority": "none",
+        "canCertifyGa": false
+      },
+      {
+        "provider": "macos_sandbox_exec",
+        "enabled": false,
+        "configuredByEnv": "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER",
+        "fallbackConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
+        "argsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER_ARGS_JSON",
         "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
         "argsPrefixFormat": "json_string_array",
         "executionAssetHashBound": true,

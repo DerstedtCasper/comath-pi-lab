@@ -1968,6 +1968,8 @@ function defaultProviderHelperHostValidator(
 ): AgentAdapterOsIsolationProviderHelperHostValidationProbe {
   const providerEnvVar = providerHelperProgramEnvVar(input.provider);
   const configuredProgram = process.env[providerEnvVar] ?? process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER;
+  const supportedPlatforms = providerHelperSupportedPlatforms(input.provider);
+  const hostPlatform = process.platform;
   if (!configuredProgram) {
     return {
       validation_source: "service_owned_provider_helper_host_validator",
@@ -1999,9 +2001,31 @@ function defaultProviderHelperHostValidator(
     helper_program: configuredProgram,
     helper_binary_sha256: helperHash.sha256,
     helper_version: `${input.provider}-helper-env-configured`,
-    supported_platforms: [process.platform],
-    diagnostics: [`${providerEnvVar} resolved to a service-owned helper executable for host validation.`]
+    supported_platforms: supportedPlatforms,
+    diagnostics: [
+      `${providerEnvVar} resolved to a service-owned helper executable for host validation.`,
+      supportedPlatforms.includes(hostPlatform)
+        ? `${input.provider} configured helper host platform contract accepts platform=${hostPlatform}.`
+        : `${input.provider} configured helper host platform contract rejects platform=${hostPlatform}; supported platforms are ${supportedPlatforms.join(", ") || "none"}.`
+    ]
   };
+}
+
+function providerHelperSupportedPlatforms(provider: AgentAdapterOsIsolationProvider): string[] {
+  switch (provider) {
+    case "firejail":
+      return ["linux"];
+    case "windows_appcontainer":
+      return ["win32"];
+    case "macos_sandbox_exec":
+      return ["darwin"];
+    case "nix_sandbox":
+      return ["linux", "darwin"];
+    case "oci_container":
+      return ["linux", "darwin", "win32"];
+    default:
+      return [];
+  }
 }
 
 function sha256Bytes(bytes: Buffer | string): string {
@@ -2744,7 +2768,10 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   });
   const bindingMatches = runnerMatches && launchReady && launchMatches;
   const readyRunnerBundle = runnerReady && bindingMatches ? runnerBundle : null;
-  const requestedPlatform = sanitizeProbeText(input.host_environment?.platform ?? process.platform) || process.platform;
+  const callerRequestedPlatform = sanitizeProbeText(input.host_environment?.platform ?? "") || null;
+  const observedPlatform = process.platform;
+  const usesDefaultHostValidator = options.provider_helper_host_validator === undefined;
+  const validationPlatform = usesDefaultHostValidator ? observedPlatform : (callerRequestedPlatform ?? observedPlatform);
   const environmentPolicy = readyRunnerBundle?.runner.provider_runner_contract.environment_policy ?? providerRunnerEnvironmentPolicy(provider);
   const fixedArgs = providerHelperFixedArgs({
     helperExecutionId: hostValidationId,
@@ -2768,7 +2795,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
         backend,
         provider,
         runner_binary_sha256: readyRunnerBundle.runner.provider_runner_resolution.runner_binary_sha256 as string,
-        platform: requestedPlatform
+        platform: validationPlatform
       }) ?? undefined
     : undefined;
   const validationSourceAccepted = validation?.validation_source === "service_owned_provider_helper_host_validator";
@@ -2798,8 +2825,8 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   const supportedPlatforms = sanitizeSupportedPlatforms(validation?.supported_platforms);
   const platformSupported = Boolean(
     validationSourceAccepted &&
-      supportedPlatforms.length > 0 &&
-      supportedPlatforms.includes(requestedPlatform)
+    supportedPlatforms.length > 0 &&
+    supportedPlatforms.includes(validationPlatform)
   );
   const helperHostReady = Boolean(
     validationSourceAccepted &&
@@ -2817,7 +2844,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   });
   const ok = status === "provider_helper_host_validated";
   const diagnostics = [
-    requestedPlatform ? `platform=${requestedPlatform}` : undefined,
+    validationPlatform ? `platform=${validationPlatform}` : undefined,
     input.host_environment?.notes ? sanitizeProbeText(input.host_environment.notes) : undefined,
     ...sanitizeDiagnostics(validation?.diagnostics),
     ok
@@ -2852,7 +2879,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
         ? sanitizeProbeText(validation.helper_version)
         : null,
       supported_platforms: supportedPlatforms,
-      platform: requestedPlatform,
+      platform: validationPlatform,
       platform_supported: platformSupported,
       shell: false,
       network_policy: "disabled",
