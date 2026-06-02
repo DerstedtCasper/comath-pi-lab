@@ -208,6 +208,39 @@ export type AgentAdapterOsIsolationProviderHelperExecutionOptions = {
   provider_helper_config_resolver?: AgentAdapterOsIsolationProviderHelperConfigResolver;
 };
 
+export type AgentAdapterOsIsolationProviderHelperCollectionProbeInput = {
+  project_root: string;
+  project_id: string;
+  collection_id: string;
+  helper_execution_id: string;
+  helper_execution_path: string;
+  runner_id: string;
+  runner_path: string;
+  launch_id: string;
+  launch_path: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+  helper_exit_code: number;
+  stdout_sha256: string;
+  stderr_sha256: string;
+  transcript_sha256: string;
+  platform?: string;
+};
+
+export type AgentAdapterOsIsolationProviderHelperCollection = AgentAdapterOsIsolationProbeCollection & {
+  probe_source?: "service_owned_provider_helper_collection_probe" | "operator_attested" | "unknown";
+  diagnostics?: string[];
+};
+
+export type AgentAdapterOsIsolationProviderHelperCollectionProbe = (
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+) => AgentAdapterOsIsolationProviderHelperCollection | null | undefined;
+
+export type AgentAdapterOsIsolationProviderHelperCollectionOptions = {
+  provider_helper_collection_probe?: AgentAdapterOsIsolationProviderHelperCollectionProbe;
+};
+
 export type AgentAdapterOsIsolationSandboxLaunchStatus =
   | "ready_for_service_owned_os_sandbox_execution"
   | "blocked_sandbox_provider_unsupported"
@@ -251,6 +284,14 @@ export type AgentAdapterOsIsolationProviderHelperExecutionStatus =
   | "blocked_provider_helper_binary_mismatch"
   | "blocked_provider_helper_launch_failed"
   | "blocked_provider_helper_execution_failed";
+
+export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
+  | "provider_helper_os_evidence_collected"
+  | "blocked_provider_helper_execution_missing"
+  | "blocked_provider_helper_execution_binding_mismatch"
+  | "blocked_provider_helper_execution_not_attempted"
+  | "blocked_provider_helper_collection_hash_mismatch"
+  | "blocked_provider_helper_collection_not_collected";
 
 export type AgentAdapterOsIsolationSandboxExecutionInput = {
   project_id: string;
@@ -313,6 +354,31 @@ export type AgentAdapterOsIsolationProviderHelperExecutionInput = {
     command_override?: string;
     argv_override?: string[];
     env_override?: Record<string, string>;
+  };
+};
+
+export type AgentAdapterOsIsolationProviderHelperCollectionInput = {
+  project_id: string;
+  collection_id?: string;
+  helper_execution_id: string;
+  runner_id: string;
+  launch_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend?: AgentAdapterBackend;
+  actor: string;
+  requested_provider?: string;
+  collection_environment?: {
+    platform?: string;
+    notes?: string;
+    process_isolation_enforced?: boolean;
+    filesystem_scope_enforced?: boolean;
+    network_isolation_enforced?: boolean;
+    no_new_privileges?: boolean;
+    escape_prevention?: boolean;
+    adapter_process_exit_code?: number;
+    stdout_sha256?: string;
+    stderr_sha256?: string;
+    transcript_sha256?: string;
   };
 };
 
@@ -678,6 +744,60 @@ export type AgentAdapterOsIsolationProviderHelperExecution = {
   can_certify_ga: false;
 };
 
+export type AgentAdapterOsIsolationProviderHelperExecutionArtifact = {
+  kind: "agent_adapter_os_isolation_provider_helper_execution";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
+  schema_version: "comath.agent_adapter_os_isolation_provider_helper_collection.v1";
+  collection_id: string;
+  project_id: string;
+  helper_execution_id: string;
+  runner_id: string;
+  launch_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  created_at: string;
+  ok: boolean;
+  collection_status: AgentAdapterOsIsolationProviderHelperCollectionStatus;
+  requested_provider: string;
+  provider: AgentAdapterOsIsolationProvider;
+  collection_path: string;
+  launch_artifact: AgentAdapterOsIsolationLaunchArtifact | null;
+  runner_artifact: AgentAdapterOsIsolationProviderRunnerArtifact | null;
+  helper_execution_artifact: AgentAdapterOsIsolationProviderHelperExecutionArtifact | null;
+  probe: AgentAdapterOsIsolationProbe | null;
+  provider_helper_collection: {
+    probe_source: "service_owned_provider_helper_collection_probe" | "missing";
+    hashes_match_helper_execution: boolean;
+    helper_exit_code: number | null;
+    stdout_sha256: string | null;
+    stderr_sha256: string | null;
+    transcript_sha256: string | null;
+    diagnostics: string[];
+    proof_authority: "none";
+  };
+  adapter_execution_isolation: {
+    required_for_ga: true;
+    current_boundary: AgentAdapterOsIsolationBoundary;
+    os_enforced: boolean;
+    provider: AgentAdapterOsIsolationProvider;
+    claims_runtime_enforcement: false;
+    proof_authority: "none";
+  };
+  blocker_certificate: {
+    blocker_code: AgentAdapterOsIsolationProviderHelperCollectionStatus;
+    replayable_next_action: string;
+    proof_authority: "none";
+  } | null;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
 const osEnforcedProviders = new Set<AgentAdapterOsIsolationProvider>([
   "oci_container",
   "nix_sandbox",
@@ -776,6 +896,19 @@ function assertProviderHelperExecutionId(value: string | undefined): string {
   throw new ComathError("invalid adapter OS-isolation provider helper execution id", {
     statusCode: 400,
     code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HELPER_EXECUTION_ID_INVALID"
+  });
+}
+
+function assertProviderHelperCollectionId(value: string | undefined): string {
+  if (!value) {
+    return `ADAPTER-OSISO-HELPER-COLLECT-${Date.now()}`;
+  }
+  if (/^[A-Z0-9][A-Z0-9_-]{2,96}$/.test(value)) {
+    return value;
+  }
+  throw new ComathError("invalid adapter OS-isolation provider helper collection id", {
+    statusCode: 400,
+    code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HELPER_COLLECTION_ID_INVALID"
   });
 }
 
@@ -1030,6 +1163,10 @@ function providerHelperExecutionPath(helperExecutionId: string): string {
   return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", helperExecutionId, "provider-helper-execution.json"));
 }
 
+function providerHelperCollectionPath(collectionId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", collectionId, "provider-helper-collection.json"));
+}
+
 function readSandboxLaunchArtifact(
   projectRoot: string,
   launchId: string
@@ -1081,6 +1218,33 @@ function readProviderRunnerArtifact(
       size_bytes: bytes.byteLength
     },
     runner: parsed
+  };
+}
+
+function readProviderHelperExecutionArtifact(
+  projectRoot: string,
+  helperExecutionId: string
+): { artifact: AgentAdapterOsIsolationProviderHelperExecutionArtifact; helperExecution: AgentAdapterOsIsolationProviderHelperExecution } | null {
+  const path = providerHelperExecutionPath(helperExecutionId);
+  const absolutePath = assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    return null;
+  }
+  const bytes = readFileSync(absolutePath);
+  let parsed: AgentAdapterOsIsolationProviderHelperExecution;
+  try {
+    parsed = JSON.parse(bytes.toString("utf8")) as AgentAdapterOsIsolationProviderHelperExecution;
+  } catch {
+    return null;
+  }
+  return {
+    artifact: {
+      kind: "agent_adapter_os_isolation_provider_helper_execution",
+      path,
+      sha256: sha256Text(bytes.toString("utf8")),
+      size_bytes: bytes.byteLength
+    },
+    helperExecution: parsed
   };
 }
 
@@ -1581,6 +1745,153 @@ function helperExecutionStatus(input: {
     return "blocked_provider_helper_execution_failed";
   }
   return "provider_helper_execution_attempted";
+}
+
+function providerHelperExecutionIsCollectable(
+  helperBundle: { helperExecution: AgentAdapterOsIsolationProviderHelperExecution } | null
+): boolean {
+  const helperExecution = helperBundle?.helperExecution;
+  return Boolean(
+    helperExecution &&
+      helperExecution.schema_version === "comath.agent_adapter_os_isolation_provider_helper_execution.v1" &&
+      helperExecution.ok === true &&
+      helperExecution.helper_execution_status === "provider_helper_execution_attempted" &&
+      helperExecution.provider_helper_attempted === true &&
+      helperExecution.provider_helper_execution.helper_source === "service_owned_provider_helper_config" &&
+      helperExecution.provider_helper_execution.helper_exit_code === 0 &&
+      helperExecution.provider_helper_execution.shell === false &&
+      helperExecution.provider_helper_execution.network_policy === "disabled" &&
+      helperExecution.provider_helper_execution.command_override_allowed === false &&
+      helperExecution.provider_helper_execution.environment_override_allowed === false &&
+      helperExecution.provider_helper_execution.caller_supplied_success_allowed === false &&
+      isSha256(helperExecution.provider_helper_execution.stdout_sha256) &&
+      isSha256(helperExecution.provider_helper_execution.stderr_sha256) &&
+      isSha256(helperExecution.provider_helper_execution.transcript_sha256) &&
+      osEnforcedProviders.has(helperExecution.provider)
+  );
+}
+
+function providerHelperExecutionMatchesCollectionInput(input: {
+  helperBundle: { helperExecution: AgentAdapterOsIsolationProviderHelperExecution } | null;
+  runnerBundle: { artifact: AgentAdapterOsIsolationProviderRunnerArtifact; runner: AgentAdapterOsIsolationProviderRunner } | null;
+  launchBundle: { artifact: AgentAdapterOsIsolationLaunchArtifact; launch: AgentAdapterOsIsolationSandboxLaunch } | null;
+  projectId: string;
+  helperExecutionId: string;
+  runnerId: string;
+  launchId: string;
+  adapterId: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+}): boolean {
+  const helperExecution = input.helperBundle?.helperExecution;
+  if (!helperExecution) {
+    return false;
+  }
+  const runnerArtifact = input.runnerBundle?.artifact;
+  const launchArtifact = input.launchBundle?.artifact;
+  return Boolean(
+    helperExecution.project_id === input.projectId &&
+      helperExecution.helper_execution_id === input.helperExecutionId &&
+      helperExecution.runner_id === input.runnerId &&
+      helperExecution.launch_id === input.launchId &&
+      helperExecution.adapter_id === input.adapterId &&
+      helperExecution.backend === input.backend &&
+      helperExecution.provider === input.provider &&
+      runnerArtifact &&
+      launchArtifact &&
+      helperExecution.runner_artifact?.path === runnerArtifact.path &&
+      helperExecution.runner_artifact?.sha256 === runnerArtifact.sha256 &&
+      helperExecution.runner_artifact?.size_bytes === runnerArtifact.size_bytes &&
+      helperExecution.launch_artifact?.path === launchArtifact.path &&
+      helperExecution.launch_artifact?.sha256 === launchArtifact.sha256 &&
+      helperExecution.launch_artifact?.size_bytes === launchArtifact.size_bytes
+  );
+}
+
+function providerHelperCollectionHashesMatchExecution(
+  collection: AgentAdapterOsIsolationProviderHelperCollection | undefined,
+  helperExecution: AgentAdapterOsIsolationProviderHelperExecution | undefined
+): boolean {
+  if (!collection || !helperExecution) {
+    return false;
+  }
+  return Boolean(
+    collection.probe_source === "service_owned_provider_helper_collection_probe" &&
+      collection.adapter_process_exit_code === helperExecution.provider_helper_execution.helper_exit_code &&
+      isSha256(collection.stdout_sha256) &&
+      isSha256(collection.stderr_sha256) &&
+      isSha256(collection.transcript_sha256) &&
+      collection.stdout_sha256.toLowerCase() === helperExecution.provider_helper_execution.stdout_sha256?.toLowerCase() &&
+      collection.stderr_sha256.toLowerCase() === helperExecution.provider_helper_execution.stderr_sha256?.toLowerCase() &&
+      collection.transcript_sha256.toLowerCase() === helperExecution.provider_helper_execution.transcript_sha256?.toLowerCase()
+  );
+}
+
+function providerHelperCollectionForProbe(input: {
+  collection: AgentAdapterOsIsolationProviderHelperCollection | undefined;
+  helperExecution: AgentAdapterOsIsolationProviderHelperExecution | undefined;
+  hashesMatch: boolean;
+}): AgentAdapterOsIsolationProbeCollection | undefined {
+  if (input.collection?.probe_source !== "service_owned_provider_helper_collection_probe" || !input.hashesMatch) {
+    return undefined;
+  }
+  return {
+    collection_source: input.collection.collection_source,
+    process_isolation_enforced: input.collection.process_isolation_enforced,
+    filesystem_scope_enforced: input.collection.filesystem_scope_enforced,
+    network_isolation_enforced: input.collection.network_isolation_enforced,
+    no_new_privileges: input.collection.no_new_privileges,
+    escape_prevention: input.collection.escape_prevention,
+    adapter_process_exit_code: input.collection.adapter_process_exit_code,
+    stdout_sha256: input.collection.stdout_sha256,
+    stderr_sha256: input.collection.stderr_sha256,
+    transcript_sha256: input.collection.transcript_sha256,
+    notes: sanitizeDiagnostics(input.collection.diagnostics).join(" ")
+  };
+}
+
+function providerHelperCollectionStatus(input: {
+  helperExecutionPresent: boolean;
+  helperExecutionCollectable: boolean;
+  bindingMatches: boolean;
+  collectionPresent: boolean;
+  collectionSourceAccepted: boolean;
+  hashesMatch: boolean;
+  probe: AgentAdapterOsIsolationProbe | null;
+}): AgentAdapterOsIsolationProviderHelperCollectionStatus {
+  if (!input.helperExecutionPresent) {
+    return "blocked_provider_helper_execution_missing";
+  }
+  if (!input.bindingMatches) {
+    return "blocked_provider_helper_execution_binding_mismatch";
+  }
+  if (!input.helperExecutionCollectable) {
+    return "blocked_provider_helper_execution_not_attempted";
+  }
+  if (input.collectionPresent && input.collectionSourceAccepted && !input.hashesMatch) {
+    return "blocked_provider_helper_collection_hash_mismatch";
+  }
+  return input.probe?.ok === true
+    ? "provider_helper_os_evidence_collected"
+    : "blocked_provider_helper_collection_not_collected";
+}
+
+function providerHelperCollectionReplayableNextAction(
+  status: AgentAdapterOsIsolationProviderHelperCollectionStatus
+): string {
+  if (status === "blocked_provider_helper_execution_missing") {
+    return "Run a service-owned provider-helper execution attempt before collecting provider-helper OS-isolation evidence.";
+  }
+  if (status === "blocked_provider_helper_execution_binding_mismatch") {
+    return "Collect provider-helper evidence with the exact project, adapter, backend, provider, launch, runner, and helper execution bindings.";
+  }
+  if (status === "blocked_provider_helper_execution_not_attempted") {
+    return "Repair the service-owned provider helper execution until it records a successful attempted helper process with hash-bound stdout/stderr/transcript material.";
+  }
+  if (status === "blocked_provider_helper_collection_hash_mismatch") {
+    return "Re-run the service-owned provider-helper collection probe so exit/stdout/stderr/transcript hashes exactly match the helper execution manifest.";
+  }
+  return "Run a service-owned provider-helper collection probe that records complete OS-enforcement checks and writes canonical probe/evidence artifacts.";
 }
 
 function collectionBoolean(
@@ -2110,6 +2421,212 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
     }
   });
   return helperExecution;
+}
+
+export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
+  projectRoot: string,
+  input: AgentAdapterOsIsolationProviderHelperCollectionInput,
+  options: AgentAdapterOsIsolationProviderHelperCollectionOptions = {}
+): AgentAdapterOsIsolationProviderHelperCollectionManifest {
+  getAgentAdapterPackage(input.adapter_id);
+  const collectionId = assertProviderHelperCollectionId(input.collection_id);
+  const backend = assertBackend(input.backend);
+  const path = providerHelperCollectionPath(collectionId);
+  const absoluteCollectionPath = assertPathAllowed(projectRoot, path, { purpose: "runtime-write" });
+  if (existsSync(absoluteCollectionPath)) {
+    throw new ComathError("adapter OS-isolation provider helper collection already exists", {
+      statusCode: 409,
+      code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HELPER_COLLECTION_ALREADY_EXISTS"
+    });
+  }
+
+  const helperBundle = readProviderHelperExecutionArtifact(projectRoot, input.helper_execution_id);
+  const runnerBundle = readProviderRunnerArtifact(projectRoot, input.runner_id);
+  const launchBundle = readSandboxLaunchArtifact(projectRoot, input.launch_id);
+  const helperExecution = helperBundle?.helperExecution;
+  const { requestedProvider, knownProvider } = normalizeRequestedProvider(
+    input.requested_provider ?? helperExecution?.requested_provider ?? runnerBundle?.runner.requested_provider
+  );
+  const provider = helperExecution?.provider ?? runnerBundle?.runner.provider ?? knownProvider ?? "unknown";
+  const helperExecutionCollectable = providerHelperExecutionIsCollectable(helperBundle);
+  const runnerReady = providerRunnerIsReadyForHelperExecution(runnerBundle);
+  const launchReady = sandboxLaunchIsReadyForExecution(launchBundle);
+  const runnerMatches = providerRunnerMatchesHelperInput({
+    runnerBundle,
+    projectId: input.project_id,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+  const launchMatches = sandboxLaunchMatchesExecutionInput({
+    launchBundle,
+    projectId: input.project_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend,
+    provider
+  });
+  const bindingMatches = Boolean(
+    helperExecution &&
+      runnerReady &&
+      launchReady &&
+      runnerMatches &&
+      launchMatches &&
+      providerHelperExecutionMatchesCollectionInput({
+        helperBundle,
+        runnerBundle,
+        launchBundle,
+        projectId: input.project_id,
+        helperExecutionId: input.helper_execution_id,
+        runnerId: input.runner_id,
+        launchId: input.launch_id,
+        adapterId: input.adapter_id,
+        backend,
+        provider
+      })
+  );
+
+  const canCollectFromHelperExecution = bindingMatches && helperExecutionCollectable;
+  const collection = canCollectFromHelperExecution
+    ? options.provider_helper_collection_probe?.({
+        project_root: projectRoot,
+        project_id: input.project_id,
+        collection_id: collectionId,
+        helper_execution_id: input.helper_execution_id,
+        helper_execution_path: helperExecution?.helper_execution_path as string,
+        runner_id: input.runner_id,
+        runner_path: runnerBundle?.runner.runner_path as string,
+        launch_id: input.launch_id,
+        launch_path: launchBundle?.launch.launch_path as string,
+        adapter_id: input.adapter_id,
+        backend,
+        provider,
+        helper_exit_code: helperExecution?.provider_helper_execution.helper_exit_code as number,
+        stdout_sha256: helperExecution?.provider_helper_execution.stdout_sha256 as string,
+        stderr_sha256: helperExecution?.provider_helper_execution.stderr_sha256 as string,
+        transcript_sha256: helperExecution?.provider_helper_execution.transcript_sha256 as string,
+        platform: input.collection_environment?.platform
+      }) ?? undefined
+    : undefined;
+  const collectionSourceAccepted = collection?.probe_source === "service_owned_provider_helper_collection_probe";
+  const hashesMatch = providerHelperCollectionHashesMatchExecution(collection, helperExecution);
+  const probe = helperExecution && canCollectFromHelperExecution
+    ? probeAgentAdapterOsIsolation(projectRoot, {
+        project_id: input.project_id,
+        probe_id: collectionId,
+        adapter_id: input.adapter_id,
+        backend,
+        actor: input.actor,
+        requested_provider: provider,
+        probe_environment: {
+          provider_available: true,
+          platform: input.collection_environment?.platform,
+          notes: input.collection_environment?.notes
+        }
+      }, {
+        collector: () =>
+          providerHelperCollectionForProbe({
+            collection,
+            helperExecution,
+            hashesMatch
+          })
+      })
+    : null;
+  const status = providerHelperCollectionStatus({
+    helperExecutionPresent: Boolean(helperExecution),
+    helperExecutionCollectable,
+    bindingMatches,
+    collectionPresent: Boolean(collection),
+    collectionSourceAccepted,
+    hashesMatch,
+    probe
+  });
+  const ok = status === "provider_helper_os_evidence_collected";
+  const diagnostics = [
+    input.collection_environment?.platform ? `platform=${sanitizeProbeText(input.collection_environment.platform)}` : undefined,
+    input.collection_environment?.notes ? sanitizeProbeText(input.collection_environment.notes) : undefined,
+    ...sanitizeDiagnostics(collection?.diagnostics),
+    ok
+      ? "Service-owned provider-helper collection produced canonical OS-enforcement evidence."
+      : "No service-owned provider-helper collection was accepted as canonical OS-enforcement evidence."
+  ].filter((entry): entry is string => Boolean(entry));
+  const helperCollection: AgentAdapterOsIsolationProviderHelperCollectionManifest = {
+    schema_version: "comath.agent_adapter_os_isolation_provider_helper_collection.v1",
+    collection_id: collectionId,
+    project_id: input.project_id,
+    helper_execution_id: input.helper_execution_id,
+    runner_id: input.runner_id,
+    launch_id: input.launch_id,
+    adapter_id: input.adapter_id,
+    backend,
+    created_at: new Date().toISOString(),
+    ok,
+    collection_status: status,
+    requested_provider: sanitizeProbeText(requestedProvider) || "unknown",
+    provider,
+    collection_path: path,
+    launch_artifact: launchBundle?.artifact ?? null,
+    runner_artifact: runnerBundle?.artifact ?? null,
+    helper_execution_artifact: helperBundle?.artifact ?? null,
+    probe,
+    provider_helper_collection: {
+      probe_source: collectionSourceAccepted ? "service_owned_provider_helper_collection_probe" : "missing",
+      hashes_match_helper_execution: hashesMatch,
+      helper_exit_code: helperExecution?.provider_helper_execution.helper_exit_code ?? null,
+      stdout_sha256: helperExecution?.provider_helper_execution.stdout_sha256 ?? null,
+      stderr_sha256: helperExecution?.provider_helper_execution.stderr_sha256 ?? null,
+      transcript_sha256: helperExecution?.provider_helper_execution.transcript_sha256 ?? null,
+      diagnostics,
+      proof_authority: "none"
+    },
+    adapter_execution_isolation: {
+      required_for_ga: true,
+      current_boundary: ok ? "os_enforced" : "process_boundary_only",
+      os_enforced: ok,
+      provider,
+      claims_runtime_enforcement: false,
+      proof_authority: "none"
+    },
+    blocker_certificate: ok
+      ? null
+      : {
+          blocker_code: status,
+          replayable_next_action: providerHelperCollectionReplayableNextAction(status),
+          proof_authority: "none"
+        },
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+
+  mkdirSync(dirname(absoluteCollectionPath), { recursive: true });
+  writeFileSync(absoluteCollectionPath, canonicalJson(helperCollection), "utf8");
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_adapter.os_isolation_provider_helper_collected",
+    actor: sanitizeReviewText(input.actor),
+    target_id: input.project_id,
+    payload: {
+      collection_id: collectionId,
+      helper_execution_id: input.helper_execution_id,
+      runner_id: input.runner_id,
+      launch_id: input.launch_id,
+      adapter_id: input.adapter_id,
+      backend,
+      ok,
+      collection_status: status,
+      provider,
+      probe_id: probe?.probe_id ?? null,
+      evidence_path: probe?.evidence_path ?? null,
+      hashes_match_helper_execution: hashesMatch,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return helperCollection;
 }
 
 export function runAgentAdapterOsIsolationSandboxExecutionProbe(

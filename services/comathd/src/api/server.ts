@@ -65,6 +65,7 @@ import {
 import {
   buildAgentProfileLaunch,
   buildAgentAdapterPackageLaunch,
+  collectAgentAdapterOsIsolationProviderHelperExecutionEvidence,
   createAgentRunForProfile,
   executeAgentAdapterPackage,
   executeProfileAgentRun,
@@ -328,6 +329,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         return {
           runner: sanitizePublicFormalAuthorityVocabulary(
             prepareAgentAdapterOsIsolationProviderRunner(body.project_root, body)
+          )
+        };
+      }
+    ],
+    [
+      "POST /agent/adapter/package/os-isolation-provider-helper-collection",
+      (payload) => {
+        const body = payload as Parameters<typeof collectAgentAdapterOsIsolationProviderHelperExecutionEvidence>[1] & { project_root: string };
+        return {
+          collection: sanitizePublicFormalAuthorityVocabulary(
+            collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(body.project_root, body)
           )
         };
       }

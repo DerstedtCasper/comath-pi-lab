@@ -65,12 +65,16 @@ Provider-runner contract manifests may be mistaken for executed sandboxing becau
 
 Provider-helper execution attempt manifests may be mistaken for collected OS-enforcement evidence because they record a service-owned helper process exit code and stdout/stderr/transcript hashes. Mitigation: helper execution manifests require a ready provider-runner manifest, a service-owned helper configuration, a runner-binary hash match, `shell=false`, fixed argv, a non-inherited fixed environment, and hash-only output recording. Caller-supplied helper command, argv, env, exit codes, stdout/stderr hashes, and route payloads are ignored. A helper exit code of 0 records only an attempted helper execution and cannot satisfy readiness without later canonical Task170/Task172 collected probe/evidence artifacts.
 
+### Provider Helper Collection Confusion
+
+Provider-helper collection bridge manifests may be mistaken for readiness evidence because they can contain a canonical probe result when a service-owned collector succeeds. Mitigation: the route cannot accept collector callbacks or caller-supplied OS-enforcement booleans, exit codes, or stdout/stderr/transcript hashes. The internal collector must bind to the ready helper execution, provider runner, and launch artifacts, and its exit/stdout/stderr/transcript hashes must exactly match the helper execution manifest before `comathd` writes canonical Task170 probe/evidence artifacts. The collection wrapper manifest itself remains non-authoritative and is rejected by the readiness gate; only the canonical probe/evidence artifact can be reviewed.
+
 ## Residual Risks
 
 - Pattern-based secret scanning is not full DLP.
 - Service-level network-denial metadata is not equivalent to OS/kernel-enforced network isolation.
 - Adapter sandbox-launch preflight is not equivalent to actually executing adapters inside an OS-enforced sandbox.
-- Adapter provider-runner contracts, provider-helper execution attempts, sandbox-execution probe bridging, and Pi consumer wiring are not equivalent to collected OS-enforcement evidence across production OCI/Nix/Firejail/AppContainer/macOS helpers and hosts.
+- Adapter provider-runner contracts, provider-helper execution attempts, provider-helper collection bridge manifests, sandbox-execution probe bridging, and Pi consumer wiring are not equivalent to broad production OS-enforced execution across OCI/Nix/Firejail/AppContainer/macOS helpers and hosts.
 - Injected-client Codex API tests are not live production account validation.
 - Goal 3 positive acceptance breadth is representative unless the full 100-task matrix is clean-replayed.
 - Documentation must continue to distinguish implemented trust gates from final global GA completion.
