@@ -1,3 +1,25 @@
+# Goal 3 Task 182 / Configured Helper Execution And Collection Chain
+
+Scope: extend the Task181 configured Windows AppContainer helper asset into the default host-validated helper execution path by allowing a service-owned fixed helper args-prefix asset, while preserving the boundary that helper execution, helper exit status, public route payloads, and collection wrapper manifests are not readiness evidence, proof authority, real-Pi execution, broad provider support, or GA certification.
+
+Work performed:
+
+- Treated Task181's next step as authoritative and selected the actual configured helper execution/collection residual blocker.
+- Added a Task182 regression covering default route-based provider-runner, host-validation, helper execution, public collection spoof blocking, internal service-owned collection, readiness review, audit events, host-path scrubbing, and malformed helper args-prefix failure.
+- Added provider-specific `*_HELPER_ARGS_JSON` support with fallback `COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON`.
+- Fed parsed service-owned helper args into the default helper config resolver only when the JSON value is a bounded string array.
+- Persisted only `helper_args_prefix_sha256` and `helper_args_prefix_count`; raw helper paths, prefix args, stdout/stderr text, and secrets remain out of public manifests and audit payloads.
+- Added the `agent_adapter_os_isolation_configured_provider_helper_execution_asset` capability and synchronized config/docs/tracker wording.
+
+Verification evidence:
+
+- TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, `node services/comathd/tests/unit/goal3-task182-agent-adapter-os-isolation-configured-helper-execution-collection.test.mjs` failed because the default route attempted `node --provider ...` directly and returned `blocked_provider_helper_execution_failed` instead of `provider_helper_execution_attempted`.
+- GREEN focused Task182 exited 0, including the malformed `COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER_ARGS_JSON` fail-closed case.
+- Adjacent focused regressions exited 0: Task167 adapter OS-isolation readiness, Task168 adapter OS-isolation probe, Task170 configured-host collection, Task171 sandbox launch, Task172 sandbox execution, Task175 provider-runner contract, Task176 provider-helper execution, Task177 provider-helper collection, Task178 provider-helper host validation, Task179 host-validation-bound helper execution, Task181 configured helper asset, Phase43 adapter package, and Phase44 Codex external invocation.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task182 discovered by the default comathd runner.
+
+Boundary notes: Task182 does not implement a full AppContainer runner, does not prove the configured helper actually enforced AppContainer isolation, does not expose provider-helper routes through Pi tools, and does not make helper execution manifests or public collection route payloads readiness evidence. Only an internal service-owned collection probe can write canonical probe/evidence artifacts for Task167 readiness review, and even those artifacts remain release-readiness evidence with `proof_authority="none"` and `can_certify_ga=false`.
+
 # Goal 3 Task 181 / Configured Windows AppContainer Provider Helper Asset
 
 Scope: add the next smallest production-helper implementation slice after Task180 by letting a host-configured, service-owned Windows AppContainer helper executable flow through the default provider-runner and helper-host validation path, without turning helper configuration, helper host validation, or route payloads into OS-enforcement evidence, readiness evidence, proof authority, real-Pi execution, broad provider support, or GA certification.

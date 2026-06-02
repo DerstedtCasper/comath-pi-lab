@@ -199,6 +199,8 @@ Task180 revalidated the Task175-179 provider-helper chain, public route sanitiza
 
 Task181 adds a narrow Windows AppContainer configured-provider helper asset path through `COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER`. The default resolver may bind only the service-owned helper executable hash into provider-runner and helper-host validation manifests; helper paths, caller payload metadata, helper exit status, and host-validation wrappers still cannot satisfy readiness, prove OS enforcement, certify GA, or affect mathematical proof authority.
 
+Task182 adds a narrow configured helper execution asset path through `COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER_ARGS_JSON`. After ready provider-runner and matching validated helper-host artifacts, the default helper execution route may run the configured executable with service-owned fixed prefix args, fixed argv, and fixed `COMATH_*` env. Manifests may expose only executable hash plus prefix hash/count; helper paths, prefix args, helper exit status, public collection route payloads, and helper execution wrappers still cannot satisfy readiness, prove OS enforcement, certify GA, or affect mathematical proof authority.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

@@ -786,6 +786,8 @@ export type AgentAdapterOsIsolationProviderHelperExecution = {
     helper_source: "service_owned_provider_helper_config" | "missing";
     helper_configured: boolean;
     helper_binary_sha256: string | null;
+    helper_args_prefix_sha256: string | null;
+    helper_args_prefix_count: number;
     helper_version: string | null;
     helper_exit_code: number | null;
     helper_signal: string | null;
@@ -1847,6 +1849,69 @@ function providerHelperProgramEnvVar(provider: AgentAdapterOsIsolationProvider):
   }
 }
 
+function providerHelperArgsEnvVar(provider: AgentAdapterOsIsolationProvider): string {
+  switch (provider) {
+    case "oci_container":
+      return "COMATH_AGENT_ADAPTER_OSISO_OCI_HELPER_ARGS_JSON";
+    case "nix_sandbox":
+      return "COMATH_AGENT_ADAPTER_OSISO_NIX_HELPER_ARGS_JSON";
+    case "firejail":
+      return "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_HELPER_ARGS_JSON";
+    case "windows_appcontainer":
+      return "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER_ARGS_JSON";
+    case "macos_sandbox_exec":
+      return "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER_ARGS_JSON";
+    default:
+      return "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON";
+  }
+}
+
+function configuredHelperArgsPrefix(provider: AgentAdapterOsIsolationProvider): {
+  ok: boolean;
+  args: string[];
+  configured_env_var: string | null;
+  diagnostics: string[];
+} {
+  const providerEnvVar = providerHelperArgsEnvVar(provider);
+  const configuredArgs = process.env[providerEnvVar] ?? process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON;
+  const configuredEnvVar = process.env[providerEnvVar] !== undefined
+    ? providerEnvVar
+    : process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON !== undefined
+      ? "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON"
+      : null;
+  if (!configuredArgs) {
+    return { ok: true, args: [], configured_env_var: null, diagnostics: [] };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(configuredArgs);
+  } catch {
+    return {
+      ok: false,
+      args: [],
+      configured_env_var: configuredEnvVar,
+      diagnostics: [`${configuredEnvVar ?? providerEnvVar} must be a JSON string array.`]
+    };
+  }
+  const args = sanitizeHelperArgsPrefix(parsed);
+  if (!Array.isArray(parsed) || args.length !== parsed.length) {
+    return {
+      ok: false,
+      args: [],
+      configured_env_var: configuredEnvVar,
+      diagnostics: [`${configuredEnvVar ?? providerEnvVar} must contain only bounded string arguments.`]
+    };
+  }
+  return {
+    ok: true,
+    args,
+    configured_env_var: configuredEnvVar,
+    diagnostics: [
+      `${configuredEnvVar ?? providerEnvVar} resolved to ${args.length} fixed service-owned helper argument(s).`
+    ]
+  };
+}
+
 function defaultProviderHelperConfigResolver(
   input: AgentAdapterOsIsolationProviderHelperConfigResolverInput
 ): AgentAdapterOsIsolationProviderHelperConfig {
@@ -1876,13 +1941,25 @@ function defaultProviderHelperConfigResolver(
       diagnostics: [`${providerEnvVar} does not point to an existing file.`]
     };
   }
+  const configuredArgs = configuredHelperArgsPrefix(input.provider);
+  if (!configuredArgs.ok) {
+    return {
+      config_source: "service_owned_provider_helper_config",
+      helper_available: false,
+      diagnostics: configuredArgs.diagnostics
+    };
+  }
   return {
     config_source: "service_owned_provider_helper_config",
     helper_available: true,
     helper_program: configuredProgram,
+    helper_args_prefix: configuredArgs.args,
     helper_version: `${input.provider}-helper-env-configured`,
     timeout_ms: 10_000,
-    diagnostics: [`${providerEnvVar} resolved to a service-owned helper executable.`]
+    diagnostics: [
+      `${providerEnvVar} resolved to a service-owned helper executable.`,
+      ...configuredArgs.diagnostics
+    ]
   };
 }
 
@@ -2943,6 +3020,7 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
       helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase()
   );
   const helperArgsPrefix = configAccepted ? sanitizeHelperArgsPrefix(config?.helper_args_prefix) : [];
+  const helperArgsPrefixSha256 = helperArgsPrefix.length > 0 ? sha256Text(canonicalJson(helperArgsPrefix)) : null;
   const shouldSpawn = Boolean(hostValidationBindingAccepted && configAccepted && helperHashMatches && helperProgram);
   const spawned = shouldSpawn
     ? spawnSync(helperProgram as string, [...helperArgsPrefix, ...fixedArgs], {
@@ -2984,6 +3062,8 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
         runner_id: input.runner_id,
         launch_id: input.launch_id,
         helper_binary_sha256: helperHash?.sha256 ?? null,
+        helper_args_prefix_sha256: helperArgsPrefixSha256,
+        helper_args_prefix_count: helperArgsPrefix.length,
         helper_exit_code: exitCode,
         helper_signal: signal,
         stdout_sha256: stdoutSha256,
@@ -3047,6 +3127,8 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
       helper_source: configAccepted ? "service_owned_provider_helper_config" : "missing",
       helper_configured: configAccepted,
       helper_binary_sha256: helperHash?.sha256 ?? null,
+      helper_args_prefix_sha256: helperArgsPrefixSha256,
+      helper_args_prefix_count: helperArgsPrefix.length,
       helper_version: configAccepted && typeof config?.helper_version === "string"
         ? sanitizeProbeText(config.helper_version)
         : null,

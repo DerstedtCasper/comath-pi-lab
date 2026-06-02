@@ -45,6 +45,10 @@
         "enabled": false,
         "configuredByEnv": "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER",
         "fallbackConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
+        "argsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_HELPER_ARGS_JSON",
+        "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
+        "argsPrefixFormat": "json_string_array",
+        "executionAssetHashBound": true,
         "proofAuthority": "none",
         "canCertifyGa": false
       }
