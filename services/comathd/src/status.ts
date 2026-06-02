@@ -81,7 +81,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "installed_codex_cli_validation",
       "pi_codex_durable_service_lifecycle_probe",
       "pi_codex_production_codex_api_account_network_probe",
-      "pi_codex_real_pi_install_runtime_probe"
+      "pi_codex_real_pi_install_runtime_probe",
+      "pi_codex_lifecycle_operator_session_persistence"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

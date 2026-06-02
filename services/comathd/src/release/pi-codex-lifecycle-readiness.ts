@@ -388,6 +388,73 @@ type PiCodexProductionCodexAccountNetworkProbeArtifactBody = Omit<
   "codex_validation_artifact"
 >;
 
+export type PiCodexLifecycleOperatorSessionStatus =
+  | "recoverable_operator_session"
+  | "blocked_operator_session"
+  | "completed_operator_session";
+
+export type PiCodexLifecycleOperatorSessionStep =
+  | "real_pi_install_runtime_probe"
+  | "durable_service_lifecycle_probe"
+  | "codex_api_account_network_probe"
+  | "lifecycle_evidence_intake"
+  | "readiness_review";
+
+export type PiCodexLifecycleOperatorSessionArtifactPathInput = {
+  kind: PiCodexLifecycleEvidenceArtifactKind;
+  path: string;
+};
+
+export type PiCodexLifecycleOperatorSessionInput = {
+  project_id: string;
+  session_id?: string;
+  actor: string;
+  session_status?: PiCodexLifecycleOperatorSessionStatus;
+  pi_host_label?: string;
+  session_kind?: PiCodexLifecycleInstallSessionEvidence["session_kind"];
+  operator_cursor?: string;
+  completed_steps?: PiCodexLifecycleOperatorSessionStep[];
+  artifact_paths?: PiCodexLifecycleOperatorSessionArtifactPathInput[];
+  last_result_summary?: unknown;
+};
+
+export type PiCodexLifecycleOperatorSessionManifestArtifact = {
+  kind: "operator_session_manifest";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexLifecycleOperatorSessionManifest = {
+  schema_version: "comath.pi_codex_lifecycle_operator_session.v1";
+  session_id: string;
+  project_id: string;
+  actor: string;
+  created_at: string;
+  updated_at: string;
+  session_status: PiCodexLifecycleOperatorSessionStatus;
+  pi_host_label?: string;
+  session_kind: PiCodexLifecycleInstallSessionEvidence["session_kind"];
+  operator_cursor: string;
+  completed_steps: PiCodexLifecycleOperatorSessionStep[];
+  artifact_refs: PiCodexLifecycleEvidenceArtifact[];
+  last_result_summary: unknown;
+  next_recommended_route: string;
+  session_manifest_path: string;
+  session_manifest_artifact: PiCodexLifecycleOperatorSessionManifestArtifact;
+  durable_transport_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexLifecycleOperatorSessionManifestBody = Omit<
+  PiCodexLifecycleOperatorSessionManifest,
+  "session_manifest_artifact"
+>;
+
 const defaultInstallSessionEvidence: PiCodexLifecycleInstallSessionEvidence = {
   session_kind: "unknown",
   pi_host_kind: "unknown",
@@ -494,6 +561,103 @@ function assertCodexValidationId(value: string | undefined): string {
     });
   }
   return validationId;
+}
+
+function assertOperatorSessionId(value: string | undefined): string {
+  const sessionId = value ?? `LIFE-OP-SESSION-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (
+    !/^[A-Za-z0-9._-]+$/.test(sessionId) ||
+    sessionId === "." ||
+    sessionId === ".." ||
+    sessionId.split(".").some((segment) => segment.length === 0)
+  ) {
+    throw new ComathError("invalid Pi/Codex lifecycle operator session id", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_SESSION_INVALID_ID"
+    });
+  }
+  return sessionId;
+}
+
+function assertOperatorSessionProjectId(value: string): string {
+  if (/^[A-Z]+-\d{4,}$/.test(value)) {
+    return value;
+  }
+  throw new ComathError("invalid Pi/Codex lifecycle operator session project id", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_OPERATOR_SESSION_INVALID_PROJECT_ID"
+  });
+}
+
+function assertOperatorSessionStatus(
+  value: PiCodexLifecycleOperatorSessionInput["session_status"]
+): PiCodexLifecycleOperatorSessionStatus {
+  const status = value ?? "recoverable_operator_session";
+  if (
+    status === "recoverable_operator_session" ||
+    status === "blocked_operator_session" ||
+    status === "completed_operator_session"
+  ) {
+    return status;
+  }
+  throw new ComathError("invalid Pi/Codex lifecycle operator session status", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_OPERATOR_SESSION_INVALID_STATUS"
+  });
+}
+
+function assertOperatorSessionStep(value: string): PiCodexLifecycleOperatorSessionStep {
+  if (
+    value === "real_pi_install_runtime_probe" ||
+    value === "durable_service_lifecycle_probe" ||
+    value === "codex_api_account_network_probe" ||
+    value === "lifecycle_evidence_intake" ||
+    value === "readiness_review"
+  ) {
+    return value;
+  }
+  throw new ComathError("invalid Pi/Codex lifecycle operator session step", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_OPERATOR_SESSION_INVALID_STEP"
+  });
+}
+
+function operatorSessionSteps(values: PiCodexLifecycleOperatorSessionInput["completed_steps"]): PiCodexLifecycleOperatorSessionStep[] {
+  const seen = new Set<PiCodexLifecycleOperatorSessionStep>();
+  const steps: PiCodexLifecycleOperatorSessionStep[] = [];
+  for (const value of values ?? []) {
+    const step = assertOperatorSessionStep(value);
+    if (!seen.has(step)) {
+      seen.add(step);
+      steps.push(step);
+    }
+  }
+  return steps;
+}
+
+function assertOperatorSessionKind(
+  value: PiCodexLifecycleOperatorSessionInput["session_kind"]
+): PiCodexLifecycleInstallSessionEvidence["session_kind"] {
+  const sessionKind = value ?? "unknown";
+  if (
+    sessionKind === "phase45_local_fake_pi_http_e2e" ||
+    sessionKind === "real_pi_host_manual_install" ||
+    sessionKind === "real_pi_host_automated_install" ||
+    sessionKind === "unknown"
+  ) {
+    return sessionKind;
+  }
+  throw new ComathError("invalid Pi/Codex lifecycle operator session kind", {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_OPERATOR_SESSION_INVALID_KIND"
+  });
+}
+
+function optionalOperatorLabel(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return assertPiHostLabel(value);
 }
 
 function assertProbeTimeout(value: number | undefined): number {
@@ -725,6 +889,52 @@ function truncateProbeOutput(value: string): string {
   return Buffer.from(scrubHostPaths(value), "utf8").subarray(0, lifecycleProbeOutputLimit).toString("utf8");
 }
 
+const operatorSessionEnvSecretPattern =
+  /\b(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token)\b\s*[:=]\s*[^\s,;}"']+/gi;
+const operatorSessionBearerSecretPattern = /\bAuthorization\s*:\s*Bearer\s+[^\s,;}"']+/gi;
+const operatorSessionSecretPattern = /\b(?:sk-[A-Za-z0-9._-]+)\b/gi;
+const operatorSessionProofSuccessPattern =
+  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|proven|verified_final_authority_evidence)\b/gi;
+
+function sanitizeOperatorSessionText(value: string): string {
+  return Buffer.from(
+    scrubHostPaths(value)
+      .replace(operatorSessionEnvSecretPattern, "<secret>")
+      .replace(operatorSessionBearerSecretPattern, "<secret>")
+      .replace(operatorSessionSecretPattern, "<secret>")
+      .replace(operatorSessionProofSuccessPattern, "unverified_formal_status"),
+    "utf8"
+  )
+    .subarray(0, lifecycleProbeOutputLimit)
+    .toString("utf8");
+}
+
+function sanitizeOperatorSessionValue(value: unknown, depth = 0): unknown {
+  if (depth > 5) {
+    return "<truncated>";
+  }
+  if (typeof value === "string") {
+    return sanitizeOperatorSessionText(value);
+  }
+  if (typeof value === "number" || typeof value === "boolean" || value === null) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((entry) => sanitizeOperatorSessionValue(entry, depth + 1));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .slice(0, 40)
+        .map(([key, entry]) => [sanitizeOperatorSessionText(key), sanitizeOperatorSessionValue(entry, depth + 1)])
+    );
+  }
+  if (value === undefined) {
+    return "not_provided";
+  }
+  return sanitizeOperatorSessionText(String(value));
+}
+
 function defaultLifecycleProbeRunner(
   command: PiCodexLifecycleServiceProbeRunnerCommand
 ): PiCodexLifecycleServiceProbeRunnerResult {
@@ -924,6 +1134,119 @@ function readLifecycleArtifact(
     sha256: sha256Bytes(content),
     size_bytes: content.byteLength
   };
+}
+
+const operatorSessionStepOrder: PiCodexLifecycleOperatorSessionStep[] = [
+  "real_pi_install_runtime_probe",
+  "durable_service_lifecycle_probe",
+  "codex_api_account_network_probe",
+  "lifecycle_evidence_intake",
+  "readiness_review"
+];
+
+const operatorSessionRouteByStep: Record<PiCodexLifecycleOperatorSessionStep, string> = {
+  real_pi_install_runtime_probe: "/release/pi-codex-lifecycle/real-pi-runtime-probe",
+  durable_service_lifecycle_probe: "/release/pi-codex-lifecycle/service-probe",
+  codex_api_account_network_probe: "/release/pi-codex-lifecycle/codex-api-probe",
+  lifecycle_evidence_intake: "/release/pi-codex-lifecycle/evidence",
+  readiness_review: "/release/pi-codex-lifecycle/review"
+};
+
+function nextOperatorSessionRoute(completedSteps: PiCodexLifecycleOperatorSessionStep[]): string {
+  const completed = new Set(completedSteps);
+  const nextStep = operatorSessionStepOrder.find((step) => !completed.has(step)) ?? "readiness_review";
+  return operatorSessionRouteByStep[nextStep];
+}
+
+function readOperatorSessionCreatedAt(projectRoot: string, sessionManifestPath: string, fallback: string): string {
+  const absolutePath = assertPathAllowed(projectRoot, sessionManifestPath, { purpose: "read" });
+  if (!existsSync(absolutePath)) {
+    return fallback;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(absolutePath, "utf8")) as { created_at?: unknown };
+    if (typeof parsed.created_at === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(parsed.created_at)) {
+      return parsed.created_at;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function persistPiCodexLifecycleOperatorSession(
+  projectRoot: string,
+  input: PiCodexLifecycleOperatorSessionInput
+): PiCodexLifecycleOperatorSessionManifest {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const sessionId = assertOperatorSessionId(input.session_id);
+  const sessionStatus = assertOperatorSessionStatus(input.session_status);
+  const piHostLabel = optionalOperatorLabel(input.pi_host_label);
+  const sessionKind = assertOperatorSessionKind(input.session_kind);
+  const completedSteps = operatorSessionSteps(input.completed_steps);
+  const artifactRefs = (input.artifact_paths ?? []).map((artifact) =>
+    readLifecycleArtifact(projectRoot, artifact.kind, artifact.path)
+  );
+  const now = new Date().toISOString();
+  const sessionManifestPath = normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", sessionId, "operator-session-manifest.json")
+  );
+  const createdAt = readOperatorSessionCreatedAt(projectRoot, sessionManifestPath, now);
+  const body: PiCodexLifecycleOperatorSessionManifestBody = {
+    schema_version: "comath.pi_codex_lifecycle_operator_session.v1",
+    session_id: sessionId,
+    project_id: projectId,
+    actor: sanitizeOperatorSessionText(input.actor),
+    created_at: createdAt,
+    updated_at: now,
+    session_status: sessionStatus,
+    ...(piHostLabel === undefined ? {} : { pi_host_label: piHostLabel }),
+    session_kind: sessionKind,
+    operator_cursor: sanitizeOperatorSessionText(input.operator_cursor ?? "not_provided"),
+    completed_steps: completedSteps,
+    artifact_refs: artifactRefs,
+    last_result_summary: sanitizeOperatorSessionValue(input.last_result_summary),
+    next_recommended_route: nextOperatorSessionRoute(completedSteps),
+    session_manifest_path: sessionManifestPath,
+    durable_transport_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const artifactText = canonicalJson(body);
+  const absoluteManifestPath = assertPathAllowed(projectRoot, sessionManifestPath, { purpose: "runtime-write" });
+  mkdirSync(dirname(absoluteManifestPath), { recursive: true });
+  writeFileSync(absoluteManifestPath, artifactText, "utf8");
+  const result: PiCodexLifecycleOperatorSessionManifest = {
+    ...body,
+    session_manifest_artifact: {
+      kind: "operator_session_manifest",
+      path: sessionManifestPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_lifecycle_operator_session_persisted",
+    actor: sanitizeOperatorSessionText(input.actor),
+    target_id: projectId,
+    payload: {
+      session_id: sessionId,
+      session_status: sessionStatus,
+      session_manifest_path: sessionManifestPath,
+      completed_steps: completedSteps,
+      artifact_kinds: artifactRefs.map((artifact) => artifact.kind),
+      durable_transport_provided: false,
+      pi_direct_write_allowed: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
 }
 
 export function probePiCodexDurableServiceLifecycle(
