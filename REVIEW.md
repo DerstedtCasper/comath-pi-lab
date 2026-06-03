@@ -1,3 +1,31 @@
+# Goal 3 Task 191 / Host Capability To Helper Validation Binding
+
+Scope: bind provider-helper host validation to a matching service-owned provider host capability probe, while keeping both the host capability artifact and host-validation manifest non-authoritative and unable to satisfy adapter OS-isolation readiness, OS-enforcement evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
+Work performed:
+
+- Treated Task190's next step as authoritative and selected the host-capability-to-helper-validation binding blocker.
+- Used read-only subagent review for service extension points and public wording while keeping this thread as the only writer.
+- Added `goal3-task191-agent-adapter-os-isolation-provider-host-capability-helper-validation-binding.test.mjs`.
+- Extended `validateAgentAdapterOsIsolationProviderHelperHost()` so it accepts `host_capability_probe_id`, reads the append-only Task190 probe artifact, requires observed service-owned capability status, and blocks before invoking the host validator when the probe is missing, unobserved, or mismatched.
+- Added host capability binding metadata to host-validation manifests, helper-execution binding manifests, and audit events without granting readiness or proof authority.
+- Updated Task176-179 and Task181-189 provider-helper fixtures so deeper helper execution, collection, self-test, runtime-attestation, bundled-helper, and check-debug gates now run only after a host capability prerequisite.
+- Added `agent_adapter_os_isolation_provider_host_capability_helper_validation_binding`, registered Task191 in phase0 smoke and GA release criteria, and synchronized README, AGENTS, TODO, adapter contracts, GA release criteria, and threat model wording.
+
+Verification evidence:
+
+- TDD RED was observed before implementation: focused Task191 exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_provider_host_capability_helper_validation_binding`.
+- After implementation, focused Task191 exited 0.
+- Adjacent provider-helper regressions exited 0 after fixture migration: Task176, Task177, Task178, Task179, Task181, Task182, Task184, Task185, Task186, Task187, Task188, Task189, and Task190.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task191 discovered by the default runner.
+- Root gate exited 0: `corepack pnpm test`, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only before the tracker/review append.
+
+Boundary notes: Task191 makes host capability a fail-closed prerequisite for provider-helper host validation. The binding must match project id, adapter id, backend, provider, service-observed platform, artifact path/hash, and non-authority flags. Missing, unobserved, or mismatched host capability probes now block before the host validator can run. This does not make host capability metadata readiness evidence, OS-enforcement evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
+Residual risks: Goal 3 remains incomplete. Task191 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute helpers under OS-enforced isolation, does not expose provider-helper routes through Pi tools, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 190 / Provider Host Capability Probe Contract
 
 Scope: add a service-owned provider host capability probe contract for OS sandbox families, while keeping host capability metadata strictly diagnostic and unable to become adapter OS-isolation readiness evidence, OS-enforcement evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.

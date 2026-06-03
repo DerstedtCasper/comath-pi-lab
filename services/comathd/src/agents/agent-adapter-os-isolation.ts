@@ -213,6 +213,11 @@ export type AgentAdapterOsIsolationProviderHelperHostValidatorInput = {
   project_root: string;
   project_id: string;
   host_validation_id: string;
+  host_capability_probe_id: string;
+  host_capability_probe_path: string;
+  host_capability_probe_sha256: string;
+  host_capability_status: AgentAdapterOsIsolationProviderHostCapabilityStatus;
+  provider_host_capability_available: boolean;
   runner_id: string;
   runner_path: string;
   launch_id: string;
@@ -385,6 +390,9 @@ export type AgentAdapterOsIsolationProviderHelperExecutionStatus =
 
 export type AgentAdapterOsIsolationProviderHelperHostValidationStatus =
   | "provider_helper_host_validated"
+  | "blocked_provider_host_capability_probe_missing"
+  | "blocked_provider_host_capability_probe_not_observed"
+  | "blocked_provider_host_capability_binding_mismatch"
   | "blocked_provider_runner_manifest_missing"
   | "blocked_provider_runner_binding_mismatch"
   | "blocked_provider_helper_host_not_validated"
@@ -476,6 +484,7 @@ export type AgentAdapterOsIsolationProviderHelperExecutionInput = {
 export type AgentAdapterOsIsolationProviderHelperHostValidationInput = {
   project_id: string;
   host_validation_id?: string;
+  host_capability_probe_id?: string;
   runner_id: string;
   launch_id: string;
   adapter_id: AgentAdapterPackageId;
@@ -914,6 +923,9 @@ export type AgentAdapterOsIsolationProviderHelperExecution = {
     host_validation_id: string | null;
     host_validation_status: AgentAdapterOsIsolationProviderHelperHostValidationStatus | null;
     validation_source: "service_owned_provider_helper_host_validator" | "missing";
+    host_capability_probe_id: string | null;
+    provider_host_capability_bound: boolean;
+    host_capability_status: AgentAdapterOsIsolationProviderHostCapabilityStatus | null;
     helper_binary_sha256: string | null;
     runner_binary_sha256: string | null;
     hashes_match_provider_runner: boolean;
@@ -987,6 +999,7 @@ export type AgentAdapterOsIsolationProviderHelperHostValidationArtifact = {
 export type AgentAdapterOsIsolationProviderHelperHostValidation = {
   schema_version: "comath.agent_adapter_os_isolation_provider_helper_host_validation.v1";
   host_validation_id: string;
+  host_capability_probe_id: string | null;
   project_id: string;
   runner_id: string;
   launch_id: string;
@@ -999,6 +1012,19 @@ export type AgentAdapterOsIsolationProviderHelperHostValidation = {
   provider: AgentAdapterOsIsolationProvider;
   provider_helper_host_ready: boolean;
   host_validation_path: string;
+  provider_host_capability_artifact: AgentAdapterOsIsolationProviderHostCapabilityArtifact | null;
+  provider_host_capability_binding: {
+    bound: boolean;
+    host_capability_probe_id: string | null;
+    host_capability_status: AgentAdapterOsIsolationProviderHostCapabilityStatus | null;
+    probe_source: "service_owned_provider_host_capability_probe" | "missing";
+    provider_host_capability_available: boolean;
+    provider: AgentAdapterOsIsolationProvider | null;
+    platform: string | null;
+    platform_supported: boolean;
+    diagnostics: string[];
+    proof_authority: "none";
+  };
   launch_artifact: AgentAdapterOsIsolationLaunchArtifact | null;
   runner_artifact: AgentAdapterOsIsolationProviderRunnerArtifact | null;
   provider_helper_host_validation: {
@@ -1011,6 +1037,8 @@ export type AgentAdapterOsIsolationProviderHelperHostValidation = {
     supported_platforms: string[];
     platform: string | null;
     platform_supported: boolean;
+    host_capability_required: true;
+    host_capability_bound: boolean;
     self_test_required: boolean;
     self_test_passed: boolean;
     self_test_exit_code: number | null;
@@ -1804,6 +1832,56 @@ function providerHostCapabilityReplayableNextAction(
     return "Run the service-owned provider host capability probe on a compatible host with the required provider family facilities installed.";
   }
   return "Run a service-owned provider host capability probe; caller-supplied platform, tool, kernel, or success metadata cannot validate host capability.";
+}
+
+function providerHostCapabilityIsObserved(
+  bundle: { hostCapability: AgentAdapterOsIsolationProviderHostCapabilityManifest } | null
+): boolean {
+  const hostCapability = bundle?.hostCapability;
+  return Boolean(
+    hostCapability &&
+      hostCapability.schema_version === "comath.agent_adapter_os_isolation_provider_host_capability_probe.v1" &&
+      hostCapability.ok === true &&
+      hostCapability.host_capability_status === "provider_host_capability_observed" &&
+      hostCapability.provider_host_capability_available === true &&
+      hostCapability.provider_host_capability.probe_source === "service_owned_provider_host_capability_probe" &&
+      hostCapability.provider_host_capability.provider_host_capability_available === true &&
+      hostCapability.provider_host_capability.platform_supported === true &&
+      hostCapability.adapter_execution_isolation.os_enforced === false &&
+      hostCapability.proof_authority === "none" &&
+      hostCapability.can_promote_claim === false &&
+      hostCapability.can_certify_ga === false
+  );
+}
+
+function providerHostCapabilityMatchesHelperHostInput(input: {
+  bundle: {
+    artifact: AgentAdapterOsIsolationProviderHostCapabilityArtifact;
+    hostCapability: AgentAdapterOsIsolationProviderHostCapabilityManifest;
+  } | null;
+  projectId: string;
+  hostCapabilityProbeId: string | null;
+  adapterId: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  provider: AgentAdapterOsIsolationProvider;
+  serviceObservedPlatform: NodeJS.Platform;
+}): boolean {
+  const hostCapability = input.bundle?.hostCapability;
+  if (!hostCapability || !input.hostCapabilityProbeId || !input.bundle?.artifact) {
+    return false;
+  }
+  return Boolean(
+    hostCapability.project_id === input.projectId &&
+      hostCapability.host_capability_probe_id === input.hostCapabilityProbeId &&
+      hostCapability.adapter_id === input.adapterId &&
+      hostCapability.backend === input.backend &&
+      hostCapability.provider === input.provider &&
+      hostCapability.provider_host_capability.platform === input.serviceObservedPlatform &&
+      hostCapability.provider_host_capability.platform_supported === true &&
+      hostCapability.provider_host_capability.proof_authority === "none" &&
+      input.bundle.artifact.path === hostCapability.host_capability_probe_path &&
+      isSha256(input.bundle.artifact.sha256)
+  );
 }
 
 function classifySandboxLaunch(input: {
@@ -2675,6 +2753,15 @@ function providerHelperHostReplayableNextAction(
   if (status === "blocked_provider_runner_binding_mismatch") {
     return "Validate the provider-helper host with the exact project, adapter, backend, provider, launch, and runner bindings.";
   }
+  if (status === "blocked_provider_host_capability_probe_missing") {
+    return "Run a service-owned provider host capability probe and pass its append-only host_capability_probe_id before validating the provider-helper host.";
+  }
+  if (status === "blocked_provider_host_capability_probe_not_observed") {
+    return "Retry provider-helper host validation only after the referenced provider host capability probe is service-owned and provider_host_capability_observed.";
+  }
+  if (status === "blocked_provider_host_capability_binding_mismatch") {
+    return "Bind provider-helper host validation to a provider host capability probe with the exact project, adapter, backend, provider, platform, and artifact hash.";
+  }
   if (status === "blocked_provider_helper_host_binary_mismatch") {
     return "Reconfigure the service-owned provider helper host so the validated helper binary hash matches the ready provider-runner manifest.";
   }
@@ -2690,6 +2777,9 @@ function providerHelperHostReplayableNextAction(
 function providerHelperHostValidationStatus(input: {
   runnerReady: boolean;
   runnerMatches: boolean;
+  hostCapabilityPresent: boolean;
+  hostCapabilityObserved: boolean;
+  hostCapabilityMatches: boolean;
   validationSourceAccepted: boolean;
   helperHostReady: boolean;
   hashesMatchRunner: boolean;
@@ -2703,6 +2793,15 @@ function providerHelperHostValidationStatus(input: {
   }
   if (!input.runnerMatches) {
     return "blocked_provider_runner_binding_mismatch";
+  }
+  if (!input.hostCapabilityPresent) {
+    return "blocked_provider_host_capability_probe_missing";
+  }
+  if (!input.hostCapabilityObserved) {
+    return "blocked_provider_host_capability_probe_not_observed";
+  }
+  if (!input.hostCapabilityMatches) {
+    return "blocked_provider_host_capability_binding_mismatch";
   }
   if (input.validationSourceAccepted && input.platformContractDeclared && !input.platformSupported) {
     return "blocked_provider_helper_host_platform_mismatch";
@@ -2808,6 +2907,11 @@ function providerHelperHostValidationIsExecutable(
       hostValidation.provider_helper_host_validation.command_override_allowed === false &&
       hostValidation.provider_helper_host_validation.environment_override_allowed === false &&
       hostValidation.provider_helper_host_validation.caller_supplied_success_allowed === false &&
+      hostValidation.provider_host_capability_binding.bound === true &&
+      hostValidation.provider_host_capability_binding.probe_source === "service_owned_provider_host_capability_probe" &&
+      hostValidation.provider_host_capability_binding.provider_host_capability_available === true &&
+      hostValidation.provider_helper_host_validation.host_capability_required === true &&
+      hostValidation.provider_helper_host_validation.host_capability_bound === true &&
       hostValidation.proof_authority === "none" &&
       hostValidation.can_promote_claim === false &&
       hostValidation.can_certify_ga === false &&
@@ -2858,7 +2962,19 @@ function providerHelperHostValidationMatchesExecutionInput(input: {
       hostValidation.provider_helper_host_validation.runner_binary_sha256.toLowerCase() ===
         runnerBinarySha256.toLowerCase() &&
       hostValidation.provider_helper_host_validation.helper_binary_sha256.toLowerCase() ===
-        runnerBinarySha256.toLowerCase()
+        runnerBinarySha256.toLowerCase() &&
+      Boolean(hostValidation.host_capability_probe_id) &&
+      hostValidation.provider_host_capability_artifact?.kind === "agent_adapter_os_isolation_provider_host_capability_probe" &&
+      isSha256(hostValidation.provider_host_capability_artifact.sha256) &&
+      hostValidation.provider_host_capability_binding.bound === true &&
+      hostValidation.provider_host_capability_binding.host_capability_probe_id === hostValidation.host_capability_probe_id &&
+      hostValidation.provider_host_capability_binding.host_capability_status === "provider_host_capability_observed" &&
+      hostValidation.provider_host_capability_binding.probe_source === "service_owned_provider_host_capability_probe" &&
+      hostValidation.provider_host_capability_binding.provider_host_capability_available === true &&
+      hostValidation.provider_host_capability_binding.provider === input.provider &&
+      hostValidation.provider_host_capability_binding.platform_supported === true &&
+      hostValidation.provider_helper_host_validation.host_capability_required === true &&
+      hostValidation.provider_helper_host_validation.host_capability_bound === true
   );
 }
 
@@ -3506,10 +3622,35 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   });
   const bindingMatches = runnerMatches && launchReady && launchMatches;
   const readyRunnerBundle = runnerReady && bindingMatches ? runnerBundle : null;
-  const callerRequestedPlatform = sanitizeProbeText(input.host_environment?.platform ?? "") || null;
+  const hostCapabilityProbeId = input.host_capability_probe_id ?? null;
+  const hostCapabilityBundle = hostCapabilityProbeId
+    ? readProviderHostCapabilityProbeArtifact(projectRoot, hostCapabilityProbeId)
+    : null;
+  const serviceObservedPlatform = process.platform;
+  const hostCapabilityPresent = Boolean(hostCapabilityProbeId && hostCapabilityBundle);
+  const hostCapabilityObserved = providerHostCapabilityIsObserved(hostCapabilityBundle);
+  const hostCapabilityMatches = providerHostCapabilityMatchesHelperHostInput({
+    bundle: hostCapabilityBundle,
+    projectId: input.project_id,
+    hostCapabilityProbeId,
+    adapterId: input.adapter_id,
+    backend,
+    provider,
+    serviceObservedPlatform
+  });
+  const hostCapabilityBindingAccepted = hostCapabilityPresent && hostCapabilityObserved && hostCapabilityMatches;
+  const hostCapabilityDiagnostics = [
+    hostCapabilityProbeId ? `host_capability_probe_id=${sanitizeProbeText(hostCapabilityProbeId)}` : "host_capability_probe_id=missing",
+    hostCapabilityBundle?.hostCapability.host_capability_status
+      ? `host_capability_status=${sanitizeProbeText(hostCapabilityBundle.hostCapability.host_capability_status)}`
+      : undefined,
+    ...sanitizeDiagnostics(hostCapabilityBundle?.hostCapability.provider_host_capability.diagnostics),
+    hostCapabilityBindingAccepted
+      ? "Service-owned provider host capability probe is bound to provider-helper host validation diagnostics."
+      : "Provider-helper host validation is blocked until a matching service-owned provider host capability probe is supplied."
+  ].filter((entry): entry is string => Boolean(entry));
   const observedPlatform = process.platform;
-  const usesDefaultHostValidator = options.provider_helper_host_validator === undefined;
-  const validationPlatform = usesDefaultHostValidator ? observedPlatform : (callerRequestedPlatform ?? observedPlatform);
+  const validationPlatform = observedPlatform;
   const environmentPolicy = readyRunnerBundle?.runner.provider_runner_contract.environment_policy ?? providerRunnerEnvironmentPolicy(provider);
   const fixedArgs = providerHelperFixedArgs({
     helperExecutionId: hostValidationId,
@@ -3520,11 +3661,16 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
     provider
   });
 
-  const validation = readyRunnerBundle
+  const validation = readyRunnerBundle && hostCapabilityBindingAccepted
     ? (options.provider_helper_host_validator ?? defaultProviderHelperHostValidator)({
         project_root: projectRoot,
         project_id: input.project_id,
         host_validation_id: hostValidationId,
+        host_capability_probe_id: hostCapabilityProbeId as string,
+        host_capability_probe_path: hostCapabilityBundle?.hostCapability.host_capability_probe_path ?? "",
+        host_capability_probe_sha256: hostCapabilityBundle?.artifact.sha256 ?? "",
+        host_capability_status: hostCapabilityBundle?.hostCapability.host_capability_status ?? "blocked_provider_host_capability_probe_not_collected",
+        provider_host_capability_available: hostCapabilityBundle?.hostCapability.provider_host_capability_available === true,
         runner_id: input.runner_id,
         runner_path: readyRunnerBundle.runner.runner_path,
         launch_id: input.launch_id,
@@ -3577,6 +3723,9 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   const status = providerHelperHostValidationStatus({
     runnerReady,
     runnerMatches: bindingMatches,
+    hostCapabilityPresent,
+    hostCapabilityObserved,
+    hostCapabilityMatches,
     validationSourceAccepted,
     helperHostReady,
     hashesMatchRunner: hashesMatchProviderRunner,
@@ -3589,6 +3738,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   const diagnostics = [
     validationPlatform ? `platform=${validationPlatform}` : undefined,
     input.host_environment?.notes ? sanitizeProbeText(input.host_environment.notes) : undefined,
+    ...hostCapabilityDiagnostics,
     ...sanitizeDiagnostics(validation?.diagnostics),
     ok
       ? "Service-owned provider-helper host validator accepted the helper host configuration."
@@ -3598,6 +3748,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   const hostValidation: AgentAdapterOsIsolationProviderHelperHostValidation = {
     schema_version: "comath.agent_adapter_os_isolation_provider_helper_host_validation.v1",
     host_validation_id: hostValidationId,
+    host_capability_probe_id: hostCapabilityProbeId,
     project_id: input.project_id,
     runner_id: input.runner_id,
     launch_id: input.launch_id,
@@ -3610,6 +3761,22 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
     provider,
     provider_helper_host_ready: ok,
     host_validation_path: path,
+    provider_host_capability_artifact: hostCapabilityBundle?.artifact ?? null,
+    provider_host_capability_binding: {
+      bound: hostCapabilityBindingAccepted,
+      host_capability_probe_id: hostCapabilityProbeId,
+      host_capability_status: hostCapabilityBundle?.hostCapability.host_capability_status ?? null,
+      probe_source:
+        hostCapabilityBundle?.hostCapability.provider_host_capability.probe_source === "service_owned_provider_host_capability_probe"
+          ? "service_owned_provider_host_capability_probe"
+          : "missing",
+      provider_host_capability_available: hostCapabilityBundle?.hostCapability.provider_host_capability_available === true,
+      provider: hostCapabilityBundle?.hostCapability.provider ?? null,
+      platform: hostCapabilityBundle?.hostCapability.provider_host_capability.platform ?? null,
+      platform_supported: hostCapabilityBundle?.hostCapability.provider_host_capability.platform_supported === true,
+      diagnostics: hostCapabilityDiagnostics,
+      proof_authority: "none"
+    },
     launch_artifact: launchBundle?.artifact ?? null,
     runner_artifact: runnerBundle?.artifact ?? null,
     provider_helper_host_validation: {
@@ -3624,6 +3791,8 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
       supported_platforms: supportedPlatforms,
       platform: validationPlatform,
       platform_supported: platformSupported,
+      host_capability_required: true,
+      host_capability_bound: hostCapabilityBindingAccepted,
       self_test_required: selfTestRequired,
       self_test_passed: selfTestPassed,
       self_test_exit_code: validationSourceAccepted && typeof validation?.self_test_exit_code === "number"
@@ -3692,6 +3861,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
     target_id: input.project_id,
     payload: {
       host_validation_id: hostValidationId,
+      host_capability_probe_id: hostCapabilityProbeId,
       runner_id: input.runner_id,
       launch_id: input.launch_id,
       adapter_id: input.adapter_id,
@@ -3700,6 +3870,8 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
       host_validation_status: status,
       provider,
       provider_helper_host_ready: ok,
+      host_capability_bound: hostCapabilityBindingAccepted,
+      host_capability_status: hostCapabilityBundle?.hostCapability.host_capability_status ?? null,
       helper_binary_sha256: helperBinarySha256,
       runner_binary_sha256: isSha256(runnerBinarySha256) ? runnerBinarySha256.toLowerCase() : null,
       hashes_match_provider_runner: hashesMatchProviderRunner,
@@ -3925,6 +4097,9 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
         hostValidation?.provider_helper_host_validation.validation_source === "service_owned_provider_helper_host_validator"
           ? "service_owned_provider_helper_host_validator"
           : "missing",
+      host_capability_probe_id: hostValidation?.host_capability_probe_id ?? null,
+      provider_host_capability_bound: hostValidation?.provider_host_capability_binding.bound === true,
+      host_capability_status: hostValidation?.provider_host_capability_binding.host_capability_status ?? null,
       helper_binary_sha256: isSha256(hostValidation?.provider_helper_host_validation.helper_binary_sha256)
         ? hostValidation.provider_helper_host_validation.helper_binary_sha256.toLowerCase()
         : null,
@@ -4005,6 +4180,9 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
       helper_execution_status: status,
       host_validation_status: hostValidation?.host_validation_status ?? null,
       host_validation_bound: hostValidationBindingAccepted,
+      host_capability_probe_id: hostValidation?.host_capability_probe_id ?? null,
+      host_capability_bound: hostValidation?.provider_host_capability_binding.bound === true,
+      host_capability_status: hostValidation?.provider_host_capability_binding.host_capability_status ?? null,
       provider,
       provider_helper_attempted: attempted,
       helper_exit_code: attempted ? exitCode : null,

@@ -10,6 +10,7 @@ import {
   initProject,
   prepareAgentAdapterOsIsolationProviderRunner,
   prepareAgentAdapterOsIsolationSandboxLaunch,
+  probeAgentAdapterOsIsolationProviderHostCapability,
   readAuditEvents,
   reviewAgentAdapterOsIsolationReadiness,
   runAgentAdapterOsIsolationProviderHelperExecution,
@@ -120,6 +121,34 @@ try {
     }
   });
   assert.equal(readyRunner.ok, true, "ready provider-runner manifest is required before Task179 binding");
+
+  const hostCapability = probeAgentAdapterOsIsolationProviderHostCapability(projectRoot, {
+    project_id: projectId,
+    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0179-READY",
+    adapter_id: "codex-cli",
+    backend: "external",
+    actor: `${projectRoot} token=host-capability-secret`,
+    requested_provider: "windows_appcontainer",
+    host_capability_environment: {
+      platform: "caller-spoofed-platform",
+      notes: `${projectRoot} password=host-capability-secret`
+    }
+  }, {
+    provider_host_capability_probe: (probeInput) => {
+      assert.equal(probeInput.project_root, projectRoot);
+      assert.equal(probeInput.provider, "windows_appcontainer");
+      assert.equal(probeInput.platform, process.platform);
+      return {
+        probe_source: "service_owned_provider_host_capability_probe",
+        provider_host_capability_available: true,
+        capability_facts: ["task179 helper execution host-validation prerequisite observed"],
+        required_tools: ["windows_appcontainer-task179-host-probe"],
+        kernel_features: ["task179-provider-host-capability"],
+        diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
+      };
+    }
+  });
+  assert.equal(hostCapability.ok, true, "Task191 requires host validation to bind a service-owned provider host capability probe");
 
   let resolverCalledWithoutHostValidation = false;
   const missingHostValidation = runAgentAdapterOsIsolationProviderHelperExecution(projectRoot, {
@@ -235,6 +264,7 @@ try {
   const unvalidatedHost = validateAgentAdapterOsIsolationProviderHelperHost(projectRoot, {
     project_id: projectId,
     host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0179-UNVALIDATED",
+    host_capability_probe_id: hostCapability.host_capability_probe_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
     adapter_id: "codex-cli",
@@ -282,6 +312,7 @@ try {
   const readyHost = validateAgentAdapterOsIsolationProviderHelperHost(projectRoot, {
     project_id: projectId,
     host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0179-READY",
+    host_capability_probe_id: hostCapability.host_capability_probe_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
     adapter_id: "codex-cli",
@@ -304,6 +335,9 @@ try {
       assert.equal(hostInput.adapter_id, "codex-cli");
       assert.equal(hostInput.backend, "external");
       assert.equal(hostInput.provider, "windows_appcontainer");
+      assert.equal(hostInput.host_capability_probe_id, hostCapability.host_capability_probe_id);
+      assert.equal(hostInput.host_capability_status, "provider_host_capability_observed");
+      assert.equal(hostInput.provider_host_capability_available, true);
       assert.equal(hostInput.runner_binary_sha256, helperBinarySha256);
       assert.equal(hostInput.platform, "win32");
       return {
@@ -452,6 +486,7 @@ try {
   const otherHost = validateAgentAdapterOsIsolationProviderHelperHost(projectRoot, {
     project_id: projectId,
     host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0179-OTHER",
+    host_capability_probe_id: hostCapability.host_capability_probe_id,
     runner_id: otherRunner.runner_id,
     launch_id: otherLaunch.launch_id,
     adapter_id: "codex-cli",

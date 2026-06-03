@@ -10,6 +10,7 @@ import {
   getComathdStatus,
   initProject,
   prepareAgentAdapterOsIsolationSandboxLaunch,
+  probeAgentAdapterOsIsolationProviderHostCapability,
   reviewAgentAdapterOsIsolationReadiness
 } from "../../dist/index.js";
 
@@ -236,6 +237,34 @@ try {
   assert.equal(JSON.stringify(readyRunner).includes(process.execPath), false);
   assert.equal(JSON.stringify(readyRunner).includes("runner-route-secret"), false);
 
+  const hostCapability = probeAgentAdapterOsIsolationProviderHostCapability(projectRoot, {
+    project_id: projectId,
+    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0184-PLATFORM-MISMATCH",
+    adapter_id: "codex-cli",
+    backend: "external",
+    actor: `${projectRoot} token=host-capability-secret`,
+    requested_provider: incompatibleProvider,
+    host_capability_environment: {
+      platform: "caller-spoofed-platform",
+      notes: `${projectRoot} password=host-capability-secret`
+    }
+  }, {
+    provider_host_capability_probe: (probeInput) => {
+      assert.equal(probeInput.provider, incompatibleProvider);
+      assert.equal(probeInput.platform, process.platform);
+      return {
+        probe_source: "service_owned_provider_host_capability_probe",
+        provider_host_capability_available: true,
+        capability_facts: ["task184 incompatible provider host capability remains unavailable on this platform"],
+        required_tools: [`${incompatibleProvider}-task184-host-probe`],
+        kernel_features: ["task184-provider-host-capability"],
+        diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability blocked by platform contract"]
+      };
+    }
+  });
+  assert.equal(hostCapability.ok, false, "Task191 must fail closed before helper host validation for platform-incompatible providers");
+  assert.equal(hostCapability.host_capability_status, "blocked_provider_host_capability_provider_unavailable");
+
   const routeHost = await server.inject({
     method: "POST",
     path: "/agent/adapter/package/os-isolation-provider-helper-host-validation",
@@ -243,6 +272,7 @@ try {
       project_root: projectRoot,
       project_id: projectId,
       host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0184-PLATFORM-MISMATCH",
+      host_capability_probe_id: hostCapability.host_capability_probe_id,
       runner_id: readyRunner.runner_id,
       launch_id: launch.launch_id,
       adapter_id: "codex-cli",
@@ -261,11 +291,14 @@ try {
   assert.equal(routeHost.status, 200, JSON.stringify(routeHost.body));
   const readyHost = routeHost.body.host_validation;
   assert.equal(readyHost.ok, false);
-  assert.equal(readyHost.host_validation_status, "blocked_provider_helper_host_platform_mismatch");
+  assert.equal(readyHost.host_validation_status, "blocked_provider_host_capability_probe_not_observed");
   assert.equal(readyHost.provider_helper_host_ready, false);
-  assert.equal(readyHost.provider_helper_host_validation.helper_binary_sha256, helperBinarySha256);
+  assert.equal(readyHost.provider_host_capability_binding.bound, false);
+  assert.equal(readyHost.provider_host_capability_binding.host_capability_status, "blocked_provider_host_capability_provider_unavailable");
+  assert.equal(readyHost.provider_helper_host_validation.validation_source, "missing");
+  assert.equal(readyHost.provider_helper_host_validation.helper_binary_sha256, null);
   assert.equal(readyHost.provider_helper_host_validation.runner_binary_sha256, helperBinarySha256);
-  assert.equal(readyHost.provider_helper_host_validation.hashes_match_provider_runner, true);
+  assert.equal(readyHost.provider_helper_host_validation.hashes_match_provider_runner, false);
   assert.equal(readyHost.provider_helper_host_validation.platform_supported, false);
   assert.equal(
     readyHost.provider_helper_host_validation.supported_platforms.includes(process.platform),
@@ -535,6 +568,33 @@ try {
     assert.equal(compatibleRunner.ok, true);
     assert.equal(compatibleRunner.provider, compatibleProvider);
 
+    const compatibleHostCapability = probeAgentAdapterOsIsolationProviderHostCapability(compatibleProjectRoot, {
+      project_id: compatibleProjectId,
+      host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0184-COMPATIBLE-READY",
+      adapter_id: "codex-cli",
+      backend: "external",
+      actor: `${compatibleProjectRoot} token=compatible-host-capability-secret`,
+      requested_provider: compatibleProvider,
+      host_capability_environment: {
+        platform: "caller-spoofed-platform",
+        notes: `${compatibleProjectRoot} password=compatible-host-capability-secret`
+      }
+    }, {
+      provider_host_capability_probe: (probeInput) => {
+        assert.equal(probeInput.provider, compatibleProvider);
+        assert.equal(probeInput.platform, process.platform);
+        return {
+          probe_source: "service_owned_provider_host_capability_probe",
+          provider_host_capability_available: true,
+          capability_facts: ["task184 compatible provider host capability observed"],
+          required_tools: [`${compatibleProvider}-task184-host-probe`],
+          kernel_features: ["task184-compatible-provider-host-capability"],
+          diagnostics: [`${compatibleProjectRoot} compatible host capability diagnostic must be scrubbed`, "compatible host capability observed"]
+        };
+      }
+    });
+    assert.equal(compatibleHostCapability.ok, true, "compatible provider host validation must bind a service-owned host capability probe");
+
     const compatibleHostRoute = await compatibleServer.inject({
       method: "POST",
       path: "/agent/adapter/package/os-isolation-provider-helper-host-validation",
@@ -542,6 +602,7 @@ try {
         project_root: compatibleProjectRoot,
         project_id: compatibleProjectId,
         host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0184-COMPATIBLE-READY",
+        host_capability_probe_id: compatibleHostCapability.host_capability_probe_id,
         runner_id: compatibleRunner.runner_id,
         launch_id: compatibleLaunch.launch_id,
         adapter_id: "codex-cli",

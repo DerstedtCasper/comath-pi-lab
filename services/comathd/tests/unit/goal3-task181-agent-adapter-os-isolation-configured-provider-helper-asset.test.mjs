@@ -8,6 +8,7 @@ import {
   getComathdStatus,
   initProject,
   prepareAgentAdapterOsIsolationSandboxLaunch,
+  probeAgentAdapterOsIsolationProviderHostCapability,
   readAuditEvents,
   reviewAgentAdapterOsIsolationReadiness,
   validateAgentAdapterOsIsolationProviderHelperHost
@@ -150,6 +151,33 @@ try {
   assert.equal(JSON.stringify(readyRunner).includes("caller-owned-runner"), false, "caller command override must not be persisted");
   assert.equal(JSON.stringify(readyRunner).includes("--claim-ready"), false, "caller argv override must not be persisted");
 
+  const hostCapability = probeAgentAdapterOsIsolationProviderHostCapability(projectRoot, {
+    project_id: projectId,
+    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0181-ENV-READY",
+    adapter_id: "codex-cli",
+    backend: "external",
+    actor: `${projectRoot} token=host-capability-secret`,
+    requested_provider: "windows_appcontainer",
+    host_capability_environment: {
+      platform: "caller-spoofed-platform",
+      notes: `${projectRoot} password=host-capability-secret`
+    }
+  }, {
+    provider_host_capability_probe: (probeInput) => {
+      assert.equal(probeInput.provider, "windows_appcontainer");
+      assert.equal(probeInput.platform, process.platform);
+      return {
+        probe_source: "service_owned_provider_host_capability_probe",
+        provider_host_capability_available: true,
+        capability_facts: ["task181 configured helper host-validation prerequisite observed"],
+        required_tools: ["windows_appcontainer-task181-host-probe"],
+        kernel_features: ["task181-provider-host-capability"],
+        diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
+      };
+    }
+  });
+  assert.equal(hostCapability.ok, true, "Task191 requires service-owned host capability before configured helper host validation");
+
   const notRunnerEvidence = reviewAgentAdapterOsIsolationReadiness(projectRoot, {
     project_id: projectId,
     review_id: "ADAPTER-OSISO-0181-RUNNER-NOT-EVIDENCE",
@@ -167,6 +195,7 @@ try {
   const readyHost = validateAgentAdapterOsIsolationProviderHelperHost(projectRoot, {
     project_id: projectId,
     host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0181-ENV-READY",
+    host_capability_probe_id: hostCapability.host_capability_probe_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
     adapter_id: "codex-cli",

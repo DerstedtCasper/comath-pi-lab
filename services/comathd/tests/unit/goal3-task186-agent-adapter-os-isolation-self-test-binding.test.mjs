@@ -6,7 +6,8 @@ import {
   createComathServer,
   getComathdStatus,
   initProject,
-  prepareAgentAdapterOsIsolationSandboxLaunch
+  prepareAgentAdapterOsIsolationSandboxLaunch,
+  probeAgentAdapterOsIsolationProviderHostCapability
 } from "../../dist/index.js";
 
 const providerHelpers = {
@@ -116,6 +117,33 @@ try {
   const runner = runnerRoute.body.runner;
   assert.equal(runner.ok, true);
 
+  const hostCapability = probeAgentAdapterOsIsolationProviderHostCapability(projectRoot, {
+    project_id: projectId,
+    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0186-SELF-TEST-BINDING",
+    adapter_id: "codex-cli",
+    backend: "external",
+    actor: `${projectRoot} token=host-capability-secret`,
+    requested_provider: compatibleProvider,
+    host_capability_environment: {
+      platform: "caller-spoofed-platform",
+      notes: `${projectRoot} password=host-capability-secret`
+    }
+  }, {
+    provider_host_capability_probe: (probeInput) => {
+      assert.equal(probeInput.provider, compatibleProvider);
+      assert.equal(probeInput.platform, process.platform);
+      return {
+        probe_source: "service_owned_provider_host_capability_probe",
+        provider_host_capability_available: true,
+        capability_facts: ["task186 self-test binding host-validation prerequisite observed"],
+        required_tools: [`${compatibleProvider}-task186-host-probe`],
+        kernel_features: ["task186-provider-host-capability"],
+        diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
+      };
+    }
+  });
+  assert.equal(hostCapability.ok, true, "Task191 requires service-owned host capability before self-test binding validation");
+
   const genericHostRoute = await server.inject({
     method: "POST",
     path: "/agent/adapter/package/os-isolation-provider-helper-host-validation",
@@ -123,6 +151,7 @@ try {
       project_root: projectRoot,
       project_id: projectId,
       host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0186-GENERIC-SELF-TEST",
+      host_capability_probe_id: hostCapability.host_capability_probe_id,
       runner_id: runner.runner_id,
       launch_id: launch.launch_id,
       adapter_id: "codex-cli",
@@ -180,6 +209,7 @@ try {
       project_root: projectRoot,
       project_id: projectId,
       host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0186-BOUND-SELF-TEST",
+      host_capability_probe_id: hostCapability.host_capability_probe_id,
       runner_id: runner.runner_id,
       launch_id: launch.launch_id,
       adapter_id: "codex-cli",

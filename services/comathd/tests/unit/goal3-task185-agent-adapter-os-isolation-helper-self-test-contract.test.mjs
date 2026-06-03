@@ -9,6 +9,7 @@ import {
   getComathdStatus,
   initProject,
   prepareAgentAdapterOsIsolationSandboxLaunch,
+  probeAgentAdapterOsIsolationProviderHostCapability,
   reviewAgentAdapterOsIsolationReadiness
 } from "../../dist/index.js";
 
@@ -132,6 +133,33 @@ try {
   assert.equal(readyRunner.provider, compatibleProvider);
   assert.equal(readyRunner.provider_runner_resolution.runner_binary_sha256, helperBinarySha256);
 
+  const hostCapability = probeAgentAdapterOsIsolationProviderHostCapability(projectRoot, {
+    project_id: projectId,
+    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0185-SELF-TEST",
+    adapter_id: "codex-cli",
+    backend: "external",
+    actor: `${projectRoot} token=host-capability-secret`,
+    requested_provider: compatibleProvider,
+    host_capability_environment: {
+      platform: "host-capability-caller-platform-ignored",
+      notes: `${projectRoot} password=host-capability-secret`
+    }
+  }, {
+    provider_host_capability_probe: (probeInput) => {
+      assert.equal(probeInput.provider, compatibleProvider);
+      assert.equal(probeInput.platform, process.platform);
+      return {
+        probe_source: "service_owned_provider_host_capability_probe",
+        provider_host_capability_available: true,
+        capability_facts: ["task185 self-test host-validation prerequisite observed"],
+        required_tools: [`${compatibleProvider}-task185-host-probe`],
+        kernel_features: ["task185-provider-host-capability"],
+        diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
+      };
+    }
+  });
+  assert.equal(hostCapability.ok, true, "Task191 requires service-owned host capability before helper self-test validation");
+
   const badHostRoute = await server.inject({
     method: "POST",
     path: "/agent/adapter/package/os-isolation-provider-helper-host-validation",
@@ -139,6 +167,7 @@ try {
       project_root: projectRoot,
       project_id: projectId,
       host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0185-SELF-TEST-FAIL",
+      host_capability_probe_id: hostCapability.host_capability_probe_id,
       runner_id: readyRunner.runner_id,
       launch_id: launch.launch_id,
       adapter_id: "codex-cli",
@@ -273,6 +302,7 @@ try {
       project_root: projectRoot,
       project_id: projectId,
       host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0185-SELF-TEST-PASS",
+      host_capability_probe_id: hostCapability.host_capability_probe_id,
       runner_id: readyRunner.runner_id,
       launch_id: launch.launch_id,
       adapter_id: "codex-cli",

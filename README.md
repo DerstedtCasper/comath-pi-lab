@@ -118,6 +118,8 @@ Task189 revalidates the Task184-188 provider-helper and bundled-helper chain as 
 
 Task190 adds a service-owned provider host capability probe contract for adapter OS-isolation provider families. The probe can record service-observed platform/tool/kernel capability facts, sanitized diagnostics, and replayable host blockers before helper host validation, while rejecting caller-supplied platform, tool, kernel, proof-authority, or GA-certification payloads. Host capability manifests remain diagnostics only: they are not provider-helper readiness, helper self-test/runtime attestation, collected OS-enforcement evidence, readiness-review evidence by themselves, mathematical proof authority, real-Pi execution evidence, broad provider support, or GA certification.
 
+Task191 binds provider-helper host validation to a matching service-owned provider host capability probe. Host validation now fails closed unless the referenced append-only probe is observed, project/adapter/backend/provider/platform/artifact-bound, non-authoritative, and still diagnostic-only. This prerequisite does not make host capability metadata provider-helper readiness, collected OS-enforcement evidence, readiness-review evidence, proof authority, real-Pi evidence, or GA certification.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)

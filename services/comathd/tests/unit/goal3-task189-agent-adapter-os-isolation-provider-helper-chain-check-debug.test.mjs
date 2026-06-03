@@ -8,6 +8,7 @@ import {
   getComathdStatus,
   initProject,
   prepareAgentAdapterOsIsolationSandboxLaunch,
+  probeAgentAdapterOsIsolationProviderHostCapability,
   reviewAgentAdapterOsIsolationReadiness
 } from "../../dist/index.js";
 
@@ -177,6 +178,33 @@ try {
   assert.equal(runner.proof_authority, "none");
   assert.equal(runner.can_certify_ga, false);
 
+  const hostCapability = probeAgentAdapterOsIsolationProviderHostCapability(projectRoot, {
+    project_id: projectId,
+    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0189-CHECK-DEBUG",
+    adapter_id: "codex-cli",
+    backend: "external",
+    actor: `${projectRoot} token=host-capability-secret`,
+    requested_provider: compatibleProvider,
+    host_capability_environment: {
+      platform: "caller-spoofed-platform",
+      notes: `${projectRoot} password=host-capability-secret`
+    }
+  }, {
+    provider_host_capability_probe: (probeInput) => {
+      assert.equal(probeInput.provider, compatibleProvider);
+      assert.equal(probeInput.platform, process.platform);
+      return {
+        probe_source: "service_owned_provider_host_capability_probe",
+        provider_host_capability_available: true,
+        capability_facts: ["task189 chain-check host-validation prerequisite observed"],
+        required_tools: [`${compatibleProvider}-task189-host-probe`],
+        kernel_features: ["task189-provider-host-capability"],
+        diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
+      };
+    }
+  });
+  assert.equal(hostCapability.ok, true, "Task191 requires service-owned host capability before provider-helper chain validation");
+
   const hostRoute = await server.inject({
     method: "POST",
     path: "/agent/adapter/package/os-isolation-provider-helper-host-validation",
@@ -184,6 +212,7 @@ try {
       project_root: projectRoot,
       project_id: projectId,
       host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0189-CHECK-DEBUG",
+      host_capability_probe_id: hostCapability.host_capability_probe_id,
       runner_id: runner.runner_id,
       launch_id: launch.launch_id,
       adapter_id: "codex-cli",
