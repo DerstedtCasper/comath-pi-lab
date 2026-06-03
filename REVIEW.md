@@ -1,3 +1,33 @@
+# Goal 3 Task 200 / Configured Collection Host Capability Binding
+
+Scope: require configured provider-helper collection probes to bind the current provider-helper host-validation artifact and observed provider host-capability probe artifact before canonical OS-isolation evidence can be nested, while preserving non-authority wrapper semantics and Lean-only proof authority.
+
+Changes:
+
+- Added `goal3-task200-agent-adapter-os-isolation-configured-collection-host-capability-binding.test.mjs`.
+- Added host-validation id/path/hash and provider host-capability probe id/path/hash/status fields to configured collection probe fixed argv and stdout binding.
+- Required provider-helper collection to fail closed unless helper execution, host validation, and provider host capability remain mutually bound.
+- Persisted host capability binding metadata in provider-helper collection manifests and audit events.
+- Added `agent_adapter_os_isolation_configured_provider_helper_collection_host_capability_binding`.
+- Registered Task200 in phase0 smoke and GA release criteria.
+- Updated README, AGENTS, TODO, adapter contracts, threat model, config sample, config README, REVIEW, and the Goal 3 tracker wording.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task200 initially exited 1 because `agent_adapter_os_isolation_configured_provider_helper_collection_host_capability_binding` was not present in the service capability ledger; after adding an explicit manifest-field assertion, focused Task200 exited 1 because `provider_helper_collection.host_validation_path` was not persisted.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after implementation.
+- Focused Task200 exited 0 after implementation.
+- Focused Task199 exited 0 after Task200 fixture/contract hardening.
+- Adjacent focused regressions exited 0: Task198, Task197, Task187, and Task191.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task200 discovered by the default runner.
+- Read-only code review found no code-path issues. Read-only documentation review found wording/tracker gaps, and those were repaired before final verification.
+
+Boundary notes: Task200 changes only the configured provider-helper collection probe binding path. A configured collection probe cannot be accepted unless helper execution is collectable, runtime-attested, and still bound to the current service-owned host-validation artifact, and that host-validation artifact is still bound to an observed service-owned provider host-capability probe. Configured probe stdout must bind host-validation id/path/hash, host-capability probe id/path/hash/status, and `provider_host_capability_bound=true`. These bindings are audit and provenance prerequisites only. They do not make host capability metadata readiness evidence by itself, do not make helper collection wrappers readiness evidence, do not provide real-Pi evidence, do not affect mathematical proof authority, and do not certify GA.
+
+Residual risks: Goal 3 remains incomplete. Task200 does not ship built-in production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute container/Nix/Firejail/sandbox-exec tools by default, does not inspect daemon/socket/container/store/profile/sandbox-policy state, does not provide broad cross-platform OS-enforced execution, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA. The focused Task200 negative path covers a configured probe missing the host-capability artifact hash; stale persisted host-validation/hash mismatch tampering remains a future focused hardening target.
+
 # Goal 3 Task 199 / Configured Provider Helper Collection Probe
 
 Scope: make the production provider-helper collection route execute a host-configured service-owned provider collection probe after the runtime-attestation gate, while preserving route payload rejection, non-authority wrappers, and Lean-only proof authority.

@@ -21,7 +21,7 @@ function sha256File(path) {
 }
 
 function createHelperScript(projectRoot) {
-  const helperScript = join(projectRoot, "task199-provider-helper.mjs");
+  const helperScript = join(projectRoot, "task200-provider-helper.mjs");
   writeFileSync(
     helperScript,
     [
@@ -48,8 +48,9 @@ function createHelperScript(projectRoot) {
   return helperScript;
 }
 
-function createCollectionProbeScript(projectRoot) {
-  const collectionProbeScript = join(projectRoot, "task199-provider-helper-collection-probe.mjs");
+function createCollectionProbeScript(projectRoot, { omitHostCapabilityHash = false } = {}) {
+  const suffix = omitHostCapabilityHash ? "missing-host-capability" : "bound-host-capability";
+  const collectionProbeScript = join(projectRoot, `task200-${suffix}-collection-probe.mjs`);
   writeFileSync(
     collectionProbeScript,
     [
@@ -78,7 +79,9 @@ function createCollectionProbeScript(projectRoot) {
       "  host_validation_sha256: valueAfter('--host-validation-sha256'),",
       "  host_capability_probe_id: valueAfter('--host-capability-probe-id'),",
       "  host_capability_probe_path: valueAfter('--host-capability-probe-path'),",
-      "  host_capability_probe_sha256: valueAfter('--host-capability-probe-sha256'),",
+      omitHostCapabilityHash
+        ? "  host_capability_probe_sha256: null,"
+        : "  host_capability_probe_sha256: valueAfter('--host-capability-probe-sha256'),",
       "  host_capability_status: valueAfter('--host-capability-status'),",
       "  provider_host_capability_bound: valueAfter('--provider-host-capability-bound') === 'true',",
       "  collection_source: 'service_owned_os_probe',",
@@ -96,54 +99,39 @@ function createCollectionProbeScript(projectRoot) {
   return collectionProbeScript;
 }
 
-function createInvalidCollectionProbeScript(projectRoot) {
-  const collectionProbeScript = join(projectRoot, "task199-invalid-provider-helper-collection-probe.mjs");
-  writeFileSync(
-    collectionProbeScript,
-    [
-      "const args = process.argv.slice(2);",
-      "const valueAfter = (flag) => { const index = args.indexOf(flag); return index >= 0 ? args[index + 1] : null; };",
-      "const payload = {",
-      "  comath_provider_helper_collection_probe: true,",
-      "  ok: true,",
-      "  provider: process.env.COMATH_OS_ISOLATION_PROVIDER,",
-      "  network_policy: process.env.COMATH_RUNNER_NETWORK,",
-      "  proof_authority: process.env.COMATH_PROOF_AUTHORITY,",
-      "  adapter: process.env.COMATH_ADAPTER_ID,",
-      "  backend: process.env.COMATH_ADAPTER_BACKEND,",
-      "  project_id: process.env.COMATH_PROJECT_ID,",
-      "  collection_id: valueAfter('--collection-id'),",
-      "  helper_execution_id: valueAfter('--helper-execution-id'),",
-      "  runner_id: process.env.COMATH_PROVIDER_RUNNER_ID,",
-      "  launch_id: process.env.COMATH_SANDBOX_LAUNCH_ID,",
-      "  helper_exit_code: Number(valueAfter('--helper-exit-code')),",
-      "  stdout_sha256: '0'.repeat(64),",
-      "  stderr_sha256: valueAfter('--stderr-sha256'),",
-      "  transcript_sha256: valueAfter('--transcript-sha256'),",
-      "  host_validation_id: valueAfter('--host-validation-id'),",
-      "  host_validation_path: valueAfter('--host-validation-path'),",
-      "  host_validation_sha256: valueAfter('--host-validation-sha256'),",
-      "  host_capability_probe_id: valueAfter('--host-capability-probe-id'),",
-      "  host_capability_probe_path: valueAfter('--host-capability-probe-path'),",
-      "  host_capability_probe_sha256: valueAfter('--host-capability-probe-sha256'),",
-      "  host_capability_status: valueAfter('--host-capability-status'),",
-      "  provider_host_capability_bound: valueAfter('--provider-host-capability-bound') === 'true',",
-      "  collection_source: 'service_owned_os_probe',",
-      "  process_isolation_enforced: true,",
-      "  filesystem_scope_enforced: true,",
-      "  network_isolation_enforced: true,",
-      "  no_new_privileges: true,",
-      "  escape_prevention: true",
-      "};",
-      "console.log(JSON.stringify(payload));",
-      "console.error('invalid collection probe stderr ok');"
-    ].join("\n"),
-    "utf8"
-  );
-  return collectionProbeScript;
+async function postCollection(server, projectRoot, projectId, helperExecution, readyRunner, launch, collectionId, actorSecret) {
+  return server.inject({
+    method: "POST",
+    path: "/agent/adapter/package/os-isolation-provider-helper-collection",
+    body: {
+      project_root: projectRoot,
+      project_id: projectId,
+      collection_id: collectionId,
+      helper_execution_id: helperExecution.helper_execution_id,
+      runner_id: readyRunner.runner_id,
+      launch_id: launch.launch_id,
+      adapter_id: "codex-cli",
+      backend: "external",
+      actor: `${projectRoot} token=${actorSecret}`,
+      requested_provider: "windows_appcontainer",
+      collection_environment: {
+        platform: "win32",
+        notes: `${projectRoot} password=${actorSecret}`,
+        process_isolation_enforced: true,
+        filesystem_scope_enforced: true,
+        network_isolation_enforced: true,
+        no_new_privileges: true,
+        escape_prevention: true,
+        adapter_process_exit_code: 0,
+        stdout_sha256: "f".repeat(64),
+        stderr_sha256: "e".repeat(64),
+        transcript_sha256: "d".repeat(64)
+      }
+    }
+  });
 }
 
-const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task199-configured-helper-collection-probe-"));
+const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task200-configured-collection-host-capability-"));
 const probeEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE";
 const probeArgsEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE_ARGS_JSON";
 const previousProbeEnv = process.env[probeEnvVar];
@@ -152,27 +140,29 @@ const previousProbeArgsEnv = process.env[probeArgsEnvVar];
 try {
   assert.equal(
     getComathdStatus().capabilities.includes(
-      "agent_adapter_os_isolation_configured_provider_helper_collection_probe"
+      "agent_adapter_os_isolation_configured_provider_helper_collection_host_capability_binding"
     ),
     true,
-    "Task199 capability ledger must advertise configured provider-helper collection probe execution"
+    "Task200 capability ledger must advertise configured collection probe host-capability binding"
   );
 
   const init = initProject({
-    name: "Goal3 Task199 Adapter OS Isolation Configured Provider Helper Collection Probe",
+    name: "Goal3 Task200 Adapter OS Isolation Configured Collection Host Capability Binding",
     root_path: projectRoot
   });
   const projectId = init.project.project_id;
   const helperScript = createHelperScript(projectRoot);
-  const collectionProbeScript = createCollectionProbeScript(projectRoot);
-  const invalidCollectionProbeScript = createInvalidCollectionProbeScript(projectRoot);
+  const hostBoundCollectionProbeScript = createCollectionProbeScript(projectRoot);
+  const missingHostCapabilityProbeScript = createCollectionProbeScript(projectRoot, {
+    omitHostCapabilityHash: true
+  });
   const helperBinarySha256 = sha256File(process.execPath);
   process.env[probeEnvVar] = process.execPath;
-  process.env[probeArgsEnvVar] = JSON.stringify([collectionProbeScript]);
+  process.env[probeArgsEnvVar] = JSON.stringify([hostBoundCollectionProbeScript]);
 
   const launch = prepareAgentAdapterOsIsolationSandboxLaunch(projectRoot, {
     project_id: projectId,
-    launch_id: "ADAPTER-OSISO-LAUNCH-0199-READY",
+    launch_id: "ADAPTER-OSISO-LAUNCH-0200-READY",
     adapter_id: "codex-cli",
     backend: "external",
     actor: `${projectRoot} token=launch-secret`,
@@ -189,7 +179,7 @@ try {
         probe_source: "service_owned_launcher_preflight",
         provider_available: true,
         launcher_binary_sha256: "a".repeat(64),
-        launcher_version: "appcontainer-launcher-7.0",
+        launcher_version: "appcontainer-launcher-8.0",
         diagnostics: [`${projectRoot} launcher diagnostic must be scrubbed`, "launcher ready"]
       };
     }
@@ -198,7 +188,7 @@ try {
 
   const readyRunner = prepareAgentAdapterOsIsolationProviderRunner(projectRoot, {
     project_id: projectId,
-    runner_id: "ADAPTER-OSISO-RUNNER-0199-READY",
+    runner_id: "ADAPTER-OSISO-RUNNER-0200-READY",
     launch_id: launch.launch_id,
     adapter_id: "codex-cli",
     backend: "external",
@@ -226,7 +216,7 @@ try {
 
   const hostCapability = probeAgentAdapterOsIsolationProviderHostCapability(projectRoot, {
     project_id: projectId,
-    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0199-READY",
+    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0200-READY",
     adapter_id: "codex-cli",
     backend: "external",
     actor: `${projectRoot} token=host-capability-secret`,
@@ -243,9 +233,9 @@ try {
       return {
         probe_source: "service_owned_provider_host_capability_probe",
         provider_host_capability_available: true,
-        capability_facts: ["task199 configured collection probe host prerequisite observed"],
-        required_tools: ["windows_appcontainer-task199-host-probe"],
-        kernel_features: ["task199-provider-host-capability"],
+        capability_facts: ["task200 configured collection host capability prerequisite observed"],
+        required_tools: ["windows_appcontainer-task200-host-probe"],
+        kernel_features: ["task200-provider-host-capability"],
         diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
       };
     }
@@ -254,7 +244,7 @@ try {
 
   const readyHost = validateAgentAdapterOsIsolationProviderHelperHost(projectRoot, {
     project_id: projectId,
-    host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0199-READY",
+    host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0200-READY",
     host_capability_probe_id: hostCapability.host_capability_probe_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
@@ -269,8 +259,8 @@ try {
   }, {
     provider_helper_host_validator: (hostInput) => {
       assert.equal(hostInput.project_root, projectRoot);
-      assert.equal(hostInput.project_id, projectId);
       assert.equal(hostInput.host_capability_probe_id, hostCapability.host_capability_probe_id);
+      assert.equal(hostInput.host_capability_probe_path, hostCapability.host_capability_probe_path);
       assert.equal(hostInput.host_capability_status, "provider_host_capability_observed");
       assert.equal(hostInput.provider, "windows_appcontainer");
       return {
@@ -285,10 +275,12 @@ try {
     }
   });
   assert.equal(readyHost.ok, true);
+  assert.equal(readyHost.provider_host_capability_artifact.path, hostCapability.host_capability_probe_path);
+  assert.match(readyHost.provider_host_capability_artifact.sha256, /^[a-f0-9]{64}$/);
 
   const helperExecution = runAgentAdapterOsIsolationProviderHelperExecution(projectRoot, {
     project_id: projectId,
-    helper_execution_id: "ADAPTER-OSISO-HELPER-0199-READY",
+    helper_execution_id: "ADAPTER-OSISO-HELPER-0200-READY",
     host_validation_id: readyHost.host_validation_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
@@ -306,7 +298,7 @@ try {
     provider_helper_config_resolver: (helperInput) => {
       assert.equal(helperInput.project_root, projectRoot);
       assert.equal(helperInput.project_id, projectId);
-      assert.equal(helperInput.helper_execution_id, "ADAPTER-OSISO-HELPER-0199-READY");
+      assert.equal(helperInput.helper_execution_id, "ADAPTER-OSISO-HELPER-0200-READY");
       assert.equal(helperInput.runner_id, readyRunner.runner_id);
       assert.equal(helperInput.launch_id, launch.launch_id);
       assert.equal(helperInput.provider, "windows_appcontainer");
@@ -323,75 +315,40 @@ try {
   });
   assert.equal(helperExecution.ok, true);
   assert.equal(helperExecution.provider_helper_execution.runtime_attestation_bound, true);
-  assert.notEqual(helperExecution.provider_helper_execution.stdout_sha256, "1".repeat(64));
-  assert.notEqual(helperExecution.provider_helper_execution.stderr_sha256, "2".repeat(64));
+  assert.equal(helperExecution.provider_helper_host_validation_binding.host_capability_probe_id, hostCapability.host_capability_probe_id);
 
   const server = createComathServer();
-  const routeCollection = await server.inject({
-    method: "POST",
-    path: "/agent/adapter/package/os-isolation-provider-helper-collection",
-    body: {
-      project_root: projectRoot,
-      project_id: projectId,
-      collection_id: "ADAPTER-OSISO-HELPER-COLLECT-0199-CONFIGURED",
-      helper_execution_id: helperExecution.helper_execution_id,
-      runner_id: readyRunner.runner_id,
-      launch_id: launch.launch_id,
-      adapter_id: "codex-cli",
-      backend: "external",
-      actor: `${projectRoot} token=route-collector-secret`,
-      requested_provider: "windows_appcontainer",
-      collection_environment: {
-        platform: "win32",
-        notes: `${projectRoot} password=route-collector-secret`,
-        process_isolation_enforced: false,
-        filesystem_scope_enforced: false,
-        network_isolation_enforced: false,
-        no_new_privileges: false,
-        escape_prevention: false,
-        adapter_process_exit_code: 99,
-        stdout_sha256: "f".repeat(64),
-        stderr_sha256: "e".repeat(64),
-        transcript_sha256: "d".repeat(64)
-      }
-    }
-  });
+  const routeCollection = await postCollection(
+    server,
+    projectRoot,
+    projectId,
+    helperExecution,
+    readyRunner,
+    launch,
+    "ADAPTER-OSISO-HELPER-COLLECT-0200-HOST-BOUND",
+    "route-collector-secret"
+  );
 
   assert.equal(routeCollection.status, 200, JSON.stringify(routeCollection.body));
   const collection = routeCollection.body.collection;
-  assert.equal(collection.ok, true, "configured provider-helper collection probe should produce canonical OS evidence");
+  assert.equal(collection.ok, true, "host-capability-bound configured collection probe should produce canonical OS evidence");
   assert.equal(collection.collection_status, "provider_helper_os_evidence_collected");
-  assert.equal(collection.provider_helper_collection.probe_source, "service_owned_provider_helper_collection_probe");
-  assert.equal(collection.provider_helper_collection.hashes_match_helper_execution, true);
+  assert.equal(collection.provider_helper_collection.host_capability_required, true);
+  assert.equal(collection.provider_helper_collection.host_capability_bound, true);
+  assert.equal(collection.provider_helper_collection.host_validation_id, readyHost.host_validation_id);
+  assert.equal(collection.provider_helper_collection.host_validation_path, helperExecution.host_validation_artifact.path);
+  assert.equal(collection.provider_helper_collection.host_validation_sha256, helperExecution.host_validation_artifact.sha256);
+  assert.equal(collection.provider_helper_collection.host_capability_probe_id, hostCapability.host_capability_probe_id);
+  assert.equal(collection.provider_helper_collection.host_capability_probe_path, hostCapability.host_capability_probe_path);
+  assert.equal(collection.provider_helper_collection.host_capability_probe_sha256, readyHost.provider_host_capability_artifact.sha256);
+  assert.equal(collection.provider_helper_collection.host_capability_status, "provider_host_capability_observed");
   assert.equal(collection.provider_helper_collection.os_enforcement_complete, true);
   assert.deepEqual(collection.provider_helper_collection.incomplete_os_enforcement_facts, []);
-  assert.equal(collection.provider_helper_collection.helper_exit_code, 0);
-  assert.equal(
-    collection.provider_helper_collection.stdout_sha256,
-    helperExecution.provider_helper_execution.stdout_sha256,
-    "configured collector must bind service-owned helper stdout hash, not caller payload hash"
-  );
-  assert.equal(collection.provider_helper_collection.stderr_sha256, helperExecution.provider_helper_execution.stderr_sha256);
-  assert.equal(collection.provider_helper_collection.transcript_sha256, helperExecution.provider_helper_execution.transcript_sha256);
-  assert.equal(collection.provider_helper_collection.runtime_attestation_bound, true);
   assert.equal(collection.probe.ok, true);
-  assert.equal(collection.probe.probe_status, "os_isolation_probe_collected");
-  assert.equal(collection.probe.evidence.collection_source, "service_owned_os_probe");
-  assert.equal(collection.probe.evidence.process_isolation_enforced, true);
-  assert.equal(collection.probe.evidence.filesystem_scope_enforced, true);
-  assert.equal(collection.probe.evidence.network_isolation_enforced, true);
-  assert.equal(collection.probe.evidence.no_new_privileges, true);
-  assert.equal(collection.probe.evidence.escape_prevention, true);
-  assert.equal(collection.probe.evidence.stdout_sha256, helperExecution.provider_helper_execution.stdout_sha256);
-  assert.equal(collection.probe.evidence.stderr_sha256, helperExecution.provider_helper_execution.stderr_sha256);
-  assert.equal(collection.probe.evidence.transcript_sha256, helperExecution.provider_helper_execution.transcript_sha256);
   assert.equal(collection.probe.adapter_execution_isolation.os_enforced, true);
-  assert.equal(collection.adapter_execution_isolation.current_boundary, "process_boundary_only");
   assert.equal(collection.adapter_execution_isolation.os_enforced, false);
   assert.equal(collection.proof_authority, "none");
-  assert.equal(collection.can_promote_claim, false);
   assert.equal(collection.can_certify_ga, false);
-  assert.equal(collection.blocker_certificate, null);
   assert.equal(existsSync(join(projectRoot, collection.collection_path)), true);
   assert.equal(existsSync(join(projectRoot, collection.probe.evidence_path)), true);
   assert.equal(JSON.stringify(routeCollection.body).includes(projectRoot), false, "route response must not echo host paths");
@@ -399,74 +356,37 @@ try {
 
   const readiness = reviewAgentAdapterOsIsolationReadiness(projectRoot, {
     project_id: projectId,
-    review_id: "ADAPTER-OSISO-0199-CONFIGURED-HELPER-COLLECTION-READINESS",
+    review_id: "ADAPTER-OSISO-0200-HOST-BOUND-COLLECTION-READINESS",
     adapter_id: "codex-cli",
     backend: "external",
-    actor: "goal3-task199-test",
+    actor: "goal3-task200-test",
     evidence_path: collection.probe.evidence_path
   });
-  assert.equal(readiness.ok, true, "configured complete helper collection evidence should satisfy OS-isolation readiness");
-  assert.equal(readiness.adapter_execution_isolation.os_enforced, true);
+  assert.equal(readiness.ok, true, "complete host-bound configured collection evidence can satisfy OS-isolation readiness");
   assert.equal(readiness.proof_authority, "none");
   assert.equal(readiness.can_certify_ga, false);
 
-  const events = readAuditEvents(projectRoot);
-  assert.equal(
-    events.some(
-      (event) =>
-        event.event_type === "agent_adapter.os_isolation_provider_helper_collected" &&
-        event.payload.collection_id === "ADAPTER-OSISO-HELPER-COLLECT-0199-CONFIGURED" &&
-        event.payload.ok === true &&
-        event.payload.collection_status === "provider_helper_os_evidence_collected" &&
-        event.payload.hashes_match_helper_execution === true &&
-        event.payload.os_enforcement_complete === true &&
-        Array.isArray(event.payload.incomplete_os_enforcement_facts) &&
-        event.payload.incomplete_os_enforcement_facts.length === 0 &&
-        event.payload.proof_authority === "none" &&
-        event.payload.can_certify_ga === false
-    ),
-    true,
-    "configured helper collection evidence must be audit-visible and non-authoritative"
+  process.env[probeArgsEnvVar] = JSON.stringify([missingHostCapabilityProbeScript]);
+  const invalidRouteCollection = await postCollection(
+    server,
+    projectRoot,
+    projectId,
+    helperExecution,
+    readyRunner,
+    launch,
+    "ADAPTER-OSISO-HELPER-COLLECT-0200-MISSING-HOST-CAP",
+    "invalid-collector-secret"
   );
-  assert.equal(JSON.stringify(events).includes(projectRoot), false, "audit events must not echo host paths");
-  assert.equal(JSON.stringify(events).includes("route-collector-secret"), false, "audit events must not echo route secrets");
 
-  process.env[probeArgsEnvVar] = JSON.stringify([invalidCollectionProbeScript]);
-  const invalidRouteCollection = await server.inject({
-    method: "POST",
-    path: "/agent/adapter/package/os-isolation-provider-helper-collection",
-    body: {
-      project_root: projectRoot,
-      project_id: projectId,
-      collection_id: "ADAPTER-OSISO-HELPER-COLLECT-0199-BAD-STDOUT",
-      helper_execution_id: helperExecution.helper_execution_id,
-      runner_id: readyRunner.runner_id,
-      launch_id: launch.launch_id,
-      adapter_id: "codex-cli",
-      backend: "external",
-      actor: `${projectRoot} token=invalid-collector-secret`,
-      requested_provider: "windows_appcontainer",
-      collection_environment: {
-        platform: "win32",
-        notes: `${projectRoot} password=invalid-collector-secret`,
-        process_isolation_enforced: true,
-        filesystem_scope_enforced: true,
-        network_isolation_enforced: true,
-        no_new_privileges: true,
-        escape_prevention: true,
-        adapter_process_exit_code: 0,
-        stdout_sha256: "f".repeat(64),
-        stderr_sha256: "e".repeat(64),
-        transcript_sha256: "d".repeat(64)
-      }
-    }
-  });
   assert.equal(invalidRouteCollection.status, 200, JSON.stringify(invalidRouteCollection.body));
   const invalidCollection = invalidRouteCollection.body.collection;
-  assert.equal(invalidCollection.ok, false, "invalid configured probe stdout binding must fail closed");
+  assert.equal(invalidCollection.ok, false, "configured probe without host capability artifact hash must fail closed");
   assert.equal(invalidCollection.collection_status, "blocked_provider_helper_collection_incomplete_os_enforcement");
   assert.equal(invalidCollection.provider_helper_collection.probe_source, "service_owned_provider_helper_collection_probe");
-  assert.equal(invalidCollection.provider_helper_collection.hashes_match_helper_execution, true);
+  assert.equal(invalidCollection.provider_helper_collection.host_capability_required, true);
+  assert.equal(invalidCollection.provider_helper_collection.host_capability_bound, true);
+  assert.equal(invalidCollection.provider_helper_collection.host_capability_probe_id, hostCapability.host_capability_probe_id);
+  assert.equal(invalidCollection.provider_helper_collection.host_capability_probe_sha256, readyHost.provider_host_capability_artifact.sha256);
   assert.equal(invalidCollection.provider_helper_collection.os_enforcement_complete, false);
   assert.deepEqual(invalidCollection.provider_helper_collection.incomplete_os_enforcement_facts, [
     "process_isolation_enforced",
@@ -475,10 +395,7 @@ try {
     "no_new_privileges",
     "escape_prevention"
   ]);
-  assert.equal(invalidCollection.provider_helper_collection.stdout_sha256, helperExecution.provider_helper_execution.stdout_sha256);
   assert.equal(invalidCollection.probe.ok, false);
-  assert.equal(invalidCollection.probe.probe_status, "blocked_os_isolation_probe_not_collected");
-  assert.equal(invalidCollection.probe.evidence.process_isolation_enforced, false);
   assert.equal(invalidCollection.adapter_execution_isolation.os_enforced, false);
   assert.equal(invalidCollection.proof_authority, "none");
   assert.equal(invalidCollection.can_certify_ga, false);
@@ -488,17 +405,31 @@ try {
 
   const invalidReadiness = reviewAgentAdapterOsIsolationReadiness(projectRoot, {
     project_id: projectId,
-    review_id: "ADAPTER-OSISO-0199-BAD-STDOUT-READINESS",
+    review_id: "ADAPTER-OSISO-0200-MISSING-HOST-CAP-READINESS",
     adapter_id: "codex-cli",
     backend: "external",
-    actor: "goal3-task199-invalid-test",
+    actor: "goal3-task200-invalid-test",
     evidence_path: invalidCollection.probe.evidence_path
   });
-  assert.equal(invalidReadiness.ok, false, "invalid configured collection probe blocker must not satisfy readiness");
+  assert.equal(invalidReadiness.ok, false, "host-capability-unbound configured collection blocker must not satisfy readiness");
+
+  const events = readAuditEvents(projectRoot);
   assert.equal(
-    invalidReadiness.vetoes.some((veto) => veto.code === "adapter_os_process_isolation_missing"),
-    true
+    events.some(
+      (event) =>
+        event.event_type === "agent_adapter.os_isolation_provider_helper_collected" &&
+        event.payload.collection_id === "ADAPTER-OSISO-HELPER-COLLECT-0200-HOST-BOUND" &&
+        event.payload.ok === true &&
+        event.payload.host_capability_bound === true &&
+        event.payload.host_capability_probe_id === hostCapability.host_capability_probe_id &&
+        event.payload.host_capability_status === "provider_host_capability_observed" &&
+        event.payload.proof_authority === "none" &&
+        event.payload.can_certify_ga === false
+    ),
+    true,
+    "host-capability-bound configured helper collection must be audit-visible and non-authoritative"
   );
+  assert.equal(JSON.stringify(events).includes(projectRoot), false, "audit events must not echo host paths");
 } finally {
   if (previousProbeEnv === undefined) {
     delete process.env[probeEnvVar];
@@ -513,4 +444,4 @@ try {
   rmSync(projectRoot, { recursive: true, force: true });
 }
 
-console.log("Goal 3 Task199 agent adapter OS-isolation configured provider-helper collection probe tests passed.");
+console.log("Goal 3 Task200 configured collection host capability binding tests passed.");
