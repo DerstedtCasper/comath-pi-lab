@@ -1,3 +1,33 @@
+# Goal 3 Task 201 / Provider Helper Release Chain Check-Debug
+
+Scope: revalidate the Task190-200 provider host-capability, helper host-validation, helper execution, runtime-attestation, default/configured collection, wrapper-readiness, public wording, route/Pi payload, runtime cleanliness, and release-hardening suite discovery chain, with a new stale host-capability artifact drift regression.
+
+Changes:
+
+- Added `goal3-task201-agent-adapter-os-isolation-provider-helper-release-chain-check-debug.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_helper_release_chain_check_debug`.
+- Added `blocked_provider_helper_collection_host_capability_binding_mismatch`.
+- Required provider-helper collection to re-read the current provider host-capability artifact and compare it to the host-validation binding before configured collection probe output can be accepted.
+- Registered Task201 in phase0 smoke and GA release criteria.
+- Updated README, AGENTS, TODO, adapter contracts, threat model, REVIEW, and the Goal 3 tracker wording.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task201 initially exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_provider_helper_release_chain_check_debug`.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after implementation.
+- Focused Task201 exited 0 after implementation.
+- Adjacent Task190-200 regressions exited 0 after using the correct Pi extension path for Task192.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task201 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- Read-only code review found a stale provider host-capability artifact drift gap; the focused Task201 regression was strengthened to cover that drift, and collection now re-reads the current host-capability artifact before accepting configured probe output.
+- Final read-only review found no issues after checking the current diff, focused Task201, and phase0 smoke. The reviewer did not rerun the full build/typecheck/test or adjacent Task190-200 suite; those gates were run by the main thread above.
+
+Boundary notes: Task201 is release-hardening and check-debug coverage only. It makes stale provider host-capability artifacts or stale host-validation bindings fail closed before configured collection can write nested canonical evidence. It preserves the existing non-authority wrapper semantics and Lean-only proof-authority boundary.
+
+Residual risks: Goal 3 remains incomplete. Task201 does not ship built-in production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute container/Nix/Firejail/sandbox-exec tools by default, does not inspect daemon/socket/container/store/profile/sandbox-policy state, does not provide broad cross-platform OS-enforced execution, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 200 / Configured Collection Host Capability Binding
 
 Scope: require configured provider-helper collection probes to bind the current provider-helper host-validation artifact and observed provider host-capability probe artifact before canonical OS-isolation evidence can be nested, while preserving non-authority wrapper semantics and Lean-only proof authority.

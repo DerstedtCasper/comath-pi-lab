@@ -237,6 +237,8 @@ Task199 adds host-configured service-owned provider-helper collection probe exec
 
 Task200 tightens the configured provider-helper collection probe contract: collection cannot run unless the helper execution remains bound to its current service-owned host-validation artifact and that host-validation artifact remains bound to an observed provider host-capability probe. Configured probe stdout must bind host-validation id/path/hash, host-capability probe id/path/hash, observed host-capability status, and `provider_host_capability_bound=true`; omissions or mismatches fail closed to replayable blockers. These bindings are audit/provenance prerequisites only, not readiness evidence by themselves, not proof authority, not real-Pi evidence, and not GA certification.
 
+Task201 revalidates the Task190-200 provider-helper release chain as a check-debug guard. It makes stale provider host-capability artifacts, stale host-validation bindings, helper release chain discovery gaps, public wording drift, route/Pi payload overclaims, runtime residue, and wrapper-readiness confusion fail closed or fail tests. This remains release-hardening coverage only: it does not make host capability metadata, host-validation artifacts, helper executions, collection wrappers, docs, or smoke registration readiness evidence by themselves, proof authority, real-Pi evidence, or GA certification.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

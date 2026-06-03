@@ -414,6 +414,7 @@ export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "blocked_provider_helper_execution_binding_mismatch"
   | "blocked_provider_helper_execution_not_attempted"
   | "blocked_provider_helper_runtime_attestation_missing"
+  | "blocked_provider_helper_collection_host_capability_binding_mismatch"
   | "blocked_provider_helper_collection_hash_mismatch"
   | "blocked_provider_helper_collection_incomplete_os_enforcement"
   | "blocked_provider_helper_collection_not_collected";
@@ -3614,6 +3615,10 @@ function providerHelperCollectionHostCapabilityBinding(input: {
     artifact: AgentAdapterOsIsolationProviderHelperHostValidationArtifact;
     hostValidation: AgentAdapterOsIsolationProviderHelperHostValidation;
   } | null;
+  hostCapabilityBundle: {
+    artifact: AgentAdapterOsIsolationProviderHostCapabilityArtifact;
+    hostCapability: AgentAdapterOsIsolationProviderHostCapabilityManifest;
+  } | null;
 }): {
   bound: boolean;
   host_validation_id: string | null;
@@ -3627,7 +3632,9 @@ function providerHelperCollectionHostCapabilityBinding(input: {
   const helperExecution = input.helperExecution;
   const hostValidation = input.hostValidationBundle?.hostValidation;
   const hostValidationArtifact = input.hostValidationBundle?.artifact;
-  const hostCapabilityArtifact = hostValidation?.provider_host_capability_artifact;
+  const hostCapabilityArtifact = input.hostCapabilityBundle?.artifact;
+  const hostCapability = input.hostCapabilityBundle?.hostCapability;
+  const hostValidationCapabilityArtifact = hostValidation?.provider_host_capability_artifact;
   const hostCapabilityProbeId = hostValidation?.host_capability_probe_id ?? null;
   const hostCapabilityStatus = hostValidation?.provider_host_capability_binding.host_capability_status ?? null;
   const hostValidationId = helperExecution?.host_validation_id ?? null;
@@ -3656,11 +3663,32 @@ function providerHelperCollectionHostCapabilityBinding(input: {
       hostValidation.provider_host_capability_binding.provider === helperExecution.provider &&
       hostValidation.provider_host_capability_binding.host_capability_probe_id === hostCapabilityProbeId &&
       hostCapabilityStatus === "provider_host_capability_observed" &&
+      hostCapability &&
+      hostCapability.schema_version === "comath.agent_adapter_os_isolation_provider_host_capability_probe.v1" &&
+      hostCapability.host_capability_probe_id === hostCapabilityProbeId &&
+      hostCapability.project_id === helperExecution.project_id &&
+      hostCapability.adapter_id === helperExecution.adapter_id &&
+      hostCapability.backend === helperExecution.backend &&
+      hostCapability.provider === helperExecution.provider &&
+      hostCapability.ok === true &&
+      hostCapability.host_capability_status === hostCapabilityStatus &&
+      hostCapability.provider_host_capability_available === true &&
+      hostCapability.host_capability_probe_path === hostCapabilityPath &&
+      hostCapability.provider_host_capability.probe_source === "service_owned_provider_host_capability_probe" &&
+      hostCapability.provider_host_capability.provider_host_capability_available === true &&
+      hostCapability.provider_host_capability.proof_authority === "none" &&
+      hostCapability.proof_authority === "none" &&
+      hostCapability.can_promote_claim === false &&
+      hostCapability.can_certify_ga === false &&
       helperExecution.provider_helper_host_validation_binding.host_capability_probe_id === hostCapabilityProbeId &&
       helperExecution.provider_helper_host_validation_binding.host_capability_status === hostCapabilityStatus &&
       hostCapabilityArtifact?.kind === "agent_adapter_os_isolation_provider_host_capability_probe" &&
       hostCapabilityArtifact.path === hostCapabilityPath &&
-      isSha256(hostCapabilityArtifact.sha256)
+      isSha256(hostCapabilityArtifact.sha256) &&
+      hostValidationCapabilityArtifact?.kind === "agent_adapter_os_isolation_provider_host_capability_probe" &&
+      hostValidationCapabilityArtifact.path === hostCapabilityArtifact.path &&
+      hostValidationCapabilityArtifact.sha256 === hostCapabilityArtifact.sha256 &&
+      hostValidationCapabilityArtifact.size_bytes === hostCapabilityArtifact.size_bytes
   );
   return {
     bound,
@@ -3933,6 +3961,7 @@ function providerHelperCollectionStatus(input: {
   helperExecutionPresent: boolean;
   helperExecutionCollectable: boolean;
   runtimeAttestationBound: boolean;
+  hostCapabilityBound: boolean;
   bindingMatches: boolean;
   collectionPresent: boolean;
   collectionSourceAccepted: boolean;
@@ -3951,6 +3980,9 @@ function providerHelperCollectionStatus(input: {
   }
   if (!input.runtimeAttestationBound) {
     return "blocked_provider_helper_runtime_attestation_missing";
+  }
+  if (!input.hostCapabilityBound) {
+    return "blocked_provider_helper_collection_host_capability_binding_mismatch";
   }
   if (input.collectionPresent && input.collectionSourceAccepted && !input.hashesMatch) {
     return "blocked_provider_helper_collection_hash_mismatch";
@@ -3977,6 +4009,9 @@ function providerHelperCollectionReplayableNextAction(
   }
   if (status === "blocked_provider_helper_runtime_attestation_missing") {
     return "Repair the service-owned provider helper so its runtime stdout attestation binds the current project, helper execution, runner, launch, adapter, backend, provider, network policy, and proof-authority boundary.";
+  }
+  if (status === "blocked_provider_helper_collection_host_capability_binding_mismatch") {
+    return "Re-run the provider host-capability probe, provider-helper host validation, and helper execution chain so collection binds the current host-validation and provider host-capability artifacts before any configured OS-enforcement probe is accepted.";
   }
   if (status === "blocked_provider_helper_collection_hash_mismatch") {
     return "Re-run the service-owned provider-helper collection probe so exit/stdout/stderr/transcript hashes exactly match the helper execution manifest.";
@@ -5057,6 +5092,13 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
   const hostValidationBundle = helperExecution?.host_validation_id
     ? readProviderHelperHostValidationArtifact(projectRoot, helperExecution.host_validation_id)
     : null;
+  const hostCapabilityProbeId =
+    hostValidationBundle?.hostValidation.host_capability_probe_id ??
+    helperExecution?.provider_helper_host_validation_binding.host_capability_probe_id ??
+    null;
+  const hostCapabilityBundle = hostCapabilityProbeId
+    ? readProviderHostCapabilityProbeArtifact(projectRoot, hostCapabilityProbeId)
+    : null;
   const { requestedProvider, knownProvider } = normalizeRequestedProvider(
     input.requested_provider ?? helperExecution?.requested_provider ?? runnerBundle?.runner.requested_provider
   );
@@ -5104,7 +5146,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
   const runtimeAttestationBound = providerHelperExecutionRuntimeAttestationBound(helperExecution);
   const hostCapabilityBinding = providerHelperCollectionHostCapabilityBinding({
     helperExecution,
-    hostValidationBundle
+    hostValidationBundle,
+    hostCapabilityBundle
   });
   const canCollectFromHelperExecution =
     bindingMatches && helperExecutionCollectable && runtimeAttestationBound && hostCapabilityBinding.bound;
@@ -5168,6 +5211,7 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     helperExecutionPresent: Boolean(helperExecution),
     helperExecutionCollectable,
     runtimeAttestationBound,
+    hostCapabilityBound: hostCapabilityBinding.bound,
     bindingMatches,
     collectionPresent: Boolean(collection),
     collectionSourceAccepted,
