@@ -2650,6 +2650,37 @@ function providerHelperFixedArgs(input: {
   ];
 }
 
+function providerHelperCollectionProbeFixedArgs(input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput): string[] {
+  return [
+    "--provider",
+    input.provider,
+    "--runner-id",
+    input.runner_id,
+    "--launch-id",
+    input.launch_id,
+    "--collection-id",
+    input.collection_id,
+    "--helper-execution-id",
+    input.helper_execution_id,
+    "--adapter-id",
+    input.adapter_id,
+    "--backend",
+    input.backend,
+    "--network-policy",
+    "disabled",
+    "--proof-authority",
+    "none",
+    "--helper-exit-code",
+    String(input.helper_exit_code),
+    "--stdout-sha256",
+    input.stdout_sha256,
+    "--stderr-sha256",
+    input.stderr_sha256,
+    "--transcript-sha256",
+    input.transcript_sha256
+  ];
+}
+
 function providerHelperSelfTestFixedArgs(input: {
   hostValidationId: string;
   runnerId: string;
@@ -2713,6 +2744,40 @@ function providerHelperArgsEnvVar(provider: AgentAdapterOsIsolationProvider): st
   }
 }
 
+function providerHelperCollectionProbeProgramEnvVar(provider: AgentAdapterOsIsolationProvider): string {
+  switch (provider) {
+    case "oci_container":
+      return "COMATH_AGENT_ADAPTER_OSISO_OCI_COLLECTION_PROBE";
+    case "nix_sandbox":
+      return "COMATH_AGENT_ADAPTER_OSISO_NIX_COLLECTION_PROBE";
+    case "firejail":
+      return "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_COLLECTION_PROBE";
+    case "windows_appcontainer":
+      return "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE";
+    case "macos_sandbox_exec":
+      return "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_COLLECTION_PROBE";
+    default:
+      return "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_COLLECTION_PROBE";
+  }
+}
+
+function providerHelperCollectionProbeArgsEnvVar(provider: AgentAdapterOsIsolationProvider): string {
+  switch (provider) {
+    case "oci_container":
+      return "COMATH_AGENT_ADAPTER_OSISO_OCI_COLLECTION_PROBE_ARGS_JSON";
+    case "nix_sandbox":
+      return "COMATH_AGENT_ADAPTER_OSISO_NIX_COLLECTION_PROBE_ARGS_JSON";
+    case "firejail":
+      return "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_COLLECTION_PROBE_ARGS_JSON";
+    case "windows_appcontainer":
+      return "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE_ARGS_JSON";
+    case "macos_sandbox_exec":
+      return "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_COLLECTION_PROBE_ARGS_JSON";
+    default:
+      return "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_COLLECTION_PROBE_ARGS_JSON";
+  }
+}
+
 function configuredHelperArgsPrefix(provider: AgentAdapterOsIsolationProvider): {
   ok: boolean;
   args: string[];
@@ -2755,6 +2820,53 @@ function configuredHelperArgsPrefix(provider: AgentAdapterOsIsolationProvider): 
     configured_env_var: configuredEnvVar,
     diagnostics: [
       `${configuredEnvVar ?? providerEnvVar} resolved to ${args.length} fixed service-owned helper argument(s).`
+    ]
+  };
+}
+
+function configuredProviderHelperCollectionProbeArgsPrefix(provider: AgentAdapterOsIsolationProvider): {
+  ok: boolean;
+  args: string[];
+  configured_env_var: string | null;
+  diagnostics: string[];
+} {
+  const providerEnvVar = providerHelperCollectionProbeArgsEnvVar(provider);
+  const fallbackEnvVar = "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_COLLECTION_PROBE_ARGS_JSON";
+  const configuredArgs = process.env[providerEnvVar] ?? process.env[fallbackEnvVar];
+  const configuredEnvVar = process.env[providerEnvVar] !== undefined
+    ? providerEnvVar
+    : process.env[fallbackEnvVar] !== undefined
+      ? fallbackEnvVar
+      : null;
+  if (!configuredArgs) {
+    return { ok: true, args: [], configured_env_var: null, diagnostics: [] };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(configuredArgs);
+  } catch {
+    return {
+      ok: false,
+      args: [],
+      configured_env_var: configuredEnvVar,
+      diagnostics: [`${configuredEnvVar ?? providerEnvVar} must be a JSON string array.`]
+    };
+  }
+  const args = sanitizeHelperArgsPrefix(parsed);
+  if (!Array.isArray(parsed) || args.length !== parsed.length) {
+    return {
+      ok: false,
+      args: [],
+      configured_env_var: configuredEnvVar,
+      diagnostics: [`${configuredEnvVar ?? providerEnvVar} must contain only bounded string arguments.`]
+    };
+  }
+  return {
+    ok: true,
+    args,
+    configured_env_var: configuredEnvVar,
+    diagnostics: [
+      `${configuredEnvVar ?? providerEnvVar} resolved to ${args.length} fixed service-owned collection probe argument(s).`
     ]
   };
 }
@@ -3571,8 +3683,9 @@ function providerHelperCollectionForProbe(input: {
   };
 }
 
-function defaultProviderHelperCollectionProbe(
-  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+function incompleteProviderHelperCollectionProbe(
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput,
+  diagnostics: string[]
 ): AgentAdapterOsIsolationProviderHelperCollection {
   return {
     probe_source: "service_owned_provider_helper_collection_probe",
@@ -3586,10 +3699,124 @@ function defaultProviderHelperCollectionProbe(
     stdout_sha256: input.stdout_sha256,
     stderr_sha256: input.stderr_sha256,
     transcript_sha256: input.transcript_sha256,
-    diagnostics: [
-      "Default provider-helper collection probe bound service-owned helper execution hashes only; provider-specific OS-enforcement probe is still required."
-    ]
+    diagnostics
   };
+}
+
+function providerHelperCollectionProbeStdoutAccepted(
+  parsed: Record<string, unknown> | null,
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): boolean {
+  return Boolean(
+    parsed &&
+      parsed.comath_provider_helper_collection_probe === true &&
+      parsed.ok === true &&
+      parsed.provider === input.provider &&
+      parsed.network_policy === "disabled" &&
+      parsed.proof_authority === "none" &&
+      parsed.adapter === input.adapter_id &&
+      parsed.backend === input.backend &&
+      parsed.project_id === input.project_id &&
+      parsed.collection_id === input.collection_id &&
+      parsed.helper_execution_id === input.helper_execution_id &&
+      parsed.runner_id === input.runner_id &&
+      parsed.launch_id === input.launch_id &&
+      parsed.helper_exit_code === input.helper_exit_code &&
+      parsed.collection_source === "service_owned_os_probe" &&
+      isSha256(parsed.stdout_sha256) &&
+      isSha256(parsed.stderr_sha256) &&
+      isSha256(parsed.transcript_sha256) &&
+      parsed.stdout_sha256.toLowerCase() === input.stdout_sha256.toLowerCase() &&
+      parsed.stderr_sha256.toLowerCase() === input.stderr_sha256.toLowerCase() &&
+      parsed.transcript_sha256.toLowerCase() === input.transcript_sha256.toLowerCase()
+  );
+}
+
+function configuredProviderHelperCollectionProbe(
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): AgentAdapterOsIsolationProviderHelperCollection | null {
+  const providerEnvVar = providerHelperCollectionProbeProgramEnvVar(input.provider);
+  const fallbackEnvVar = "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_COLLECTION_PROBE";
+  const configuredProgram = process.env[providerEnvVar] ?? process.env[fallbackEnvVar];
+  const configuredEnvVar = process.env[providerEnvVar] !== undefined
+    ? providerEnvVar
+    : process.env[fallbackEnvVar] !== undefined
+      ? fallbackEnvVar
+      : null;
+  if (!configuredProgram) {
+    return null;
+  }
+  if (!isAbsolute(configuredProgram)) {
+    return incompleteProviderHelperCollectionProbe(input, [
+      `${configuredEnvVar ?? providerEnvVar} must be an absolute path.`
+    ]);
+  }
+  if (!existsSync(configuredProgram) || !statSync(configuredProgram).isFile()) {
+    return incompleteProviderHelperCollectionProbe(input, [
+      `${configuredEnvVar ?? providerEnvVar} does not point to an existing file.`
+    ]);
+  }
+  const configuredArgs = configuredProviderHelperCollectionProbeArgsPrefix(input.provider);
+  if (!configuredArgs.ok) {
+    return incompleteProviderHelperCollectionProbe(input, configuredArgs.diagnostics);
+  }
+  const fixedArgs = providerHelperCollectionProbeFixedArgs(input);
+  const env = providerHelperEnv({
+    projectId: input.project_id,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend: input.backend,
+    provider: input.provider
+  });
+  const spawned = spawnSync(configuredProgram, [...configuredArgs.args, ...fixedArgs], {
+    cwd: input.project_root,
+    env,
+    encoding: "utf8",
+    shell: false,
+    timeout: 10_000
+  });
+  const stdout = typeof spawned.stdout === "string" ? spawned.stdout : "";
+  const stderr = typeof spawned.stderr === "string" ? spawned.stderr : "";
+  const exitCode = typeof spawned.status === "number" ? spawned.status : null;
+  const spawnError = spawned.error as (Error & { code?: string }) | undefined;
+  const timedOut = spawnError?.code === "ETIMEDOUT";
+  const parsed = parseFirstJsonLine(stdout);
+  const accepted = !spawnError && exitCode === 0 && providerHelperCollectionProbeStdoutAccepted(parsed, input);
+  const baseDiagnostics = [
+    `${configuredEnvVar ?? providerEnvVar} resolved to a service-owned provider-helper collection probe executable.`,
+    ...configuredArgs.diagnostics,
+    accepted
+      ? `Configured provider-helper collection probe passed with exit_code=${exitCode}.`
+      : `Configured provider-helper collection probe failed binding validation with exit_code=${exitCode ?? "null"}.`,
+    timedOut ? "Configured provider-helper collection probe timed out." : undefined,
+    spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined
+  ].filter((entry): entry is string => Boolean(entry));
+  if (!accepted || !parsed) {
+    return incompleteProviderHelperCollectionProbe(input, baseDiagnostics);
+  }
+  return {
+    probe_source: "service_owned_provider_helper_collection_probe",
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: parsed.process_isolation_enforced === true,
+    filesystem_scope_enforced: parsed.filesystem_scope_enforced === true,
+    network_isolation_enforced: parsed.network_isolation_enforced === true,
+    no_new_privileges: parsed.no_new_privileges === true,
+    escape_prevention: parsed.escape_prevention === true,
+    adapter_process_exit_code: input.helper_exit_code,
+    stdout_sha256: input.stdout_sha256,
+    stderr_sha256: input.stderr_sha256,
+    transcript_sha256: input.transcript_sha256,
+    diagnostics: baseDiagnostics
+  };
+}
+
+function defaultProviderHelperCollectionProbe(
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): AgentAdapterOsIsolationProviderHelperCollection {
+  return configuredProviderHelperCollectionProbe(input) ?? incompleteProviderHelperCollectionProbe(input, [
+    "Default provider-helper collection probe bound service-owned helper execution hashes only; provider-specific OS-enforcement probe is still required."
+  ]);
 }
 
 function providerHelperCollectionStatus(input: {

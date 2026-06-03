@@ -365,6 +365,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task177-agent-adapter-os-isolation-provider-helper-collection.test.mjs",
   "goal3-task197-agent-adapter-os-isolation-provider-helper-collection-complete-enforcement-gate.test.mjs",
   "goal3-task198-agent-adapter-os-isolation-provider-helper-default-collection-probe.test.mjs",
+  "goal3-task199-agent-adapter-os-isolation-configured-provider-helper-collection-probe.test.mjs",
   "goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs",
   "goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs",
   "goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs",
@@ -419,7 +420,19 @@ for (const envName of [
   "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER",
   "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER_ARGS_JSON",
   "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
-  "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON"
+  "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_OCI_COLLECTION_PROBE",
+  "COMATH_AGENT_ADAPTER_OSISO_OCI_COLLECTION_PROBE_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_NIX_COLLECTION_PROBE",
+  "COMATH_AGENT_ADAPTER_OSISO_NIX_COLLECTION_PROBE_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_COLLECTION_PROBE",
+  "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_COLLECTION_PROBE_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE",
+  "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_COLLECTION_PROBE",
+  "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_COLLECTION_PROBE_ARGS_JSON",
+  "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_COLLECTION_PROBE",
+  "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_COLLECTION_PROBE_ARGS_JSON"
 ]) {
   if (!sampleConfig.includes(envName)) {
     invariantFailures.push(`sample config must expose ${envName} as a host-only configuration handle`);

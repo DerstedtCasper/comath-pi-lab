@@ -1,3 +1,32 @@
+# Goal 3 Task 199 / Configured Provider Helper Collection Probe
+
+Scope: make the production provider-helper collection route execute a host-configured service-owned provider collection probe after the runtime-attestation gate, while preserving route payload rejection, non-authority wrappers, and Lean-only proof authority.
+
+Changes:
+
+- Added `goal3-task199-agent-adapter-os-isolation-configured-provider-helper-collection-probe.test.mjs`, covering the complete configured probe path and an invalid-stdout binding fail-closed path.
+- Added provider-specific `*_COLLECTION_PROBE` and `*_COLLECTION_PROBE_ARGS_JSON` handles plus fallback provider-helper collection probe handles.
+- Added default-route execution for configured collection probes with `shell=false`, fixed argv/env, disabled-network `proof_authority=none`, stdout JSON binding, and fail-closed incomplete blocker fallback.
+- Added `agent_adapter_os_isolation_configured_provider_helper_collection_probe`.
+- Registered Task199 in phase0 smoke and GA release criteria.
+- Updated README, AGENTS, TODO, adapter contracts, GA release criteria, config sample, and config README wording.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task199 exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_configured_provider_helper_collection_probe`.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after implementation.
+- Focused Task199 exited 0, including the complete configured probe path and invalid stdout hash-binding fail-closed regression.
+- Adjacent focused regressions exited 0: Task182, Task187, Task197, and Task198.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task199 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- Read-only subagent review found no code-path issues in the core implementation/test. It noted missing explicit negative coverage for invalid configured probe outcomes; an invalid stdout hash-binding fail-closed regression was added and focused Task199 was rerun successfully.
+
+Boundary notes: Task199 changes only the production route/no-injected-callback provider-helper collection path after the Task187 runtime-attestation gate. Configured collection probes must be service-owned executables with bounded JSON args prefixes, fixed argv/env, `shell=false`, and stdout JSON binding to project, collection, helper execution, runner, launch, adapter, backend, provider, helper exit code, and helper stdout/stderr/transcript hashes. Caller collection booleans/hashes remain ignored. Invalid, missing, or incomplete configured probes remain replayable blockers. A complete configured probe can make the nested canonical probe/evidence artifact satisfy OS-isolation readiness, but the collection wrapper itself stays `adapter_execution_isolation.os_enforced=false`, `proof_authority="none"`, `can_promote_claim=false`, and `can_certify_ga=false`.
+
+Residual risks: Goal 3 remains incomplete. Task199 does not ship built-in production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute container/Nix/Firejail/sandbox-exec tools by default, does not provide broad cross-platform OS-enforced execution, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 198 / Default Provider Helper Collection Probe
 
 Scope: make the production provider-helper collection route/no-injected-callback path write service-owned, hash-bound blocker evidence after a collectable runtime-attested helper execution, while preserving non-authority and readiness rejection.
