@@ -231,6 +231,8 @@ Task196 completes the remaining default host facility diagnostic matrix for Nix 
 
 Task197 tightens provider-helper collection semantics: matching helper exit/stdout/stderr/transcript hashes and a service-owned callback are not sufficient unless the callback also reports service-owned collection source, helper exit `0`, and complete process/filesystem/network/no-new-privileges/escape-prevention facts. Hash-bound incomplete collection facts produce `blocked_provider_helper_collection_incomplete_os_enforcement`, remain non-authoritative, and cannot satisfy adapter OS-isolation readiness.
 
+Task198 makes the production route/no-injected-callback path use a service-owned default provider-helper collection probe after the Task187 runtime-attestation gate. The default probe binds only the persisted helper exit/stdout/stderr/transcript hashes and records false OS-enforcement facts, so it writes replayable blocker evidence under `blocked_provider_helper_collection_incomplete_os_enforcement` rather than readiness evidence. Caller collection booleans/hashes remain ignored, wrappers keep `adapter_execution_isolation.os_enforced=false`, and only a later provider-specific complete service-owned OS probe can satisfy readiness.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

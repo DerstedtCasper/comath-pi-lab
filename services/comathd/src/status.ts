@@ -91,6 +91,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_adapter_os_isolation_configured_provider_helper_execution_asset",
       "agent_adapter_os_isolation_provider_helper_collection",
       "agent_adapter_os_isolation_provider_helper_collection_complete_enforcement_gate",
+      "agent_adapter_os_isolation_provider_helper_default_collection_probe",
       "agent_adapter_os_isolation_provider_helper_execution",
       "agent_adapter_os_isolation_provider_helper_host_validation",
       "agent_adapter_os_isolation_provider_runner_contract",

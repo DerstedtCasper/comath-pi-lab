@@ -343,9 +343,11 @@ try {
   assert.equal(callerOnlyRoute.status, 200, JSON.stringify(callerOnlyRoute.body));
   assert.equal(
     callerOnlyRoute.body.collection.collection_status,
-    "blocked_provider_helper_collection_not_collected",
-    "route callers cannot self-collect provider-helper OS evidence"
+    "blocked_provider_helper_collection_incomplete_os_enforcement",
+    "route callers cannot self-collect provider-helper OS evidence; the default collector only records an incomplete blocker"
   );
+  assert.equal(callerOnlyRoute.body.collection.provider_helper_collection.hashes_match_helper_execution, true);
+  assert.equal(callerOnlyRoute.body.collection.provider_helper_collection.os_enforcement_complete, false);
   assert.equal(callerOnlyRoute.body.collection.probe.ok, false);
   assert.equal(callerOnlyRoute.body.collection.adapter_execution_isolation.os_enforced, false);
   assert.equal(callerOnlyRoute.body.collection.can_certify_ga, false);

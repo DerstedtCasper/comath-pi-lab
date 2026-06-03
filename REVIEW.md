@@ -1,3 +1,33 @@
+# Goal 3 Task 198 / Default Provider Helper Collection Probe
+
+Scope: make the production provider-helper collection route/no-injected-callback path write service-owned, hash-bound blocker evidence after a collectable runtime-attested helper execution, while preserving non-authority and readiness rejection.
+
+Changes:
+
+- Added `goal3-task198-agent-adapter-os-isolation-provider-helper-default-collection-probe.test.mjs`.
+- Added internal default provider-helper collection probe behavior for `collectAgentAdapterOsIsolationProviderHelperExecutionEvidence()` when no injected probe is supplied.
+- Added `agent_adapter_os_isolation_provider_helper_default_collection_probe`.
+- Migrated public route/no-callback expectations in Task177, Task182, Task188, and Task189 from generic no-collection to incomplete OS-enforcement blocker semantics.
+- Registered Task198 in phase0 smoke and GA release criteria.
+- Updated README, AGENTS, TODO, adapter contracts, GA release criteria, and threat model wording.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task198 exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_provider_helper_default_collection_probe`.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after implementation.
+- Focused Task198 exited 0.
+- Adjacent focused regressions exited 0: Task177, Task182, Task187, Task188, Task189, and Task197.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task198 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task198 changes the production route/no-injected-callback result only after helper execution is already collectable and runtime-attested. The default probe binds persisted helper exit/stdout/stderr/transcript hashes and records false OS-enforcement facts, so it emits `blocked_provider_helper_collection_incomplete_os_enforcement` blocker evidence rather than collected OS-enforcement evidence. Caller collection booleans/hashes remain ignored, the Task187 runtime-attestation gate still blocks before probe writing, wrapper manifests keep `adapter_execution_isolation.os_enforced=false`, and readiness still requires a later provider-specific complete service-owned OS probe.
+
+Residual risks: Goal 3 remains incomplete. Task198 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute adapters under OS enforcement, does not make default blocker evidence readiness evidence, does not broaden Lean/mathlib replay, does not provide durable long-lived operator transport, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 197 / Provider Helper Collection Complete Enforcement Gate
 
 Scope: make provider-helper collection fail closed when an internal service-owned callback is hash-bound to the helper execution but reports incomplete OS-enforcement facts, while preserving canonical blocker evidence and non-authority semantics.
@@ -24,7 +54,7 @@ Verification:
 - `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
 - `Test-Path -LiteralPath ".comath"` returned `False`.
 
-Boundary notes: Task197 only distinguishes service-owned hash-bound collection callbacks with incomplete OS-enforcement facts from generic no-collection cases. It preserves route/no-callback `blocked_provider_helper_collection_not_collected`, preserves the Task187 runtime-attestation gate, leaves incomplete canonical probe/evidence as readiness blockers, and keeps helper collection wrappers non-authoritative with `adapter_execution_isolation.os_enforced=false`, `proof_authority="none"`, `can_promote_claim=false`, and `can_certify_ga=false`.
+Boundary notes: Task197 only distinguished service-owned hash-bound collection callbacks with incomplete OS-enforcement facts from generic no-collection cases before Task198 introduced a default route collector. It preserves the Task187 runtime-attestation gate, leaves incomplete canonical probe/evidence as readiness blockers, and keeps helper collection wrappers non-authoritative with `adapter_execution_isolation.os_enforced=false`, `proof_authority="none"`, `can_promote_claim=false`, and `can_certify_ga=false`.
 
 Residual risks: Goal 3 remains incomplete. Task197 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute adapters under OS enforcement, does not broaden Lean/mathlib replay, does not provide durable long-lived operator transport, does not complete fully interactive real-Pi execution, and does not certify GA.
 

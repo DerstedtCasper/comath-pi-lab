@@ -347,7 +347,9 @@ try {
   assert.equal(routeCollection.status, 200, JSON.stringify(routeCollection.body));
   const publicCollection = routeCollection.body.collection;
   assert.equal(publicCollection.ok, false, "public route callers cannot self-collect provider-helper OS evidence");
-  assert.equal(publicCollection.collection_status, "blocked_provider_helper_collection_not_collected");
+  assert.equal(publicCollection.collection_status, "blocked_provider_helper_collection_incomplete_os_enforcement");
+  assert.equal(publicCollection.provider_helper_collection.hashes_match_helper_execution, true);
+  assert.equal(publicCollection.provider_helper_collection.os_enforcement_complete, false);
   assert.equal(publicCollection.adapter_execution_isolation.os_enforced, false);
   assert.equal(publicCollection.proof_authority, "none");
   assert.equal(publicCollection.can_certify_ga, false);

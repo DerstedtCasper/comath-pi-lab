@@ -346,9 +346,11 @@ try {
   assert.equal(routeCollection.status, 200, JSON.stringify(routeCollection.body));
   assert.equal(
     routeCollection.body.collection.collection_status,
-    "blocked_provider_helper_collection_not_collected",
-    "public route callers cannot turn helper execution into collected OS evidence"
+    "blocked_provider_helper_collection_incomplete_os_enforcement",
+    "public route callers cannot turn helper execution into collected OS evidence; the default collector only records an incomplete blocker"
   );
+  assert.equal(routeCollection.body.collection.provider_helper_collection.hashes_match_helper_execution, true);
+  assert.equal(routeCollection.body.collection.provider_helper_collection.os_enforcement_complete, false);
   assert.equal(routeCollection.body.collection.adapter_execution_isolation.os_enforced, false);
   assert.equal(routeCollection.body.collection.can_certify_ga, false);
   assert.equal(JSON.stringify(routeCollection.body).includes(projectRoot), false, "collection route response must not echo host paths");

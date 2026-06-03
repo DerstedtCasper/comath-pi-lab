@@ -3571,6 +3571,27 @@ function providerHelperCollectionForProbe(input: {
   };
 }
 
+function defaultProviderHelperCollectionProbe(
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): AgentAdapterOsIsolationProviderHelperCollection {
+  return {
+    probe_source: "service_owned_provider_helper_collection_probe",
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: false,
+    filesystem_scope_enforced: false,
+    network_isolation_enforced: false,
+    no_new_privileges: false,
+    escape_prevention: false,
+    adapter_process_exit_code: input.helper_exit_code,
+    stdout_sha256: input.stdout_sha256,
+    stderr_sha256: input.stderr_sha256,
+    transcript_sha256: input.transcript_sha256,
+    diagnostics: [
+      "Default provider-helper collection probe bound service-owned helper execution hashes only; provider-specific OS-enforcement probe is still required."
+    ]
+  };
+}
+
 function providerHelperCollectionStatus(input: {
   helperExecutionPresent: boolean;
   helperExecutionCollectable: boolean;
@@ -4742,8 +4763,10 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
 
   const runtimeAttestationBound = providerHelperExecutionRuntimeAttestationBound(helperExecution);
   const canCollectFromHelperExecution = bindingMatches && helperExecutionCollectable && runtimeAttestationBound;
+  const providerHelperCollectionProbe =
+    options.provider_helper_collection_probe ?? defaultProviderHelperCollectionProbe;
   const collection = canCollectFromHelperExecution
-    ? options.provider_helper_collection_probe?.({
+    ? providerHelperCollectionProbe({
         project_root: projectRoot,
         project_id: input.project_id,
         collection_id: collectionId,

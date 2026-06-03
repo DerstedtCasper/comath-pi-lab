@@ -280,7 +280,9 @@ try {
   });
   assert.equal(routeCollection.status, 200, JSON.stringify(routeCollection.body));
   assert.equal(routeCollection.body.collection.ok, false, "public route callers cannot turn bundled helper output into readiness evidence");
-  assert.equal(routeCollection.body.collection.collection_status, "blocked_provider_helper_collection_not_collected");
+  assert.equal(routeCollection.body.collection.collection_status, "blocked_provider_helper_collection_incomplete_os_enforcement");
+  assert.equal(routeCollection.body.collection.provider_helper_collection.hashes_match_helper_execution, true);
+  assert.equal(routeCollection.body.collection.provider_helper_collection.os_enforcement_complete, false);
   assert.equal(routeCollection.body.collection.adapter_execution_isolation.os_enforced, false);
   assert.equal(routeCollection.body.collection.can_certify_ga, false);
 
