@@ -1,3 +1,33 @@
+# Goal 3 Task 190 / Provider Host Capability Probe Contract
+
+Scope: add a service-owned provider host capability probe contract for OS sandbox families, while keeping host capability metadata strictly diagnostic and unable to become adapter OS-isolation readiness evidence, OS-enforcement evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
+Work performed:
+
+- Treated Task189's next step as authoritative and selected the provider-helper host-probe residual blocker rather than durable transport or Lean replay breadth.
+- Used read-only subagent review for service extension points and public docs/release-hardening wording while keeping this thread as the only writer.
+- Added `goal3-task190-agent-adapter-os-isolation-provider-host-capability-probe-contract.test.mjs`.
+- Added `probeAgentAdapterOsIsolationProviderHostCapability()` plus the `POST /agent/adapter/package/os-isolation-provider-host-capability-probe` service route.
+- Added `agent_adapter_os_isolation_provider_host_capability_probe_contract` to the service capability ledger and registered the focused suite in phase0 smoke and GA release criteria.
+- Added append-only provider host capability probe manifests under `.comath/release/agent-adapter-os-isolation/<id>/provider-host-capability-probe.json`, with audit event `agent_adapter.os_isolation_provider_host_capability_probed`.
+- Updated README, AGENTS, TODO, adapter contracts, GA release criteria, and threat model so provider host capability facts remain pre-helper diagnostics only.
+
+Verification evidence:
+
+- TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, focused Task190 exited 1 because `../../dist/index.js` did not export `probeAgentAdapterOsIsolationProviderHostCapability`.
+- After implementation, focused Task190 exited 0.
+- Adjacent provider-helper regressions exited 0: Task175, Task176, Task177, Task178, Task179, Task181, Task182, Task184, Task185, Task186, Task187, Task188, and Task189.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` initially exceeded the 120 second command window; root-cause check showed it is the long default runner, and the same command exited 0 in a 300 second window with Task190 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `Test-Path -LiteralPath ".comath"` returned `False` after test runs.
+
+Boundary notes: Task190 records service-observed provider host capability facts, required tool metadata, kernel feature metadata, platform compatibility, and provider availability only when supplied by a service-owned callback. Caller-supplied platform, tool path, kernel facts, success booleans, proof authority, and GA claims remain ignored. The resulting manifest keeps `adapter_execution_isolation.current_boundary="process_boundary_only"`, `os_enforced=false`, `proof_authority="none"`, `can_promote_claim=false`, and `can_certify_ga=false`, and readiness review rejects the host capability manifest.
+
+Residual risks: Goal 3 remains incomplete. Task190 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute helpers under OS-enforced isolation, does not bind host capability probes into helper readiness, does not expose provider-helper routes through Pi tools, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 189 / Provider Helper Chain Check-Debug
 
 Scope: revalidate the Task184-188 provider-helper and bundled-helper chain as a comprehensive check-debug loop, with special attention to wrapper manifests being mistaken for adapter OS-isolation readiness evidence, OS-enforcement evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.

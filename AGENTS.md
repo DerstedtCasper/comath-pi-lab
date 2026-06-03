@@ -215,6 +215,8 @@ Task188 adds a bundled provider-helper protocol asset for the default no-env-hel
 
 Task189 revalidates the Task184-188 provider-helper/bundled-helper chain as a check-debug loop. Helper configuration, platform contracts, self-test status, runtime attestation, bundled protocol execution, host-validation manifests, helper-execution manifests, public collection route outputs, and successful collection wrapper manifests remain non-authoritative and cannot satisfy readiness by themselves, prove OS enforcement, certify GA, provide real-Pi execution evidence, or affect mathematical proof authority. Only canonical service-owned probe/evidence artifacts and their readiness reviews can feed release gates.
 
+Task190 adds a service-owned provider host capability probe contract. It records service-observed provider-family platform/tool/kernel capability facts and replayable host blockers before helper host validation, rejects caller-supplied capability success metadata, and remains diagnostic only. It does not unlock provider-helper readiness, replace helper self-test/runtime attestation, produce collected OS-enforcement evidence, satisfy readiness review by itself, provide mathematical proof authority, real-Pi execution evidence, broad provider support, or GA certification.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

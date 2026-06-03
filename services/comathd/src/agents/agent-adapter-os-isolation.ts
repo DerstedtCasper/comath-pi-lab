@@ -286,6 +286,56 @@ export type AgentAdapterOsIsolationProviderHelperCollectionOptions = {
   provider_helper_collection_probe?: AgentAdapterOsIsolationProviderHelperCollectionProbe;
 };
 
+export type AgentAdapterOsIsolationProviderHostCapabilityFact = {
+  capability: string;
+  observed: boolean;
+  evidence_sha256: string | null;
+  notes: string | null;
+};
+
+export type AgentAdapterOsIsolationProviderHostCapabilityTool = {
+  name: string;
+  present: boolean;
+  version: string | null;
+  binary_sha256: string | null;
+};
+
+export type AgentAdapterOsIsolationProviderHostCapabilityKernelFeature = {
+  name: string;
+  observed: boolean;
+  evidence_sha256: string | null;
+  notes: string | null;
+};
+
+export type AgentAdapterOsIsolationProviderHostCapabilityProbeInput = {
+  project_root: string;
+  project_id: string;
+  host_capability_probe_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  requested_provider: string;
+  provider: AgentAdapterOsIsolationProvider | null;
+  platform: NodeJS.Platform;
+};
+
+export type AgentAdapterOsIsolationProviderHostCapabilityProbeResult = {
+  probe_source?: "service_owned_provider_host_capability_probe" | "operator_attested" | "unknown";
+  provider_host_capability_available?: boolean;
+  platform?: string;
+  capability_facts?: AgentAdapterOsIsolationProviderHostCapabilityFact[];
+  required_tools?: AgentAdapterOsIsolationProviderHostCapabilityTool[];
+  kernel_features?: AgentAdapterOsIsolationProviderHostCapabilityKernelFeature[];
+  diagnostics?: string[];
+};
+
+export type AgentAdapterOsIsolationProviderHostCapabilityProbe = (
+  input: AgentAdapterOsIsolationProviderHostCapabilityProbeInput
+) => AgentAdapterOsIsolationProviderHostCapabilityProbeResult | null | undefined;
+
+export type AgentAdapterOsIsolationProviderHostCapabilityOptions = {
+  provider_host_capability_probe?: AgentAdapterOsIsolationProviderHostCapabilityProbe;
+};
+
 export type AgentAdapterOsIsolationSandboxLaunchStatus =
   | "ready_for_service_owned_os_sandbox_execution"
   | "blocked_sandbox_provider_unsupported"
@@ -350,6 +400,13 @@ export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "blocked_provider_helper_runtime_attestation_missing"
   | "blocked_provider_helper_collection_hash_mismatch"
   | "blocked_provider_helper_collection_not_collected";
+
+export type AgentAdapterOsIsolationProviderHostCapabilityStatus =
+  | "provider_host_capability_observed"
+  | "blocked_provider_host_capability_provider_unsupported"
+  | "blocked_provider_host_capability_provider_not_os_enforced"
+  | "blocked_provider_host_capability_provider_unavailable"
+  | "blocked_provider_host_capability_probe_not_collected";
 
 export type AgentAdapterOsIsolationSandboxExecutionInput = {
   project_id: string;
@@ -459,6 +516,25 @@ export type AgentAdapterOsIsolationProviderHelperCollectionInput = {
     stdout_sha256?: string;
     stderr_sha256?: string;
     transcript_sha256?: string;
+  };
+};
+
+export type AgentAdapterOsIsolationProviderHostCapabilityProbeRouteInput = {
+  project_id: string;
+  host_capability_probe_id?: string;
+  adapter_id: AgentAdapterPackageId;
+  backend?: AgentAdapterBackend;
+  actor: string;
+  requested_provider?: string;
+  host_capability_environment?: {
+    platform?: string;
+    notes?: string;
+    provider_host_capability_available?: boolean;
+    capability_facts?: unknown;
+    kernel_feature_facts?: unknown;
+    tool_path?: string;
+    proof_authority?: unknown;
+    can_certify_ga?: unknown;
   };
 };
 
@@ -764,6 +840,56 @@ export type AgentAdapterOsIsolationProviderRunnerArtifact = {
   size_bytes: number;
 };
 
+export type AgentAdapterOsIsolationProviderHostCapabilityManifest = {
+  schema_version: "comath.agent_adapter_os_isolation_provider_host_capability_probe.v1";
+  host_capability_probe_id: string;
+  project_id: string;
+  adapter_id: AgentAdapterPackageId;
+  backend: AgentAdapterBackend;
+  created_at: string;
+  ok: boolean;
+  host_capability_status: AgentAdapterOsIsolationProviderHostCapabilityStatus;
+  requested_provider: string;
+  provider: AgentAdapterOsIsolationProvider;
+  provider_host_capability_available: boolean;
+  host_capability_probe_path: string;
+  provider_host_capability: {
+    probe_source: "service_owned_provider_host_capability_probe" | "missing";
+    provider_host_capability_available: boolean;
+    platform: string | null;
+    platform_supported: boolean;
+    capability_facts: AgentAdapterOsIsolationProviderHostCapabilityFact[];
+    required_tools: AgentAdapterOsIsolationProviderHostCapabilityTool[];
+    kernel_features: AgentAdapterOsIsolationProviderHostCapabilityKernelFeature[];
+    diagnostics: string[];
+    caller_supplied_success_allowed: false;
+    proof_authority: "none";
+  };
+  adapter_execution_isolation: {
+    required_for_ga: true;
+    current_boundary: AgentAdapterOsIsolationBoundary;
+    os_enforced: false;
+    provider: AgentAdapterOsIsolationProvider;
+    claims_runtime_enforcement: false;
+    proof_authority: "none";
+  };
+  blocker_certificate: {
+    blocker_code: AgentAdapterOsIsolationProviderHostCapabilityStatus;
+    replayable_next_action: string;
+    proof_authority: "none";
+  } | null;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+export type AgentAdapterOsIsolationProviderHostCapabilityArtifact = {
+  kind: "agent_adapter_os_isolation_provider_host_capability_probe";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
 export type AgentAdapterOsIsolationProviderHelperExecution = {
   schema_version: "comath.agent_adapter_os_isolation_provider_helper_execution.v1";
   helper_execution_id: string;
@@ -1063,6 +1189,19 @@ function assertProviderRunnerId(value: string | undefined): string {
   });
 }
 
+function assertProviderHostCapabilityProbeId(value: string | undefined): string {
+  if (!value) {
+    return `ADAPTER-OSISO-HOST-CAP-${Date.now()}`;
+  }
+  if (/^[A-Z0-9][A-Z0-9_-]{2,96}$/.test(value)) {
+    return value;
+  }
+  throw new ComathError("invalid adapter OS-isolation provider host capability probe id", {
+    statusCode: 400,
+    code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HOST_CAPABILITY_PROBE_ID_INVALID"
+  });
+}
+
 function assertProviderHelperExecutionId(value: string | undefined): string {
   if (!value) {
     return `ADAPTER-OSISO-HELPER-${Date.now()}`;
@@ -1349,6 +1488,10 @@ function providerRunnerPath(runnerId: string): string {
   return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", runnerId, "provider-runner.json"));
 }
 
+function providerHostCapabilityProbePath(hostCapabilityProbeId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", hostCapabilityProbeId, "provider-host-capability-probe.json"));
+}
+
 function providerHelperExecutionPath(helperExecutionId: string): string {
   return normalizeRelativePath(join(".comath", "release", "agent-adapter-os-isolation", helperExecutionId, "provider-helper-execution.json"));
 }
@@ -1412,6 +1555,36 @@ function readProviderRunnerArtifact(
       size_bytes: bytes.byteLength
     },
     runner: parsed
+  };
+}
+
+function readProviderHostCapabilityProbeArtifact(
+  projectRoot: string,
+  hostCapabilityProbeId: string
+): {
+  artifact: AgentAdapterOsIsolationProviderHostCapabilityArtifact;
+  hostCapability: AgentAdapterOsIsolationProviderHostCapabilityManifest;
+} | null {
+  const path = providerHostCapabilityProbePath(hostCapabilityProbeId);
+  const absolutePath = assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    return null;
+  }
+  const bytes = readFileSync(absolutePath);
+  let parsed: AgentAdapterOsIsolationProviderHostCapabilityManifest;
+  try {
+    parsed = JSON.parse(bytes.toString("utf8")) as AgentAdapterOsIsolationProviderHostCapabilityManifest;
+  } catch {
+    return null;
+  }
+  return {
+    artifact: {
+      kind: "agent_adapter_os_isolation_provider_host_capability_probe",
+      path,
+      sha256: sha256Text(bytes.toString("utf8")),
+      size_bytes: bytes.byteLength
+    },
+    hostCapability: parsed
   };
 }
 
@@ -1550,6 +1723,87 @@ function sanitizeDiagnostics(values: unknown): string[] {
     .map((entry) => sanitizeProbeText(entry))
     .filter((entry) => entry.length > 0)
     .slice(0, 8);
+}
+
+function sanitizeCapabilityFacts(values: unknown): AgentAdapterOsIsolationProviderHostCapabilityFact[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
+    .map((entry) => ({
+      capability: sanitizeProbeText(entry.capability) || "unknown_capability",
+      observed: entry.observed === true,
+      evidence_sha256: isSha256(entry.evidence_sha256) ? entry.evidence_sha256.toLowerCase() : null,
+      notes: typeof entry.notes === "string" ? sanitizeProbeText(entry.notes) : null
+    }))
+    .slice(0, 16);
+}
+
+function sanitizeCapabilityTools(values: unknown): AgentAdapterOsIsolationProviderHostCapabilityTool[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
+    .map((entry) => ({
+      name: sanitizeProbeText(entry.name) || "unknown_tool",
+      present: entry.present === true,
+      version: typeof entry.version === "string" ? sanitizeProbeText(entry.version) : null,
+      binary_sha256: isSha256(entry.binary_sha256) ? entry.binary_sha256.toLowerCase() : null
+    }))
+    .slice(0, 16);
+}
+
+function sanitizeKernelFeatures(values: unknown): AgentAdapterOsIsolationProviderHostCapabilityKernelFeature[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
+    .map((entry) => ({
+      name: sanitizeProbeText(entry.name) || "unknown_kernel_feature",
+      observed: entry.observed === true,
+      evidence_sha256: isSha256(entry.evidence_sha256) ? entry.evidence_sha256.toLowerCase() : null,
+      notes: typeof entry.notes === "string" ? sanitizeProbeText(entry.notes) : null
+    }))
+    .slice(0, 16);
+}
+
+function providerHostCapabilityStatus(input: {
+  knownProvider: AgentAdapterOsIsolationProvider | null;
+  sourceAccepted: boolean;
+  providerAvailable: boolean;
+  platformSupported: boolean;
+}): AgentAdapterOsIsolationProviderHostCapabilityStatus {
+  if (!input.knownProvider || input.knownProvider === "unknown") {
+    return "blocked_provider_host_capability_provider_unsupported";
+  }
+  if (!osEnforcedProviders.has(input.knownProvider)) {
+    return "blocked_provider_host_capability_provider_not_os_enforced";
+  }
+  if (!input.sourceAccepted) {
+    return "blocked_provider_host_capability_probe_not_collected";
+  }
+  if (!input.providerAvailable || !input.platformSupported) {
+    return "blocked_provider_host_capability_provider_unavailable";
+  }
+  return "provider_host_capability_observed";
+}
+
+function providerHostCapabilityReplayableNextAction(
+  status: AgentAdapterOsIsolationProviderHostCapabilityStatus
+): string {
+  if (status === "blocked_provider_host_capability_provider_unsupported") {
+    return "Select a supported OS-enforced adapter isolation provider before probing host capability.";
+  }
+  if (status === "blocked_provider_host_capability_provider_not_os_enforced") {
+    return "Select an OS-enforced provider family such as OCI, Nix, Firejail, Windows AppContainer, or macOS sandbox-exec before collecting host capability evidence.";
+  }
+  if (status === "blocked_provider_host_capability_provider_unavailable") {
+    return "Run the service-owned provider host capability probe on a compatible host with the required provider family facilities installed.";
+  }
+  return "Run a service-owned provider host capability probe; caller-supplied platform, tool, kernel, or success metadata cannot validate host capability.";
 }
 
 function classifySandboxLaunch(input: {
@@ -2943,6 +3197,125 @@ export function prepareAgentAdapterOsIsolationSandboxLaunch(
     }
   });
   return launch;
+}
+
+export function probeAgentAdapterOsIsolationProviderHostCapability(
+  projectRoot: string,
+  input: AgentAdapterOsIsolationProviderHostCapabilityProbeRouteInput,
+  options: AgentAdapterOsIsolationProviderHostCapabilityOptions = {}
+): AgentAdapterOsIsolationProviderHostCapabilityManifest {
+  getAgentAdapterPackage(input.adapter_id);
+  const hostCapabilityProbeId = assertProviderHostCapabilityProbeId(input.host_capability_probe_id);
+  const backend = assertBackend(input.backend);
+  const path = providerHostCapabilityProbePath(hostCapabilityProbeId);
+  const absoluteProbePath = assertPathAllowed(projectRoot, path, { purpose: "runtime-write" });
+  if (existsSync(absoluteProbePath)) {
+    throw new ComathError("adapter OS-isolation provider host capability probe already exists", {
+      statusCode: 409,
+      code: "AGENT_ADAPTER_OS_ISOLATION_PROVIDER_HOST_CAPABILITY_PROBE_ALREADY_EXISTS"
+    });
+  }
+
+  const { requestedProvider, knownProvider } = normalizeRequestedProvider(input.requested_provider);
+  const provider = knownProvider ?? "unknown";
+  const serviceObservedPlatform = process.platform;
+  const supportedPlatforms = providerHelperSupportedPlatforms(provider);
+  const platformSupported = Boolean(knownProvider && supportedPlatforms.includes(serviceObservedPlatform));
+  const probe = options.provider_host_capability_probe?.({
+    project_root: projectRoot,
+    project_id: input.project_id,
+    host_capability_probe_id: hostCapabilityProbeId,
+    adapter_id: input.adapter_id,
+    backend,
+    requested_provider: requestedProvider,
+    provider: knownProvider,
+    platform: serviceObservedPlatform
+  }) ?? undefined;
+  const sourceAccepted = probe?.probe_source === "service_owned_provider_host_capability_probe";
+  const providerAvailable = sourceAccepted && probe.provider_host_capability_available === true;
+  const status = providerHostCapabilityStatus({
+    knownProvider,
+    sourceAccepted,
+    providerAvailable,
+    platformSupported
+  });
+  const ok = status === "provider_host_capability_observed";
+  const diagnostics = [
+    input.host_capability_environment?.platform
+      ? `caller_platform_ignored=${sanitizeProbeText(input.host_capability_environment.platform)}`
+      : undefined,
+    input.host_capability_environment?.notes ? sanitizeProbeText(input.host_capability_environment.notes) : undefined,
+    ...sanitizeDiagnostics(probe?.diagnostics),
+    ok
+      ? "Service-owned provider host capability probe recorded host capability facts for future helper validation planning."
+      : "No service-owned provider host capability probe was accepted as provider-helper readiness or OS-enforcement evidence."
+  ].filter((entry): entry is string => Boolean(entry));
+  const manifest: AgentAdapterOsIsolationProviderHostCapabilityManifest = {
+    schema_version: "comath.agent_adapter_os_isolation_provider_host_capability_probe.v1",
+    host_capability_probe_id: hostCapabilityProbeId,
+    project_id: input.project_id,
+    adapter_id: input.adapter_id,
+    backend,
+    created_at: new Date().toISOString(),
+    ok,
+    host_capability_status: status,
+    requested_provider: sanitizeProbeText(requestedProvider) || "unknown",
+    provider,
+    provider_host_capability_available: ok,
+    host_capability_probe_path: path,
+    provider_host_capability: {
+      probe_source: sourceAccepted ? "service_owned_provider_host_capability_probe" : "missing",
+      provider_host_capability_available: ok,
+      platform: serviceObservedPlatform,
+      platform_supported: platformSupported,
+      capability_facts: sourceAccepted ? sanitizeCapabilityFacts(probe?.capability_facts) : [],
+      required_tools: sourceAccepted ? sanitizeCapabilityTools(probe?.required_tools) : [],
+      kernel_features: sourceAccepted ? sanitizeKernelFeatures(probe?.kernel_features) : [],
+      diagnostics,
+      caller_supplied_success_allowed: false,
+      proof_authority: "none"
+    },
+    adapter_execution_isolation: {
+      required_for_ga: true,
+      current_boundary: "process_boundary_only",
+      os_enforced: false,
+      provider,
+      claims_runtime_enforcement: false,
+      proof_authority: "none"
+    },
+    blocker_certificate: ok
+      ? null
+      : {
+          blocker_code: status,
+          replayable_next_action: providerHostCapabilityReplayableNextAction(status),
+          proof_authority: "none"
+        },
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+
+  mkdirSync(dirname(absoluteProbePath), { recursive: true });
+  writeFileSync(absoluteProbePath, canonicalJson(manifest), "utf8");
+  appendAuditEvent(projectRoot, {
+    project_id: input.project_id,
+    event_type: "agent_adapter.os_isolation_provider_host_capability_probed",
+    actor: sanitizeReviewText(input.actor),
+    target_id: input.project_id,
+    payload: {
+      host_capability_probe_id: hostCapabilityProbeId,
+      adapter_id: input.adapter_id,
+      backend,
+      ok,
+      host_capability_status: status,
+      provider,
+      provider_host_capability_available: ok,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return manifest;
 }
 
 export function prepareAgentAdapterOsIsolationProviderRunner(

@@ -69,6 +69,7 @@ import {
   createAgentRunForProfile,
   executeAgentAdapterPackage,
   executeProfileAgentRun,
+  probeAgentAdapterOsIsolationProviderHostCapability,
   runAgentAdapterOsIsolationProviderHelperExecution,
   prepareAgentAdapterOsIsolationProviderRunner,
   prepareAgentAdapterOsIsolationSandboxLaunch,
@@ -330,6 +331,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         return {
           runner: sanitizePublicFormalAuthorityVocabulary(
             prepareAgentAdapterOsIsolationProviderRunner(body.project_root, body)
+          )
+        };
+      }
+    ],
+    [
+      "POST /agent/adapter/package/os-isolation-provider-host-capability-probe",
+      (payload) => {
+        const body = payload as Parameters<typeof probeAgentAdapterOsIsolationProviderHostCapability>[1] & { project_root: string };
+        return {
+          host_capability_probe: sanitizePublicFormalAuthorityVocabulary(
+            probeAgentAdapterOsIsolationProviderHostCapability(body.project_root, body)
           )
         };
       }

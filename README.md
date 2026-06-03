@@ -116,6 +116,8 @@ Task188 adds a bundled CoMath provider-helper protocol asset for the no-env-help
 
 Task189 revalidates the Task184-188 provider-helper and bundled-helper chain as a comprehensive check-debug loop. It keeps configured helper handles, platform contracts, self-test bindings, runtime-attestation bindings, bundled protocol execution, host-validation wrappers, helper-execution wrappers, and collection wrappers non-authoritative: none can satisfy readiness by themselves, prove OS enforcement, affect mathematical proof authority, provide real-Pi evidence, or certify GA. Only canonical service-owned probe/evidence artifacts can feed the adapter OS-isolation readiness review.
 
+Task190 adds a service-owned provider host capability probe contract for adapter OS-isolation provider families. The probe can record service-observed platform/tool/kernel capability facts, sanitized diagnostics, and replayable host blockers before helper host validation, while rejecting caller-supplied platform, tool, kernel, proof-authority, or GA-certification payloads. Host capability manifests remain diagnostics only: they are not provider-helper readiness, helper self-test/runtime attestation, collected OS-enforcement evidence, readiness-review evidence by themselves, mathematical proof authority, real-Pi execution evidence, broad provider support, or GA certification.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)
