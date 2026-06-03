@@ -223,6 +223,8 @@ Task192 exposes the Task190/191 provider host capability and provider-helper hos
 
 Task193 adds the default service-owned provider host capability probe for the route/no-injected-callback path. It may observe provider-family/platform compatibility and bundled provider-helper protocol asset diagnostics from service-owned state, but it must ignore caller success-shaped capability, tool, kernel, proof-authority, and GA fields. The default probe is still host-capability diagnostics only: it cannot satisfy readiness, prove OS enforcement, replace helper validation/runtime attestation, provide real-Pi evidence, broaden provider support, affect mathematical proof authority, or certify GA.
 
+Task194 adds Windows AppContainer host facility diagnostics to the default host capability probe. The probe may record service-observed Win32 facility facts and `windows_checknetisolation` tool presence/hash metadata, but it must not leak Windows system paths, accept caller-supplied tool/kernel/success/proof/GA metadata, or turn facility diagnostics into helper readiness, executed OS-isolation evidence, collected OS-enforcement evidence, real-Pi evidence, broad provider support, mathematical proof authority, or GA certification.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

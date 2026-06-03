@@ -1,3 +1,30 @@
+# Goal 3 Task 194 / Windows AppContainer Host Facility Probe
+
+Scope: extend the default service-owned provider host capability probe with one concrete OS-family host facility diagnostic for Windows AppContainer, while keeping the output diagnostic-only and unable to become provider-helper readiness, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
+Changes:
+
+- Added `goal3-task194-agent-adapter-os-isolation-windows-appcontainer-host-facility-probe.test.mjs`.
+- Added a Windows AppContainer facility diagnostic producer to the default host capability probe.
+- The probe records `windows_appcontainer_host_facility_probe`, `windows_appcontainer_service_observed_host_facility_family`, and `windows_checknetisolation` tool presence/hash metadata from service-owned Win32 host state.
+- Sanitization keeps Windows system paths and caller secrets out of route responses, persisted manifests, and audit events.
+- Added `agent_adapter_os_isolation_windows_appcontainer_host_facility_probe`, phase0 smoke coverage, GA release criteria coverage, and public boundary wording.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task194 exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_windows_appcontainer_host_facility_probe`.
+- `corepack pnpm --filter @comath/comathd build` initially caught a TypeScript array inference issue in the new diagnostic merge; the root cause was `.concat()` narrowing the literal array type before merging interface-typed nullable fields, and the implementation now uses spread merging under the declared return type.
+- After implementation, focused Task194 exited 0.
+- Adjacent provider-host regressions exited 0: Task190, Task191, and Task193.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test` exited 0, with Task194 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+
+Boundary notes: Task194 observes Windows host facility metadata and hashes the `CheckNetIsolation` host tool when available, but it does not launch an AppContainer, execute an adapter under OS enforcement, validate a provider helper, satisfy readiness review, write proof authority, provide real-Pi execution evidence, broaden cross-platform helper support, or certify GA. Caller-supplied platform, tool path, capability facts, kernel facts, proof-authority fields, and GA flags remain ignored.
+
+Residual risks: Goal 3 remains incomplete. Task194 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute helpers under OS-enforced isolation, does not make host facility metadata readiness evidence, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 193 / Default Provider Host Capability Probe
 
 Scope: add a default service-owned provider host capability probe for the route/no-injected-callback path while keeping host capability manifests diagnostic-only and unable to become provider-helper readiness, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.

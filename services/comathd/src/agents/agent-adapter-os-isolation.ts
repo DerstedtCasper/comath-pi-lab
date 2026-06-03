@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, win32 as pathWin32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
@@ -1806,6 +1806,84 @@ function providerCapabilityEvidenceHash(material: Record<string, unknown>): stri
   }));
 }
 
+function sha256ExistingFileOrNull(path: string): string | null {
+  try {
+    return existsSync(path) && statSync(path).isFile() ? sha256FileSync(path).sha256 : null;
+  } catch {
+    return null;
+  }
+}
+
+function windowsSystemRootCandidate(): string {
+  const configuredRoot = process.env.SystemRoot;
+  if (typeof configuredRoot === "string" && /^[A-Za-z]:\\[^<>:"|?*]+(?:\\[^<>:"|?*]+)*$/.test(configuredRoot)) {
+    return configuredRoot;
+  }
+  return "C:\\Windows";
+}
+
+function windowsAppContainerHostFacilityDiagnostics(
+  input: AgentAdapterOsIsolationProviderHostCapabilityProbeInput
+): Pick<
+  AgentAdapterOsIsolationProviderHostCapabilityProbeResult,
+  "capability_facts" | "required_tools" | "kernel_features" | "diagnostics"
+> | null {
+  if (input.provider !== "windows_appcontainer") {
+    return null;
+  }
+
+  const serviceObservedWindows = input.platform === "win32";
+  const checkNetIsolationSha256 = serviceObservedWindows
+    ? sha256ExistingFileOrNull(pathWin32.join(windowsSystemRootCandidate(), "System32", "CheckNetIsolation.exe"))
+    : null;
+
+  return {
+    capability_facts: [
+      {
+        capability: "windows_appcontainer_host_facility_probe",
+        observed: serviceObservedWindows,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: "windows_appcontainer_host_facility_probe",
+          provider: input.provider,
+          platform: input.platform,
+          check_net_isolation_present: Boolean(checkNetIsolationSha256)
+        }),
+        notes:
+          "Windows AppContainer host facility diagnostics only; this is not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification."
+      }
+    ],
+    required_tools: [
+      {
+        name: "windows_checknetisolation",
+        present: Boolean(checkNetIsolationSha256),
+        version: null,
+        binary_sha256: checkNetIsolationSha256
+      }
+    ],
+    kernel_features: [
+      {
+        name: "windows_appcontainer_service_observed_host_facility_family",
+        observed: serviceObservedWindows,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: "windows_appcontainer_service_observed_host_facility_family",
+          provider: input.provider,
+          platform: input.platform
+        }),
+        notes: "Service-observed Windows host facility family only; no AppContainer launch or runtime isolation enforcement has run."
+      }
+    ],
+    diagnostics: [
+      serviceObservedWindows
+        ? "Windows AppContainer host facility diagnostics were evaluated on the service-observed Win32 platform."
+        : "Windows AppContainer host facility diagnostics require the service-observed Win32 platform.",
+      checkNetIsolationSha256
+        ? "CheckNetIsolation host tool was detected and hashed without exposing its executable path."
+        : "CheckNetIsolation host tool was not detected or could not be hashed.",
+      "Windows AppContainer host facility diagnostics are not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification."
+    ]
+  };
+}
+
 function defaultProviderHostCapabilityProbe(
   input: AgentAdapterOsIsolationProviderHostCapabilityProbeInput
 ): AgentAdapterOsIsolationProviderHostCapabilityProbeResult {
@@ -1819,6 +1897,7 @@ function defaultProviderHostCapabilityProbe(
   const helperAssetHash = helperAssetPath ? sha256FileSync(helperAssetPath).sha256 : null;
   const runtimeHash = bundledHelper ? sha256FileSync(bundledHelper.program).sha256 : null;
   const providerHostCapabilityAvailable = Boolean(providerOsEnforced && platformSupported && bundledHelper);
+  const windowsAppContainerFacility = windowsAppContainerHostFacilityDiagnostics(input);
 
   return {
     probe_source: "service_owned_provider_host_capability_probe",
@@ -1851,7 +1930,8 @@ function defaultProviderHostCapabilityProbe(
         observed: Boolean(bundledHelper && helperAssetHash),
         evidence_sha256: helperAssetHash,
         notes: "Bundled provider-helper protocol asset is service-owned diagnostics only, not OS-enforcement evidence or GA certification."
-      }
+      },
+      ...(windowsAppContainerFacility?.capability_facts ?? [])
     ],
     required_tools: [
       {
@@ -1859,7 +1939,8 @@ function defaultProviderHostCapabilityProbe(
         present: Boolean(bundledHelper),
         version: bundledHelper?.version ?? null,
         binary_sha256: runtimeHash
-      }
+      },
+      ...(windowsAppContainerFacility?.required_tools ?? [])
     ],
     kernel_features: [
       {
@@ -1881,7 +1962,8 @@ function defaultProviderHostCapabilityProbe(
           platform: input.platform
         }),
         notes: "Host capability probing does not collect executed OS-isolation or adapter runtime evidence."
-      }
+      },
+      ...(windowsAppContainerFacility?.kernel_features ?? [])
     ],
     diagnostics: [
       `Default service-owned provider host capability probe evaluated provider=${sanitizeProbeText(providerLabel)} on platform=${sanitizeProbeText(input.platform)}.`,
@@ -1891,6 +1973,7 @@ function defaultProviderHostCapabilityProbe(
       bundledHelper
         ? "Bundled CoMath provider-helper protocol asset is available for default host capability diagnostics."
         : "No bundled provider-helper protocol asset is available for this provider/platform family.",
+      ...(windowsAppContainerFacility?.diagnostics ?? []),
       "Default host capability diagnostics are not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification."
     ]
   };

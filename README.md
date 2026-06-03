@@ -124,6 +124,8 @@ Task192 exposes those provider host capability and provider-helper host-validati
 
 Task193 adds a default service-owned provider host capability probe for the production route path. `comathd` can now record provider-family/platform compatibility and bundled provider-helper protocol asset diagnostics without an injected test callback, while ignoring caller-submitted success, tool, kernel, proof-authority, and GA fields. These default probe manifests still keep `adapter_execution_isolation.os_enforced=false`, remain host-capability diagnostics only, and cannot satisfy readiness, prove OS enforcement, replace helper validation/runtime attestation, provide real-Pi evidence, or certify GA.
 
+Task194 extends that default host capability path with Windows AppContainer host facility diagnostics. On Win32 service hosts, the default probe records a Windows AppContainer facility fact and `windows_checknetisolation` tool presence/hash metadata without exposing system paths or accepting caller-supplied success fields. These diagnostics are still not provider-helper readiness, executed OS isolation, collected OS-enforcement evidence, readiness-review evidence, mathematical proof authority, real-Pi execution evidence, broad provider support, or GA certification.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)

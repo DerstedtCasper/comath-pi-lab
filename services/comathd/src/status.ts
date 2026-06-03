@@ -77,6 +77,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_adapter_package_registry",
       "agent_adapter_os_isolation_cross_provider_configured_helper_assets",
       "agent_adapter_os_isolation_default_provider_host_capability_probe",
+      "agent_adapter_os_isolation_windows_appcontainer_host_facility_probe",
       "agent_adapter_os_isolation_provider_host_capability_probe_contract",
       "agent_adapter_os_isolation_provider_helper_platform_contract",
       "agent_adapter_os_isolation_provider_helper_self_test_contract",
