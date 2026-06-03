@@ -191,7 +191,7 @@ for (const [content, label] of [
   );
 }
 
-assert.equal(todo.includes("Task184-201"), true, "TODO must roll the provider-helper deferred-chain summary through Task201");
+assert.match(todo, /Task184-20(?:1|[2-9])/, "TODO must roll the provider-helper deferred-chain summary at least through Task201");
 assert.equal(review.includes("Goal 3 Task 201"), true, "REVIEW must include Task201 verification evidence");
 assert.equal(goal3Tasks.includes("## Task201"), true, "Goal 3 tracker must record Task201 before the next frontier");
 

@@ -2,7 +2,7 @@ import { copyFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const adapters = ["codex-cli-adapter.mjs"];
-const helpers = ["provider-helper-protocol.mjs"];
+const helpers = ["provider-helper-protocol.mjs", "provider-helper-collection-probe.mjs"];
 
 for (const adapter of adapters) {
   const source = join(process.cwd(), "src", "agents", "adapters", adapter);

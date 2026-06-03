@@ -239,6 +239,8 @@ Task200 tightens the configured provider-helper collection probe contract: colle
 
 Task201 revalidates the Task190-200 provider-helper release chain as a check-debug guard. It makes stale provider host-capability artifacts, stale host-validation bindings, helper release chain discovery gaps, public wording drift, route/Pi payload overclaims, runtime residue, and wrapper-readiness confusion fail closed or fail tests. This remains release-hardening coverage only: it does not make host capability metadata, host-validation artifacts, helper executions, collection wrappers, docs, or smoke registration readiness evidence by themselves, proof authority, real-Pi evidence, or GA certification.
 
+Task202 adds a bundled provider-helper collection probe asset to the default no-env collection path. It must run with service-owned argv/env, bind current helper execution, host-validation, host-capability, and hash facts, and then preserve the incomplete blocker shape until a provider-specific collector supplies all required OS facts.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

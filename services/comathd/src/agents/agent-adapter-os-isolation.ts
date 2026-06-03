@@ -2911,6 +2911,12 @@ function bundledProviderHelperAssetPath(): string | null {
   return existsSync(helperPath) && statSync(helperPath).isFile() ? helperPath : null;
 }
 
+function bundledProviderHelperCollectionProbeAssetPath(): string | null {
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const helperPath = join(moduleDir, "helpers", "provider-helper-collection-probe.mjs");
+  return existsSync(helperPath) && statSync(helperPath).isFile() ? helperPath : null;
+}
+
 function bundledProviderHelperConfig(provider: AgentAdapterOsIsolationProvider): {
   program: string;
   argsPrefix: string[];
@@ -3949,10 +3955,69 @@ function configuredProviderHelperCollectionProbe(
   };
 }
 
+function bundledProviderHelperCollectionProbe(
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): AgentAdapterOsIsolationProviderHelperCollection | null {
+  const assetPath = bundledProviderHelperCollectionProbeAssetPath();
+  if (!assetPath || !isAbsolute(process.execPath) || !existsSync(process.execPath) || !statSync(process.execPath).isFile()) {
+    return null;
+  }
+  const fixedArgs = providerHelperCollectionProbeFixedArgs(input);
+  const env = providerHelperEnv({
+    projectId: input.project_id,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend: input.backend,
+    provider: input.provider
+  });
+  const spawned = spawnSync(process.execPath, [assetPath, ...fixedArgs], {
+    cwd: input.project_root,
+    env,
+    encoding: "utf8",
+    shell: false,
+    timeout: 10_000
+  });
+  const stdout = typeof spawned.stdout === "string" ? spawned.stdout : "";
+  const stderr = typeof spawned.stderr === "string" ? spawned.stderr : "";
+  const exitCode = typeof spawned.status === "number" ? spawned.status : null;
+  const spawnError = spawned.error as (Error & { code?: string }) | undefined;
+  const timedOut = spawnError?.code === "ETIMEDOUT";
+  const parsed = parseFirstJsonLine(stdout);
+  const accepted = !spawnError && exitCode === 0 && providerHelperCollectionProbeStdoutAccepted(parsed, input);
+  const baseDiagnostics = [
+    "Bundled CoMath provider-helper collection probe asset executed as a service-owned default collector.",
+    accepted
+      ? `Bundled provider-helper collection probe passed with exit_code=${exitCode}.`
+      : `Bundled provider-helper collection probe failed binding validation with exit_code=${exitCode ?? "null"}.`,
+    "Bundled collection output binds helper execution, host-validation, and host-capability hashes but records incomplete OS-enforcement facts.",
+    timedOut ? "Bundled provider-helper collection probe timed out." : undefined,
+    spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined,
+    stderr ? `stderr_sha256=${sha256Bytes(stderr)}` : undefined
+  ].filter((entry): entry is string => Boolean(entry));
+  if (!accepted || !parsed) {
+    return incompleteProviderHelperCollectionProbe(input, baseDiagnostics);
+  }
+  return {
+    probe_source: "service_owned_provider_helper_collection_probe",
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: parsed.process_isolation_enforced === true,
+    filesystem_scope_enforced: parsed.filesystem_scope_enforced === true,
+    network_isolation_enforced: parsed.network_isolation_enforced === true,
+    no_new_privileges: parsed.no_new_privileges === true,
+    escape_prevention: parsed.escape_prevention === true,
+    adapter_process_exit_code: input.helper_exit_code,
+    stdout_sha256: input.stdout_sha256,
+    stderr_sha256: input.stderr_sha256,
+    transcript_sha256: input.transcript_sha256,
+    diagnostics: baseDiagnostics
+  };
+}
+
 function defaultProviderHelperCollectionProbe(
   input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
 ): AgentAdapterOsIsolationProviderHelperCollection {
-  return configuredProviderHelperCollectionProbe(input) ?? incompleteProviderHelperCollectionProbe(input, [
+  return configuredProviderHelperCollectionProbe(input) ?? bundledProviderHelperCollectionProbe(input) ?? incompleteProviderHelperCollectionProbe(input, [
     "Default provider-helper collection probe bound service-owned helper execution hashes only; provider-specific OS-enforcement probe is still required."
   ]);
 }

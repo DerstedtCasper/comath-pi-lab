@@ -100,6 +100,7 @@ node services/comathd/tests/unit/goal3-task198-agent-adapter-os-isolation-provid
 node services/comathd/tests/unit/goal3-task199-agent-adapter-os-isolation-configured-provider-helper-collection-probe.test.mjs
 node services/comathd/tests/unit/goal3-task200-agent-adapter-os-isolation-configured-collection-host-capability-binding.test.mjs
 node services/comathd/tests/unit/goal3-task201-agent-adapter-os-isolation-provider-helper-release-chain-check-debug.test.mjs
+node services/comathd/tests/unit/goal3-task202-agent-adapter-os-isolation-bundled-provider-helper-collection-probe.test.mjs
 node services/comathd/tests/unit/goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs
 node services/comathd/tests/unit/goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs
 node services/comathd/tests/unit/goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs

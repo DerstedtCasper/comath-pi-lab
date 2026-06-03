@@ -1,3 +1,35 @@
+# Goal 3 Task 202 / Bundled Provider Helper Collection Probe
+
+Scope: add a bundled provider-helper collection probe asset for the default no-env provider-helper collection path, so the production route executes service-owned collection binding logic while still preserving incomplete OS-enforcement blocker semantics.
+
+Changes:
+
+- Added `goal3-task202-agent-adapter-os-isolation-bundled-provider-helper-collection-probe.test.mjs`.
+- Added `provider-helper-collection-probe.mjs` as a copied helper asset.
+- Added `agent_adapter_os_isolation_bundled_provider_helper_collection_probe_asset`.
+- Made the default provider-helper collection probe execute the bundled asset when no configured collection probe is supplied.
+- Registered Task202 in phase0 smoke and GA release criteria.
+- Updated README, AGENTS, TODO, adapter contracts, threat model, REVIEW, and the Goal 3 tracker wording.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task202 initially exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_bundled_provider_helper_collection_probe_asset`.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after implementation.
+- Focused Task202 exited 0 after implementation.
+- Adjacent provider-helper regressions exited 0 after the fresh build: Task187, Task188, Task189, Task191, Task197, Task198, Task199, Task200, Task201, and Task202.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task202 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+- Read-only documentation/smoke review found no issues after checking Task202 release-hardening registration, GA criteria listing, TODO rollover, public wording, and the focused Task202 test.
+- Read-only code-path review found no issues in configured-probe precedence, bundled default execution, fixed argv/stdout binding, incomplete OS facts, and readiness rejection. It reported Task197/Task198 failures from its read-only check before build/copy state was refreshed; the main thread reran Task197 and Task198 after a fresh build and both exited 0.
+
+Boundary notes: Task202 changes the no-env default provider-helper collection path from an in-process incomplete blocker into a spawned bundled collection probe asset. The bundled probe binds current helper execution, host-validation, host-capability, and hash facts, records false OS-enforcement facts, and leaves readiness rejection intact until a provider-specific collector supplies all required OS facts.
+
+Residual risks: Goal 3 remains incomplete. Task202 does not ship provider-specific OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute container/Nix/Firejail/sandbox-exec tools by default, does not inspect daemon/socket/container/store/profile/sandbox-policy state, does not provide broad cross-platform OS-enforced execution, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 201 / Provider Helper Release Chain Check-Debug
 
 Scope: revalidate the Task190-200 provider host-capability, helper host-validation, helper execution, runtime-attestation, default/configured collection, wrapper-readiness, public wording, route/Pi payload, runtime cleanliness, and release-hardening suite discovery chain, with a new stale host-capability artifact drift regression.
