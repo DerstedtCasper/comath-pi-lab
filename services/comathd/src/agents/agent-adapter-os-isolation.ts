@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
 import { assertPathAllowed } from "../security/path-policy.js";
@@ -1659,12 +1660,27 @@ function defaultProviderRunnerResolver(
   const providerEnvVar = providerHelperProgramEnvVar(input.provider);
   const configuredProgram = process.env[providerEnvVar] ?? process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER;
   if (!configuredProgram) {
+    const bundledHelper = bundledProviderHelperConfig(input.provider);
+    if (!bundledHelper) {
+      return {
+        resolution_source: "service_owned_provider_runner_resolver",
+        runner_available: false,
+        diagnostics: [
+          `${input.provider} provider runner helper is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
+          `Set ${providerEnvVar} to an absolute service-owned helper executable before collecting provider execution evidence.`
+        ]
+      };
+    }
+    const helperHash = sha256FileSync(bundledHelper.program);
     return {
       resolution_source: "service_owned_provider_runner_resolver",
-      runner_available: false,
+      runner_available: true,
+      runner_binary_sha256: helperHash.sha256,
+      runner_version: bundledHelper.version,
       diagnostics: [
-        `${input.provider} provider runner helper is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
-        `Set ${providerEnvVar} to an absolute service-owned helper executable before collecting provider execution evidence.`
+        `${input.provider} provider runner is using the bundled CoMath provider-helper protocol asset for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
+        ...bundledHelper.diagnostics,
+        "Bundled helper assets prove only protocol binding; canonical OS-enforcement evidence still requires service-owned collection."
       ]
     };
   }
@@ -1970,20 +1986,58 @@ function configuredHelperArgsPrefix(provider: AgentAdapterOsIsolationProvider): 
   };
 }
 
+function bundledProviderHelperAssetPath(): string | null {
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const helperPath = join(moduleDir, "helpers", "provider-helper-protocol.mjs");
+  return existsSync(helperPath) && statSync(helperPath).isFile() ? helperPath : null;
+}
+
+function bundledProviderHelperConfig(provider: AgentAdapterOsIsolationProvider): {
+  program: string;
+  argsPrefix: string[];
+  version: string;
+  diagnostics: string[];
+} | null {
+  const helperAssetPath = bundledProviderHelperAssetPath();
+  if (!helperAssetPath || !isAbsolute(process.execPath) || !existsSync(process.execPath) || !statSync(process.execPath).isFile()) {
+    return null;
+  }
+  return {
+    program: process.execPath,
+    argsPrefix: [helperAssetPath],
+    version: `${provider}-helper-bundled-protocol-v1`,
+    diagnostics: [
+      "Bundled CoMath provider-helper protocol asset is available.",
+      "Bundled helper output is protocol attestation only, not OS-enforcement evidence or GA certification."
+    ]
+  };
+}
+
 function defaultProviderHelperConfigResolver(
   input: AgentAdapterOsIsolationProviderHelperConfigResolverInput
 ): AgentAdapterOsIsolationProviderHelperConfig {
   const providerEnvVar = providerHelperProgramEnvVar(input.provider);
   const configuredProgram = process.env[providerEnvVar] ?? process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER;
   if (!configuredProgram) {
-    return {
-      config_source: "service_owned_provider_helper_config",
-      helper_available: false,
-      diagnostics: [
-        `${input.provider} provider helper is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
-        `Set ${providerEnvVar} to an absolute service-owned helper executable before attempting provider helper execution.`
-      ]
-    };
+    const bundledHelper = bundledProviderHelperConfig(input.provider);
+    return bundledHelper
+      ? {
+          config_source: "service_owned_provider_helper_config",
+          helper_available: true,
+          helper_program: bundledHelper.program,
+          helper_args_prefix: bundledHelper.argsPrefix,
+          helper_version: bundledHelper.version,
+          timeout_ms: 10_000,
+          diagnostics: bundledHelper.diagnostics
+        }
+      : {
+          config_source: "service_owned_provider_helper_config",
+          helper_available: false,
+          diagnostics: [
+            `${input.provider} provider helper is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
+            `Set ${providerEnvVar} to an absolute service-owned helper executable before attempting provider helper execution.`
+          ]
+        };
   }
   if (!isAbsolute(configuredProgram)) {
     return {
@@ -2029,14 +2083,31 @@ function defaultProviderHelperHostValidator(
   const supportedPlatforms = providerHelperSupportedPlatforms(input.provider);
   const hostPlatform = process.platform;
   if (!configuredProgram) {
-    return {
-      validation_source: "service_owned_provider_helper_host_validator",
-      helper_host_ready: false,
-      diagnostics: [
-        `${input.provider} provider helper host is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
-        `Set ${providerEnvVar} to an absolute service-owned helper executable before validating this host.`
-      ]
-    };
+    const bundledHelper = bundledProviderHelperConfig(input.provider);
+    if (!bundledHelper) {
+      return {
+        validation_source: "service_owned_provider_helper_host_validator",
+        helper_host_ready: false,
+        diagnostics: [
+          `${input.provider} provider helper host is not configured for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
+          `Set ${providerEnvVar} to an absolute service-owned helper executable before validating this host.`
+        ]
+      };
+    }
+    return runDefaultProviderHelperHostValidator({
+      input,
+      helperProgram: bundledHelper.program,
+      helperVersion: bundledHelper.version,
+      configuredArgs: {
+        ok: true,
+        args: bundledHelper.argsPrefix,
+        configured_env_var: null,
+        diagnostics: bundledHelper.diagnostics
+      },
+      providerLabel: "bundled CoMath provider-helper protocol asset",
+      supportedPlatforms,
+      hostPlatform
+    });
   }
   if (!isAbsolute(configuredProgram)) {
     return {
@@ -2052,15 +2123,41 @@ function defaultProviderHelperHostValidator(
       diagnostics: [`${providerEnvVar} does not point to an existing file.`]
     };
   }
-  const helperHash = sha256FileSync(configuredProgram);
   const configuredArgs = configuredHelperArgsPrefix(input.provider);
+  return runDefaultProviderHelperHostValidator({
+    input,
+    helperProgram: configuredProgram,
+    helperVersion: `${input.provider}-helper-env-configured`,
+    configuredArgs,
+    providerLabel: providerEnvVar,
+    supportedPlatforms,
+    hostPlatform
+  });
+}
+
+function runDefaultProviderHelperHostValidator(input: {
+  input: AgentAdapterOsIsolationProviderHelperHostValidatorInput;
+  helperProgram: string;
+  helperVersion: string;
+  configuredArgs: {
+    ok: boolean;
+    args: string[];
+    configured_env_var: string | null;
+    diagnostics: string[];
+  };
+  providerLabel: string;
+  supportedPlatforms: string[];
+  hostPlatform: NodeJS.Platform;
+}): AgentAdapterOsIsolationProviderHelperHostValidationProbe {
+  const { input: validatorInput, helperProgram, helperVersion, configuredArgs, providerLabel, supportedPlatforms, hostPlatform } = input;
+  const helperHash = sha256FileSync(helperProgram);
   if (!configuredArgs.ok) {
     return {
       validation_source: "service_owned_provider_helper_host_validator",
       helper_host_ready: false,
-      helper_program: configuredProgram,
+      helper_program: helperProgram,
       helper_binary_sha256: helperHash.sha256,
-      helper_version: `${input.provider}-helper-env-configured`,
+      helper_version: helperVersion,
       supported_platforms: supportedPlatforms,
       self_test_required: true,
       self_test_passed: false,
@@ -2077,25 +2174,25 @@ function defaultProviderHelperHostValidator(
     };
   }
   const fixedArgs = providerHelperSelfTestFixedArgs({
-    hostValidationId: input.host_validation_id,
-    runnerId: input.runner_id,
-    launchId: input.launch_id,
-    adapterId: input.adapter_id,
-    backend: input.backend,
-    provider: input.provider
+    hostValidationId: validatorInput.host_validation_id,
+    runnerId: validatorInput.runner_id,
+    launchId: validatorInput.launch_id,
+    adapterId: validatorInput.adapter_id,
+    backend: validatorInput.backend,
+    provider: validatorInput.provider
   });
   const env = providerHelperEnv({
-    projectId: input.project_id,
-    runnerId: input.runner_id,
-    launchId: input.launch_id,
-    adapterId: input.adapter_id,
-    backend: input.backend,
-    provider: input.provider
+    projectId: validatorInput.project_id,
+    runnerId: validatorInput.runner_id,
+    launchId: validatorInput.launch_id,
+    adapterId: validatorInput.adapter_id,
+    backend: validatorInput.backend,
+    provider: validatorInput.provider
   });
   const shouldRunSelfTest = supportedPlatforms.includes(hostPlatform);
   const selfTest = shouldRunSelfTest
-    ? spawnSync(configuredProgram, [...configuredArgs.args, ...fixedArgs], {
-        cwd: input.project_root,
+    ? spawnSync(helperProgram, [...configuredArgs.args, ...fixedArgs], {
+        cwd: validatorInput.project_root,
         env,
         encoding: "utf8",
         shell: false,
@@ -2112,12 +2209,12 @@ function defaultProviderHelperHostValidator(
   const selfTestStderrSha256 = shouldRunSelfTest ? sha256Bytes(stderr) : null;
   const selfTestArgsPrefixSha256 = configuredArgs.args.length > 0 ? sha256Text(canonicalJson(configuredArgs.args)) : null;
   const selfTestFixedArgsSha256 = sha256Text(canonicalJson(fixedArgs));
-  const selfTestPassed = shouldRunSelfTest && !spawnError && exitCode === 0 && providerHelperSelfTestStdoutAccepted(stdout, input);
+  const selfTestPassed = shouldRunSelfTest && !spawnError && exitCode === 0 && providerHelperSelfTestStdoutAccepted(stdout, validatorInput);
   const selfTestTranscriptSha256 = shouldRunSelfTest
     ? sha256Text(canonicalJson({
-        host_validation_id: input.host_validation_id,
-        runner_id: input.runner_id,
-        launch_id: input.launch_id,
+        host_validation_id: validatorInput.host_validation_id,
+        runner_id: validatorInput.runner_id,
+        launch_id: validatorInput.launch_id,
         helper_binary_sha256: helperHash.sha256,
         helper_args_prefix_sha256: selfTestArgsPrefixSha256,
         helper_args_prefix_count: configuredArgs.args.length,
@@ -2131,9 +2228,9 @@ function defaultProviderHelperHostValidator(
   return {
     validation_source: "service_owned_provider_helper_host_validator",
     helper_host_ready: selfTestPassed,
-    helper_program: configuredProgram,
+    helper_program: helperProgram,
     helper_binary_sha256: helperHash.sha256,
-    helper_version: `${input.provider}-helper-env-configured`,
+    helper_version: helperVersion,
     supported_platforms: supportedPlatforms,
     self_test_required: true,
     self_test_passed: selfTestPassed,
@@ -2147,11 +2244,11 @@ function defaultProviderHelperHostValidator(
     self_test_args_prefix_count: configuredArgs.args.length,
     self_test_fixed_args_sha256: selfTestFixedArgsSha256,
     diagnostics: [
-      `${providerEnvVar} resolved to a service-owned helper executable for host validation.`,
+      `${providerLabel} resolved to a service-owned helper executable for host validation.`,
       ...configuredArgs.diagnostics,
       supportedPlatforms.includes(hostPlatform)
-        ? `${input.provider} configured helper host platform contract accepts platform=${hostPlatform}.`
-        : `${input.provider} configured helper host platform contract rejects platform=${hostPlatform}; supported platforms are ${supportedPlatforms.join(", ") || "none"}.`,
+        ? `${validatorInput.provider} configured helper host platform contract accepts platform=${hostPlatform}.`
+        : `${validatorInput.provider} configured helper host platform contract rejects platform=${hostPlatform}; supported platforms are ${supportedPlatforms.join(", ") || "none"}.`,
       shouldRunSelfTest
         ? `Provider helper self-test ${selfTestPassed ? "passed" : "failed"} with exit_code=${exitCode ?? "null"}.`
         : "Provider helper self-test skipped because host platform is incompatible.",

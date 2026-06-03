@@ -112,6 +112,8 @@ Task186 hardens that self-test contract so a helper response must bind the curre
 
 Task187 hardens the runtime side of configured provider-helper execution. A helper execution can feed the provider-helper collection bridge only when the helper stdout emits a service-checked runtime attestation bound to the current project id, helper-execution id, provider-runner id, sandbox-launch id, adapter, backend, provider, disabled network policy, and `proof_authority=none`. Generic runtime success output now blocks collection before any canonical probe writer is invoked. This remains execution/collection metadata only; it does not prove OS enforcement, satisfy readiness by itself, affect mathematical proof authority, or certify GA.
 
+Task188 adds a bundled CoMath provider-helper protocol asset for the no-env-helper default path. The provider-runner, host-validation, and helper-execution routes can use the packaged protocol script through the current Node executable with fixed argv/env, pass the self-test/runtime-attestation binding checks, and still expose only hashes/counts/status in public manifests. This is protocol coverage only: it is not a production OCI/Nix/Firejail/AppContainer/macOS helper binary, not collected OS-enforcement evidence, not readiness evidence by itself, not mathematical proof authority, broad provider support, real-Pi execution, or GA certification.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)

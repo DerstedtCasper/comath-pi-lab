@@ -79,6 +79,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_adapter_os_isolation_provider_helper_platform_contract",
       "agent_adapter_os_isolation_provider_helper_self_test_contract",
       "agent_adapter_os_isolation_provider_helper_runtime_attestation_binding",
+      "agent_adapter_os_isolation_bundled_provider_helper_asset",
       "agent_adapter_os_isolation_configured_provider_helper_asset",
       "agent_adapter_os_isolation_configured_provider_helper_execution_asset",
       "agent_adapter_os_isolation_provider_helper_collection",

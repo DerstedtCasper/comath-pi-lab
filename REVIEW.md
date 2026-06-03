@@ -1,3 +1,29 @@
+# Goal 3 Task 188 / Bundled Provider Helper Protocol Asset
+
+Scope: make the default provider-helper protocol chain executable without a host-configured helper by bundling a service-owned protocol asset, while preserving that bundled helper output is protocol binding only and cannot become OS-enforcement evidence, proof authority, readiness evidence by itself, broad provider support, real-Pi execution, or GA certification.
+
+Work performed:
+
+- Treated the existing uncommitted Task188 residue as the live frontier after Task187 instead of reopening old Goal 3 work.
+- Added `goal3-task188-agent-adapter-os-isolation-bundled-helper-asset.test.mjs` covering the no-env-helper path through provider-runner preparation, provider-helper host validation, helper execution, public-route collection rejection, internal service-owned collection, and readiness review.
+- Added `provider-helper-protocol.mjs`, copied it into `dist/agents/helpers/` during the comathd build, and wired default resolver/host-validation/helper-execution paths to use it through the current Node executable when no env helper is configured.
+- Added `agent_adapter_os_isolation_bundled_provider_helper_asset` to the service capability ledger.
+- Synchronized README, AGENTS, TODO, adapter contracts, GA release criteria, threat model, phase0 smoke, and tracker wording around the bundled protocol boundary.
+
+Verification evidence:
+
+- Task188 residue was present at continuation start: the new Task188 test existed untracked and `services/comathd/src/agents/agent-adapter-os-isolation.ts` was already dirty.
+- Initial RED/build failure was observed: `corepack pnpm --filter @comath/comathd build` exited 1 because `runDefaultProviderHelperHostValidator()` passed the wrapper object to `providerHelperSelfTestStdoutAccepted()` and transcript hashing instead of the original validator input.
+- After the minimal type fix, focused Task188 RED was observed: `node services/comathd/tests/unit/goal3-task188-agent-adapter-os-isolation-bundled-helper-asset.test.mjs` exited 1 because the capability ledger did not advertise `agent_adapter_os_isolation_bundled_provider_helper_asset`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task188 exited 0.
+- Adjacent Task178 initially failed because its old route-caller assertion expected no-env host validation to remain blocked; Task188 intentionally allows only the bundled service-owned protocol asset to validate the host. The regression was updated to keep the caller hash/version/command rejected while asserting `adapter_execution_isolation.os_enforced=false` and `can_certify_ga=false`.
+- Final Task188 gate matrix exited 0: focused Task188; adjacent Task175, Task176, Task177, Task178, Task179, Task181, Task182, Task184, Task185, Task186, and Task187 suites; `node scripts/phase0-smoke.mjs`; `corepack pnpm --filter @comath/comathd build`; `corepack pnpm --filter @comath/comathd typecheck`; and full `corepack pnpm --filter @comath/comathd test`.
+- Runtime/static hygiene checks: `Test-Path -LiteralPath ".comath"` returned `False`; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; release-hardening scans found Task188 registered in smoke/release criteria/status/copy script and found only deliberate negative boundary wording for bundled helper proof-authority/GA/OS-evidence claims.
+
+Boundary notes: Task188 does not ship real production helper binaries, does not prove Firejail/AppContainer/sandbox-exec/OCI/Nix OS enforcement, does not expose provider-helper routes through Pi tools, does not make bundled helper execution or collection wrapper metadata readiness evidence, does not broaden Lean/mathlib replay, does not complete real-Pi execution, and does not certify GA. The bundled protocol asset is useful executable protocol coverage; canonical OS-isolation readiness still requires service-owned probe/evidence artifacts and readiness review.
+
+Residual risks: Goal 3 remains incomplete. Remaining high-risk frontiers include production provider helper binaries/host probes for one OS sandbox family, comprehensive revalidation loops, durable long-lived operator transport, broader live Lean/mathlib replay, and fully interactive real-Pi execution.
+
 # Goal 3 Task 187 / Provider Helper Runtime Attestation Binding
 
 Scope: harden the provider-helper execution-to-collection bridge so generic helper runtime success output cannot be upgraded into canonical OS-isolation evidence; the helper must emit a runtime attestation bound to the current project, helper execution, provider-runner, sandbox-launch, adapter, backend, provider, disabled network policy, and `proof_authority=none` before collection can invoke the canonical probe writer.

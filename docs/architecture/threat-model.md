@@ -65,6 +65,10 @@ Configured provider-helper asset environment variables may be mistaken for broad
 
 Configured provider-helper execution args-prefix environment variables may be mistaken for an executed sandbox profile or public helper script. Mitigation: provider-specific `*_HELPER_ARGS_JSON` handles and the fallback args-prefix handle are host configuration only; public manifests record only the args-prefix hash and count, never the prefix argument values or helper script paths. The configured prefix can help run a service-owned helper asset after validated host binding, but helper execution still does not prove OS enforcement and cannot satisfy readiness without later canonical collected probe/evidence artifacts.
 
+### Bundled Provider Helper Protocol Confusion
+
+The bundled CoMath provider-helper protocol asset may be mistaken for a production OCI/Nix/Firejail/AppContainer/macOS sandbox helper because it can pass the fixed self-test and emit runtime attestation under service-owned argv/env. Mitigation: the bundled asset is packaged protocol material only. It runs through the current Node executable, records only executable hashes plus args-prefix hash/count, exposes no helper paths or raw stdout/stderr text, keeps `proof_authority=none`, `adapter_execution_isolation.os_enforced=false`, and `can_certify_ga=false`, and cannot satisfy readiness unless a separate canonical service-owned probe/evidence artifact passes the readiness review.
+
 ### Provider Helper Host Validation Confusion
 
 Provider-helper host-validation manifests may be mistaken for executed sandboxing because they bind a service-owned helper binary hash, supported platform list, fixed environment policy, and possibly a successful provider-helper self-test. Mitigation: host-validation manifests require a ready provider-runner manifest, reject caller helper-host-ready booleans, command/argv/env/hash/version/self-test metadata, record blockers for missing validators, binary mismatches, platform mismatches, and failed self-tests, and cannot satisfy readiness without later canonical collected probe/evidence artifacts.

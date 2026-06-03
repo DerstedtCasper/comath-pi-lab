@@ -116,12 +116,15 @@ try {
       argv_override: ["--claim-ready"]
     }
   });
-  assert.equal(callerOnly.ok, false, "caller-only runner metadata must not resolve the provider runner");
-  assert.equal(callerOnly.runner_status, "blocked_provider_runner_unavailable");
-  assert.equal(callerOnly.provider_runner_ready, false);
+  assert.equal(callerOnly.ok, true, "bundled service-owned helper asset may resolve the runner when no env helper is configured");
+  assert.equal(callerOnly.runner_status, "ready_for_service_owned_provider_runner");
+  assert.equal(callerOnly.provider_runner_ready, true);
   assert.equal(callerOnly.provider_runner_resolution.resolution_source, "service_owned_provider_runner_resolver");
-  assert.equal(callerOnly.provider_runner_resolution.runner_available, false);
-  assert.equal(callerOnly.provider_runner_resolution.runner_binary_sha256, null);
+  assert.equal(callerOnly.provider_runner_resolution.runner_available, true);
+  assert.match(callerOnly.provider_runner_resolution.runner_binary_sha256, /^[a-f0-9]{64}$/);
+  assert.notEqual(callerOnly.provider_runner_resolution.runner_binary_sha256, "2".repeat(64), "caller supplied runner hash must not be accepted");
+  assert.equal(callerOnly.provider_runner_resolution.runner_version, "windows_appcontainer-helper-bundled-protocol-v1");
+  assert.equal(callerOnly.adapter_execution_isolation.os_enforced, false);
   assert.equal(callerOnly.can_certify_ga, false);
   assert.equal(JSON.stringify(callerOnly).includes("user-supplied-runner"), false);
   assert.equal(JSON.stringify(callerOnly).includes("--claim-ready"), false);
@@ -261,9 +264,11 @@ try {
     }
   });
   assert.equal(routeResponse.status, 200, JSON.stringify(routeResponse.body));
-  assert.equal(routeResponse.body.runner.ok, false, "route callers cannot self-certify provider runner resolution");
-  assert.equal(routeResponse.body.runner.runner_status, "blocked_provider_runner_unavailable");
-  assert.equal(routeResponse.body.runner.provider_runner_ready, false);
+  assert.equal(routeResponse.body.runner.ok, true, "route callers cannot self-certify provider runner resolution, but bundled service-owned protocol asset may resolve it");
+  assert.equal(routeResponse.body.runner.runner_status, "ready_for_service_owned_provider_runner");
+  assert.equal(routeResponse.body.runner.provider_runner_ready, true);
+  assert.notEqual(routeResponse.body.runner.provider_runner_resolution.runner_binary_sha256, "3".repeat(64), "route supplied runner hash must not be accepted");
+  assert.equal(routeResponse.body.runner.adapter_execution_isolation.os_enforced, false);
   assert.equal(routeResponse.body.runner.can_certify_ga, false);
   assert.equal(JSON.stringify(routeResponse.body).includes(projectRoot), false, "route response must not echo host paths");
   assert.equal(JSON.stringify(routeResponse.body).includes("route-secret"), false, "route response must not echo secrets");

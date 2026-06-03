@@ -165,10 +165,26 @@ try {
   assert.equal(callerOnlyRoute.status, 200, JSON.stringify(callerOnlyRoute.body));
   assert.equal(
     callerOnlyRoute.body.host_validation.host_validation_status,
-    "blocked_provider_helper_host_not_validated",
-    "route callers cannot self-validate the provider helper host"
+    "provider_helper_host_validated",
+    "route callers cannot self-validate the provider helper host, but the bundled service-owned protocol asset may validate it"
   );
-  assert.equal(callerOnlyRoute.body.host_validation.provider_helper_host_ready, false);
+  assert.equal(callerOnlyRoute.body.host_validation.provider_helper_host_ready, true);
+  assert.equal(
+    callerOnlyRoute.body.host_validation.provider_helper_host_validation.validation_source,
+    "service_owned_provider_helper_host_validator"
+  );
+  assert.notEqual(
+    callerOnlyRoute.body.host_validation.provider_helper_host_validation.helper_binary_sha256,
+    "2".repeat(64),
+    "route supplied helper hash must not be accepted"
+  );
+  assert.notEqual(
+    callerOnlyRoute.body.host_validation.provider_helper_host_validation.helper_version,
+    "route-claims-ready",
+    "route supplied helper version must not be accepted"
+  );
+  assert.equal(callerOnlyRoute.body.host_validation.provider_helper_host_validation.self_test_passed, true);
+  assert.equal(callerOnlyRoute.body.host_validation.adapter_execution_isolation.os_enforced, false);
   assert.equal(callerOnlyRoute.body.host_validation.can_certify_ga, false);
   assert.equal(JSON.stringify(callerOnlyRoute.body).includes(projectRoot), false, "route response must not echo host paths");
   assert.equal(JSON.stringify(callerOnlyRoute.body).includes("route-secret"), false, "route response must not echo secrets");
