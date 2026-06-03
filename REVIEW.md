@@ -1,3 +1,32 @@
+# Goal 3 Task 196 / Remaining Provider Host Facility Probes
+
+Scope: complete the default service-owned provider host facility diagnostic matrix for Nix sandbox, Firejail, and macOS `sandbox-exec`, while keeping `nix`, `nix-store`, `firejail`, and `sandbox-exec` observation diagnostic-only and unable to become provider-helper readiness, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
+Changes:
+
+- Added `goal3-task196-agent-adapter-os-isolation-remaining-provider-host-facility-probes.test.mjs`.
+- Added a shared remaining-provider facility diagnostic producer to the default host capability probe.
+- The probe records `nix_sandbox_host_facility_probe`, `firejail_host_facility_probe`, `macos_sandbox_exec_host_facility_probe`, matching service-observed host facility family features, and executable-candidate presence/hash metadata for `nix`, `nix-store`, `firejail`, and `sandbox-exec`.
+- The probe never executes those tools, never reads store/profile/sandbox-policy state, and does not record tool versions.
+- PATH probing reuses the executable-candidate detector: POSIX files must have an execute bit, and Windows files must match a PATHEXT executable suffix.
+- Sanitization keeps caller tool paths, PATH entries, executable paths, and caller secrets out of route responses, persisted manifests, and audit events.
+- Added `agent_adapter_os_isolation_remaining_provider_host_facility_probes`, phase0 smoke coverage, GA release criteria coverage, and public boundary wording.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task196 exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_remaining_provider_host_facility_probes`.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after implementation.
+- After implementation, focused Task196 exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0, with Task196 discovered by the default runner.
+- Adjacent provider-host regressions exited 0: Task190, Task191, Task193, Task194, and Task195.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task196 observes Nix/Firejail/macOS host facility metadata and hashes CLI binaries when available, but it does not execute those CLIs, inspect stores/profiles/sandbox policies, launch a sandbox, execute an adapter under OS enforcement, validate a provider helper, satisfy readiness review, write proof authority, provide real-Pi execution evidence, broaden cross-platform helper support, or certify GA. Caller-supplied platform, tool path, capability facts, kernel facts, proof-authority fields, and GA flags remain ignored.
+
+Residual risks: Goal 3 remains incomplete. Task196 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute helpers under OS-enforced isolation, does not make host facility metadata readiness evidence, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 195 / OCI Container Host Facility Probe
 
 Scope: extend the default service-owned provider host capability probe with an OCI container host facility diagnostic while keeping Docker/Podman observation diagnostic-only and unable to become provider-helper readiness, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.

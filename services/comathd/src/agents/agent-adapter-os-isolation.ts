@@ -2014,6 +2014,123 @@ function ociContainerHostFacilityDiagnostics(
   };
 }
 
+type RemainingProviderHostFacilitySpec = {
+  provider: AgentAdapterOsIsolationProvider;
+  label: string;
+  capability: string;
+  feature: string;
+  supported_platforms: NodeJS.Platform[];
+  unsupported_platform_diagnostics: string;
+  tools: Array<{
+    name: string;
+    command: string;
+    label: string;
+  }>;
+};
+
+const remainingProviderHostFacilitySpecs: Partial<Record<AgentAdapterOsIsolationProvider, RemainingProviderHostFacilitySpec>> = {
+  nix_sandbox: {
+    provider: "nix_sandbox",
+    label: "Nix sandbox",
+    capability: "nix_sandbox_host_facility_probe",
+    feature: "nix_sandbox_service_observed_host_facility_family",
+    supported_platforms: ["linux", "darwin"],
+    unsupported_platform_diagnostics:
+      "Nix sandbox host facility diagnostics require linux or darwin service-observed platforms.",
+    tools: [
+      { name: "nix_cli", command: "nix", label: "nix CLI" },
+      { name: "nix_store_cli", command: "nix-store", label: "nix-store CLI" }
+    ]
+  },
+  firejail: {
+    provider: "firejail",
+    label: "Firejail",
+    capability: "firejail_host_facility_probe",
+    feature: "firejail_service_observed_host_facility_family",
+    supported_platforms: ["linux"],
+    unsupported_platform_diagnostics:
+      "Firejail host facility diagnostics require the linux service-observed platform.",
+    tools: [{ name: "firejail_cli", command: "firejail", label: "Firejail CLI" }]
+  },
+  macos_sandbox_exec: {
+    provider: "macos_sandbox_exec",
+    label: "macOS sandbox-exec",
+    capability: "macos_sandbox_exec_host_facility_probe",
+    feature: "macos_sandbox_exec_service_observed_host_facility_family",
+    supported_platforms: ["darwin"],
+    unsupported_platform_diagnostics:
+      "macOS sandbox-exec host facility diagnostics require the darwin service-observed platform.",
+    tools: [{ name: "macos_sandbox_exec_cli", command: "sandbox-exec", label: "sandbox-exec CLI" }]
+  }
+};
+
+function remainingProviderHostFacilityDiagnostics(
+  input: AgentAdapterOsIsolationProviderHostCapabilityProbeInput
+): Pick<
+  AgentAdapterOsIsolationProviderHostCapabilityProbeResult,
+  "capability_facts" | "required_tools" | "kernel_features" | "diagnostics"
+> | null {
+  const spec = input.provider ? remainingProviderHostFacilitySpecs[input.provider] : null;
+  if (!spec) {
+    return null;
+  }
+
+  const serviceSupportedHost = spec.supported_platforms.includes(input.platform);
+  const toolHashes = spec.tools.map((tool) => ({
+    ...tool,
+    sha256: serviceSupportedHost ? servicePathExecutableHashOrNull(tool.command) : null
+  }));
+  const toolPresence = Object.fromEntries(
+    toolHashes.map((tool) => [`${tool.name}_present`, Boolean(tool.sha256)])
+  );
+
+  return {
+    capability_facts: [
+      {
+        capability: spec.capability,
+        observed: serviceSupportedHost,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: spec.capability,
+          provider: spec.provider,
+          platform: input.platform,
+          ...toolPresence
+        }),
+        notes:
+          `${spec.label} host facility diagnostics only; this is not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification.`
+      }
+    ],
+    required_tools: toolHashes.map((tool) => ({
+      name: tool.name,
+      present: Boolean(tool.sha256),
+      version: null,
+      binary_sha256: tool.sha256
+    })),
+    kernel_features: [
+      {
+        name: spec.feature,
+        observed: serviceSupportedHost,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: spec.feature,
+          provider: spec.provider,
+          platform: input.platform
+        }),
+        notes: `Service-observed ${spec.label} host facility family only; no provider-helper launch or runtime isolation enforcement has run.`
+      }
+    ],
+    diagnostics: [
+      serviceSupportedHost
+        ? `${spec.label} host facility diagnostics were evaluated on a service-supported host platform.`
+        : spec.unsupported_platform_diagnostics,
+      ...toolHashes.map((tool) =>
+        tool.sha256
+          ? `${tool.label} host tool was detected and hashed without exposing its executable path.`
+          : `${tool.label} host tool was not detected as an executable candidate or could not be hashed.`
+      ),
+      `${spec.label} host facility diagnostics are not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification.`
+    ]
+  };
+}
+
 function defaultProviderHostCapabilityProbe(
   input: AgentAdapterOsIsolationProviderHostCapabilityProbeInput
 ): AgentAdapterOsIsolationProviderHostCapabilityProbeResult {
@@ -2029,6 +2146,7 @@ function defaultProviderHostCapabilityProbe(
   const providerHostCapabilityAvailable = Boolean(providerOsEnforced && platformSupported && bundledHelper);
   const windowsAppContainerFacility = windowsAppContainerHostFacilityDiagnostics(input);
   const ociContainerFacility = ociContainerHostFacilityDiagnostics(input);
+  const remainingProviderFacility = remainingProviderHostFacilityDiagnostics(input);
 
   return {
     probe_source: "service_owned_provider_host_capability_probe",
@@ -2063,7 +2181,8 @@ function defaultProviderHostCapabilityProbe(
         notes: "Bundled provider-helper protocol asset is service-owned diagnostics only, not OS-enforcement evidence or GA certification."
       },
       ...(windowsAppContainerFacility?.capability_facts ?? []),
-      ...(ociContainerFacility?.capability_facts ?? [])
+      ...(ociContainerFacility?.capability_facts ?? []),
+      ...(remainingProviderFacility?.capability_facts ?? [])
     ],
     required_tools: [
       {
@@ -2073,7 +2192,8 @@ function defaultProviderHostCapabilityProbe(
         binary_sha256: runtimeHash
       },
       ...(windowsAppContainerFacility?.required_tools ?? []),
-      ...(ociContainerFacility?.required_tools ?? [])
+      ...(ociContainerFacility?.required_tools ?? []),
+      ...(remainingProviderFacility?.required_tools ?? [])
     ],
     kernel_features: [
       {
@@ -2097,7 +2217,8 @@ function defaultProviderHostCapabilityProbe(
         notes: "Host capability probing does not collect executed OS-isolation or adapter runtime evidence."
       },
       ...(windowsAppContainerFacility?.kernel_features ?? []),
-      ...(ociContainerFacility?.kernel_features ?? [])
+      ...(ociContainerFacility?.kernel_features ?? []),
+      ...(remainingProviderFacility?.kernel_features ?? [])
     ],
     diagnostics: [
       `Default service-owned provider host capability probe evaluated provider=${sanitizeProbeText(providerLabel)} on platform=${sanitizeProbeText(input.platform)}.`,
@@ -2109,6 +2230,7 @@ function defaultProviderHostCapabilityProbe(
         : "No bundled provider-helper protocol asset is available for this provider/platform family.",
       ...(windowsAppContainerFacility?.diagnostics ?? []),
       ...(ociContainerFacility?.diagnostics ?? []),
+      ...(remainingProviderFacility?.diagnostics ?? []),
       "Default host capability diagnostics are not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification."
     ]
   };

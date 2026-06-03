@@ -79,6 +79,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_adapter_os_isolation_default_provider_host_capability_probe",
       "agent_adapter_os_isolation_windows_appcontainer_host_facility_probe",
       "agent_adapter_os_isolation_oci_container_host_facility_probe",
+      "agent_adapter_os_isolation_remaining_provider_host_facility_probes",
       "agent_adapter_os_isolation_provider_host_capability_probe_contract",
       "agent_adapter_os_isolation_provider_helper_platform_contract",
       "agent_adapter_os_isolation_provider_helper_self_test_contract",

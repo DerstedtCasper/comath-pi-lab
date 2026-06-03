@@ -128,6 +128,8 @@ Task194 extends that default host capability path with Windows AppContainer host
 
 Task195 extends the same default host capability path with OCI container host facility diagnostics. On service-supported Linux, macOS, or Windows hosts, the default probe records an OCI facility fact plus Docker/Podman CLI presence/hash metadata without executing those tools, inspecting daemon/socket/container state, exposing executable paths, or accepting caller-supplied tool/success fields. These diagnostics remain host-capability metadata only: not provider-helper readiness, executed OS isolation, collected OS-enforcement evidence, readiness-review evidence, mathematical proof authority, real-Pi execution evidence, broad provider support, or GA certification.
 
+Task196 completes the remaining default host facility diagnostic matrix for Nix sandbox, Firejail, and macOS `sandbox-exec`. On service-supported host platforms, the default probe records Nix/Firejail/macOS facility facts plus `nix`, `nix-store`, `firejail`, or `sandbox-exec` executable-candidate presence/hash metadata without running those tools, reading stores/profiles/sandbox policies, exposing PATH/executable paths, recording versions, or accepting caller-supplied tool/success fields. These diagnostics remain host-capability metadata only: not provider-helper readiness, executed OS isolation, collected OS-enforcement evidence, readiness-review evidence, mathematical proof authority, real-Pi execution evidence, broad provider support, or GA certification.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)
