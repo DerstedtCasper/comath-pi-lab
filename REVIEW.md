@@ -1,3 +1,33 @@
+# Goal 3 Task 197 / Provider Helper Collection Complete Enforcement Gate
+
+Scope: make provider-helper collection fail closed when an internal service-owned callback is hash-bound to the helper execution but reports incomplete OS-enforcement facts, while preserving canonical blocker evidence and non-authority semantics.
+
+Changes:
+
+- Added `goal3-task197-agent-adapter-os-isolation-provider-helper-collection-complete-enforcement-gate.test.mjs`.
+- Added `blocked_provider_helper_collection_incomplete_os_enforcement` for the hash-bound but incomplete callback case.
+- Added provider-helper collection manifest fields `os_enforcement_complete` and `incomplete_os_enforcement_facts`.
+- Added `agent_adapter_os_isolation_provider_helper_collection_complete_enforcement_gate`.
+- Registered Task197 in phase0 smoke and GA release criteria.
+- Updated README, AGENTS, TODO, adapter contracts, GA release criteria, and threat model wording.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task197 exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_provider_helper_collection_complete_enforcement_gate`.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after implementation.
+- Focused Task197 exited 0.
+- Adjacent regressions exited 0: Task167, Task172, Task177, and Task187.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` initially exceeded a 180-second command timeout and left six `node` test child processes; those residual PIDs were cleaned up with approved elevated `Stop-Process`, and the same command rerun with a sufficient timeout exited 0 with Task197 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task197 only distinguishes service-owned hash-bound collection callbacks with incomplete OS-enforcement facts from generic no-collection cases. It preserves route/no-callback `blocked_provider_helper_collection_not_collected`, preserves the Task187 runtime-attestation gate, leaves incomplete canonical probe/evidence as readiness blockers, and keeps helper collection wrappers non-authoritative with `adapter_execution_isolation.os_enforced=false`, `proof_authority="none"`, `can_promote_claim=false`, and `can_certify_ga=false`.
+
+Residual risks: Goal 3 remains incomplete. Task197 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute adapters under OS enforcement, does not broaden Lean/mathlib replay, does not provide durable long-lived operator transport, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 196 / Remaining Provider Host Facility Probes
 
 Scope: complete the default service-owned provider host facility diagnostic matrix for Nix sandbox, Firejail, and macOS `sandbox-exec`, while keeping `nix`, `nix-store`, `firejail`, and `sandbox-exec` observation diagnostic-only and unable to become provider-helper readiness, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.

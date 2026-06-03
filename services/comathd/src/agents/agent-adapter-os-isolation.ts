@@ -407,6 +407,7 @@ export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "blocked_provider_helper_execution_not_attempted"
   | "blocked_provider_helper_runtime_attestation_missing"
   | "blocked_provider_helper_collection_hash_mismatch"
+  | "blocked_provider_helper_collection_incomplete_os_enforcement"
   | "blocked_provider_helper_collection_not_collected";
 
 export type AgentAdapterOsIsolationProviderHostCapabilityStatus =
@@ -1102,6 +1103,8 @@ export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
   provider_helper_collection: {
     probe_source: "service_owned_provider_helper_collection_probe" | "missing";
     hashes_match_helper_execution: boolean;
+    os_enforcement_complete: boolean;
+    incomplete_os_enforcement_facts: string[];
     helper_exit_code: number | null;
     stdout_sha256: string | null;
     stderr_sha256: string | null;
@@ -3516,6 +3519,35 @@ function providerHelperCollectionHashesMatchExecution(
   );
 }
 
+const providerHelperCollectionRequiredOsEnforcementFacts = [
+  "collection_source",
+  "process_isolation_enforced",
+  "filesystem_scope_enforced",
+  "network_isolation_enforced",
+  "no_new_privileges",
+  "escape_prevention",
+  "adapter_process_exit_code"
+] as const;
+
+function providerHelperCollectionOsEnforcementCompleteness(input: {
+  collection: AgentAdapterOsIsolationProviderHelperCollection | undefined;
+  hashesMatch: boolean;
+}): { complete: boolean; incompleteFacts: string[] } {
+  if (input.collection?.probe_source !== "service_owned_provider_helper_collection_probe" || !input.hashesMatch) {
+    return { complete: false, incompleteFacts: [] };
+  }
+  const incompleteFacts = providerHelperCollectionRequiredOsEnforcementFacts.filter((fact) => {
+    if (fact === "collection_source") {
+      return input.collection?.collection_source !== "service_owned_os_probe";
+    }
+    if (fact === "adapter_process_exit_code") {
+      return input.collection?.adapter_process_exit_code !== 0;
+    }
+    return input.collection?.[fact] !== true;
+  });
+  return { complete: incompleteFacts.length === 0, incompleteFacts };
+}
+
 function providerHelperCollectionForProbe(input: {
   collection: AgentAdapterOsIsolationProviderHelperCollection | undefined;
   helperExecution: AgentAdapterOsIsolationProviderHelperExecution | undefined;
@@ -3547,6 +3579,7 @@ function providerHelperCollectionStatus(input: {
   collectionPresent: boolean;
   collectionSourceAccepted: boolean;
   hashesMatch: boolean;
+  osEnforcementComplete: boolean;
   probe: AgentAdapterOsIsolationProbe | null;
 }): AgentAdapterOsIsolationProviderHelperCollectionStatus {
   if (!input.helperExecutionPresent) {
@@ -3563,6 +3596,9 @@ function providerHelperCollectionStatus(input: {
   }
   if (input.collectionPresent && input.collectionSourceAccepted && !input.hashesMatch) {
     return "blocked_provider_helper_collection_hash_mismatch";
+  }
+  if (input.collectionPresent && input.collectionSourceAccepted && input.hashesMatch && !input.osEnforcementComplete) {
+    return "blocked_provider_helper_collection_incomplete_os_enforcement";
   }
   return input.probe?.ok === true
     ? "provider_helper_os_evidence_collected"
@@ -3586,6 +3622,9 @@ function providerHelperCollectionReplayableNextAction(
   }
   if (status === "blocked_provider_helper_collection_hash_mismatch") {
     return "Re-run the service-owned provider-helper collection probe so exit/stdout/stderr/transcript hashes exactly match the helper execution manifest.";
+  }
+  if (status === "blocked_provider_helper_collection_incomplete_os_enforcement") {
+    return "Re-run the service-owned provider-helper collection probe with complete OS-enforcement facts: process, filesystem, network, no-new-privileges, escape-prevention, service-owned source, and helper exit code.";
   }
   return "Run a service-owned provider-helper collection probe that records complete OS-enforcement checks and writes canonical probe/evidence artifacts.";
 }
@@ -4726,6 +4765,7 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     : undefined;
   const collectionSourceAccepted = collection?.probe_source === "service_owned_provider_helper_collection_probe";
   const hashesMatch = providerHelperCollectionHashesMatchExecution(collection, helperExecution);
+  const osEnforcementCompleteness = providerHelperCollectionOsEnforcementCompleteness({ collection, hashesMatch });
   const probe = helperExecution && canCollectFromHelperExecution
     ? probeAgentAdapterOsIsolation(projectRoot, {
         project_id: input.project_id,
@@ -4756,6 +4796,7 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     collectionPresent: Boolean(collection),
     collectionSourceAccepted,
     hashesMatch,
+    osEnforcementComplete: osEnforcementCompleteness.complete,
     probe
   });
   const ok = status === "provider_helper_os_evidence_collected";
@@ -4789,6 +4830,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     provider_helper_collection: {
       probe_source: collectionSourceAccepted ? "service_owned_provider_helper_collection_probe" : "missing",
       hashes_match_helper_execution: hashesMatch,
+      os_enforcement_complete: osEnforcementCompleteness.complete,
+      incomplete_os_enforcement_facts: osEnforcementCompleteness.incompleteFacts,
       helper_exit_code: helperExecution?.provider_helper_execution.helper_exit_code ?? null,
       stdout_sha256: helperExecution?.provider_helper_execution.stdout_sha256 ?? null,
       stderr_sha256: helperExecution?.provider_helper_execution.stderr_sha256 ?? null,
@@ -4838,6 +4881,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       probe_id: probe?.probe_id ?? null,
       evidence_path: probe?.evidence_path ?? null,
       hashes_match_helper_execution: hashesMatch,
+      os_enforcement_complete: osEnforcementCompleteness.complete,
+      incomplete_os_enforcement_facts: osEnforcementCompleteness.incompleteFacts,
       runtime_attestation_bound: runtimeAttestationBound,
       proof_authority: "none",
       can_promote_claim: false,
