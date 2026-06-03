@@ -213,6 +213,8 @@ Task187 hardens provider-helper runtime attestation binding. A host-validation-b
 
 Task188 adds a bundled provider-helper protocol asset for the default no-env-helper path. It may make provider-runner, host-validation, helper-execution, internal collection, and readiness-review test chains executable without a host-configured helper, but only as service-owned protocol material. The bundled asset must not be described as a production OS sandbox helper, collected OS-enforcement evidence, readiness evidence by itself, broad provider support, real-Pi execution, proof authority, or GA certification.
 
+Task189 revalidates the Task184-188 provider-helper/bundled-helper chain as a check-debug loop. Helper configuration, platform contracts, self-test status, runtime attestation, bundled protocol execution, host-validation manifests, helper-execution manifests, public collection route outputs, and successful collection wrapper manifests remain non-authoritative and cannot satisfy readiness by themselves, prove OS enforcement, certify GA, provide real-Pi execution evidence, or affect mathematical proof authority. Only canonical service-owned probe/evidence artifacts and their readiness reviews can feed release gates.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

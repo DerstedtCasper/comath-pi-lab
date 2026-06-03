@@ -3810,8 +3810,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     },
     adapter_execution_isolation: {
       required_for_ga: true,
-      current_boundary: ok ? "os_enforced" : "process_boundary_only",
-      os_enforced: ok,
+      current_boundary: "process_boundary_only",
+      os_enforced: false,
       provider,
       claims_runtime_enforcement: false,
       proof_authority: "none"

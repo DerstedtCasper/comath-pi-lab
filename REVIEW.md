@@ -1,3 +1,32 @@
+# Goal 3 Task 189 / Provider Helper Chain Check-Debug
+
+Scope: revalidate the Task184-188 provider-helper and bundled-helper chain as a comprehensive check-debug loop, with special attention to wrapper manifests being mistaken for adapter OS-isolation readiness evidence, OS-enforcement evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
+Work performed:
+
+- Treated Task189 as the cadence-mandated check-debug loop after Task188 instead of opening a new goal file or expanding proof authority.
+- Added `goal3-task189-agent-adapter-os-isolation-provider-helper-chain-check-debug.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_helper_chain_check_debug` to the service capability ledger and registered the focused suite in phase0 smoke and GA release criteria.
+- Revalidated the bundled no-env-helper path through provider-runner, host validation, helper execution, public collection-route rejection, internal service-owned collection, direct readiness review, and route readiness review.
+- Hardened successful provider-helper collection manifests so the wrapper top-level `adapter_execution_isolation` remains `process_boundary_only` / `os_enforced=false`; only the nested canonical probe/evidence artifact can carry OS-enforcement evidence.
+- Updated adjacent provider-helper tests and public docs so configured helpers, self-tests, runtime attestations, bundled protocol execution, host-validation wrappers, helper-execution wrappers, public collection route outputs, and successful collection wrappers remain non-authoritative.
+
+Verification evidence:
+
+- Initial focused RED was observed: after `corepack pnpm --filter @comath/comathd build` exited 0, `node services/comathd/tests/unit/goal3-task189-agent-adapter-os-isolation-provider-helper-chain-check-debug.test.mjs` exited 1 because the capability ledger did not advertise `agent_adapter_os_isolation_provider_helper_chain_check_debug`.
+- After the initial implementation, focused Task189 exited 0.
+- Read-only code review then found that successful collection wrappers still exposed top-level `adapter_execution_isolation.os_enforced=true`. The strengthened Task189 test exited 1 with actual `current_boundary="os_enforced"` where `process_boundary_only` was expected. The implementation now leaves wrapper-level OS enforcement false and records OS-enforcement only on the nested canonical probe/evidence artifact.
+- Adjacent focused regressions exited 0 after the wrapper-boundary repair: Task175, Task176, Task177, Task178, Task179, Task181, Task182, Task184, Task185, Task186, Task187, Task188, and focused Task189.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0, with Task189 discovered by the default runner.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath ".comath"` returned `False`.
+- Static scans confirmed no provider-helper wrapper tests still expect collection-wrapper top-level `os_enforced=true`; remaining top-level true assertions are the canonical Task170/Task172 producer paths, while provider-helper suites now assert nested probe evidence instead.
+
+Boundary notes: Task189 is a check-debug and boundary-tightening task. It does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, prove OS enforcement from helper configuration or bundled protocol execution, expose provider-helper routes through Pi tools, make host-validation/helper-execution/collection wrappers readiness evidence, broaden Lean/mathlib replay, complete real-Pi execution, or certify GA.
+
+Residual risks: Goal 3 remains incomplete. Remaining high-risk frontiers include production provider helper binaries/host probes for one OS sandbox family, durable long-lived operator transport, broader live Lean/mathlib replay, fully interactive real-Pi execution, and final GA audit closure.
+
 # Goal 3 Task 188 / Bundled Provider Helper Protocol Asset
 
 Scope: make the default provider-helper protocol chain executable without a host-configured helper by bundling a service-owned protocol asset, while preserving that bundled helper output is protocol binding only and cannot become OS-enforcement evidence, proof authority, readiness evidence by itself, broad provider support, real-Pi execution, or GA certification.

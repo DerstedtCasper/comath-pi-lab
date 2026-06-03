@@ -114,6 +114,8 @@ Task187 hardens the runtime side of configured provider-helper execution. A help
 
 Task188 adds a bundled CoMath provider-helper protocol asset for the no-env-helper default path. The provider-runner, host-validation, and helper-execution routes can use the packaged protocol script through the current Node executable with fixed argv/env, pass the self-test/runtime-attestation binding checks, and still expose only hashes/counts/status in public manifests. This is protocol coverage only: it is not a production OCI/Nix/Firejail/AppContainer/macOS helper binary, not collected OS-enforcement evidence, not readiness evidence by itself, not mathematical proof authority, broad provider support, real-Pi execution, or GA certification.
 
+Task189 revalidates the Task184-188 provider-helper and bundled-helper chain as a comprehensive check-debug loop. It keeps configured helper handles, platform contracts, self-test bindings, runtime-attestation bindings, bundled protocol execution, host-validation wrappers, helper-execution wrappers, and collection wrappers non-authoritative: none can satisfy readiness by themselves, prove OS enforcement, affect mathematical proof authority, provide real-Pi evidence, or certify GA. Only canonical service-owned probe/evidence artifacts can feed the adapter OS-isolation readiness review.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)

@@ -79,7 +79,7 @@ Provider-helper execution attempt manifests may be mistaken for collected OS-enf
 
 ### Provider Helper Collection Confusion
 
-Provider-helper collection bridge manifests may be mistaken for readiness evidence because they can contain a canonical probe result when a service-owned collector succeeds. Mitigation: the route cannot accept collector callbacks or caller-supplied OS-enforcement booleans, exit codes, or stdout/stderr/transcript hashes. The internal collector must bind to the ready helper execution, provider runner, and launch artifacts, and its exit/stdout/stderr/transcript hashes must exactly match the helper execution manifest before `comathd` writes canonical Task170 probe/evidence artifacts. The collection wrapper manifest itself remains non-authoritative and is rejected by the readiness gate; only the canonical probe/evidence artifact can be reviewed.
+Provider-helper collection bridge manifests may be mistaken for readiness evidence because they can contain a canonical probe result when a service-owned collector succeeds. Mitigation: the route cannot accept collector callbacks or caller-supplied OS-enforcement booleans, exit codes, or stdout/stderr/transcript hashes. The internal collector must bind to the ready helper execution, provider runner, and launch artifacts, and its exit/stdout/stderr/transcript hashes must exactly match the helper execution manifest before `comathd` writes canonical Task170 probe/evidence artifacts. The collection wrapper manifest itself remains non-authoritative, keeps its top-level `adapter_execution_isolation.os_enforced=false`, and is rejected by the readiness gate; only the canonical probe/evidence artifact can be reviewed.
 
 ## Residual Risks
 

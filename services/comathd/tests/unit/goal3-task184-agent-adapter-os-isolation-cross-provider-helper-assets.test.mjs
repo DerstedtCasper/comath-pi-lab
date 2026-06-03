@@ -635,7 +635,8 @@ try {
     });
     assert.equal(compatibleCollected.ok, true);
     assert.equal(compatibleCollected.collection_status, "provider_helper_os_evidence_collected");
-    assert.equal(compatibleCollected.adapter_execution_isolation.os_enforced, true);
+    assert.equal(compatibleCollected.adapter_execution_isolation.os_enforced, false, "helper collection wrapper is not readiness evidence by itself");
+    assert.equal(compatibleCollected.probe.adapter_execution_isolation.os_enforced, true);
     assert.equal(compatibleCollected.proof_authority, "none");
     assert.equal(compatibleCollected.can_certify_ga, false);
     assert.equal(JSON.stringify(compatibleCollected).includes(compatibleProjectRoot), false);

@@ -537,7 +537,8 @@ try {
   assert.equal(collected.collection_status, "provider_helper_os_evidence_collected");
   assert.equal(collected.helper_execution_artifact.path, boundExecution.helper_execution_path);
   assert.equal(collected.probe.ok, true);
-  assert.equal(collected.adapter_execution_isolation.os_enforced, true);
+  assert.equal(collected.adapter_execution_isolation.os_enforced, false, "helper collection wrapper is not readiness evidence by itself");
+  assert.equal(collected.probe.adapter_execution_isolation.os_enforced, true);
   assert.equal(collected.proof_authority, "none");
   assert.equal(collected.can_certify_ga, false);
 

@@ -308,7 +308,8 @@ try {
   assert.equal(collected.provider_helper_collection.runtime_attestation_sha256, bound.execution.provider_helper_execution.runtime_attestation_sha256);
   assert.equal(collected.probe.ok, true);
   assert.equal(collected.probe.evidence.collection_source, "service_owned_os_probe");
-  assert.equal(collected.adapter_execution_isolation.os_enforced, true);
+  assert.equal(collected.adapter_execution_isolation.os_enforced, false, "helper collection wrapper is not readiness evidence by itself");
+  assert.equal(collected.probe.adapter_execution_isolation.os_enforced, true);
   assert.equal(collected.proof_authority, "none");
   assert.equal(collected.can_promote_claim, false);
   assert.equal(collected.can_certify_ga, false);
