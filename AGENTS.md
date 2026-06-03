@@ -219,6 +219,8 @@ Task190 adds a service-owned provider host capability probe contract. It records
 
 Task191 requires provider-helper host validation to bind a matching, observed, service-owned provider host capability probe before any host validator can run. The binding must match project id, adapter id, backend, provider, service-observed platform, artifact path/hash, and non-authority flags. Missing, unobserved, or mismatched host capability probes fail closed and do not call the host validator. This does not turn host capability metadata into readiness, OS-enforcement evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
 
+Task192 exposes the Task190/191 provider host capability and provider-helper host-validation boundaries through Pi release tools and `/cm:release` subcommands. Pi remains a thin client: the new consumers are host-confirmed, strip model-supplied confirmation ids, forward only sanitized caller `platform` / `notes` diagnostics, and cannot make host capability or host-validation payloads readiness evidence, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

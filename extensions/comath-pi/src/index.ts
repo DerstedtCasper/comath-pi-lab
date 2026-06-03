@@ -155,6 +155,8 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleGuidedRealPiExecution",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
+  "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",
+  "comath.release.agentAdapterOsIsolationProviderHelperHostValidation",
   "comath.agent.profileList",
   "comath.agent.profileGet",
   "comath.agent.runForProfile",
@@ -467,6 +469,8 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleGuidedRealPiExecution" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
+    name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe" ||
+    name === "comath.release.agentAdapterOsIsolationProviderHelperHostValidation" ||
     name === "comath.campaign.export" ||
     name === "comath.campaign.replay"
   );
@@ -525,6 +529,21 @@ const AGENT_ADAPTER_OS_ISOLATION_PROVIDERS = [
 
 function publicOperatorText(value: string): string {
   return sanitizePublicProofAuthorityValue(value) as string;
+}
+
+function publicDiagnosticEnvironment(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const source = value as Record<string, unknown>;
+  const environment: Record<string, string> = {};
+  if (typeof source.platform === "string") {
+    environment.platform = publicOperatorText(source.platform);
+  }
+  if (typeof source.notes === "string") {
+    environment.notes = publicOperatorText(source.notes);
+  }
+  return Object.keys(environment).length > 0 ? environment : undefined;
 }
 
 function optionalPublicOperatorText(input: Record<string, unknown>, field: string, fallback: string): string {
@@ -1582,6 +1601,45 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe") {
+    const requestedProvider = readString(input, "requested_provider", { optional: true });
+    const hostCapabilityEnvironment = publicDiagnosticEnvironment(input.host_capability_environment);
+    return publicToolResult(
+      name,
+      client.post("/agent/adapter/package/os-isolation-provider-host-capability-probe", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        host_capability_probe_id: readString(input, "host_capability_probe_id"),
+        adapter_id: readString(input, "adapter_id"),
+        backend: readString(input, "backend"),
+        ...(requestedProvider === undefined ? {} : { requested_provider: requestedProvider }),
+        ...(hostCapabilityEnvironment === undefined ? {} : { host_capability_environment: hostCapabilityEnvironment })
+      })
+    );
+  }
+
+  if (name === "comath.release.agentAdapterOsIsolationProviderHelperHostValidation") {
+    const requestedProvider = readString(input, "requested_provider", { optional: true });
+    const hostEnvironment = publicDiagnosticEnvironment(input.host_environment);
+    return publicToolResult(
+      name,
+      client.post("/agent/adapter/package/os-isolation-provider-helper-host-validation", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        host_validation_id: readString(input, "host_validation_id"),
+        host_capability_probe_id: readString(input, "host_capability_probe_id"),
+        runner_id: readString(input, "runner_id"),
+        launch_id: readString(input, "launch_id"),
+        adapter_id: readString(input, "adapter_id"),
+        backend: readString(input, "backend"),
+        ...(requestedProvider === undefined ? {} : { requested_provider: requestedProvider }),
+        ...(hostEnvironment === undefined ? {} : { host_environment: hostEnvironment })
+      })
+    );
+  }
+
   throw new Error(`unsupported comath tool: ${name}`);
 }
 
@@ -2550,6 +2608,75 @@ export function createComathTools(): ToolDescriptor[] {
               stdout_sha256: stringProp,
               stderr_sha256: stringProp,
               transcript_sha256: stringProp
+            }
+          }
+        }
+      )
+    },
+    {
+      name: "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",
+      description:
+        "Record service-owned provider host capability diagnostics through comathd without Pi direct writes, helper readiness, proof authority, OS-enforcement evidence, real-Pi evidence, or GA certification.",
+      mutates: true,
+      input_schema: objectSchema(
+        ["project_root", "project_id", "actor", "host_capability_probe_id", "adapter_id", "backend"],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          actor: stringProp,
+          host_capability_probe_id: stringProp,
+          adapter_id: stringProp,
+          backend: agentAdapterBackendProp,
+          requested_provider: {
+            type: "string",
+            enum: [...AGENT_ADAPTER_OS_ISOLATION_PROVIDERS]
+          },
+          host_capability_environment: {
+            type: "object",
+            properties: {
+              platform: stringProp,
+              notes: stringProp
+            }
+          }
+        }
+      )
+    },
+    {
+      name: "comath.release.agentAdapterOsIsolationProviderHelperHostValidation",
+      description:
+        "Record service-owned provider-helper host validation diagnostics through comathd without Pi direct writes, readiness-review evidence, proof authority, OS-enforcement evidence, real-Pi evidence, or GA certification.",
+      mutates: true,
+      input_schema: objectSchema(
+        [
+          "project_root",
+          "project_id",
+          "actor",
+          "host_validation_id",
+          "host_capability_probe_id",
+          "runner_id",
+          "launch_id",
+          "adapter_id",
+          "backend"
+        ],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          actor: stringProp,
+          host_validation_id: stringProp,
+          host_capability_probe_id: stringProp,
+          runner_id: stringProp,
+          launch_id: stringProp,
+          adapter_id: stringProp,
+          backend: agentAdapterBackendProp,
+          requested_provider: {
+            type: "string",
+            enum: [...AGENT_ADAPTER_OS_ISOLATION_PROVIDERS]
+          },
+          host_environment: {
+            type: "object",
+            properties: {
+              platform: stringProp,
+              notes: stringProp
             }
           }
         }
@@ -3970,6 +4097,75 @@ async function handleReleaseCommand(
             stdout_sha256: optionValue(parsed.args, "--stdout-sha256"),
             stderr_sha256: optionValue(parsed.args, "--stderr-sha256"),
             transcript_sha256: optionValue(parsed.args, "--transcript-sha256")
+          }
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "agent-adapter-os-isolation-provider-host-capability-probe") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe"
+    );
+    if (!tool) {
+      throw new Error("agent adapter OS-isolation provider host capability probe tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          host_capability_probe_id: requiredOption(
+            optionValue(parsed.args, "--host-capability-probe-id"),
+            "host_capability_probe_id"
+          ),
+          adapter_id: requiredOption(optionValue(parsed.args, "--adapter-id") ?? optionValue(parsed.args, "--adapter"), "adapter_id"),
+          backend: requiredOption(optionValue(parsed.args, "--backend"), "backend"),
+          requested_provider: optionValue(parsed.args, "--requested-provider"),
+          host_capability_environment: {
+            platform: optionValue(parsed.args, "--platform"),
+            notes: optionValue(parsed.args, "--host-capability-note")
+          }
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "agent-adapter-os-isolation-provider-helper-host-validation") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.agentAdapterOsIsolationProviderHelperHostValidation"
+    );
+    if (!tool) {
+      throw new Error("agent adapter OS-isolation provider-helper host validation tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          host_validation_id: requiredOption(optionValue(parsed.args, "--host-validation-id"), "host_validation_id"),
+          host_capability_probe_id: requiredOption(
+            optionValue(parsed.args, "--host-capability-probe-id"),
+            "host_capability_probe_id"
+          ),
+          runner_id: requiredOption(optionValue(parsed.args, "--runner-id"), "runner_id"),
+          launch_id: requiredOption(optionValue(parsed.args, "--launch-id"), "launch_id"),
+          adapter_id: requiredOption(optionValue(parsed.args, "--adapter-id") ?? optionValue(parsed.args, "--adapter"), "adapter_id"),
+          backend: requiredOption(optionValue(parsed.args, "--backend"), "backend"),
+          requested_provider: optionValue(parsed.args, "--requested-provider"),
+          host_environment: {
+            platform: optionValue(parsed.args, "--platform"),
+            notes: optionValue(parsed.args, "--host-validation-note")
           }
         },
         ctx

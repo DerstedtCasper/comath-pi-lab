@@ -120,6 +120,8 @@ Task190 adds a service-owned provider host capability probe contract for adapter
 
 Task191 binds provider-helper host validation to a matching service-owned provider host capability probe. Host validation now fails closed unless the referenced append-only probe is observed, project/adapter/backend/provider/platform/artifact-bound, non-authoritative, and still diagnostic-only. This prerequisite does not make host capability metadata provider-helper readiness, collected OS-enforcement evidence, readiness-review evidence, proof authority, real-Pi evidence, or GA certification.
 
+Task192 exposes those provider host capability and provider-helper host-validation boundaries through the Pi thin client as `/cm:release agent-adapter-os-isolation-provider-host-capability-probe` and `/cm:release agent-adapter-os-isolation-provider-helper-host-validation`. The Pi consumer is host-confirmed, strips model-supplied confirmation ids, forwards only sanitized `platform` / `notes` diagnostics from caller environment objects, and keeps outputs non-authoritative: no direct `.comath/` writes by Pi, no readiness-review evidence, no executed OS-isolation evidence, no proof authority, no real-Pi evidence, and no GA certification.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)

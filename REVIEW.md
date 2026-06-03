@@ -1,3 +1,33 @@
+# Goal 3 Task 192 / Pi Provider Helper Host Capability Consumer
+
+Scope: expose the Task190 provider host capability probe and Task191 provider-helper host-validation boundary through Pi release tools while keeping Pi a host-confirmed thin client with no direct trusted-state writes, readiness authority, OS-enforcement authority, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
+Work performed:
+
+- Treated Task191's next step as authoritative and selected Pi exposure for provider-helper host capability/helper validation boundaries.
+- Used two read-only explorer subagents for Pi consumer patterns and comathd Task190/191 route contracts while keeping this thread as the only writer.
+- Added `goal3-task192-pi-provider-helper-host-capability-consumer.test.mjs`.
+- Added Pi executable tools `comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe` and `comath.release.agentAdapterOsIsolationProviderHelperHostValidation`.
+- Added `/cm:release agent-adapter-os-isolation-provider-host-capability-probe` and `/cm:release agent-adapter-os-isolation-provider-helper-host-validation`.
+- Kept both tools mutating and host-confirmed, stripped model-supplied confirmation ids before service calls, and whitelisted caller environment forwarding to sanitized `platform` / `notes` diagnostics only.
+- Registered the Task192 Pi suite in the extension package test chain, root smoke focused-suite list, GA release criteria, README, AGENTS, TODO, adapter contracts, and threat model.
+
+Verification evidence:
+
+- TDD RED was observed before implementation: focused Task192 exited 1 because `comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe` was not registered.
+- After implementation, focused Task192 exited 0.
+- Adjacent Pi consumer regressions exited 0: Task169 and Task173.
+- Phase6 and Phase26 Pi extension regressions exited 0 when run from the extension package cwd.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task192 discovered by the default Pi package runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task192 does not make provider host capability or provider-helper host-validation payloads readiness-review evidence. The Pi layer forwards through `comathd`, requires host confirmation, sanitizes prompt/notification/direct-result surfaces, and strips success-shaped caller fields such as capability booleans, helper readiness, helper hashes, command/argv/env overrides, proof-authority fields, and GA-certification flags.
+
+Residual risks: Goal 3 remains incomplete. Task192 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute helpers under OS-enforced isolation, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 191 / Host Capability To Helper Validation Binding
 
 Scope: bind provider-helper host validation to a matching service-owned provider host capability probe, while keeping both the host capability artifact and host-validation manifest non-authoritative and unable to satisfy adapter OS-isolation readiness, OS-enforcement evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.

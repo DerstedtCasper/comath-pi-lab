@@ -104,6 +104,8 @@ assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycle
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleGuidedRealPiExecution"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.agentAdapterOsIsolationProbe"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe"), true);
+assert.equal(tools.some((tool) => tool.name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe"), true);
+assert.equal(tools.some((tool) => tool.name === "comath.release.agentAdapterOsIsolationProviderHelperHostValidation"), true);
 assert.equal(
   tools.every((tool) => tool.input_schema && tool.input_schema.type === "object"),
   true
