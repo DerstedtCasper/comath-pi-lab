@@ -59,11 +59,18 @@ try {
   });
   assert.equal(routeSpoof.status, 200, JSON.stringify(routeSpoof.body));
   const spoofed = routeSpoof.body.host_capability_probe;
-  assert.equal(spoofed.ok, false, "route callers cannot self-attest provider host capability");
-  assert.equal(spoofed.host_capability_status, "blocked_provider_host_capability_probe_not_collected");
-  assert.equal(spoofed.provider_host_capability_available, false);
-  assert.equal(spoofed.provider_host_capability.probe_source, "missing");
+  assert.equal(spoofed.ok, true, "route callers still cannot self-attest provider host capability; success must come from the service-owned default probe");
+  assert.equal(spoofed.host_capability_status, "provider_host_capability_observed");
+  assert.equal(spoofed.provider_host_capability_available, true);
+  assert.equal(spoofed.provider_host_capability.probe_source, "service_owned_provider_host_capability_probe");
+  assert.equal(spoofed.provider_host_capability.platform, process.platform);
+  assert.equal(spoofed.provider_host_capability.platform_supported, true);
   assert.equal(spoofed.provider_host_capability.caller_supplied_success_allowed, false);
+  assert.equal(
+    spoofed.provider_host_capability.capability_facts.some((fact) => fact.capability === "provider_family_platform_contract"),
+    true,
+    "route path must record service-owned capability facts rather than caller-submitted facts"
+  );
   assert.equal(spoofed.adapter_execution_isolation.current_boundary, "process_boundary_only");
   assert.equal(spoofed.adapter_execution_isolation.os_enforced, false);
   assert.equal(spoofed.proof_authority, "none");

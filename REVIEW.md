@@ -1,3 +1,30 @@
+# Goal 3 Task 193 / Default Provider Host Capability Probe
+
+Scope: add a default service-owned provider host capability probe for the route/no-injected-callback path while keeping host capability manifests diagnostic-only and unable to become provider-helper readiness, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
+Work performed:
+
+- Treated Task192's next step as authoritative and selected the production host-probe residual blocker.
+- Used read-only subagent review for the default collector insertion point and non-authority boundaries while keeping this thread as the only writer.
+- Added `goal3-task193-agent-adapter-os-isolation-default-provider-host-capability-probe.test.mjs`.
+- Added the internal default service-owned provider host capability probe, using service-observed provider/platform compatibility, bundled provider-helper protocol asset presence/hash, and Node runtime hash metadata rather than caller-submitted success fields.
+- Updated the route/no-injected-callback behavior so compatible provider families can produce observed host-capability diagnostics without a test callback, while incompatible provider/platform pairs still fail closed as unavailable.
+- Updated the service capability ledger with `agent_adapter_os_isolation_default_provider_host_capability_probe`, registered the focused suite in phase0 smoke and GA release criteria, and synchronized README, AGENTS, TODO, adapter contracts, GA release criteria, and threat model wording.
+- Updated Task190 route-spoof assertions so caller success-shaped fields remain ignored while service-owned default probe facts can be observed.
+
+Verification evidence:
+
+- TDD RED was observed before implementation: after `corepack pnpm --filter @comath/comathd build` exited 0, focused Task193 exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_default_provider_host_capability_probe`.
+- After implementation, focused Task193 exited 0.
+- Adjacent provider-helper and Pi regressions exited 0: Task176, Task177, Task178, Task179, Task181, Task182, Task184, Task185, Task186, Task187, Task188, Task189, Task190, Task191, and Task192.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Package gates exited 0: `corepack pnpm --filter @comath/comathd build`, `corepack pnpm --filter @comath/comathd typecheck`, and `corepack pnpm --filter @comath/comathd test`, with Task193 discovered by the default runner.
+- Root gate exited 0: `corepack pnpm test`, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task193 changes the production route path from "no callback means not collected" to "service-owned default probe may collect host-capability diagnostics." It does not allow caller platform/tool/kernel/success metadata to self-attest capability, and the resulting manifests still keep `adapter_execution_isolation.os_enforced=false`, `proof_authority="none"`, `can_promote_claim=false`, and `can_certify_ga=false`. Readiness review still rejects host-capability manifests and accepts only canonical service-owned OS-isolation probe/evidence artifacts.
+
+Residual risks: Goal 3 remains incomplete. Task193 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute helpers under OS-enforced isolation, does not make default probe metadata readiness evidence, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 192 / Pi Provider Helper Host Capability Consumer
 
 Scope: expose the Task190 provider host capability probe and Task191 provider-helper host-validation boundary through Pi release tools while keeping Pi a host-confirmed thin client with no direct trusted-state writes, readiness authority, OS-enforcement authority, proof authority, real-Pi evidence, broad provider support, or GA certification.

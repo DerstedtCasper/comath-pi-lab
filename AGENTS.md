@@ -221,6 +221,8 @@ Task191 requires provider-helper host validation to bind a matching, observed, s
 
 Task192 exposes the Task190/191 provider host capability and provider-helper host-validation boundaries through Pi release tools and `/cm:release` subcommands. Pi remains a thin client: the new consumers are host-confirmed, strip model-supplied confirmation ids, forward only sanitized caller `platform` / `notes` diagnostics, and cannot make host capability or host-validation payloads readiness evidence, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
 
+Task193 adds the default service-owned provider host capability probe for the route/no-injected-callback path. It may observe provider-family/platform compatibility and bundled provider-helper protocol asset diagnostics from service-owned state, but it must ignore caller success-shaped capability, tool, kernel, proof-authority, and GA fields. The default probe is still host-capability diagnostics only: it cannot satisfy readiness, prove OS enforcement, replace helper validation/runtime attestation, provide real-Pi evidence, broaden provider support, affect mathematical proof authority, or certify GA.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

@@ -122,6 +122,8 @@ Task191 binds provider-helper host validation to a matching service-owned provid
 
 Task192 exposes those provider host capability and provider-helper host-validation boundaries through the Pi thin client as `/cm:release agent-adapter-os-isolation-provider-host-capability-probe` and `/cm:release agent-adapter-os-isolation-provider-helper-host-validation`. The Pi consumer is host-confirmed, strips model-supplied confirmation ids, forwards only sanitized `platform` / `notes` diagnostics from caller environment objects, and keeps outputs non-authoritative: no direct `.comath/` writes by Pi, no readiness-review evidence, no executed OS-isolation evidence, no proof authority, no real-Pi evidence, and no GA certification.
 
+Task193 adds a default service-owned provider host capability probe for the production route path. `comathd` can now record provider-family/platform compatibility and bundled provider-helper protocol asset diagnostics without an injected test callback, while ignoring caller-submitted success, tool, kernel, proof-authority, and GA fields. These default probe manifests still keep `adapter_execution_isolation.os_enforced=false`, remain host-capability diagnostics only, and cannot satisfy readiness, prove OS enforcement, replace helper validation/runtime attestation, provide real-Pi evidence, or certify GA.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)

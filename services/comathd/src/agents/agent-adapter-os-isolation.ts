@@ -1798,6 +1798,104 @@ function sanitizeKernelFeatures(values: unknown): AgentAdapterOsIsolationProvide
     .slice(0, 16);
 }
 
+function providerCapabilityEvidenceHash(material: Record<string, unknown>): string {
+  return sha256Text(canonicalJson({
+    ...material,
+    proof_authority: "none",
+    adapter_execution_isolation: "process_boundary_only"
+  }));
+}
+
+function defaultProviderHostCapabilityProbe(
+  input: AgentAdapterOsIsolationProviderHostCapabilityProbeInput
+): AgentAdapterOsIsolationProviderHostCapabilityProbeResult {
+  const provider = input.provider;
+  const providerLabel = provider ?? "unknown";
+  const providerOsEnforced = Boolean(provider && osEnforcedProviders.has(provider));
+  const supportedPlatforms = provider ? providerHelperSupportedPlatforms(provider) : [];
+  const platformSupported = Boolean(provider && supportedPlatforms.includes(input.platform));
+  const bundledHelper = provider && providerOsEnforced ? bundledProviderHelperConfig(provider) : null;
+  const helperAssetPath = bundledProviderHelperAssetPath();
+  const helperAssetHash = helperAssetPath ? sha256FileSync(helperAssetPath).sha256 : null;
+  const runtimeHash = bundledHelper ? sha256FileSync(bundledHelper.program).sha256 : null;
+  const providerHostCapabilityAvailable = Boolean(providerOsEnforced && platformSupported && bundledHelper);
+
+  return {
+    probe_source: "service_owned_provider_host_capability_probe",
+    provider_host_capability_available: providerHostCapabilityAvailable,
+    platform: input.platform,
+    capability_facts: [
+      {
+        capability: "provider_family_os_enforced_contract",
+        observed: providerOsEnforced,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: "provider_family_os_enforced_contract",
+          provider: providerLabel,
+          os_enforced_provider_family: providerOsEnforced
+        }),
+        notes: "Provider family is service-known as OS-enforced in contract metadata only; this is not executed OS-isolation evidence."
+      },
+      {
+        capability: "provider_family_platform_contract",
+        observed: platformSupported,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: "provider_family_platform_contract",
+          provider: providerLabel,
+          platform: input.platform,
+          supported_platforms: supportedPlatforms
+        }),
+        notes: "Platform compatibility is service-observed from process.platform and the provider support table only."
+      },
+      {
+        capability: "bundled_provider_helper_protocol_asset",
+        observed: Boolean(bundledHelper && helperAssetHash),
+        evidence_sha256: helperAssetHash,
+        notes: "Bundled provider-helper protocol asset is service-owned diagnostics only, not OS-enforcement evidence or GA certification."
+      }
+    ],
+    required_tools: [
+      {
+        name: "comath_bundled_provider_helper_protocol",
+        present: Boolean(bundledHelper),
+        version: bundledHelper?.version ?? null,
+        binary_sha256: runtimeHash
+      }
+    ],
+    kernel_features: [
+      {
+        name: `${providerLabel}_service_observed_platform_family`,
+        observed: platformSupported,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: "service_observed_platform_family",
+          provider: providerLabel,
+          platform: input.platform
+        }),
+        notes: "Service-observed platform family only; no kernel enforcement probe has run."
+      },
+      {
+        name: `${providerLabel}_os_enforcement_not_collected`,
+        observed: false,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: "os_enforcement_not_collected",
+          provider: providerLabel,
+          platform: input.platform
+        }),
+        notes: "Host capability probing does not collect executed OS-isolation or adapter runtime evidence."
+      }
+    ],
+    diagnostics: [
+      `Default service-owned provider host capability probe evaluated provider=${sanitizeProbeText(providerLabel)} on platform=${sanitizeProbeText(input.platform)}.`,
+      platformSupported
+        ? "Service-observed platform is compatible with the requested provider family."
+        : "Requested provider family is not supported on the service-observed platform.",
+      bundledHelper
+        ? "Bundled CoMath provider-helper protocol asset is available for default host capability diagnostics."
+        : "No bundled provider-helper protocol asset is available for this provider/platform family.",
+      "Default host capability diagnostics are not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification."
+    ]
+  };
+}
+
 function providerHostCapabilityStatus(input: {
   knownProvider: AgentAdapterOsIsolationProvider | null;
   sourceAccepted: boolean;
@@ -3337,7 +3435,8 @@ export function probeAgentAdapterOsIsolationProviderHostCapability(
   const serviceObservedPlatform = process.platform;
   const supportedPlatforms = providerHelperSupportedPlatforms(provider);
   const platformSupported = Boolean(knownProvider && supportedPlatforms.includes(serviceObservedPlatform));
-  const probe = options.provider_host_capability_probe?.({
+  const providerHostCapabilityProbe = options.provider_host_capability_probe ?? defaultProviderHostCapabilityProbe;
+  const probe = providerHostCapabilityProbe({
     project_root: projectRoot,
     project_id: input.project_id,
     host_capability_probe_id: hostCapabilityProbeId,
