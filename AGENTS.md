@@ -225,6 +225,8 @@ Task193 adds the default service-owned provider host capability probe for the ro
 
 Task194 adds Windows AppContainer host facility diagnostics to the default host capability probe. The probe may record service-observed Win32 facility facts and `windows_checknetisolation` tool presence/hash metadata, but it must not leak Windows system paths, accept caller-supplied tool/kernel/success/proof/GA metadata, or turn facility diagnostics into helper readiness, executed OS-isolation evidence, collected OS-enforcement evidence, real-Pi evidence, broad provider support, mathematical proof authority, or GA certification.
 
+Task195 adds OCI container host facility diagnostics to the default host capability probe. The probe may record service-observed Linux/macOS/Windows OCI facility facts and Docker/Podman CLI presence/hash metadata, but it must not execute container tools, inspect daemon/socket/container state, leak executable paths, accept caller-supplied tool/kernel/success/proof/GA metadata, or turn facility diagnostics into helper readiness, executed OS-isolation evidence, collected OS-enforcement evidence, real-Pi evidence, broad provider support, mathematical proof authority, or GA certification.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

@@ -1,3 +1,33 @@
+# Goal 3 Task 195 / OCI Container Host Facility Probe
+
+Scope: extend the default service-owned provider host capability probe with an OCI container host facility diagnostic while keeping Docker/Podman observation diagnostic-only and unable to become provider-helper readiness, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.
+
+Changes:
+
+- Added `goal3-task195-agent-adapter-os-isolation-oci-container-host-facility-probe.test.mjs`.
+- Added an OCI container facility diagnostic producer to the default host capability probe.
+- The probe records `oci_container_host_facility_probe`, `oci_container_service_observed_host_facility_family`, and Docker/Podman CLI presence/hash metadata from service-owned host state.
+- The probe never executes Docker or Podman, never inspects daemons, sockets, or container runtime state, and does not record tool versions.
+- Docker/Podman PATH probing now requires executable candidates: POSIX files must have an execute bit, and Windows files must match a PATHEXT executable suffix.
+- Sanitization keeps caller tool paths, executable paths, and caller secrets out of route responses, persisted manifests, and audit events.
+- Added `agent_adapter_os_isolation_oci_container_host_facility_probe`, phase0 smoke coverage, GA release criteria coverage, and public boundary wording.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task195 exited 1 because the service capability ledger did not advertise `agent_adapter_os_isolation_oci_container_host_facility_probe`.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after implementation.
+- After implementation, focused Task195 exited 0.
+- Read-only code review found a false-positive risk where non-executable PATH files named `docker` or `podman` could be hashed as CLI presence. The Task195 test was strengthened with controlled non-executable lookalikes, reproduced the failure, and then passed after executable-candidate detection was added.
+- Adjacent provider-host regressions exited 0: Task190, Task191, Task193, and Task194.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0, with Task195 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task195 observes OCI host facility metadata and hashes Docker/Podman CLI binaries when available, but it does not execute those CLIs, inspect container daemons or sockets, launch an OCI container, execute an adapter under OS enforcement, validate a provider helper, satisfy readiness review, write proof authority, provide real-Pi execution evidence, broaden cross-platform helper support, or certify GA. Caller-supplied platform, tool path, capability facts, kernel facts, proof-authority fields, and GA flags remain ignored.
+
+Residual risks: Goal 3 remains incomplete. Task195 does not ship production OCI/Nix/Firejail/Windows AppContainer/macOS sandbox helper binaries, does not execute helpers under OS-enforced isolation, does not make host facility metadata readiness evidence, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 194 / Windows AppContainer Host Facility Probe
 
 Scope: extend the default service-owned provider host capability probe with one concrete OS-family host facility diagnostic for Windows AppContainer, while keeping the output diagnostic-only and unable to become provider-helper readiness, executed OS-isolation evidence, proof authority, real-Pi evidence, broad provider support, or GA certification.

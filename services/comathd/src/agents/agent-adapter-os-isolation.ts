@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, win32 as pathWin32 } from "node:path";
+import { delimiter, dirname, extname, isAbsolute, join, relative, resolve, win32 as pathWin32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
@@ -1814,6 +1814,65 @@ function sha256ExistingFileOrNull(path: string): string | null {
   }
 }
 
+function windowsExecutableExtensions(): Set<string> {
+  return new Set(
+    (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM")
+      .split(";")
+      .map((entry) => entry.trim().toUpperCase())
+      .filter((entry) => /^\.[A-Z0-9]+$/.test(entry))
+  );
+}
+
+function servicePathExecutableNames(command: string): string[] {
+  if (process.platform !== "win32") {
+    return [command];
+  }
+  const extensions = Array.from(windowsExecutableExtensions());
+  return Array.from(new Set([
+    ...extensions.flatMap((extension) => [
+      `${command}${extension.toLowerCase()}`,
+      `${command}${extension.toUpperCase()}`
+    ])
+  ]));
+}
+
+function sha256ExecutableFileOrNull(path: string): string | null {
+  try {
+    const stats = statSync(path);
+    if (!stats.isFile()) {
+      return null;
+    }
+    if (process.platform === "win32") {
+      const extension = extname(path).toUpperCase();
+      if (!windowsExecutableExtensions().has(extension)) {
+        return null;
+      }
+    } else if ((stats.mode & 0o111) === 0) {
+      return null;
+    }
+    return sha256FileSync(path).sha256;
+  } catch {
+    return null;
+  }
+}
+
+function servicePathExecutableHashOrNull(command: string): string | null {
+  const pathEntries = (process.env.PATH ?? "")
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0 && entry.length <= 4096 && isAbsolute(entry));
+  const names = servicePathExecutableNames(command);
+  for (const entry of pathEntries) {
+    for (const name of names) {
+      const sha256 = sha256ExecutableFileOrNull(join(entry, name));
+      if (sha256) {
+        return sha256;
+      }
+    }
+  }
+  return null;
+}
+
 function windowsSystemRootCandidate(): string {
   const configuredRoot = process.env.SystemRoot;
   if (typeof configuredRoot === "string" && /^[A-Za-z]:\\[^<>:"|?*]+(?:\\[^<>:"|?*]+)*$/.test(configuredRoot)) {
@@ -1884,6 +1943,77 @@ function windowsAppContainerHostFacilityDiagnostics(
   };
 }
 
+function ociContainerHostFacilityDiagnostics(
+  input: AgentAdapterOsIsolationProviderHostCapabilityProbeInput
+): Pick<
+  AgentAdapterOsIsolationProviderHostCapabilityProbeResult,
+  "capability_facts" | "required_tools" | "kernel_features" | "diagnostics"
+> | null {
+  if (input.provider !== "oci_container") {
+    return null;
+  }
+
+  const serviceSupportedHost = ["linux", "darwin", "win32"].includes(input.platform);
+  const dockerSha256 = serviceSupportedHost ? servicePathExecutableHashOrNull("docker") : null;
+  const podmanSha256 = serviceSupportedHost ? servicePathExecutableHashOrNull("podman") : null;
+
+  return {
+    capability_facts: [
+      {
+        capability: "oci_container_host_facility_probe",
+        observed: serviceSupportedHost,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: "oci_container_host_facility_probe",
+          provider: input.provider,
+          platform: input.platform,
+          docker_cli_present: Boolean(dockerSha256),
+          podman_cli_present: Boolean(podmanSha256)
+        }),
+        notes:
+          "OCI container host facility diagnostics only; this is not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification."
+      }
+    ],
+    required_tools: [
+      {
+        name: "oci_docker_cli",
+        present: Boolean(dockerSha256),
+        version: null,
+        binary_sha256: dockerSha256
+      },
+      {
+        name: "oci_podman_cli",
+        present: Boolean(podmanSha256),
+        version: null,
+        binary_sha256: podmanSha256
+      }
+    ],
+    kernel_features: [
+      {
+        name: "oci_container_service_observed_host_facility_family",
+        observed: serviceSupportedHost,
+        evidence_sha256: providerCapabilityEvidenceHash({
+          capability: "oci_container_service_observed_host_facility_family",
+          provider: input.provider,
+          platform: input.platform
+        }),
+        notes: "Service-observed OCI container host facility family only; no container launch or runtime isolation enforcement has run."
+      }
+    ],
+    diagnostics: [
+      serviceSupportedHost
+        ? "OCI container host facility diagnostics were evaluated on a service-supported host platform."
+        : "OCI container host facility diagnostics require linux, darwin, or win32 service-observed platforms.",
+      dockerSha256
+        ? "Docker CLI host tool was detected and hashed without exposing its executable path."
+        : "Docker CLI host tool was not detected or could not be hashed.",
+      podmanSha256
+        ? "Podman CLI host tool was detected and hashed without exposing its executable path."
+        : "Podman CLI host tool was not detected or could not be hashed.",
+      "OCI container host facility diagnostics are not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification."
+    ]
+  };
+}
+
 function defaultProviderHostCapabilityProbe(
   input: AgentAdapterOsIsolationProviderHostCapabilityProbeInput
 ): AgentAdapterOsIsolationProviderHostCapabilityProbeResult {
@@ -1898,6 +2028,7 @@ function defaultProviderHostCapabilityProbe(
   const runtimeHash = bundledHelper ? sha256FileSync(bundledHelper.program).sha256 : null;
   const providerHostCapabilityAvailable = Boolean(providerOsEnforced && platformSupported && bundledHelper);
   const windowsAppContainerFacility = windowsAppContainerHostFacilityDiagnostics(input);
+  const ociContainerFacility = ociContainerHostFacilityDiagnostics(input);
 
   return {
     probe_source: "service_owned_provider_host_capability_probe",
@@ -1931,7 +2062,8 @@ function defaultProviderHostCapabilityProbe(
         evidence_sha256: helperAssetHash,
         notes: "Bundled provider-helper protocol asset is service-owned diagnostics only, not OS-enforcement evidence or GA certification."
       },
-      ...(windowsAppContainerFacility?.capability_facts ?? [])
+      ...(windowsAppContainerFacility?.capability_facts ?? []),
+      ...(ociContainerFacility?.capability_facts ?? [])
     ],
     required_tools: [
       {
@@ -1940,7 +2072,8 @@ function defaultProviderHostCapabilityProbe(
         version: bundledHelper?.version ?? null,
         binary_sha256: runtimeHash
       },
-      ...(windowsAppContainerFacility?.required_tools ?? [])
+      ...(windowsAppContainerFacility?.required_tools ?? []),
+      ...(ociContainerFacility?.required_tools ?? [])
     ],
     kernel_features: [
       {
@@ -1963,7 +2096,8 @@ function defaultProviderHostCapabilityProbe(
         }),
         notes: "Host capability probing does not collect executed OS-isolation or adapter runtime evidence."
       },
-      ...(windowsAppContainerFacility?.kernel_features ?? [])
+      ...(windowsAppContainerFacility?.kernel_features ?? []),
+      ...(ociContainerFacility?.kernel_features ?? [])
     ],
     diagnostics: [
       `Default service-owned provider host capability probe evaluated provider=${sanitizeProbeText(providerLabel)} on platform=${sanitizeProbeText(input.platform)}.`,
@@ -1974,6 +2108,7 @@ function defaultProviderHostCapabilityProbe(
         ? "Bundled CoMath provider-helper protocol asset is available for default host capability diagnostics."
         : "No bundled provider-helper protocol asset is available for this provider/platform family.",
       ...(windowsAppContainerFacility?.diagnostics ?? []),
+      ...(ociContainerFacility?.diagnostics ?? []),
       "Default host capability diagnostics are not provider-helper readiness, executed OS isolation, proof authority, real-Pi evidence, or GA certification."
     ]
   };

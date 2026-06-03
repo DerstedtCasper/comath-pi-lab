@@ -378,6 +378,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task192-pi-provider-helper-host-capability-consumer.test.mjs",
   "goal3-task193-agent-adapter-os-isolation-default-provider-host-capability-probe.test.mjs",
   "goal3-task194-agent-adapter-os-isolation-windows-appcontainer-host-facility-probe.test.mjs",
+  "goal3-task195-agent-adapter-os-isolation-oci-container-host-facility-probe.test.mjs",
   "phase43-agent-adapter-package.test.mjs",
   "phase44-codex-cli-external-invocation.test.mjs"
 ];

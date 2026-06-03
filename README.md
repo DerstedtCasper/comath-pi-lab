@@ -126,6 +126,8 @@ Task193 adds a default service-owned provider host capability probe for the prod
 
 Task194 extends that default host capability path with Windows AppContainer host facility diagnostics. On Win32 service hosts, the default probe records a Windows AppContainer facility fact and `windows_checknetisolation` tool presence/hash metadata without exposing system paths or accepting caller-supplied success fields. These diagnostics are still not provider-helper readiness, executed OS isolation, collected OS-enforcement evidence, readiness-review evidence, mathematical proof authority, real-Pi execution evidence, broad provider support, or GA certification.
 
+Task195 extends the same default host capability path with OCI container host facility diagnostics. On service-supported Linux, macOS, or Windows hosts, the default probe records an OCI facility fact plus Docker/Podman CLI presence/hash metadata without executing those tools, inspecting daemon/socket/container state, exposing executable paths, or accepting caller-supplied tool/success fields. These diagnostics remain host-capability metadata only: not provider-helper readiness, executed OS isolation, collected OS-enforcement evidence, readiness-review evidence, mathematical proof authority, real-Pi execution evidence, broad provider support, or GA certification.
+
 - [GA Release Criteria](docs/architecture/ga-release-criteria.md)
 - [Threat Model](docs/architecture/threat-model.md)
 - [Adapter Contracts](docs/architecture/adapter-contracts.md)
