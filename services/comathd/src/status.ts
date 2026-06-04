@@ -100,6 +100,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_adapter_os_isolation_provider_specific_tool_binding_gate",
       "agent_adapter_os_isolation_provider_family_os_enforcement_witness_gate",
       "agent_adapter_os_isolation_provider_family_execution_profile_gate",
+      "agent_adapter_os_isolation_provider_specific_live_probe_attempt_gate",
       "agent_adapter_os_isolation_provider_helper_execution",
       "agent_adapter_os_isolation_provider_helper_host_validation",
       "agent_adapter_os_isolation_provider_runner_contract",

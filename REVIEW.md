@@ -1,3 +1,33 @@
+# Goal 3 Task 207 / Provider-Specific Live Probe Attempt Gate
+
+Scope: tighten complete provider-helper collection evidence so Task206-valid provider-family execution-profile material must also bind to a provider-specific live probe attempt before nested canonical OS-isolation evidence can satisfy readiness.
+
+Changes:
+
+- Added `goal3-task207-agent-adapter-os-isolation-provider-specific-live-probe-attempt-gate.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_specific_live_probe_attempt_gate`.
+- Added provider-specific live probe attempt fields to provider-helper collection manifests, nested probe/evidence details, audit payloads, and readiness review checks.
+- Required configured collection probes to emit matching `provider_specific_live_probe_attempt` material before complete OS facts can satisfy nested canonical evidence.
+- Added missing provider-specific live probe attempt blockers and readiness vetoes for missing or mismatched live-probe material.
+- Registered Task207 in phase0 smoke and GA release criteria.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task207 initially failed because the service capability ledger did not advertise `agent_adapter_os_isolation_provider_specific_live_probe_attempt_gate`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task207 exited 0.
+- Adjacent provider-helper regressions exited 0: Task177, Task179, Task182, Task184, Task185, Task187, Task188, Task189, Task197, Task198, Task199, Task200, Task201, Task202, Task203, Task204, Task205, and Task206.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task207 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task207 adds provenance and stale-evidence hardening only. The live probe attempt does not alter Lean authority, live Pi execution status, provider coverage, or release readiness by itself.
+
+Residual risks: Goal 3 remains incomplete. This task does not ship provider-specific production sandbox helpers, execute container/Nix/Firejail/sandbox-exec tools by default, inspect daemon/socket/container/store/profile/sandbox-policy state, provide durable long-lived operator transport, broaden Lean/mathlib replay, or complete fully interactive real-Pi execution.
+
 # Goal 3 Task 206 / Provider-Family Execution Profile Gate
 
 Scope: tighten complete provider-helper collection evidence so Task205-valid provider-family OS-enforcement witness material must also bind to a service-derived provider-family execution kind, profile hash, and argv hash before nested canonical OS-isolation evidence can satisfy readiness.

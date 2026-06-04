@@ -44,6 +44,7 @@ Any one of these blocks a GA release:
 - Task204 keeps provider-specific tool binding under release-hardening coverage: complete provider-helper collection evidence must bind the provider-tool witness to the current host-capability provider tool name/hash.
 - Task205 keeps provider-family OS-enforcement witness binding under release-hardening coverage: complete provider-helper collection evidence must carry `provider_family_os_enforcement_witness` material bound to the current provider family, host-capability/tool bindings, helper transcript, and complete OS-enforcement facts.
 - Task206 keeps provider-family execution profile binding under release-hardening coverage: complete provider-helper collection evidence must also carry service-derived `provider_family_execution_profile` material binding the provider-family execution kind, profile hash, and argv hash. This is provenance metadata only and remains non-authoritative, non-release-grade, and non-shipping.
+- Task207 keeps provider-specific live probe attempt binding under release-hardening coverage: complete provider-helper collection evidence must also carry `provider_specific_live_probe_attempt` material bound to the current provider-family execution profile, provider tool hashes, helper transcript, complete OS facts, disabled network policy, and non-authority boundary.
 - Adapter OS-isolation sandbox-execution route payloads, caller-supplied execution booleans, process exit codes, or stdout/stderr/transcript hashes can be treated as collected OS-enforcement evidence without an internal service-owned execution probe callback and canonical probe/evidence artifact.
 - Pi `/cm:release agent-adapter-os-isolation-sandbox-execution` payloads or tool outputs can be treated as collected OS-enforcement evidence, direct `.comath/` writes, production sandbox-runner evidence, or GA certification.
 - Adapter OS-isolation sandbox-execution probe manifests are described as a production provider-specific sandbox runner, broad cross-platform OS-enforced execution support, mathematical proof authority, or GA certification.
@@ -108,6 +109,7 @@ node services/comathd/tests/unit/goal3-task203-agent-adapter-os-isolation-provid
 node services/comathd/tests/unit/goal3-task204-agent-adapter-os-isolation-provider-specific-tool-binding.test.mjs
 node services/comathd/tests/unit/goal3-task205-agent-adapter-os-isolation-provider-family-enforcement-witness-gate.test.mjs
 node services/comathd/tests/unit/goal3-task206-agent-adapter-os-isolation-provider-family-execution-profile-gate.test.mjs
+node services/comathd/tests/unit/goal3-task207-agent-adapter-os-isolation-provider-specific-live-probe-attempt-gate.test.mjs
 node services/comathd/tests/unit/goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs
 node services/comathd/tests/unit/goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs
 node services/comathd/tests/unit/goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs

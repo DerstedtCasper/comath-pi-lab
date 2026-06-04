@@ -146,6 +146,35 @@ function providerFamilyOsEnforcementWitness(probeInput) {
   };
 }
 
+function providerSpecificLiveProbeAttempt(probeInput) {
+  const expectation = probeInput.provider_tool_execution_witness_expectation;
+  return {
+    attempt_source: "provider_specific_live_os_probe",
+    provider: probeInput.provider,
+    execution_id: `${probeInput.collection_id}-LIVE`,
+    collection_id: probeInput.collection_id,
+    helper_execution_id: probeInput.helper_execution_id,
+    runner_id: probeInput.runner_id,
+    launch_id: probeInput.launch_id,
+    provider_family_execution_kind: expectation.provider_family_execution_kind,
+    provider_family_execution_profile_sha256: expectation.provider_family_execution_profile_sha256,
+    provider_family_execution_argv_sha256: expectation.provider_family_execution_argv_sha256,
+    provider_tool_sha256: expectation.tool_sha256,
+    provider_tool_profile_sha256: expectation.profile_sha256,
+    provider_tool_argv_sha256: expectation.argv_sha256,
+    transcript_sha256: probeInput.transcript_sha256,
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: true,
+    filesystem_scope_enforced: true,
+    network_isolation_enforced: true,
+    no_new_privileges: true,
+    escape_prevention: true,
+    adapter_process_exit_code: 0,
+    network_policy: "disabled",
+    proof_authority: "none"
+  };
+}
+
 try {
   assert.equal(
     getComathdStatus().capabilities.includes("agent_adapter_os_isolation_bundled_provider_helper_asset"),
@@ -412,6 +441,7 @@ try {
         transcript_sha256: execution.provider_helper_execution.transcript_sha256,
         provider_tool_execution_witness: providerToolExecutionWitness(probeInput),
         provider_family_os_enforcement_witness: providerFamilyOsEnforcementWitness(probeInput),
+        provider_specific_live_probe_attempt: providerSpecificLiveProbeAttempt(probeInput),
         diagnostics: [`${projectRoot} collector diagnostic must be scrubbed`, "task188 bundled helper collection succeeded"]
       };
     }
