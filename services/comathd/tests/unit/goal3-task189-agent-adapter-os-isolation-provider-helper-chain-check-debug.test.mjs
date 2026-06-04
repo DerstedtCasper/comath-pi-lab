@@ -116,6 +116,28 @@ function readRuntimeJson(relativePath) {
   return JSON.parse(readFileSync(join(projectRoot, relativePath), "utf8"));
 }
 
+function providerToolExecutionWitness(probeInput) {
+  const expectation = probeInput.provider_tool_execution_witness_expectation;
+  assert.match(expectation.tool_sha256, /^[a-f0-9]{64}$/);
+  assert.match(expectation.profile_sha256, /^[a-f0-9]{64}$/);
+  assert.match(expectation.argv_sha256, /^[a-f0-9]{64}$/);
+  return {
+    witness_source: "provider_specific_executed_tool",
+    provider: probeInput.provider,
+    execution_id: `${probeInput.collection_id}-TOOL`,
+    collection_id: probeInput.collection_id,
+    helper_execution_id: probeInput.helper_execution_id,
+    runner_id: probeInput.runner_id,
+    launch_id: probeInput.launch_id,
+    tool_sha256: expectation.tool_sha256,
+    profile_sha256: expectation.profile_sha256,
+    argv_sha256: expectation.argv_sha256,
+    transcript_sha256: probeInput.transcript_sha256,
+    network_policy: "disabled",
+    proof_authority: "none"
+  };
+}
+
 try {
   assert.equal(
     getComathdStatus().capabilities.includes("agent_adapter_os_isolation_provider_helper_chain_check_debug"),
@@ -405,12 +427,14 @@ try {
         stdout_sha256: execution.provider_helper_execution.stdout_sha256,
         stderr_sha256: execution.provider_helper_execution.stderr_sha256,
         transcript_sha256: execution.provider_helper_execution.transcript_sha256,
+        provider_tool_execution_witness: providerToolExecutionWitness(probeInput),
         diagnostics: [`${projectRoot} collector diagnostic must be scrubbed`, "task189 canonical collection succeeded"]
       };
     }
   });
   assert.equal(collected.ok, true, "internal service-owned collection remains the only path to canonical OS evidence");
   assert.equal(collected.collection_status, "provider_helper_os_evidence_collected");
+  assert.equal(collected.provider_helper_collection.provider_tool_execution_witness_bound, true);
   assert.equal(collected.probe.ok, true);
   assert.equal(collected.probe.evidence.collection_source, "service_owned_os_probe");
   assert.equal(collected.adapter_execution_isolation.current_boundary, "process_boundary_only");
@@ -435,6 +459,7 @@ try {
   assert.equal(readiness.ok, true, "readiness consumes canonical service-owned probe/evidence artifacts only");
   assert.equal(readiness.checks.service_owned_probe.ok, true);
   assert.equal(readiness.checks.collected_probe_binding.ok, true);
+  assert.equal(readiness.checks.provider_tool_execution_witness.ok, true);
   assert.equal(readiness.can_certify_ga, false);
 
   assertNotReadinessEvidence({

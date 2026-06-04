@@ -35,6 +35,28 @@ function sha256File(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+function providerToolExecutionWitness(probeInput) {
+  const expectation = probeInput.provider_tool_execution_witness_expectation;
+  assert.match(expectation.tool_sha256, /^[a-f0-9]{64}$/);
+  assert.match(expectation.profile_sha256, /^[a-f0-9]{64}$/);
+  assert.match(expectation.argv_sha256, /^[a-f0-9]{64}$/);
+  return {
+    witness_source: "provider_specific_executed_tool",
+    provider: probeInput.provider,
+    execution_id: `${probeInput.collection_id}-TOOL`,
+    collection_id: probeInput.collection_id,
+    helper_execution_id: probeInput.helper_execution_id,
+    runner_id: probeInput.runner_id,
+    launch_id: probeInput.launch_id,
+    tool_sha256: expectation.tool_sha256,
+    profile_sha256: expectation.profile_sha256,
+    argv_sha256: expectation.argv_sha256,
+    transcript_sha256: probeInput.transcript_sha256,
+    network_policy: "disabled",
+    proof_authority: "none"
+  };
+}
+
 const providerHelpers = {
   firejail: {
     helperEnv: "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_HELPER",
@@ -418,12 +440,14 @@ try {
         stdout_sha256: helperExecution.provider_helper_execution.stdout_sha256,
         stderr_sha256: helperExecution.provider_helper_execution.stderr_sha256,
         transcript_sha256: helperExecution.provider_helper_execution.transcript_sha256,
+        provider_tool_execution_witness: providerToolExecutionWitness(probeInput),
         diagnostics: [`${projectRoot} collector diagnostic must be scrubbed`, "task185 helper collection succeeded"]
       };
     }
   });
   assert.equal(collected.ok, true);
   assert.equal(collected.collection_status, "provider_helper_os_evidence_collected");
+  assert.equal(collected.provider_helper_collection.provider_tool_execution_witness_bound, true);
   assert.equal(collected.adapter_execution_isolation.os_enforced, false, "helper collection wrapper is not readiness evidence by itself");
   assert.equal(collected.probe.adapter_execution_isolation.os_enforced, true);
   assert.equal(collected.proof_authority, "none");
@@ -440,6 +464,7 @@ try {
     evidence_path: collected.probe.evidence_path
   });
   assert.equal(readiness.ok, true, "only canonical collected evidence should pass the readiness gate");
+  assert.equal(readiness.checks.provider_tool_execution_witness.ok, true);
   assert.equal(readiness.can_certify_ga, false);
 } finally {
   if (previousProviderHelper === undefined) {

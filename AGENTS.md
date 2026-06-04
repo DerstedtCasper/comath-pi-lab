@@ -241,6 +241,8 @@ Task201 revalidates the Task190-200 provider-helper release chain as a check-deb
 
 Task202 adds a bundled provider-helper collection probe asset to the default no-env collection path. It must run with service-owned argv/env, bind current helper execution, host-validation, host-capability, and hash facts, and then preserve the incomplete blocker shape until a provider-specific collector supplies all required OS facts.
 
+Task203 tightens complete provider-helper collection evidence. Complete service-owned OS-enforcement facts must also carry a provider-specific executed-tool witness bound to the service-owned collection probe executable hash, service-derived profile hash, fixed argv hash, current helper transcript hash, provider, collection, helper execution, runner, launch, disabled network policy, and `proof_authority="none"`. Missing, mismatched, or stale pre-Task203 witness material fails closed before readiness; this remains provenance gating only, and all existing non-authority boundaries continue to apply.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

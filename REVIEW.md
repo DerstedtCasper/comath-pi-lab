@@ -1,3 +1,38 @@
+# Goal 3 Task 203 / Provider Tool Execution Witness Gate
+
+Scope: tighten complete provider-helper collection evidence so complete OS-enforcement facts require a provider-specific executed-tool witness bound to service-derived collection-probe executable/profile/fixed-argv-template hashes and the current helper transcript before OS-isolation readiness can accept nested canonical evidence.
+
+Changes:
+
+- Added `goal3-task203-agent-adapter-os-isolation-provider-tool-witness-gate.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_tool_execution_witness_gate`.
+- Added provider-tool witness binding to provider-helper collection manifests, nested probe/evidence details, audit payloads, and readiness review checks.
+- Required configured collection probes to receive service-derived `--provider-tool-*` expected hashes and to emit matching `provider_tool_execution_witness` fields.
+- Added stale pre-Task203 evidence rejection so old complete OS-fact artifacts without witness binding cannot satisfy readiness.
+- Registered Task203 in phase0 smoke and GA release criteria.
+- Updated README, AGENTS, TODO, adapter contracts, threat model, config sample, config README, REVIEW, and the Goal 3 tracker wording.
+
+Verification:
+
+- TDD RED was observed before implementation: a focused Task203 regression using an internal service-owned callback with complete facts but a mismatched helper transcript witness exited 1 because the collection incorrectly became `ok=true`.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after the witness binding implementation.
+- Focused Task203 initially failed on missing public Task203 registration; docs/config/tracker registration was repaired before final verification.
+- Focused legacy provider-helper collection regressions exited 0 after updating service-owned callback fixtures to bind service-derived provider-tool witness expectations: Task177, Task179, Task182, Task184, Task185, Task187, Task188, and Task189.
+- Adjacent Task197-203 regressions exited 0 after a fresh build. An earlier focused rerun used stale file names for Task197, Task198, and Task201 and produced module-not-found errors only; the correct files were rerun and passed.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task203 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, workspace package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- Final `node scripts/phase0-smoke.mjs` exited 0 after tracker/review edits.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+- Read-only code-path subagent review found stale pre-Task203 provider-helper collection/evidence acceptance without witness; readiness now vetoes stale nested canonical evidence when provider-helper collection context exists.
+- Read-only witness-semantics subagent review found the initial witness hashes were shape-only/self-attested; configured and bundled collection probe paths now bind witness hashes to service-derived executable/profile/fixed-argv-template expectations.
+
+Boundary notes: Task203 adds provenance and stale-evidence hardening only. A provider-tool witness is not proof authority, real-Pi evidence, broad provider support, or GA certification; it is a required binding gate before complete provider-helper collection evidence can satisfy adapter OS-isolation readiness.
+
+Residual risks: Goal 3 remains incomplete. Task203 does not ship provider-specific production sandbox helpers, does not execute container/Nix/Firejail/sandbox-exec tools by default, does not inspect daemon/socket/container/store/profile/sandbox-policy state, does not provide broad cross-platform OS-enforced execution, does not provide durable long-lived operator transport, does not broaden Lean/mathlib replay, does not complete fully interactive real-Pi execution, and does not certify GA.
+
 # Goal 3 Task 202 / Bundled Provider Helper Collection Probe
 
 Scope: add a bundled provider-helper collection probe asset for the default no-env provider-helper collection path, so the production route executes service-owned collection binding logic while still preserving incomplete OS-enforcement blocker semantics.

@@ -89,7 +89,8 @@ function createCollectionProbeScript(projectRoot, { omitHostCapabilityHash = fal
       "  filesystem_scope_enforced: true,",
       "  network_isolation_enforced: true,",
       "  no_new_privileges: true,",
-      "  escape_prevention: true",
+      "  escape_prevention: true,",
+      "  provider_tool_execution_witness: { witness_source: 'provider_specific_executed_tool', provider: process.env.COMATH_OS_ISOLATION_PROVIDER, execution_id: `${valueAfter('--collection-id')}-TOOL`, collection_id: valueAfter('--collection-id'), helper_execution_id: valueAfter('--helper-execution-id'), runner_id: process.env.COMATH_PROVIDER_RUNNER_ID, launch_id: process.env.COMATH_SANDBOX_LAUNCH_ID, tool_sha256: valueAfter('--provider-tool-sha256'), profile_sha256: valueAfter('--provider-tool-profile-sha256'), argv_sha256: valueAfter('--provider-tool-argv-sha256'), transcript_sha256: valueAfter('--transcript-sha256'), network_policy: 'disabled', proof_authority: 'none' }",
       "};",
       "console.log(JSON.stringify(payload));",
       "console.error('collection probe stderr ok');"
@@ -343,6 +344,8 @@ try {
   assert.equal(collection.provider_helper_collection.host_capability_probe_sha256, readyHost.provider_host_capability_artifact.sha256);
   assert.equal(collection.provider_helper_collection.host_capability_status, "provider_host_capability_observed");
   assert.equal(collection.provider_helper_collection.os_enforcement_complete, true);
+  assert.equal(collection.provider_helper_collection.provider_tool_execution_witness_bound, true);
+  assert.match(collection.provider_helper_collection.provider_tool_execution_witness_sha256, /^[a-f0-9]{64}$/);
   assert.deepEqual(collection.provider_helper_collection.incomplete_os_enforcement_facts, []);
   assert.equal(collection.probe.ok, true);
   assert.equal(collection.probe.adapter_execution_isolation.os_enforced, true);
