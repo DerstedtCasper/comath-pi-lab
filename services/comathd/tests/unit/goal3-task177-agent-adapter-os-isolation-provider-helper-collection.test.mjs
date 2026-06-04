@@ -47,6 +47,44 @@ function providerToolExecutionWitness(probeInput) {
   };
 }
 
+function providerFamilyOsEnforcementWitness(probeInput) {
+  const expectation = probeInput.provider_tool_execution_witness_expectation;
+  return {
+    witness_source: "provider_family_os_enforcement",
+    provider: probeInput.provider,
+    execution_id: `${probeInput.collection_id}-FAMILY`,
+    collection_id: probeInput.collection_id,
+    helper_execution_id: probeInput.helper_execution_id,
+    runner_id: probeInput.runner_id,
+    launch_id: probeInput.launch_id,
+    host_validation_id: probeInput.host_validation_id,
+    host_validation_path: probeInput.host_validation_path,
+    host_validation_sha256: probeInput.host_validation_sha256,
+    host_capability_probe_id: probeInput.host_capability_probe_id,
+    host_capability_probe_path: probeInput.host_capability_probe_path,
+    host_capability_probe_sha256: probeInput.host_capability_probe_sha256,
+    host_capability_status: probeInput.host_capability_status,
+    provider_host_capability_bound: true,
+    provider_specific_tool_name: expectation.host_capability_tool_name,
+    provider_specific_tool_sha256: expectation.host_capability_tool_sha256,
+    provider_tool_sha256: expectation.tool_sha256,
+    provider_tool_profile_sha256: expectation.profile_sha256,
+    provider_tool_argv_sha256: expectation.argv_sha256,
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: true,
+    filesystem_scope_enforced: true,
+    network_isolation_enforced: true,
+    no_new_privileges: true,
+    escape_prevention: true,
+    adapter_process_exit_code: 0,
+    stdout_sha256: probeInput.stdout_sha256,
+    stderr_sha256: probeInput.stderr_sha256,
+    transcript_sha256: probeInput.transcript_sha256,
+    network_policy: "disabled",
+    proof_authority: "none"
+  };
+}
+
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task177-adapter-osiso-helper-collection-"));
 
 try {
@@ -463,6 +501,7 @@ try {
         stderr_sha256: helperExecution.provider_helper_execution.stderr_sha256,
         transcript_sha256: helperExecution.provider_helper_execution.transcript_sha256,
         provider_tool_execution_witness: providerToolExecutionWitness(probeInput),
+        provider_family_os_enforcement_witness: providerFamilyOsEnforcementWitness(probeInput),
         diagnostics: [`${projectRoot} collector diagnostic must be scrubbed`, "helper collection succeeded"]
       };
     }

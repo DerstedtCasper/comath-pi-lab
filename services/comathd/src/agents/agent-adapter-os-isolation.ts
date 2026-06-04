@@ -58,6 +58,9 @@ export type AgentAdapterOsIsolationEvidence = {
   provider_specific_tool_execution_sha256?: string;
   provider_specific_tool_name?: string;
   provider_specific_tool_sha256?: string;
+  provider_family_os_enforcement_witness_required?: boolean;
+  provider_family_os_enforcement_witness_bound?: boolean;
+  provider_family_os_enforcement_witness_sha256?: string;
   proof_authority?: unknown;
   can_promote_claim?: unknown;
   can_certify_ga?: unknown;
@@ -89,6 +92,41 @@ type AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation = {
   host_capability_tool_sha256?: string;
 };
 
+export type AgentAdapterOsIsolationProviderFamilyOsEnforcementWitness = {
+  witness_source: "provider_family_os_enforcement";
+  provider: AgentAdapterOsIsolationProvider;
+  execution_id: string;
+  collection_id: string;
+  helper_execution_id: string;
+  runner_id: string;
+  launch_id: string;
+  host_validation_id: string;
+  host_validation_path: string;
+  host_validation_sha256: string;
+  host_capability_probe_id: string;
+  host_capability_probe_path: string;
+  host_capability_probe_sha256: string;
+  host_capability_status: AgentAdapterOsIsolationProviderHostCapabilityStatus;
+  provider_host_capability_bound: true;
+  provider_specific_tool_name: string;
+  provider_specific_tool_sha256: string;
+  provider_tool_sha256: string;
+  provider_tool_profile_sha256: string;
+  provider_tool_argv_sha256: string;
+  collection_source: "service_owned_os_probe";
+  process_isolation_enforced: true;
+  filesystem_scope_enforced: true;
+  network_isolation_enforced: true;
+  no_new_privileges: true;
+  escape_prevention: true;
+  adapter_process_exit_code: 0;
+  stdout_sha256: string;
+  stderr_sha256: string;
+  transcript_sha256: string;
+  network_policy: "disabled";
+  proof_authority: "none";
+};
+
 export type AgentAdapterOsIsolationProbeCollection = {
   collection_source?: "service_owned_os_probe" | "operator_attested" | "unknown";
   process_isolation_enforced?: boolean;
@@ -107,6 +145,10 @@ export type AgentAdapterOsIsolationProbeCollection = {
   provider_specific_tool_execution_sha256?: string;
   provider_specific_tool_name?: string;
   provider_specific_tool_sha256?: string;
+  provider_family_os_enforcement_witness_required?: boolean;
+  provider_family_os_enforcement_witness?: AgentAdapterOsIsolationProviderFamilyOsEnforcementWitness;
+  provider_family_os_enforcement_witness_bound?: boolean;
+  provider_family_os_enforcement_witness_sha256?: string;
   notes?: string;
 };
 
@@ -463,6 +505,7 @@ export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "blocked_provider_helper_collection_hash_mismatch"
   | "blocked_provider_helper_collection_provider_specific_tool_binding_missing"
   | "blocked_provider_helper_collection_provider_tool_witness_missing"
+  | "blocked_provider_helper_collection_provider_family_os_enforcement_witness_missing"
   | "blocked_provider_helper_collection_incomplete_os_enforcement"
   | "blocked_provider_helper_collection_not_collected";
 
@@ -501,6 +544,9 @@ export type AgentAdapterOsIsolationSandboxExecutionInput = {
     provider_specific_tool_execution_sha256?: string;
     provider_specific_tool_name?: string;
     provider_specific_tool_sha256?: string;
+    provider_family_os_enforcement_witness_required?: boolean;
+    provider_family_os_enforcement_witness_bound?: boolean;
+    provider_family_os_enforcement_witness_sha256?: string;
   };
 };
 
@@ -598,6 +644,9 @@ export type AgentAdapterOsIsolationProviderHelperCollectionInput = {
     provider_specific_tool_execution_sha256?: string;
     provider_specific_tool_name?: string;
     provider_specific_tool_sha256?: string;
+    provider_family_os_enforcement_witness_required?: boolean;
+    provider_family_os_enforcement_witness_bound?: boolean;
+    provider_family_os_enforcement_witness_sha256?: string;
   };
 };
 
@@ -691,6 +740,7 @@ export type AgentAdapterOsIsolationReview = {
     collected_probe_binding: AgentAdapterOsIsolationReviewCheck;
     provider_tool_execution_witness: AgentAdapterOsIsolationReviewCheck;
     provider_specific_tool_execution: AgentAdapterOsIsolationReviewCheck;
+    provider_family_os_enforcement_witness: AgentAdapterOsIsolationReviewCheck;
     host_path_secret_free: AgentAdapterOsIsolationReviewCheck;
     non_authority: AgentAdapterOsIsolationReviewCheck;
   };
@@ -757,6 +807,9 @@ export type AgentAdapterOsIsolationProbe = {
     provider_specific_tool_execution_sha256?: string;
     provider_specific_tool_name?: string;
     provider_specific_tool_sha256?: string;
+    provider_family_os_enforcement_witness_required?: boolean;
+    provider_family_os_enforcement_witness_bound?: boolean;
+    provider_family_os_enforcement_witness_sha256?: string;
   };
   adapter_execution_isolation: {
     required_for_ga: true;
@@ -1210,6 +1263,9 @@ export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
     provider_specific_tool_execution_sha256: string | null;
     provider_specific_tool_name: string | null;
     provider_specific_tool_sha256: string | null;
+    provider_family_os_enforcement_witness_required: true;
+    provider_family_os_enforcement_witness_bound: boolean;
+    provider_family_os_enforcement_witness_sha256: string | null;
     diagnostics: string[];
     proof_authority: "none";
   };
@@ -1487,6 +1543,17 @@ function evidenceHasProviderSpecificToolExecutionFields(
   );
 }
 
+function evidenceHasProviderFamilyOsEnforcementWitnessFields(
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(
+    evidence?.collection_source === "service_owned_os_probe" &&
+      evidence.provider_family_os_enforcement_witness_required === true &&
+      evidence.provider_family_os_enforcement_witness_bound === true &&
+      isSha256(evidence.provider_family_os_enforcement_witness_sha256)
+  );
+}
+
 function providerHelperCollectionHasProviderToolExecutionWitness(
   collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
   evidence: AgentAdapterOsIsolationEvidence | undefined
@@ -1533,6 +1600,28 @@ function providerHelperCollectionHasProviderSpecificToolExecution(
         evidence?.provider_specific_tool_name &&
       collection.provider_helper_collection.provider_specific_tool_sha256 ===
         evidence?.provider_specific_tool_sha256
+  );
+}
+
+function providerHelperCollectionRequiresProviderFamilyOsEnforcementWitness(
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(collection || evidence?.provider_family_os_enforcement_witness_required === true);
+}
+
+function providerHelperCollectionHasProviderFamilyOsEnforcementWitness(
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  const witnessSha256 = collection?.provider_helper_collection.provider_family_os_enforcement_witness_sha256;
+  return Boolean(
+    collection &&
+      collection.provider_helper_collection.provider_family_os_enforcement_witness_required === true &&
+      collection.provider_helper_collection.provider_family_os_enforcement_witness_bound === true &&
+      isSha256(witnessSha256) &&
+      isSha256(evidence?.provider_family_os_enforcement_witness_sha256) &&
+      witnessSha256 === evidence.provider_family_os_enforcement_witness_sha256
   );
 }
 
@@ -1661,6 +1750,26 @@ function evidenceHasCollectedProbeBinding(
           )
         )
     );
+    const providerFamilyOsEnforcementWitnessRequired = providerHelperCollectionRequiresProviderFamilyOsEnforcementWitness(
+      providerHelperCollection,
+      evidence
+    );
+    const providerFamilyOsEnforcementWitnessBound = Boolean(
+      !providerFamilyOsEnforcementWitnessRequired ||
+        (
+          evidenceHasProviderFamilyOsEnforcementWitnessFields(evidence) &&
+          parsedProbe.evidence?.provider_family_os_enforcement_witness_required === true &&
+          parsedProbe.evidence?.provider_family_os_enforcement_witness_bound === true &&
+          isSha256(parsedProbe.evidence?.provider_family_os_enforcement_witness_sha256) &&
+          parsedProbe.evidence?.provider_family_os_enforcement_witness_sha256 ===
+            evidence.provider_family_os_enforcement_witness_sha256 &&
+          (
+            providerHelperCollection
+              ? providerHelperCollectionHasProviderFamilyOsEnforcementWitness(providerHelperCollection, evidence)
+              : true
+          )
+        )
+    );
     return Boolean(
       parsedProbe.schema_version === "comath.agent_adapter_os_isolation_probe.v1" &&
         parsedProbe.probe_id === evidence.probe_id &&
@@ -1675,6 +1784,7 @@ function evidenceHasCollectedProbeBinding(
         parsedProbe.evidence?.provider === evidence.provider &&
         providerToolWitnessBound &&
         providerSpecificToolBound &&
+        providerFamilyOsEnforcementWitnessBound &&
         parsedProbe.proof_authority === "none" &&
         parsedProbe.can_promote_claim === false &&
         parsedProbe.can_certify_ga === false
@@ -1761,6 +1871,12 @@ function buildVetoes(input: {
     vetoes.push({
       code: "adapter_os_isolation_provider_specific_tool_execution_missing",
       message: "Collected OS-isolation evidence must bind the provider-tool execution witness to the current host-capability provider tool."
+    });
+  }
+  if (!input.checks.provider_family_os_enforcement_witness.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_provider_family_os_enforcement_witness_missing",
+      message: "Collected OS-isolation evidence must carry a provider-family OS-enforcement witness bound to the complete service-owned enforcement facts."
     });
   }
   if (!input.checks.host_path_secret_free.ok) {
@@ -2111,6 +2227,148 @@ function providerToolExecutionWitnessSha256(
   }));
 }
 
+function providerFamilyOsEnforcementWitnessAccepted(
+  value: unknown,
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput,
+  expectation: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation | undefined
+): value is AgentAdapterOsIsolationProviderFamilyOsEnforcementWitness {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    !providerSpecificToolExpectationRequired(expectation) ||
+    !isSha256(expectation?.tool_sha256) ||
+    !isSha256(expectation?.profile_sha256) ||
+    !isSha256(expectation?.argv_sha256)
+  ) {
+    return false;
+  }
+  const witness = value as Record<string, unknown>;
+  return Boolean(
+    witness.witness_source === "provider_family_os_enforcement" &&
+      witness.provider === input.provider &&
+      isBoundedExecutionId(witness.execution_id) &&
+      witness.collection_id === input.collection_id &&
+      witness.helper_execution_id === input.helper_execution_id &&
+      witness.runner_id === input.runner_id &&
+      witness.launch_id === input.launch_id &&
+      witness.host_validation_id === input.host_validation_id &&
+      witness.host_validation_path === input.host_validation_path &&
+      isSha256(witness.host_validation_sha256) &&
+      witness.host_validation_sha256.toLowerCase() === input.host_validation_sha256.toLowerCase() &&
+      witness.host_capability_probe_id === input.host_capability_probe_id &&
+      witness.host_capability_probe_path === input.host_capability_probe_path &&
+      isSha256(witness.host_capability_probe_sha256) &&
+      witness.host_capability_probe_sha256.toLowerCase() === input.host_capability_probe_sha256.toLowerCase() &&
+      witness.host_capability_status === input.host_capability_status &&
+      witness.provider_host_capability_bound === true &&
+      input.provider_host_capability_bound === true &&
+      witness.provider_specific_tool_name === expectation?.host_capability_tool_name &&
+      isSha256(witness.provider_specific_tool_sha256) &&
+      witness.provider_specific_tool_sha256.toLowerCase() === expectation?.host_capability_tool_sha256?.toLowerCase() &&
+      isSha256(witness.provider_tool_sha256) &&
+      witness.provider_tool_sha256.toLowerCase() === expectation.tool_sha256.toLowerCase() &&
+      isSha256(witness.provider_tool_profile_sha256) &&
+      witness.provider_tool_profile_sha256.toLowerCase() === expectation.profile_sha256.toLowerCase() &&
+      isSha256(witness.provider_tool_argv_sha256) &&
+      witness.provider_tool_argv_sha256.toLowerCase() === expectation.argv_sha256.toLowerCase() &&
+      witness.collection_source === "service_owned_os_probe" &&
+      witness.process_isolation_enforced === true &&
+      witness.filesystem_scope_enforced === true &&
+      witness.network_isolation_enforced === true &&
+      witness.no_new_privileges === true &&
+      witness.escape_prevention === true &&
+      witness.adapter_process_exit_code === 0 &&
+      input.helper_exit_code === 0 &&
+      isSha256(witness.stdout_sha256) &&
+      witness.stdout_sha256.toLowerCase() === input.stdout_sha256.toLowerCase() &&
+      isSha256(witness.stderr_sha256) &&
+      witness.stderr_sha256.toLowerCase() === input.stderr_sha256.toLowerCase() &&
+      isSha256(witness.transcript_sha256) &&
+      witness.transcript_sha256.toLowerCase() === input.transcript_sha256.toLowerCase() &&
+      witness.network_policy === "disabled" &&
+      witness.proof_authority === "none"
+  );
+}
+
+function providerFamilyOsEnforcementWitnessSha256(
+  witness: AgentAdapterOsIsolationProviderFamilyOsEnforcementWitness | undefined
+): string | null {
+  if (!witness) {
+    return null;
+  }
+  if (
+    witness.witness_source !== "provider_family_os_enforcement" ||
+    !osEnforcedProviders.has(witness.provider) ||
+    !isBoundedExecutionId(witness.execution_id) ||
+    !isBoundedExecutionId(witness.collection_id) ||
+    !isBoundedExecutionId(witness.helper_execution_id) ||
+    !isBoundedExecutionId(witness.runner_id) ||
+    !isBoundedExecutionId(witness.launch_id) ||
+    !isBoundedExecutionId(witness.host_validation_id) ||
+    typeof witness.host_validation_path !== "string" ||
+    !isSha256(witness.host_validation_sha256) ||
+    !isBoundedExecutionId(witness.host_capability_probe_id) ||
+    typeof witness.host_capability_probe_path !== "string" ||
+    !isSha256(witness.host_capability_probe_sha256) ||
+    witness.host_capability_status !== "provider_host_capability_observed" ||
+    witness.provider_host_capability_bound !== true ||
+    !isProviderToolName(witness.provider_specific_tool_name) ||
+    !isSha256(witness.provider_specific_tool_sha256) ||
+    !isSha256(witness.provider_tool_sha256) ||
+    !isSha256(witness.provider_tool_profile_sha256) ||
+    !isSha256(witness.provider_tool_argv_sha256) ||
+    witness.collection_source !== "service_owned_os_probe" ||
+    witness.process_isolation_enforced !== true ||
+    witness.filesystem_scope_enforced !== true ||
+    witness.network_isolation_enforced !== true ||
+    witness.no_new_privileges !== true ||
+    witness.escape_prevention !== true ||
+    witness.adapter_process_exit_code !== 0 ||
+    !isSha256(witness.stdout_sha256) ||
+    !isSha256(witness.stderr_sha256) ||
+    !isSha256(witness.transcript_sha256) ||
+    witness.network_policy !== "disabled" ||
+    witness.proof_authority !== "none"
+  ) {
+    return null;
+  }
+  return sha256Text(canonicalJson({
+    witness_source: "provider_family_os_enforcement",
+    provider: witness.provider,
+    execution_id: witness.execution_id,
+    collection_id: witness.collection_id,
+    helper_execution_id: witness.helper_execution_id,
+    runner_id: witness.runner_id,
+    launch_id: witness.launch_id,
+    host_validation_id: witness.host_validation_id,
+    host_validation_path: witness.host_validation_path,
+    host_validation_sha256: witness.host_validation_sha256.toLowerCase(),
+    host_capability_probe_id: witness.host_capability_probe_id,
+    host_capability_probe_path: witness.host_capability_probe_path,
+    host_capability_probe_sha256: witness.host_capability_probe_sha256.toLowerCase(),
+    host_capability_status: witness.host_capability_status,
+    provider_host_capability_bound: true,
+    provider_specific_tool_name: witness.provider_specific_tool_name,
+    provider_specific_tool_sha256: witness.provider_specific_tool_sha256.toLowerCase(),
+    provider_tool_sha256: witness.provider_tool_sha256.toLowerCase(),
+    provider_tool_profile_sha256: witness.provider_tool_profile_sha256.toLowerCase(),
+    provider_tool_argv_sha256: witness.provider_tool_argv_sha256.toLowerCase(),
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: true,
+    filesystem_scope_enforced: true,
+    network_isolation_enforced: true,
+    no_new_privileges: true,
+    escape_prevention: true,
+    adapter_process_exit_code: 0,
+    stdout_sha256: witness.stdout_sha256.toLowerCase(),
+    stderr_sha256: witness.stderr_sha256.toLowerCase(),
+    transcript_sha256: witness.transcript_sha256.toLowerCase(),
+    network_policy: "disabled",
+    proof_authority: "none"
+  }));
+}
+
 function collectionProviderToolWitnessBound(
   collection: (AgentAdapterOsIsolationProbeCollection & {
     provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
@@ -2199,12 +2457,54 @@ function providerSpecificToolExecutionSha256(
   return witnessSha256;
 }
 
+function collectionProviderFamilyOsEnforcementWitnessBound(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): boolean {
+  const witness = collection?.provider_family_os_enforcement_witness;
+  if (!witness) {
+    return false;
+  }
+  if (input && !providerFamilyOsEnforcementWitnessAccepted(
+    witness,
+    input,
+    collection.provider_tool_execution_witness_expectation ??
+      input.provider_tool_execution_witness_expectation
+  )) {
+    return false;
+  }
+  return Boolean(providerFamilyOsEnforcementWitnessSha256(witness));
+}
+
+function providerFamilyOsEnforcementWitnessSha256ForCollection(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): string | null {
+  if (!collectionProviderFamilyOsEnforcementWitnessBound(collection, input)) {
+    return null;
+  }
+  return providerFamilyOsEnforcementWitnessSha256(collection?.provider_family_os_enforcement_witness);
+}
+
 function collectionProviderToolWitnessSatisfied(
   collection: AgentAdapterOsIsolationProbeCollection | undefined,
   input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
 ): boolean {
   return collection?.provider_tool_execution_witness_required === true
     ? collectionProviderToolWitnessBound(collection, input)
+    : true;
+}
+
+function collectionProviderFamilyOsEnforcementWitnessSatisfied(
+  collection: AgentAdapterOsIsolationProbeCollection | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): boolean {
+  return collection?.provider_family_os_enforcement_witness_required === true
+    ? collectionProviderFamilyOsEnforcementWitnessBound(collection, input)
     : true;
 }
 
@@ -2229,7 +2529,8 @@ function isCollectedOsIsolationProbe(input: {
       isSha256(collection.stderr_sha256) &&
       isSha256(collection.transcript_sha256) &&
       collectionProviderToolWitnessSatisfied(collection) &&
-      collectionProviderSpecificToolExecutionBound(collection)
+      collectionProviderSpecificToolExecutionBound(collection) &&
+      collectionProviderFamilyOsEnforcementWitnessSatisfied(collection)
   );
 }
 
@@ -4435,6 +4736,12 @@ function providerHelperCollectionOsEnforcementCompleteness(input: {
   ) {
     incompleteFacts.push("provider_specific_tool_execution");
   }
+  if (
+    incompleteFacts.length === 0 &&
+    !collectionProviderFamilyOsEnforcementWitnessBound(input.collection, input.collectionProbeInput ?? undefined)
+  ) {
+    incompleteFacts.push("provider_family_os_enforcement_witness");
+  }
   return { complete: incompleteFacts.length === 0, incompleteFacts };
 }
 
@@ -4469,6 +4776,19 @@ function providerHelperCollectionForProbe(input: {
     input.collection,
     input.collectionProbeInput ?? undefined
   );
+  const providerFamilyOsEnforcementWitness =
+    input.collectionProbeInput &&
+    providerFamilyOsEnforcementWitnessAccepted(
+      input.collection.provider_family_os_enforcement_witness,
+      input.collectionProbeInput,
+      input.collection.provider_tool_execution_witness_expectation ??
+        input.collectionProbeInput.provider_tool_execution_witness_expectation
+    )
+      ? input.collection.provider_family_os_enforcement_witness
+      : undefined;
+  const providerFamilyOsEnforcementWitnessHash = providerFamilyOsEnforcementWitnessSha256(
+    providerFamilyOsEnforcementWitness
+  );
   return {
     collection_source: input.collection.collection_source,
     process_isolation_enforced: input.collection.process_isolation_enforced,
@@ -4489,6 +4809,10 @@ function providerHelperCollectionForProbe(input: {
     provider_specific_tool_sha256: providerSpecificToolRequired
       ? expectation?.host_capability_tool_sha256?.toLowerCase()
       : undefined,
+    provider_family_os_enforcement_witness_required: true,
+    provider_family_os_enforcement_witness: providerFamilyOsEnforcementWitness,
+    provider_family_os_enforcement_witness_bound: Boolean(providerFamilyOsEnforcementWitnessHash),
+    provider_family_os_enforcement_witness_sha256: providerFamilyOsEnforcementWitnessHash ?? undefined,
     notes: sanitizeDiagnostics(input.collection.diagnostics).join(" ")
   };
 }
@@ -4632,7 +4956,20 @@ function configuredProviderHelperCollectionProbe(
     ? parsed.provider_tool_execution_witness
     : undefined;
   const invalidWitness = Boolean(parsed?.provider_tool_execution_witness) && !witness;
-  const accepted = !spawnError && exitCode === 0 && !invalidWitness && providerHelperCollectionProbeStdoutAccepted(parsed, input);
+  const familyWitness = providerFamilyOsEnforcementWitnessAccepted(
+    parsed?.provider_family_os_enforcement_witness,
+    input,
+    expectation
+  )
+    ? parsed?.provider_family_os_enforcement_witness
+    : undefined;
+  const invalidFamilyWitness = Boolean(parsed?.provider_family_os_enforcement_witness) && !familyWitness;
+  const accepted =
+    !spawnError &&
+    exitCode === 0 &&
+    !invalidWitness &&
+    !invalidFamilyWitness &&
+    providerHelperCollectionProbeStdoutAccepted(parsed, input);
   const baseDiagnostics = [
     `${configuredEnvVar ?? providerEnvVar} resolved to a service-owned provider-helper collection probe executable.`,
     ...configuredArgs.diagnostics,
@@ -4640,6 +4977,7 @@ function configuredProviderHelperCollectionProbe(
       ? `Configured provider-helper collection probe passed with exit_code=${exitCode}.`
       : `Configured provider-helper collection probe failed binding validation with exit_code=${exitCode ?? "null"}.`,
     invalidWitness ? "Configured provider-helper collection probe emitted an invalid provider-tool execution witness." : undefined,
+    invalidFamilyWitness ? "Configured provider-helper collection probe emitted an invalid provider-family OS-enforcement witness." : undefined,
     timedOut ? "Configured provider-helper collection probe timed out." : undefined,
     spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined
   ].filter((entry): entry is string => Boolean(entry));
@@ -4659,6 +4997,7 @@ function configuredProviderHelperCollectionProbe(
     stderr_sha256: input.stderr_sha256,
     transcript_sha256: input.transcript_sha256,
     provider_tool_execution_witness: witness,
+    provider_family_os_enforcement_witness: familyWitness,
     provider_tool_execution_witness_expectation: expectation,
     diagnostics: baseDiagnostics
   };
@@ -4711,7 +5050,20 @@ function bundledProviderHelperCollectionProbe(
     ? parsed.provider_tool_execution_witness
     : undefined;
   const invalidWitness = Boolean(parsed?.provider_tool_execution_witness) && !witness;
-  const accepted = !spawnError && exitCode === 0 && !invalidWitness && providerHelperCollectionProbeStdoutAccepted(parsed, input);
+  const familyWitness = providerFamilyOsEnforcementWitnessAccepted(
+    parsed?.provider_family_os_enforcement_witness,
+    input,
+    expectation
+  )
+    ? parsed?.provider_family_os_enforcement_witness
+    : undefined;
+  const invalidFamilyWitness = Boolean(parsed?.provider_family_os_enforcement_witness) && !familyWitness;
+  const accepted =
+    !spawnError &&
+    exitCode === 0 &&
+    !invalidWitness &&
+    !invalidFamilyWitness &&
+    providerHelperCollectionProbeStdoutAccepted(parsed, input);
   const baseDiagnostics = [
     "Bundled CoMath provider-helper collection probe asset executed as a service-owned default collector.",
     accepted
@@ -4719,6 +5071,7 @@ function bundledProviderHelperCollectionProbe(
       : `Bundled provider-helper collection probe failed binding validation with exit_code=${exitCode ?? "null"}.`,
     "Bundled collection output binds helper execution, host-validation, and host-capability hashes but records incomplete OS-enforcement facts.",
     invalidWitness ? "Bundled provider-helper collection probe emitted an invalid provider-tool execution witness." : undefined,
+    invalidFamilyWitness ? "Bundled provider-helper collection probe emitted an invalid provider-family OS-enforcement witness." : undefined,
     timedOut ? "Bundled provider-helper collection probe timed out." : undefined,
     spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined,
     stderr ? `stderr_sha256=${sha256Bytes(stderr)}` : undefined
@@ -4739,6 +5092,7 @@ function bundledProviderHelperCollectionProbe(
     stderr_sha256: input.stderr_sha256,
     transcript_sha256: input.transcript_sha256,
     provider_tool_execution_witness: witness,
+    provider_family_os_enforcement_witness: familyWitness,
     provider_tool_execution_witness_expectation: expectation,
     diagnostics: baseDiagnostics
   };
@@ -4765,6 +5119,7 @@ function providerHelperCollectionStatus(input: {
   providerSpecificToolExecutionRequired: boolean;
   providerSpecificToolExecutionBound: boolean;
   onlyProviderToolWitnessMissing: boolean;
+  onlyProviderFamilyOsEnforcementWitnessMissing: boolean;
   osEnforcementComplete: boolean;
   probe: AgentAdapterOsIsolationProbe | null;
 }): AgentAdapterOsIsolationProviderHelperCollectionStatus {
@@ -4805,6 +5160,16 @@ function providerHelperCollectionStatus(input: {
   ) {
     return "blocked_provider_helper_collection_provider_specific_tool_binding_missing";
   }
+  if (
+    input.collectionPresent &&
+    input.collectionSourceAccepted &&
+    input.hashesMatch &&
+    input.providerToolWitnessBound &&
+    input.providerSpecificToolExecutionBound &&
+    input.onlyProviderFamilyOsEnforcementWitnessMissing
+  ) {
+    return "blocked_provider_helper_collection_provider_family_os_enforcement_witness_missing";
+  }
   if (input.collectionPresent && input.collectionSourceAccepted && input.hashesMatch && !input.osEnforcementComplete) {
     return "blocked_provider_helper_collection_incomplete_os_enforcement";
   }
@@ -4839,6 +5204,9 @@ function providerHelperCollectionReplayableNextAction(
   }
   if (status === "blocked_provider_helper_collection_provider_specific_tool_binding_missing") {
     return "Re-run the provider-specific service-owned collection probe so its executed-tool witness also binds the current host-capability provider tool name and hash.";
+  }
+  if (status === "blocked_provider_helper_collection_provider_family_os_enforcement_witness_missing") {
+    return "Re-run the provider-specific service-owned collection probe so complete OS-enforcement facts are bound to a provider-family OS-enforcement witness with current helper, host-capability, tool, transcript, and proof-authority bindings.";
   }
   if (status === "blocked_provider_helper_collection_incomplete_os_enforcement") {
     return "Re-run the service-owned provider-helper collection probe with complete OS-enforcement facts: process, filesystem, network, no-new-privileges, escape-prevention, service-owned source, and helper exit code.";
@@ -4876,11 +5244,15 @@ function collectedEvidenceDetails(
   | "provider_specific_tool_execution_sha256"
   | "provider_specific_tool_name"
   | "provider_specific_tool_sha256"
+  | "provider_family_os_enforcement_witness_required"
+  | "provider_family_os_enforcement_witness_bound"
+  | "provider_family_os_enforcement_witness_sha256"
 > {
   if (!collection || collection.collection_source !== "service_owned_os_probe") {
     return {};
   }
   const witnessSha256 = providerToolExecutionWitnessSha256(collection.provider_tool_execution_witness);
+  const familyWitnessSha256 = providerFamilyOsEnforcementWitnessSha256ForCollection(collection);
   return {
     collection_source: "service_owned_os_probe",
     adapter_process_exit_code: collected || typeof collection.adapter_process_exit_code === "number"
@@ -4905,7 +5277,11 @@ function collectedEvidenceDetails(
       : undefined,
     provider_specific_tool_sha256: isSha256(collection.provider_specific_tool_sha256)
       ? collection.provider_specific_tool_sha256.toLowerCase()
-      : undefined
+      : undefined,
+    provider_family_os_enforcement_witness_required:
+      collection.provider_family_os_enforcement_witness_required === true ? true : undefined,
+    provider_family_os_enforcement_witness_bound: Boolean(familyWitnessSha256),
+    provider_family_os_enforcement_witness_sha256: familyWitnessSha256 ?? undefined
   };
 }
 
@@ -6071,6 +6447,11 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     collection,
     collectionProbeInput ?? undefined
   );
+  const providerFamilyOsEnforcementWitnessHash = providerFamilyOsEnforcementWitnessSha256ForCollection(
+    collection,
+    collectionProbeInput ?? undefined
+  );
+  const providerFamilyOsEnforcementWitnessBound = Boolean(providerFamilyOsEnforcementWitnessHash);
   const osEnforcementCompleteness = providerHelperCollectionOsEnforcementCompleteness({
     collection,
     hashesMatch,
@@ -6114,6 +6495,9 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     onlyProviderToolWitnessMissing:
       osEnforcementCompleteness.incompleteFacts.length === 1 &&
       osEnforcementCompleteness.incompleteFacts[0] === "provider_tool_execution_witness",
+    onlyProviderFamilyOsEnforcementWitnessMissing:
+      osEnforcementCompleteness.incompleteFacts.length === 1 &&
+      osEnforcementCompleteness.incompleteFacts[0] === "provider_family_os_enforcement_witness",
     osEnforcementComplete: osEnforcementCompleteness.complete,
     probe
   });
@@ -6175,6 +6559,9 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       provider_specific_tool_execution_sha256: providerSpecificToolExecutionHash,
       provider_specific_tool_name: providerSpecificTool?.name ?? null,
       provider_specific_tool_sha256: providerSpecificTool?.sha256 ?? null,
+      provider_family_os_enforcement_witness_required: true,
+      provider_family_os_enforcement_witness_bound: providerFamilyOsEnforcementWitnessBound,
+      provider_family_os_enforcement_witness_sha256: providerFamilyOsEnforcementWitnessHash,
       diagnostics,
       proof_authority: "none"
     },
@@ -6232,6 +6619,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
         ? providerSpecificToolExecutionBound
         : false,
       provider_specific_tool_name: providerSpecificTool?.name ?? null,
+      provider_family_os_enforcement_witness_bound: providerFamilyOsEnforcementWitnessBound,
+      provider_family_os_enforcement_witness_sha256: providerFamilyOsEnforcementWitnessHash,
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false
@@ -6555,6 +6944,10 @@ export function reviewAgentAdapterOsIsolationReadiness(
     providerHelperCollection,
     evidence
   );
+  const providerFamilyOsEnforcementWitnessRequired = providerHelperCollectionRequiresProviderFamilyOsEnforcementWitness(
+    providerHelperCollection,
+    evidence
+  );
   const providerToolWitnessBound = !providerToolWitnessRequired ||
     (
       evidenceHasProviderToolExecutionWitnessFields(evidence) &&
@@ -6575,6 +6968,15 @@ export function reviewAgentAdapterOsIsolationReadiness(
               collection: providerHelperCollection,
               evidence
             })
+          : true
+      )
+    );
+  const providerFamilyOsEnforcementWitnessBound = !providerFamilyOsEnforcementWitnessRequired ||
+    (
+      evidenceHasProviderFamilyOsEnforcementWitnessFields(evidence) &&
+      (
+        providerHelperCollection
+          ? providerHelperCollectionHasProviderFamilyOsEnforcementWitness(providerHelperCollection, evidence)
           : true
       )
     );
@@ -6600,6 +7002,12 @@ export function reviewAgentAdapterOsIsolationReadiness(
     provider_specific_tool_execution: check(
       providerSpecificToolExecutionBound,
       providerSpecificToolExecutionRequired ? evidence?.provider_specific_tool_execution_sha256 ?? null : "not_required"
+    ),
+    provider_family_os_enforcement_witness: check(
+      providerFamilyOsEnforcementWitnessBound,
+      providerFamilyOsEnforcementWitnessRequired
+        ? evidence?.provider_family_os_enforcement_witness_sha256 ?? null
+        : "not_required"
     ),
     host_path_secret_free: check(hostPathSecretFree, hostPathSecretFree),
     non_authority: check(nonAuthority, nonAuthority)

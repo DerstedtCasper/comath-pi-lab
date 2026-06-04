@@ -73,7 +73,11 @@ assert.equal(
   true,
   "sample config must record that provider-helper collection probes require provider-tool witness binding"
 );
-assert.equal(readRepoFile("TODO.md").includes("Task184-203"), true, "TODO must roll the provider-helper deferred-chain summary through Task203");
+assert.match(
+  readRepoFile("TODO.md"),
+  /Task184-20[3-9]/,
+  "TODO must roll the provider-helper deferred-chain summary through at least Task203"
+);
 assert.equal(readRepoFile("REVIEW.md").includes("Goal 3 Task 203"), true, "REVIEW must include Task203 verification evidence");
 assert.equal(readRepoFile("goal-3/tasks.md").includes("## Task203"), true, "Goal 3 tracker must record Task203 before the next frontier");
 
@@ -152,6 +156,9 @@ function createCollectionProbeScript(projectRoot, { includeProviderToolWitness }
       "};",
       includeProviderToolWitness
         ? "payload.provider_tool_execution_witness = { witness_source: 'provider_specific_executed_tool', provider: process.env.COMATH_OS_ISOLATION_PROVIDER, execution_id: `${valueAfter('--collection-id')}-TOOL`, collection_id: valueAfter('--collection-id'), helper_execution_id: valueAfter('--helper-execution-id'), runner_id: process.env.COMATH_PROVIDER_RUNNER_ID, launch_id: process.env.COMATH_SANDBOX_LAUNCH_ID, tool_sha256: valueAfter('--provider-tool-sha256'), profile_sha256: valueAfter('--provider-tool-profile-sha256'), argv_sha256: valueAfter('--provider-tool-argv-sha256'), host_capability_tool_name: valueAfter('--provider-host-tool-name'), host_capability_tool_sha256: valueAfter('--provider-host-tool-sha256'), transcript_sha256: valueAfter('--transcript-sha256'), network_policy: 'disabled', proof_authority: 'none' };"
+        : "",
+      includeProviderToolWitness
+        ? "payload.provider_family_os_enforcement_witness = { witness_source: 'provider_family_os_enforcement', provider: process.env.COMATH_OS_ISOLATION_PROVIDER, execution_id: `${valueAfter('--collection-id')}-FAMILY`, collection_id: valueAfter('--collection-id'), helper_execution_id: valueAfter('--helper-execution-id'), runner_id: process.env.COMATH_PROVIDER_RUNNER_ID, launch_id: process.env.COMATH_SANDBOX_LAUNCH_ID, host_validation_id: valueAfter('--host-validation-id'), host_validation_path: valueAfter('--host-validation-path'), host_validation_sha256: valueAfter('--host-validation-sha256'), host_capability_probe_id: valueAfter('--host-capability-probe-id'), host_capability_probe_path: valueAfter('--host-capability-probe-path'), host_capability_probe_sha256: valueAfter('--host-capability-probe-sha256'), host_capability_status: valueAfter('--host-capability-status'), provider_host_capability_bound: valueAfter('--provider-host-capability-bound') === 'true', provider_specific_tool_name: valueAfter('--provider-host-tool-name'), provider_specific_tool_sha256: valueAfter('--provider-host-tool-sha256'), provider_tool_sha256: valueAfter('--provider-tool-sha256'), provider_tool_profile_sha256: valueAfter('--provider-tool-profile-sha256'), provider_tool_argv_sha256: valueAfter('--provider-tool-argv-sha256'), collection_source: 'service_owned_os_probe', process_isolation_enforced: true, filesystem_scope_enforced: true, network_isolation_enforced: true, no_new_privileges: true, escape_prevention: true, adapter_process_exit_code: numberAfter('--helper-exit-code'), stdout_sha256: valueAfter('--stdout-sha256'), stderr_sha256: valueAfter('--stderr-sha256'), transcript_sha256: valueAfter('--transcript-sha256'), network_policy: 'disabled', proof_authority: 'none' };"
         : "",
       "console.log(JSON.stringify(payload));",
       "console.error('collection probe stderr ok');"

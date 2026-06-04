@@ -114,6 +114,8 @@ Task203 tightens complete provider-helper collection evidence: complete OS-enfor
 
 Task204 adds provider-specific tool binding to that witness chain. Complete provider-helper collection evidence must now bind the witness to a host-capability provider tool name/hash observed by the current service-owned capability probe; Task203-valid witness material without that provider-specific tool binding, or evidence whose current host-capability artifact no longer matches that binding, fails closed as a replayable blocker. This is provenance hardening for the helper collection path.
 
+Task205 adds provider-family OS-enforcement witness binding to the same chain. Complete provider-helper collection evidence must now carry `provider_family_os_enforcement_witness` material bound to the current provider family, collection/helper/runner/launch ids, host-capability artifact and provider tool name/hash, helper transcript hash, complete process/filesystem/network/no-new-privileges/escape-prevention facts, disabled network policy, and `proof_authority="none"`. Missing, mismatched, or stale pre-Task205 witness material fails closed before nested canonical evidence can satisfy adapter OS-isolation readiness.
+
 Boundary unchanged: this provider-helper chain does not alter Lean clean replay authority, live Pi status, provider coverage, or certify/complete release readiness.
 
 Task180 revalidated the Task175-179 provider-helper chain, public route sanitization, current Pi probe/sandbox-execution consumers, and readiness boundary without adding a new authority surface or closing the remaining production-helper, durable-transport, broad OS-enforced execution, Lean replay, or real-Pi blockers.

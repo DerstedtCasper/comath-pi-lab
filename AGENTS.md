@@ -245,6 +245,8 @@ Task203 tightens complete provider-helper collection evidence. Complete service-
 
 Task204 extends that collection witness with provider-specific tool binding. Complete service-owned OS-enforcement facts must also bind the witness to a provider tool name/hash observed in the current service-owned host-capability artifact; a Task203-valid witness without that host-capability provider tool binding fails closed before readiness. This remains provenance gating only, and all existing non-authority boundaries continue to apply.
 
+Task205 extends the provider-helper collection chain with a provider-family OS-enforcement witness. Complete service-owned OS-enforcement facts must also carry `provider_family_os_enforcement_witness` material bound to the current provider family, host-capability artifact and provider tool name/hash, helper transcript, collection/helper/runner/launch ids, complete OS-enforcement facts, disabled network policy, and `proof_authority="none"`. Missing, mismatched, or stale pre-Task205 witness material fails closed before readiness. This remains provenance gating only, and all existing non-authority boundaries continue to apply.
+
 The current user-approved concurrency budget is `rpm=4` with reasoning effort `high`. Use a small number of bounded subagents for read-only review or disjoint write scopes. It does not permit two agents to edit the same public schema, route, path-policy file, gate, GraphPatch apply contract, artifact/paper module, or root package file at the same time.
 
 ## Proof And Evidence Rules

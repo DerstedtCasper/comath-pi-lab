@@ -121,7 +121,7 @@ for (const [content, label] of [
   );
 }
 
-assert.match(readRepoFile("TODO.md"), /Task184-(?:202|203)/, "TODO must roll the provider-helper deferred-chain summary through Task202 or later");
+assert.match(readRepoFile("TODO.md"), /Task184-20[2-9]/, "TODO must roll the provider-helper deferred-chain summary through Task202 or later");
 assert.equal(readRepoFile("REVIEW.md").includes("Goal 3 Task 202"), true, "REVIEW must include Task202 verification evidence");
 assert.equal(readRepoFile("goal-3/tasks.md").includes("## Task202"), true, "Goal 3 tracker must record Task202 before the next frontier");
 
