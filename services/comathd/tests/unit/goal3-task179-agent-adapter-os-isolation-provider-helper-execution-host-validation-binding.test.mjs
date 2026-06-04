@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -105,6 +105,39 @@ function providerSpecificLiveProbeAttempt(probeInput) {
     provider_tool_profile_sha256: expectation.profile_sha256,
     provider_tool_argv_sha256: expectation.argv_sha256,
     transcript_sha256: probeInput.transcript_sha256,
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: true,
+    filesystem_scope_enforced: true,
+    network_isolation_enforced: true,
+    no_new_privileges: true,
+    escape_prevention: true,
+    adapter_process_exit_code: 0,
+    network_policy: "disabled",
+    proof_authority: "none"
+  };
+}
+function providerSpecificLiveProbeExecution(probeInput) {
+  const expectation = probeInput.provider_tool_execution_witness_expectation;
+  return {
+    execution_source: "service_owned_provider_specific_live_os_probe",
+    provider: probeInput.provider,
+    execution_id: `${probeInput.collection_id}-LIVE-EXEC`,
+    collection_id: probeInput.collection_id,
+    helper_execution_id: probeInput.helper_execution_id,
+    runner_id: probeInput.runner_id,
+    launch_id: probeInput.launch_id,
+    provider_family_execution_kind: expectation.provider_family_execution_kind,
+    provider_family_execution_profile_sha256: expectation.provider_family_execution_profile_sha256,
+    provider_family_execution_argv_sha256: expectation.provider_family_execution_argv_sha256,
+    provider_tool_sha256: expectation.tool_sha256,
+    provider_tool_profile_sha256: expectation.profile_sha256,
+    provider_tool_argv_sha256: expectation.argv_sha256,
+    transcript_sha256: probeInput.transcript_sha256,
+    live_probe_tool_sha256: "d".repeat(64),
+    live_probe_argv_sha256: "e".repeat(64),
+    live_probe_stdout_sha256: "f".repeat(64),
+    live_probe_stderr_sha256: "1".repeat(64),
+    live_probe_transcript_sha256: "2".repeat(64),
     collection_source: "service_owned_os_probe",
     process_isolation_enforced: true,
     filesystem_scope_enforced: true,
@@ -663,6 +696,7 @@ try {
         provider_tool_execution_witness: providerToolExecutionWitness(probeInput),
         provider_family_os_enforcement_witness: providerFamilyOsEnforcementWitness(probeInput),
         provider_specific_live_probe_attempt: providerSpecificLiveProbeAttempt(probeInput),
+        provider_specific_live_probe_execution: providerSpecificLiveProbeExecution(probeInput),
         diagnostics: [`${projectRoot} collector diagnostic must be scrubbed`, "helper collection succeeded"]
       };
     }

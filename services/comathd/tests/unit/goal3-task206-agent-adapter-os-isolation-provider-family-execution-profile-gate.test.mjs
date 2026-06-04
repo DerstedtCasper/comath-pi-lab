@@ -192,6 +192,49 @@ async function postCollection(server, projectRoot, projectId, helperExecution, r
   });
 }
 
+function createLiveProbeExecutionScript(projectRoot) {
+  const liveProbeExecutionScript = join(projectRoot, "task206-valid-live-probe-execution.mjs");
+  writeFileSync(
+    liveProbeExecutionScript,
+    [
+      "const args = process.argv.slice(2);",
+      "const valueAfter = (flag) => { const index = args.indexOf(flag); return index >= 0 ? args[index + 1] : null; };",
+      "const numberAfter = (flag) => Number(valueAfter(flag));",
+      "const payload = {",
+      "  comath_provider_specific_live_os_probe: true,",
+      "  ok: true,",
+      "  provider: process.env.COMATH_OS_ISOLATION_PROVIDER,",
+      "  network_policy: process.env.COMATH_RUNNER_NETWORK,",
+      "  proof_authority: process.env.COMATH_PROOF_AUTHORITY,",
+      "  adapter: process.env.COMATH_ADAPTER_ID,",
+      "  backend: process.env.COMATH_ADAPTER_BACKEND,",
+      "  project_id: process.env.COMATH_PROJECT_ID,",
+      "  collection_id: valueAfter('--collection-id'),",
+      "  helper_execution_id: valueAfter('--helper-execution-id'),",
+      "  runner_id: process.env.COMATH_PROVIDER_RUNNER_ID,",
+      "  launch_id: process.env.COMATH_SANDBOX_LAUNCH_ID,",
+      "  provider_family_execution_kind: valueAfter('--provider-family-execution-kind'),",
+      "  provider_family_execution_profile_sha256: valueAfter('--provider-family-execution-profile-sha256'),",
+      "  provider_family_execution_argv_sha256: valueAfter('--provider-family-execution-argv-sha256'),",
+      "  provider_tool_sha256: valueAfter('--provider-tool-sha256'),",
+      "  provider_tool_profile_sha256: valueAfter('--provider-tool-profile-sha256'),",
+      "  provider_tool_argv_sha256: valueAfter('--provider-tool-argv-sha256'),",
+      "  transcript_sha256: valueAfter('--transcript-sha256'),",
+      "  collection_source: 'service_owned_os_probe',",
+      "  process_isolation_enforced: true,",
+      "  filesystem_scope_enforced: true,",
+      "  network_isolation_enforced: true,",
+      "  no_new_privileges: true,",
+      "  escape_prevention: true,",
+      "  adapter_process_exit_code: numberAfter('--helper-exit-code')",
+      "};",
+      "console.log(JSON.stringify(payload));"
+    ].join("\n"),
+    "utf8"
+  );
+  return liveProbeExecutionScript;
+}
+
 const task206Capability = "agent_adapter_os_isolation_provider_family_execution_profile_gate";
 const task206TestName = "goal3-task206-agent-adapter-os-isolation-provider-family-execution-profile-gate.test.mjs";
 
@@ -233,15 +276,23 @@ assert.equal(
   true,
   "sample config must record that complete provider-helper collection requires provider-family execution profile binding"
 );
-assert.equal(readRepoFile("TODO.md").includes("Task184-206"), true, "TODO must roll the provider-helper deferred-chain summary through Task206");
+assert.match(
+  readRepoFile("TODO.md"),
+  /Task184-20[6-9]/,
+  "TODO must roll the provider-helper deferred-chain summary through Task206 or later"
+);
 assert.equal(readRepoFile("REVIEW.md").includes("Goal 3 Task 206"), true, "REVIEW must include Task206 verification evidence");
 assert.equal(readRepoFile("goal-3/tasks.md").includes("## Task206"), true, "Goal 3 tracker must record Task206 before the next frontier");
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task206-provider-family-profile-"));
 const probeEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE";
 const probeArgsEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE_ARGS_JSON";
+const liveProbeEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_LIVE_PROBE";
+const liveProbeArgsEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_LIVE_PROBE_ARGS_JSON";
 const previousProbeEnv = process.env[probeEnvVar];
 const previousProbeArgsEnv = process.env[probeArgsEnvVar];
+const previousLiveProbeEnv = process.env[liveProbeEnvVar];
+const previousLiveProbeArgsEnv = process.env[liveProbeArgsEnvVar];
 
 try {
   const init = initProject({
@@ -253,8 +304,11 @@ try {
   const missingProfileProbe = createCollectionProbeScript(projectRoot, { profileMode: "missing" });
   const wrongProfileProbe = createCollectionProbeScript(projectRoot, { profileMode: "wrong-profile" });
   const validProfileProbe = createCollectionProbeScript(projectRoot, { profileMode: "valid" });
+  const validLiveProbeExecution = createLiveProbeExecutionScript(projectRoot);
   const helperBinarySha256 = sha256File(process.execPath);
   process.env[probeEnvVar] = process.execPath;
+  delete process.env[liveProbeEnvVar];
+  delete process.env[liveProbeArgsEnvVar];
 
   const launch = prepareAgentAdapterOsIsolationSandboxLaunch(projectRoot, {
     project_id: projectId,
@@ -451,6 +505,8 @@ try {
   assert.equal(wrongProfile.provider_helper_collection.provider_family_execution_profile_bound, false);
 
   process.env[probeArgsEnvVar] = JSON.stringify([validProfileProbe]);
+  process.env[liveProbeEnvVar] = process.execPath;
+  process.env[liveProbeArgsEnvVar] = JSON.stringify([validLiveProbeExecution]);
   const validProfileResponse = await postCollection(
     server,
     projectRoot,
@@ -545,6 +601,16 @@ try {
     delete process.env[probeArgsEnvVar];
   } else {
     process.env[probeArgsEnvVar] = previousProbeArgsEnv;
+  }
+  if (previousLiveProbeEnv === undefined) {
+    delete process.env[liveProbeEnvVar];
+  } else {
+    process.env[liveProbeEnvVar] = previousLiveProbeEnv;
+  }
+  if (previousLiveProbeArgsEnv === undefined) {
+    delete process.env[liveProbeArgsEnvVar];
+  } else {
+    process.env[liveProbeArgsEnvVar] = previousLiveProbeArgsEnv;
   }
   rmSync(projectRoot, { recursive: true, force: true });
 }

@@ -1,3 +1,34 @@
+# Goal 3 Task 208 / Provider-Specific Live Probe Execution Gate
+
+Scope: tighten complete provider-helper collection evidence so Task207-valid live-probe-attempt material must also bind to a separately executed service-owned provider-specific live OS probe subprocess before nested canonical OS-isolation evidence can satisfy readiness.
+
+Changes:
+
+- Added `goal3-task208-agent-adapter-os-isolation-provider-specific-live-probe-execution-gate.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_specific_live_probe_execution_gate`.
+- Added provider-specific live probe execution fields to provider-helper collection manifests, nested probe/evidence details, audit payloads, and readiness review checks.
+- Required configured collection probes to bind `provider_specific_live_probe_execution` material with live probe tool/argv/stdout/stderr/transcript hashes before complete OS facts can satisfy nested canonical evidence.
+- Added missing provider-specific live probe execution blockers and readiness vetoes for missing or mismatched live-probe execution material.
+- Registered Task208 in phase0 smoke and GA release criteria.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task208 initially failed because the service capability ledger did not advertise `agent_adapter_os_isolation_provider_specific_live_probe_execution_gate`.
+- A later RED caught stale pre-Task208 canonical evidence without `provider_specific_live_probe_execution_*` fields incorrectly passing readiness (`true !== false`); readiness and collected-probe binding were hardened before GREEN.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task208 exited 0.
+- Adjacent provider-helper regressions exited 0 for Task177, Task179, Task182, Task184, Task185, Task187, Task188, Task189, Task203, Task204, Task205, Task206, and Task207.
+- Package-gate verification exposed two Task208 integration issues before final GREEN: direct Task170 host collection was over-gated by the live-probe-execution predicate, and Task199/Task200 configured provider-helper positive fixtures had not yet been migrated to service-owned live-probe execution env setup. The gate predicate was narrowed to explicit `provider_specific_live_probe_execution_required`, and Task199/Task200 fixtures were migrated without weakening provider-helper Task208 readiness.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task170, Task199, Task200, Task201, Task202, Task203, Task204, Task205, Task206, Task207, and Task208 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+- Read-only subagent reviews found the stale pre-Task208 readiness bypass and tracker/smoke/docs drift; those issues were repaired.
+
+Boundary notes: Task208 adds provenance and stale-evidence hardening only. The live probe execution binding does not alter Lean authority, live Pi execution status, provider coverage, real daemon/policy inspection, or release readiness by itself.
+
+Residual risks: Goal 3 remains incomplete. This task does not ship provider-specific production sandbox helpers, execute container/Nix/Firejail/sandbox-exec tools by default, inspect daemon/socket/container/store/profile/sandbox-policy state, provide durable long-lived operator transport, broaden Lean/mathlib replay, or complete fully interactive real-Pi execution.
+
 # Goal 3 Task 207 / Provider-Specific Live Probe Attempt Gate
 
 Scope: tighten complete provider-helper collection evidence so Task206-valid provider-family execution-profile material must also bind to a provider-specific live probe attempt before nested canonical OS-isolation evidence can satisfy readiness.

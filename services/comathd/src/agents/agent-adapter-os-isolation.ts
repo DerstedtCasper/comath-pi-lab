@@ -76,6 +76,9 @@ export type AgentAdapterOsIsolationEvidence = {
   provider_specific_live_probe_attempt_required?: boolean;
   provider_specific_live_probe_attempt_bound?: boolean;
   provider_specific_live_probe_attempt_sha256?: string;
+  provider_specific_live_probe_execution_required?: boolean;
+  provider_specific_live_probe_execution_bound?: boolean;
+  provider_specific_live_probe_execution_sha256?: string;
   proof_authority?: unknown;
   can_promote_claim?: unknown;
   can_certify_ga?: unknown;
@@ -174,6 +177,37 @@ export type AgentAdapterOsIsolationProviderSpecificLiveProbeAttempt = {
   proof_authority: "none";
 };
 
+export type AgentAdapterOsIsolationProviderSpecificLiveProbeExecution = {
+  execution_source: "service_owned_provider_specific_live_os_probe";
+  provider: AgentAdapterOsIsolationProvider;
+  execution_id: string;
+  collection_id: string;
+  helper_execution_id: string;
+  runner_id: string;
+  launch_id: string;
+  provider_family_execution_kind: AgentAdapterOsIsolationProviderFamilyExecutionKind;
+  provider_family_execution_profile_sha256: string;
+  provider_family_execution_argv_sha256: string;
+  provider_tool_sha256: string;
+  provider_tool_profile_sha256: string;
+  provider_tool_argv_sha256: string;
+  transcript_sha256: string;
+  live_probe_tool_sha256: string;
+  live_probe_argv_sha256: string;
+  live_probe_stdout_sha256: string;
+  live_probe_stderr_sha256: string;
+  live_probe_transcript_sha256: string;
+  collection_source: "service_owned_os_probe";
+  process_isolation_enforced: true;
+  filesystem_scope_enforced: true;
+  network_isolation_enforced: true;
+  no_new_privileges: true;
+  escape_prevention: true;
+  adapter_process_exit_code: 0;
+  network_policy: "disabled";
+  proof_authority: "none";
+};
+
 export type AgentAdapterOsIsolationProbeCollection = {
   collection_source?: "service_owned_os_probe" | "operator_attested" | "unknown";
   process_isolation_enforced?: boolean;
@@ -205,6 +239,10 @@ export type AgentAdapterOsIsolationProbeCollection = {
   provider_specific_live_probe_attempt?: AgentAdapterOsIsolationProviderSpecificLiveProbeAttempt;
   provider_specific_live_probe_attempt_bound?: boolean;
   provider_specific_live_probe_attempt_sha256?: string;
+  provider_specific_live_probe_execution_required?: boolean;
+  provider_specific_live_probe_execution?: AgentAdapterOsIsolationProviderSpecificLiveProbeExecution;
+  provider_specific_live_probe_execution_bound?: boolean;
+  provider_specific_live_probe_execution_sha256?: string;
   notes?: string;
 };
 
@@ -564,6 +602,7 @@ export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "blocked_provider_helper_collection_provider_family_os_enforcement_witness_missing"
   | "blocked_provider_helper_collection_provider_family_execution_profile_missing"
   | "blocked_provider_helper_collection_provider_specific_live_probe_attempt_missing"
+  | "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing"
   | "blocked_provider_helper_collection_incomplete_os_enforcement"
   | "blocked_provider_helper_collection_not_collected";
 
@@ -801,6 +840,7 @@ export type AgentAdapterOsIsolationReview = {
     provider_family_os_enforcement_witness: AgentAdapterOsIsolationReviewCheck;
     provider_family_execution_profile: AgentAdapterOsIsolationReviewCheck;
     provider_specific_live_probe_attempt: AgentAdapterOsIsolationReviewCheck;
+    provider_specific_live_probe_execution: AgentAdapterOsIsolationReviewCheck;
     host_path_secret_free: AgentAdapterOsIsolationReviewCheck;
     non_authority: AgentAdapterOsIsolationReviewCheck;
   };
@@ -878,6 +918,9 @@ export type AgentAdapterOsIsolationProbe = {
     provider_specific_live_probe_attempt_required?: boolean;
     provider_specific_live_probe_attempt_bound?: boolean;
     provider_specific_live_probe_attempt_sha256?: string;
+    provider_specific_live_probe_execution_required?: boolean;
+    provider_specific_live_probe_execution_bound?: boolean;
+    provider_specific_live_probe_execution_sha256?: string;
   };
   adapter_execution_isolation: {
     required_for_ga: true;
@@ -1342,6 +1385,9 @@ export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
     provider_specific_live_probe_attempt_required: true;
     provider_specific_live_probe_attempt_bound: boolean;
     provider_specific_live_probe_attempt_sha256: string | null;
+    provider_specific_live_probe_execution_required: boolean;
+    provider_specific_live_probe_execution_bound: boolean;
+    provider_specific_live_probe_execution_sha256: string | null;
     diagnostics: string[];
     proof_authority: "none";
   };
@@ -1654,6 +1700,17 @@ function evidenceHasProviderSpecificLiveProbeAttemptFields(
   );
 }
 
+function evidenceHasProviderSpecificLiveProbeExecutionFields(
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(
+    evidence?.collection_source === "service_owned_os_probe" &&
+      evidence.provider_specific_live_probe_execution_required === true &&
+      evidence.provider_specific_live_probe_execution_bound === true &&
+      isSha256(evidence.provider_specific_live_probe_execution_sha256)
+  );
+}
+
 function providerHelperCollectionHasProviderToolExecutionWitness(
   collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
   evidence: AgentAdapterOsIsolationEvidence | undefined
@@ -1760,6 +1817,13 @@ function providerHelperCollectionRequiresProviderSpecificLiveProbeAttempt(
   return Boolean(collection || evidence?.provider_specific_live_probe_attempt_required === true);
 }
 
+function providerHelperCollectionRequiresProviderSpecificLiveProbeExecution(
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(collection || evidence?.provider_specific_live_probe_execution_required === true);
+}
+
 function providerHelperCollectionHasProviderSpecificLiveProbeAttempt(
   collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
   evidence: AgentAdapterOsIsolationEvidence | undefined
@@ -1772,6 +1836,21 @@ function providerHelperCollectionHasProviderSpecificLiveProbeAttempt(
       isSha256(attemptSha256) &&
       evidenceHasProviderSpecificLiveProbeAttemptFields(evidence) &&
       attemptSha256 === evidence?.provider_specific_live_probe_attempt_sha256
+  );
+}
+
+function providerHelperCollectionHasProviderSpecificLiveProbeExecution(
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  const executionSha256 = collection?.provider_helper_collection.provider_specific_live_probe_execution_sha256;
+  return Boolean(
+    collection &&
+      collection.provider_helper_collection.provider_specific_live_probe_execution_required === true &&
+      collection.provider_helper_collection.provider_specific_live_probe_execution_bound === true &&
+      isSha256(executionSha256) &&
+      evidenceHasProviderSpecificLiveProbeExecutionFields(evidence) &&
+      executionSha256 === evidence?.provider_specific_live_probe_execution_sha256
   );
 }
 
@@ -1962,6 +2041,26 @@ function evidenceHasCollectedProbeBinding(
           )
         )
     );
+    const providerSpecificLiveProbeExecutionRequired = providerHelperCollectionRequiresProviderSpecificLiveProbeExecution(
+      providerHelperCollection,
+      evidence
+    );
+    const providerSpecificLiveProbeExecutionBound = Boolean(
+      !providerSpecificLiveProbeExecutionRequired ||
+        (
+          evidenceHasProviderSpecificLiveProbeExecutionFields(evidence) &&
+          parsedProbe.evidence?.provider_specific_live_probe_execution_required === true &&
+          parsedProbe.evidence?.provider_specific_live_probe_execution_bound === true &&
+          isSha256(parsedProbe.evidence?.provider_specific_live_probe_execution_sha256) &&
+          parsedProbe.evidence?.provider_specific_live_probe_execution_sha256 ===
+            evidence.provider_specific_live_probe_execution_sha256 &&
+          (
+            providerHelperCollection
+              ? providerHelperCollectionHasProviderSpecificLiveProbeExecution(providerHelperCollection, evidence)
+              : true
+          )
+        )
+    );
     return Boolean(
       parsedProbe.schema_version === "comath.agent_adapter_os_isolation_probe.v1" &&
         parsedProbe.probe_id === evidence.probe_id &&
@@ -1979,6 +2078,7 @@ function evidenceHasCollectedProbeBinding(
         providerFamilyOsEnforcementWitnessBound &&
         providerFamilyExecutionProfileBound &&
         providerSpecificLiveProbeAttemptBound &&
+        providerSpecificLiveProbeExecutionBound &&
         parsedProbe.proof_authority === "none" &&
         parsedProbe.can_promote_claim === false &&
         parsedProbe.can_certify_ga === false
@@ -2083,6 +2183,12 @@ function buildVetoes(input: {
     vetoes.push({
       code: "adapter_os_isolation_provider_specific_live_probe_attempt_missing",
       message: "Collected OS-isolation evidence must bind complete OS-enforcement facts to a provider-specific live probe attempt for the current provider family."
+    });
+  }
+  if (!input.checks.provider_specific_live_probe_execution.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_provider_specific_live_probe_execution_missing",
+      message: "Collected OS-isolation evidence must bind complete OS-enforcement facts to a service-owned provider-specific live probe execution transcript for the current provider family."
     });
   }
   if (!input.checks.host_path_secret_free.ok) {
@@ -2722,6 +2828,124 @@ function providerSpecificLiveProbeAttemptSha256(
   }));
 }
 
+function providerSpecificLiveProbeExecutionAccepted(
+  execution: AgentAdapterOsIsolationProviderSpecificLiveProbeExecution | undefined,
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput,
+  expectation: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation | undefined
+): execution is AgentAdapterOsIsolationProviderSpecificLiveProbeExecution {
+  return Boolean(
+    execution &&
+      providerFamilyExecutionProfileRequired(expectation) &&
+      execution.execution_source === "service_owned_provider_specific_live_os_probe" &&
+      execution.provider === input.provider &&
+      isBoundedExecutionId(execution.execution_id) &&
+      execution.collection_id === input.collection_id &&
+      execution.helper_execution_id === input.helper_execution_id &&
+      execution.runner_id === input.runner_id &&
+      execution.launch_id === input.launch_id &&
+      execution.provider_family_execution_kind === expectation?.provider_family_execution_kind &&
+      isSha256(execution.provider_family_execution_profile_sha256) &&
+      execution.provider_family_execution_profile_sha256.toLowerCase() ===
+        expectation?.provider_family_execution_profile_sha256?.toLowerCase() &&
+      isSha256(execution.provider_family_execution_argv_sha256) &&
+      execution.provider_family_execution_argv_sha256.toLowerCase() ===
+        expectation?.provider_family_execution_argv_sha256?.toLowerCase() &&
+      isSha256(execution.provider_tool_sha256) &&
+      execution.provider_tool_sha256.toLowerCase() === expectation?.tool_sha256.toLowerCase() &&
+      isSha256(execution.provider_tool_profile_sha256) &&
+      execution.provider_tool_profile_sha256.toLowerCase() === expectation?.profile_sha256.toLowerCase() &&
+      isSha256(execution.provider_tool_argv_sha256) &&
+      execution.provider_tool_argv_sha256.toLowerCase() === expectation?.argv_sha256.toLowerCase() &&
+      isSha256(execution.transcript_sha256) &&
+      execution.transcript_sha256.toLowerCase() === input.transcript_sha256.toLowerCase() &&
+      isSha256(execution.live_probe_tool_sha256) &&
+      isSha256(execution.live_probe_argv_sha256) &&
+      isSha256(execution.live_probe_stdout_sha256) &&
+      isSha256(execution.live_probe_stderr_sha256) &&
+      isSha256(execution.live_probe_transcript_sha256) &&
+      execution.collection_source === "service_owned_os_probe" &&
+      execution.process_isolation_enforced === true &&
+      execution.filesystem_scope_enforced === true &&
+      execution.network_isolation_enforced === true &&
+      execution.no_new_privileges === true &&
+      execution.escape_prevention === true &&
+      execution.adapter_process_exit_code === 0 &&
+      input.helper_exit_code === 0 &&
+      execution.network_policy === "disabled" &&
+      execution.proof_authority === "none"
+  );
+}
+
+function providerSpecificLiveProbeExecutionSha256(
+  execution: AgentAdapterOsIsolationProviderSpecificLiveProbeExecution | undefined
+): string | null {
+  if (!execution) {
+    return null;
+  }
+  if (
+    execution.execution_source !== "service_owned_provider_specific_live_os_probe" ||
+    !osEnforcedProviders.has(execution.provider) ||
+    !isBoundedExecutionId(execution.execution_id) ||
+    !isBoundedExecutionId(execution.collection_id) ||
+    !isBoundedExecutionId(execution.helper_execution_id) ||
+    !isBoundedExecutionId(execution.runner_id) ||
+    !isBoundedExecutionId(execution.launch_id) ||
+    !isProviderFamilyExecutionKind(execution.provider_family_execution_kind) ||
+    !isSha256(execution.provider_family_execution_profile_sha256) ||
+    !isSha256(execution.provider_family_execution_argv_sha256) ||
+    !isSha256(execution.provider_tool_sha256) ||
+    !isSha256(execution.provider_tool_profile_sha256) ||
+    !isSha256(execution.provider_tool_argv_sha256) ||
+    !isSha256(execution.transcript_sha256) ||
+    !isSha256(execution.live_probe_tool_sha256) ||
+    !isSha256(execution.live_probe_argv_sha256) ||
+    !isSha256(execution.live_probe_stdout_sha256) ||
+    !isSha256(execution.live_probe_stderr_sha256) ||
+    !isSha256(execution.live_probe_transcript_sha256) ||
+    execution.collection_source !== "service_owned_os_probe" ||
+    execution.process_isolation_enforced !== true ||
+    execution.filesystem_scope_enforced !== true ||
+    execution.network_isolation_enforced !== true ||
+    execution.no_new_privileges !== true ||
+    execution.escape_prevention !== true ||
+    execution.adapter_process_exit_code !== 0 ||
+    execution.network_policy !== "disabled" ||
+    execution.proof_authority !== "none"
+  ) {
+    return null;
+  }
+  return sha256Text(canonicalJson({
+    execution_source: "service_owned_provider_specific_live_os_probe",
+    provider: execution.provider,
+    execution_id: execution.execution_id,
+    collection_id: execution.collection_id,
+    helper_execution_id: execution.helper_execution_id,
+    runner_id: execution.runner_id,
+    launch_id: execution.launch_id,
+    provider_family_execution_kind: execution.provider_family_execution_kind,
+    provider_family_execution_profile_sha256: execution.provider_family_execution_profile_sha256.toLowerCase(),
+    provider_family_execution_argv_sha256: execution.provider_family_execution_argv_sha256.toLowerCase(),
+    provider_tool_sha256: execution.provider_tool_sha256.toLowerCase(),
+    provider_tool_profile_sha256: execution.provider_tool_profile_sha256.toLowerCase(),
+    provider_tool_argv_sha256: execution.provider_tool_argv_sha256.toLowerCase(),
+    transcript_sha256: execution.transcript_sha256.toLowerCase(),
+    live_probe_tool_sha256: execution.live_probe_tool_sha256.toLowerCase(),
+    live_probe_argv_sha256: execution.live_probe_argv_sha256.toLowerCase(),
+    live_probe_stdout_sha256: execution.live_probe_stdout_sha256.toLowerCase(),
+    live_probe_stderr_sha256: execution.live_probe_stderr_sha256.toLowerCase(),
+    live_probe_transcript_sha256: execution.live_probe_transcript_sha256.toLowerCase(),
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: true,
+    filesystem_scope_enforced: true,
+    network_isolation_enforced: true,
+    no_new_privileges: true,
+    escape_prevention: true,
+    adapter_process_exit_code: 0,
+    network_policy: "disabled",
+    proof_authority: "none"
+  }));
+}
+
 function collectionProviderToolWitnessBound(
   collection: (AgentAdapterOsIsolationProbeCollection & {
     provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
@@ -2996,6 +3220,67 @@ function providerSpecificLiveProbeAttemptSha256ForCollection(
     : null;
 }
 
+function collectionProviderSpecificLiveProbeExecutionBound(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): boolean {
+  const expectation =
+    collection?.provider_tool_execution_witness_expectation ??
+      input?.provider_tool_execution_witness_expectation;
+  if (!providerFamilyExecutionProfileRequired(expectation)) {
+    if (collection?.provider_specific_live_probe_execution_required === true) {
+      return Boolean(
+        collection.provider_specific_live_probe_execution_bound === true &&
+          isSha256(collection.provider_specific_live_probe_execution_sha256)
+      );
+    }
+    return false;
+  }
+  const execution = collection?.provider_specific_live_probe_execution;
+  if (!execution) {
+    return false;
+  }
+  if (
+    input &&
+    !providerSpecificLiveProbeExecutionAccepted(execution, input, expectation)
+  ) {
+    return false;
+  }
+  const executionSha256 = providerSpecificLiveProbeExecutionSha256(execution);
+  const topLevelBindingConsistent = collection?.provider_specific_live_probe_execution_required === true
+    ? Boolean(
+        collection.provider_specific_live_probe_execution_bound === true &&
+          isSha256(collection.provider_specific_live_probe_execution_sha256) &&
+          executionSha256 === collection.provider_specific_live_probe_execution_sha256
+      )
+    : true;
+  return Boolean(
+    executionSha256 &&
+      topLevelBindingConsistent &&
+      collectionProviderSpecificLiveProbeAttemptBound(collection, input)
+  );
+}
+
+function providerSpecificLiveProbeExecutionSha256ForCollection(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): string | null {
+  if (!collectionProviderSpecificLiveProbeExecutionBound(collection, input)) {
+    return null;
+  }
+  const executionSha256 = providerSpecificLiveProbeExecutionSha256(collection?.provider_specific_live_probe_execution);
+  if (isSha256(executionSha256)) {
+    return executionSha256;
+  }
+  return isSha256(collection?.provider_specific_live_probe_execution_sha256)
+    ? collection.provider_specific_live_probe_execution_sha256.toLowerCase()
+    : null;
+}
+
 function collectionProviderToolWitnessSatisfied(
   collection: AgentAdapterOsIsolationProbeCollection | undefined,
   input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
@@ -3032,6 +3317,15 @@ function collectionProviderSpecificLiveProbeAttemptSatisfied(
     : true;
 }
 
+function collectionProviderSpecificLiveProbeExecutionSatisfied(
+  collection: AgentAdapterOsIsolationProbeCollection | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): boolean {
+  return collection?.provider_specific_live_probe_execution_required === true
+    ? collectionProviderSpecificLiveProbeExecutionBound(collection, input)
+    : true;
+}
+
 function isCollectedOsIsolationProbe(input: {
   knownProvider: AgentAdapterOsIsolationProvider | null;
   providerAvailable: boolean;
@@ -3056,7 +3350,8 @@ function isCollectedOsIsolationProbe(input: {
       collectionProviderSpecificToolExecutionBound(collection) &&
       collectionProviderFamilyOsEnforcementWitnessSatisfied(collection) &&
       collectionProviderFamilyExecutionProfileSatisfied(collection) &&
-      collectionProviderSpecificLiveProbeAttemptSatisfied(collection)
+      collectionProviderSpecificLiveProbeAttemptSatisfied(collection) &&
+      collectionProviderSpecificLiveProbeExecutionSatisfied(collection)
   );
 }
 
@@ -4181,6 +4476,40 @@ function providerHelperCollectionProbeArgsEnvVar(provider: AgentAdapterOsIsolati
   }
 }
 
+function providerSpecificLiveProbeProgramEnvVar(provider: AgentAdapterOsIsolationProvider): string {
+  switch (provider) {
+    case "oci_container":
+      return "COMATH_AGENT_ADAPTER_OSISO_OCI_LIVE_PROBE";
+    case "nix_sandbox":
+      return "COMATH_AGENT_ADAPTER_OSISO_NIX_LIVE_PROBE";
+    case "firejail":
+      return "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_LIVE_PROBE";
+    case "windows_appcontainer":
+      return "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_LIVE_PROBE";
+    case "macos_sandbox_exec":
+      return "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_LIVE_PROBE";
+    default:
+      return "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_SPECIFIC_LIVE_PROBE";
+  }
+}
+
+function providerSpecificLiveProbeArgsEnvVar(provider: AgentAdapterOsIsolationProvider): string {
+  switch (provider) {
+    case "oci_container":
+      return "COMATH_AGENT_ADAPTER_OSISO_OCI_LIVE_PROBE_ARGS_JSON";
+    case "nix_sandbox":
+      return "COMATH_AGENT_ADAPTER_OSISO_NIX_LIVE_PROBE_ARGS_JSON";
+    case "firejail":
+      return "COMATH_AGENT_ADAPTER_OSISO_FIREJAIL_LIVE_PROBE_ARGS_JSON";
+    case "windows_appcontainer":
+      return "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_LIVE_PROBE_ARGS_JSON";
+    case "macos_sandbox_exec":
+      return "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_LIVE_PROBE_ARGS_JSON";
+    default:
+      return "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_SPECIFIC_LIVE_PROBE_ARGS_JSON";
+  }
+}
+
 function configuredHelperArgsPrefix(provider: AgentAdapterOsIsolationProvider): {
   ok: boolean;
   args: string[];
@@ -4270,6 +4599,53 @@ function configuredProviderHelperCollectionProbeArgsPrefix(provider: AgentAdapte
     configured_env_var: configuredEnvVar,
     diagnostics: [
       `${configuredEnvVar ?? providerEnvVar} resolved to ${args.length} fixed service-owned collection probe argument(s).`
+    ]
+  };
+}
+
+function configuredProviderSpecificLiveProbeArgsPrefix(provider: AgentAdapterOsIsolationProvider): {
+  ok: boolean;
+  args: string[];
+  configured_env_var: string | null;
+  diagnostics: string[];
+} {
+  const providerEnvVar = providerSpecificLiveProbeArgsEnvVar(provider);
+  const fallbackEnvVar = "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_SPECIFIC_LIVE_PROBE_ARGS_JSON";
+  const configuredArgs = process.env[providerEnvVar] ?? process.env[fallbackEnvVar];
+  const configuredEnvVar = process.env[providerEnvVar] !== undefined
+    ? providerEnvVar
+    : process.env[fallbackEnvVar] !== undefined
+      ? fallbackEnvVar
+      : null;
+  if (!configuredArgs) {
+    return { ok: true, args: [], configured_env_var: null, diagnostics: [] };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(configuredArgs);
+  } catch {
+    return {
+      ok: false,
+      args: [],
+      configured_env_var: configuredEnvVar,
+      diagnostics: [`${configuredEnvVar ?? providerEnvVar} must be a JSON string array.`]
+    };
+  }
+  const args = sanitizeHelperArgsPrefix(parsed);
+  if (!Array.isArray(parsed) || args.length !== parsed.length) {
+    return {
+      ok: false,
+      args: [],
+      configured_env_var: configuredEnvVar,
+      diagnostics: [`${configuredEnvVar ?? providerEnvVar} must contain only bounded string arguments.`]
+    };
+  }
+  return {
+    ok: true,
+    args,
+    configured_env_var: configuredEnvVar,
+    diagnostics: [
+      `${configuredEnvVar ?? providerEnvVar} resolved to ${args.length} fixed service-owned live probe argument(s).`
     ]
   };
 }
@@ -5378,6 +5754,12 @@ function providerHelperCollectionOsEnforcementCompleteness(input: {
   ) {
     incompleteFacts.push("provider_specific_live_probe_attempt");
   }
+  if (
+    incompleteFacts.length === 0 &&
+    !collectionProviderSpecificLiveProbeExecutionBound(input.collection, input.collectionProbeInput ?? undefined)
+  ) {
+    incompleteFacts.push("provider_specific_live_probe_execution");
+  }
   return { complete: incompleteFacts.length === 0, incompleteFacts };
 }
 
@@ -5455,6 +5837,20 @@ function providerHelperCollectionForProbe(input: {
     input.collection,
     input.collectionProbeInput ?? undefined
   );
+  const providerSpecificLiveProbeExecution =
+    input.collectionProbeInput &&
+    providerSpecificLiveProbeExecutionAccepted(
+      input.collection.provider_specific_live_probe_execution,
+      input.collectionProbeInput,
+      input.collection.provider_tool_execution_witness_expectation ??
+        input.collectionProbeInput.provider_tool_execution_witness_expectation
+    )
+      ? input.collection.provider_specific_live_probe_execution
+      : undefined;
+  const providerSpecificLiveProbeExecutionSha256 = providerSpecificLiveProbeExecutionSha256ForCollection(
+    input.collection,
+    input.collectionProbeInput ?? undefined
+  );
   return {
     collection_source: input.collection.collection_source,
     process_isolation_enforced: input.collection.process_isolation_enforced,
@@ -5488,6 +5884,10 @@ function providerHelperCollectionForProbe(input: {
     provider_specific_live_probe_attempt: providerSpecificLiveProbeAttempt,
     provider_specific_live_probe_attempt_bound: Boolean(providerSpecificLiveProbeAttemptSha256),
     provider_specific_live_probe_attempt_sha256: providerSpecificLiveProbeAttemptSha256 ?? undefined,
+    provider_specific_live_probe_execution_required: true,
+    provider_specific_live_probe_execution: providerSpecificLiveProbeExecution,
+    provider_specific_live_probe_execution_bound: Boolean(providerSpecificLiveProbeExecutionSha256),
+    provider_specific_live_probe_execution_sha256: providerSpecificLiveProbeExecutionSha256 ?? undefined,
     notes: sanitizeDiagnostics(input.collection.diagnostics).join(" ")
   };
 }
@@ -5552,6 +5952,201 @@ function providerHelperCollectionProbeStdoutAccepted(
   );
 }
 
+function providerSpecificLiveProbeStdoutAccepted(
+  parsed: Record<string, unknown> | null,
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput,
+  expectation: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation
+): boolean {
+  return Boolean(
+    parsed &&
+      parsed.comath_provider_specific_live_os_probe === true &&
+      parsed.ok === true &&
+      parsed.provider === input.provider &&
+      parsed.network_policy === "disabled" &&
+      parsed.proof_authority === "none" &&
+      parsed.adapter === input.adapter_id &&
+      parsed.backend === input.backend &&
+      parsed.project_id === input.project_id &&
+      parsed.collection_id === input.collection_id &&
+      parsed.helper_execution_id === input.helper_execution_id &&
+      parsed.runner_id === input.runner_id &&
+      parsed.launch_id === input.launch_id &&
+      parsed.provider_family_execution_kind === expectation.provider_family_execution_kind &&
+      isSha256(parsed.provider_family_execution_profile_sha256) &&
+      parsed.provider_family_execution_profile_sha256.toLowerCase() ===
+        expectation.provider_family_execution_profile_sha256?.toLowerCase() &&
+      isSha256(parsed.provider_family_execution_argv_sha256) &&
+      parsed.provider_family_execution_argv_sha256.toLowerCase() ===
+        expectation.provider_family_execution_argv_sha256?.toLowerCase() &&
+      isSha256(parsed.provider_tool_sha256) &&
+      parsed.provider_tool_sha256.toLowerCase() === expectation.tool_sha256.toLowerCase() &&
+      isSha256(parsed.provider_tool_profile_sha256) &&
+      parsed.provider_tool_profile_sha256.toLowerCase() === expectation.profile_sha256.toLowerCase() &&
+      isSha256(parsed.provider_tool_argv_sha256) &&
+      parsed.provider_tool_argv_sha256.toLowerCase() === expectation.argv_sha256.toLowerCase() &&
+      isSha256(parsed.transcript_sha256) &&
+      parsed.transcript_sha256.toLowerCase() === input.transcript_sha256.toLowerCase() &&
+      parsed.collection_source === "service_owned_os_probe" &&
+      parsed.process_isolation_enforced === true &&
+      parsed.filesystem_scope_enforced === true &&
+      parsed.network_isolation_enforced === true &&
+      parsed.no_new_privileges === true &&
+      parsed.escape_prevention === true &&
+      parsed.adapter_process_exit_code === 0 &&
+      input.helper_exit_code === 0
+  );
+}
+
+function configuredProviderSpecificLiveProbeExecution(
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput,
+  expectation: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation
+): {
+  execution?: AgentAdapterOsIsolationProviderSpecificLiveProbeExecution;
+  diagnostics: string[];
+} {
+  const providerEnvVar = providerSpecificLiveProbeProgramEnvVar(input.provider);
+  const fallbackEnvVar = "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_SPECIFIC_LIVE_PROBE";
+  const configuredProgram = process.env[providerEnvVar] ?? process.env[fallbackEnvVar];
+  const configuredEnvVar = process.env[providerEnvVar] !== undefined
+    ? providerEnvVar
+    : process.env[fallbackEnvVar] !== undefined
+      ? fallbackEnvVar
+      : null;
+  if (!configuredProgram) {
+    return {
+      diagnostics: [
+        `${providerEnvVar} or ${fallbackEnvVar} must configure a service-owned provider-specific live OS probe executable before complete collection evidence can satisfy readiness.`
+      ]
+    };
+  }
+  if (!providerFamilyExecutionProfileRequired(expectation)) {
+    return {
+      diagnostics: [
+        "Provider-specific live OS probe execution requires a service-derived provider-family execution profile binding."
+      ]
+    };
+  }
+  if (!isAbsolute(configuredProgram)) {
+    return {
+      diagnostics: [`${configuredEnvVar ?? providerEnvVar} must be an absolute path.`]
+    };
+  }
+  if (!existsSync(configuredProgram) || !statSync(configuredProgram).isFile()) {
+    return {
+      diagnostics: [`${configuredEnvVar ?? providerEnvVar} does not point to an existing file.`]
+    };
+  }
+  const configuredArgs = configuredProviderSpecificLiveProbeArgsPrefix(input.provider);
+  if (!configuredArgs.ok) {
+    return { diagnostics: configuredArgs.diagnostics };
+  }
+  const liveProbeToolSha256 = sha256FileSync(configuredProgram).sha256;
+  const fixedArgs = providerHelperCollectionProbeFixedArgs(input, expectation);
+  const argv = [...configuredArgs.args, ...fixedArgs];
+  const liveProbeArgvSha256 = providerToolExecutionArgvSha256(argv);
+  const env = providerHelperEnv({
+    projectId: input.project_id,
+    runnerId: input.runner_id,
+    launchId: input.launch_id,
+    adapterId: input.adapter_id,
+    backend: input.backend,
+    provider: input.provider
+  });
+  const spawned = spawnSync(configuredProgram, argv, {
+    cwd: input.project_root,
+    env,
+    encoding: "utf8",
+    shell: false,
+    timeout: 10_000
+  });
+  const stdout = typeof spawned.stdout === "string" ? spawned.stdout : "";
+  const stderr = typeof spawned.stderr === "string" ? spawned.stderr : "";
+  const exitCode = typeof spawned.status === "number" ? spawned.status : null;
+  const spawnError = spawned.error as (Error & { code?: string }) | undefined;
+  const timedOut = spawnError?.code === "ETIMEDOUT";
+  const parsed = parseFirstJsonLine(stdout);
+  const accepted =
+    !spawnError &&
+    exitCode === 0 &&
+    providerSpecificLiveProbeStdoutAccepted(parsed, input, expectation);
+  const stdoutSha256 = sha256Bytes(stdout);
+  const stderrSha256 = sha256Bytes(stderr);
+  const executionId = `LIVE-${sha256Text(canonicalJson({
+    schema_version: "comath.agent_adapter_os_isolation_provider_specific_live_probe_execution_id.v1",
+    provider: input.provider,
+    collection_id: input.collection_id,
+    helper_execution_id: input.helper_execution_id,
+    runner_id: input.runner_id,
+    launch_id: input.launch_id,
+    live_probe_tool_sha256: liveProbeToolSha256,
+    live_probe_argv_sha256: liveProbeArgvSha256
+  })).slice(0, 32)}`;
+  const liveProbeTranscriptSha256 = sha256Text(canonicalJson({
+    schema_version: "comath.agent_adapter_os_isolation_provider_specific_live_probe_execution_transcript.v1",
+    execution_id: executionId,
+    provider: input.provider,
+    collection_id: input.collection_id,
+    helper_execution_id: input.helper_execution_id,
+    runner_id: input.runner_id,
+    launch_id: input.launch_id,
+    live_probe_tool_sha256: liveProbeToolSha256,
+    live_probe_argv_sha256: liveProbeArgvSha256,
+    live_probe_stdout_sha256: stdoutSha256,
+    live_probe_stderr_sha256: stderrSha256,
+    exit_code: exitCode,
+    signal: spawned.signal ?? null,
+    shell: false,
+    network_policy: "disabled",
+    proof_authority: "none"
+  }));
+  const diagnostics = [
+    `${configuredEnvVar ?? providerEnvVar} resolved to a service-owned provider-specific live OS probe executable.`,
+    ...configuredArgs.diagnostics,
+    accepted
+      ? `Configured provider-specific live OS probe passed with exit_code=${exitCode}.`
+      : `Configured provider-specific live OS probe failed binding validation with exit_code=${exitCode ?? "null"}.`,
+    !accepted && parsed ? "Configured provider-specific live OS probe stdout did not bind the current provider-family execution profile and helper transcript." : undefined,
+    !parsed ? "Configured provider-specific live OS probe did not emit a JSON stdout binding record." : undefined,
+    timedOut ? "Configured provider-specific live OS probe timed out." : undefined,
+    spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined,
+    stderr ? `live_probe_stderr_sha256=${stderrSha256}` : undefined
+  ].filter((entry): entry is string => Boolean(entry));
+  if (!accepted) {
+    return { diagnostics };
+  }
+  const execution: AgentAdapterOsIsolationProviderSpecificLiveProbeExecution = {
+    execution_source: "service_owned_provider_specific_live_os_probe",
+    provider: input.provider,
+    execution_id: executionId,
+    collection_id: input.collection_id,
+    helper_execution_id: input.helper_execution_id,
+    runner_id: input.runner_id,
+    launch_id: input.launch_id,
+    provider_family_execution_kind: expectation.provider_family_execution_kind as AgentAdapterOsIsolationProviderFamilyExecutionKind,
+    provider_family_execution_profile_sha256: expectation.provider_family_execution_profile_sha256 as string,
+    provider_family_execution_argv_sha256: expectation.provider_family_execution_argv_sha256 as string,
+    provider_tool_sha256: expectation.tool_sha256,
+    provider_tool_profile_sha256: expectation.profile_sha256,
+    provider_tool_argv_sha256: expectation.argv_sha256,
+    transcript_sha256: input.transcript_sha256,
+    live_probe_tool_sha256: liveProbeToolSha256,
+    live_probe_argv_sha256: liveProbeArgvSha256,
+    live_probe_stdout_sha256: stdoutSha256,
+    live_probe_stderr_sha256: stderrSha256,
+    live_probe_transcript_sha256: liveProbeTranscriptSha256,
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: true,
+    filesystem_scope_enforced: true,
+    network_isolation_enforced: true,
+    no_new_privileges: true,
+    escape_prevention: true,
+    adapter_process_exit_code: 0,
+    network_policy: "disabled",
+    proof_authority: "none"
+  };
+  return { execution, diagnostics };
+}
+
 function configuredProviderHelperCollectionProbe(
   input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
 ): AgentAdapterOsIsolationProviderHelperCollection | null {
@@ -5606,6 +6201,10 @@ function configuredProviderHelperCollectionProbe(
     })
   };
   const expectation = withProviderFamilyExecutionExpectation(input, expectationBase, configuredArgs.args);
+  const liveProbeExecutionResult = configuredProviderSpecificLiveProbeExecution(input, expectation);
+  const liveProbeExecutionSha256 = providerSpecificLiveProbeExecutionSha256(
+    liveProbeExecutionResult.execution
+  );
   const fixedArgs = providerHelperCollectionProbeFixedArgs(input, expectation);
   const env = providerHelperEnv({
     projectId: input.project_id,
@@ -5660,6 +6259,7 @@ function configuredProviderHelperCollectionProbe(
     accepted
       ? `Configured provider-helper collection probe passed with exit_code=${exitCode}.`
       : `Configured provider-helper collection probe failed binding validation with exit_code=${exitCode ?? "null"}.`,
+    ...liveProbeExecutionResult.diagnostics,
     invalidWitness ? "Configured provider-helper collection probe emitted an invalid provider-tool execution witness." : undefined,
     invalidFamilyWitness ? "Configured provider-helper collection probe emitted an invalid provider-family OS-enforcement witness." : undefined,
     invalidLiveProbeAttempt ? "Configured provider-helper collection probe emitted an invalid provider-specific live probe attempt." : undefined,
@@ -5684,6 +6284,10 @@ function configuredProviderHelperCollectionProbe(
     provider_tool_execution_witness: witness,
     provider_family_os_enforcement_witness: familyWitness,
     provider_specific_live_probe_attempt: liveProbeAttempt,
+    provider_specific_live_probe_execution_required: true,
+    provider_specific_live_probe_execution: liveProbeExecutionResult.execution,
+    provider_specific_live_probe_execution_bound: Boolean(liveProbeExecutionSha256),
+    provider_specific_live_probe_execution_sha256: liveProbeExecutionSha256 ?? undefined,
     provider_tool_execution_witness_expectation: expectation,
     diagnostics: baseDiagnostics
   };
@@ -5819,6 +6423,7 @@ function providerHelperCollectionStatus(input: {
   onlyProviderFamilyOsEnforcementWitnessMissing: boolean;
   onlyProviderFamilyExecutionProfileMissing: boolean;
   onlyProviderSpecificLiveProbeAttemptMissing: boolean;
+  onlyProviderSpecificLiveProbeExecutionMissing: boolean;
   osEnforcementComplete: boolean;
   probe: AgentAdapterOsIsolationProbe | null;
 }): AgentAdapterOsIsolationProviderHelperCollectionStatus {
@@ -5889,6 +6494,16 @@ function providerHelperCollectionStatus(input: {
   ) {
     return "blocked_provider_helper_collection_provider_specific_live_probe_attempt_missing";
   }
+  if (
+    input.collectionPresent &&
+    input.collectionSourceAccepted &&
+    input.hashesMatch &&
+    input.providerToolWitnessBound &&
+    input.providerSpecificToolExecutionBound &&
+    input.onlyProviderSpecificLiveProbeExecutionMissing
+  ) {
+    return "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing";
+  }
   if (input.collectionPresent && input.collectionSourceAccepted && input.hashesMatch && !input.osEnforcementComplete) {
     return "blocked_provider_helper_collection_incomplete_os_enforcement";
   }
@@ -5932,6 +6547,9 @@ function providerHelperCollectionReplayableNextAction(
   }
   if (status === "blocked_provider_helper_collection_provider_specific_live_probe_attempt_missing") {
     return "Re-run the provider-specific service-owned collection probe so complete OS-enforcement facts bind a provider-specific live probe attempt for the current provider family execution profile.";
+  }
+  if (status === "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing") {
+    return "Configure and run a service-owned provider-specific live OS probe executable so complete collection facts bind an executed live probe transcript for the current provider family execution profile.";
   }
   if (status === "blocked_provider_helper_collection_incomplete_os_enforcement") {
     return "Re-run the service-owned provider-helper collection probe with complete OS-enforcement facts: process, filesystem, network, no-new-privileges, escape-prevention, service-owned source, and helper exit code.";
@@ -5980,6 +6598,9 @@ function collectedEvidenceDetails(
   | "provider_specific_live_probe_attempt_required"
   | "provider_specific_live_probe_attempt_bound"
   | "provider_specific_live_probe_attempt_sha256"
+  | "provider_specific_live_probe_execution_required"
+  | "provider_specific_live_probe_execution_bound"
+  | "provider_specific_live_probe_execution_sha256"
 > {
   if (!collection || collection.collection_source !== "service_owned_os_probe") {
     return {};
@@ -5990,6 +6611,7 @@ function collectedEvidenceDetails(
   const familyExecutionArgvSha256 = providerFamilyExecutionArgvSha256ForCollection(collection);
   const familyExecutionKind = providerFamilyExecutionKindForCollection(collection);
   const liveProbeAttemptSha256 = providerSpecificLiveProbeAttemptSha256ForCollection(collection);
+  const liveProbeExecutionSha256 = providerSpecificLiveProbeExecutionSha256ForCollection(collection);
   return {
     collection_source: "service_owned_os_probe",
     adapter_process_exit_code: collected || typeof collection.adapter_process_exit_code === "number"
@@ -6028,7 +6650,14 @@ function collectedEvidenceDetails(
     provider_specific_live_probe_attempt_required:
       collection.provider_specific_live_probe_attempt_required === true ? true : undefined,
     provider_specific_live_probe_attempt_bound: Boolean(liveProbeAttemptSha256),
-    provider_specific_live_probe_attempt_sha256: liveProbeAttemptSha256 ?? undefined
+    provider_specific_live_probe_attempt_sha256: liveProbeAttemptSha256 ?? undefined,
+    provider_specific_live_probe_execution_required:
+      collection.provider_specific_live_probe_execution_required === true ? true : undefined,
+    provider_specific_live_probe_execution_bound:
+      collection.provider_specific_live_probe_execution_required === true
+        ? Boolean(liveProbeExecutionSha256)
+        : undefined,
+    provider_specific_live_probe_execution_sha256: liveProbeExecutionSha256 ?? undefined
   };
 }
 
@@ -7217,6 +7846,14 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     collectionProbeInput ?? undefined
   );
   const providerSpecificLiveProbeAttemptBound = Boolean(providerSpecificLiveProbeAttemptSha256);
+  const providerSpecificLiveProbeExecutionRequired = collectionSourceAccepted;
+  const providerSpecificLiveProbeExecutionSha256 = providerSpecificLiveProbeExecutionSha256ForCollection(
+    collection,
+    collectionProbeInput ?? undefined
+  );
+  const providerSpecificLiveProbeExecutionBound = providerSpecificLiveProbeExecutionRequired
+    ? Boolean(providerSpecificLiveProbeExecutionSha256)
+    : false;
   const osEnforcementCompleteness = providerHelperCollectionOsEnforcementCompleteness({
     collection,
     hashesMatch,
@@ -7269,6 +7906,9 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     onlyProviderSpecificLiveProbeAttemptMissing:
       osEnforcementCompleteness.incompleteFacts.length === 1 &&
       osEnforcementCompleteness.incompleteFacts[0] === "provider_specific_live_probe_attempt",
+    onlyProviderSpecificLiveProbeExecutionMissing:
+      osEnforcementCompleteness.incompleteFacts.length === 1 &&
+      osEnforcementCompleteness.incompleteFacts[0] === "provider_specific_live_probe_execution",
     osEnforcementComplete: osEnforcementCompleteness.complete,
     probe
   });
@@ -7341,6 +7981,9 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       provider_specific_live_probe_attempt_required: true,
       provider_specific_live_probe_attempt_bound: providerSpecificLiveProbeAttemptBound,
       provider_specific_live_probe_attempt_sha256: providerSpecificLiveProbeAttemptSha256,
+      provider_specific_live_probe_execution_required: providerSpecificLiveProbeExecutionRequired,
+      provider_specific_live_probe_execution_bound: providerSpecificLiveProbeExecutionBound,
+      provider_specific_live_probe_execution_sha256: providerSpecificLiveProbeExecutionSha256,
       diagnostics,
       proof_authority: "none"
     },
@@ -7406,6 +8049,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       provider_family_execution_argv_sha256: providerFamilyExecutionArgvSha256,
       provider_specific_live_probe_attempt_bound: providerSpecificLiveProbeAttemptBound,
       provider_specific_live_probe_attempt_sha256: providerSpecificLiveProbeAttemptSha256,
+      provider_specific_live_probe_execution_bound: providerSpecificLiveProbeExecutionBound,
+      provider_specific_live_probe_execution_sha256: providerSpecificLiveProbeExecutionSha256,
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false
@@ -7741,6 +8386,10 @@ export function reviewAgentAdapterOsIsolationReadiness(
     providerHelperCollection,
     evidence
   );
+  const providerSpecificLiveProbeExecutionRequired = providerHelperCollectionRequiresProviderSpecificLiveProbeExecution(
+    providerHelperCollection,
+    evidence
+  );
   const providerToolWitnessBound = !providerToolWitnessRequired ||
     (
       evidenceHasProviderToolExecutionWitnessFields(evidence) &&
@@ -7788,6 +8437,15 @@ export function reviewAgentAdapterOsIsolationReadiness(
       (
         providerHelperCollection
           ? providerHelperCollectionHasProviderSpecificLiveProbeAttempt(providerHelperCollection, evidence)
+        : true
+      )
+    );
+  const providerSpecificLiveProbeExecutionBound = !providerSpecificLiveProbeExecutionRequired ||
+    (
+      evidenceHasProviderSpecificLiveProbeExecutionFields(evidence) &&
+      (
+        providerHelperCollection
+          ? providerHelperCollectionHasProviderSpecificLiveProbeExecution(providerHelperCollection, evidence)
           : true
       )
     );
@@ -7830,6 +8488,12 @@ export function reviewAgentAdapterOsIsolationReadiness(
       providerSpecificLiveProbeAttemptBound,
       providerSpecificLiveProbeAttemptRequired
         ? evidence?.provider_specific_live_probe_attempt_sha256 ?? null
+        : "not_required"
+    ),
+    provider_specific_live_probe_execution: check(
+      providerSpecificLiveProbeExecutionBound,
+      providerSpecificLiveProbeExecutionRequired
+        ? evidence?.provider_specific_live_probe_execution_sha256 ?? null
         : "not_required"
     ),
     host_path_secret_free: check(hostPathSecretFree, hostPathSecretFree),
