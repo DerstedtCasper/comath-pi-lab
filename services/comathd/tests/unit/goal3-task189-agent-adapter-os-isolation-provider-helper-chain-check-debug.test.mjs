@@ -40,6 +40,12 @@ const compatibleProvider = process.platform === "darwin"
   : process.platform === "win32"
     ? "windows_appcontainer"
     : "firejail";
+const compatibleProviderToolName = {
+  firejail: "firejail_cli",
+  macos_sandbox_exec: "macos_sandbox_exec_cli",
+  windows_appcontainer: "windows_checknetisolation"
+}[compatibleProvider];
+const compatibleProviderToolSha256 = "d".repeat(64);
 
 const savedEnv = new Map();
 for (const helper of Object.values(providerHelpers)) {
@@ -121,6 +127,8 @@ function providerToolExecutionWitness(probeInput) {
   assert.match(expectation.tool_sha256, /^[a-f0-9]{64}$/);
   assert.match(expectation.profile_sha256, /^[a-f0-9]{64}$/);
   assert.match(expectation.argv_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(expectation.host_capability_tool_name, compatibleProviderToolName);
+  assert.equal(expectation.host_capability_tool_sha256, compatibleProviderToolSha256);
   return {
     witness_source: "provider_specific_executed_tool",
     provider: probeInput.provider,
@@ -132,6 +140,8 @@ function providerToolExecutionWitness(probeInput) {
     tool_sha256: expectation.tool_sha256,
     profile_sha256: expectation.profile_sha256,
     argv_sha256: expectation.argv_sha256,
+    host_capability_tool_name: expectation.host_capability_tool_name,
+    host_capability_tool_sha256: expectation.host_capability_tool_sha256,
     transcript_sha256: probeInput.transcript_sha256,
     network_policy: "disabled",
     proof_authority: "none"
@@ -219,7 +229,12 @@ try {
         probe_source: "service_owned_provider_host_capability_probe",
         provider_host_capability_available: true,
         capability_facts: ["task189 chain-check host-validation prerequisite observed"],
-        required_tools: [`${compatibleProvider}-task189-host-probe`],
+        required_tools: [{
+          name: compatibleProviderToolName,
+          present: true,
+          binary_sha256: compatibleProviderToolSha256,
+          version: null
+        }],
         kernel_features: ["task189-provider-host-capability"],
         diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
       };
@@ -435,6 +450,9 @@ try {
   assert.equal(collected.ok, true, "internal service-owned collection remains the only path to canonical OS evidence");
   assert.equal(collected.collection_status, "provider_helper_os_evidence_collected");
   assert.equal(collected.provider_helper_collection.provider_tool_execution_witness_bound, true);
+  assert.equal(collected.provider_helper_collection.provider_specific_tool_execution_bound, true);
+  assert.equal(collected.provider_helper_collection.provider_specific_tool_name, compatibleProviderToolName);
+  assert.equal(collected.provider_helper_collection.provider_specific_tool_sha256, compatibleProviderToolSha256);
   assert.equal(collected.probe.ok, true);
   assert.equal(collected.probe.evidence.collection_source, "service_owned_os_probe");
   assert.equal(collected.adapter_execution_isolation.current_boundary, "process_boundary_only");
@@ -460,6 +478,7 @@ try {
   assert.equal(readiness.checks.service_owned_probe.ok, true);
   assert.equal(readiness.checks.collected_probe_binding.ok, true);
   assert.equal(readiness.checks.provider_tool_execution_witness.ok, true);
+  assert.equal(readiness.checks.provider_specific_tool_execution.ok, true);
   assert.equal(readiness.can_certify_ga, false);
 
   assertNotReadinessEvidence({

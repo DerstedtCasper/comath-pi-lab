@@ -53,6 +53,11 @@ export type AgentAdapterOsIsolationEvidence = {
   provider_tool_execution_witness_required?: boolean;
   provider_tool_execution_witness_bound?: boolean;
   provider_tool_execution_witness_sha256?: string;
+  provider_specific_tool_execution_required?: boolean;
+  provider_specific_tool_execution_bound?: boolean;
+  provider_specific_tool_execution_sha256?: string;
+  provider_specific_tool_name?: string;
+  provider_specific_tool_sha256?: string;
   proof_authority?: unknown;
   can_promote_claim?: unknown;
   can_certify_ga?: unknown;
@@ -69,6 +74,8 @@ export type AgentAdapterOsIsolationProviderToolExecutionWitness = {
   tool_sha256: string;
   profile_sha256: string;
   argv_sha256: string;
+  host_capability_tool_name?: string;
+  host_capability_tool_sha256?: string;
   transcript_sha256: string;
   network_policy: "disabled";
   proof_authority: "none";
@@ -78,6 +85,8 @@ type AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation = {
   tool_sha256: string;
   profile_sha256: string;
   argv_sha256: string;
+  host_capability_tool_name?: string;
+  host_capability_tool_sha256?: string;
 };
 
 export type AgentAdapterOsIsolationProbeCollection = {
@@ -93,6 +102,11 @@ export type AgentAdapterOsIsolationProbeCollection = {
   transcript_sha256?: string;
   provider_tool_execution_witness_required?: boolean;
   provider_tool_execution_witness?: AgentAdapterOsIsolationProviderToolExecutionWitness;
+  provider_specific_tool_execution_required?: boolean;
+  provider_specific_tool_execution_bound?: boolean;
+  provider_specific_tool_execution_sha256?: string;
+  provider_specific_tool_name?: string;
+  provider_specific_tool_sha256?: string;
   notes?: string;
 };
 
@@ -311,6 +325,8 @@ export type AgentAdapterOsIsolationProviderHelperCollectionProbeInput = {
   stderr_sha256: string;
   transcript_sha256: string;
   provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  provider_specific_tool_name?: string | null;
+  provider_specific_tool_sha256?: string | null;
   platform?: string;
 };
 
@@ -445,6 +461,7 @@ export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "blocked_provider_helper_runtime_attestation_missing"
   | "blocked_provider_helper_collection_host_capability_binding_mismatch"
   | "blocked_provider_helper_collection_hash_mismatch"
+  | "blocked_provider_helper_collection_provider_specific_tool_binding_missing"
   | "blocked_provider_helper_collection_provider_tool_witness_missing"
   | "blocked_provider_helper_collection_incomplete_os_enforcement"
   | "blocked_provider_helper_collection_not_collected";
@@ -479,6 +496,11 @@ export type AgentAdapterOsIsolationSandboxExecutionInput = {
     provider_tool_execution_witness_required?: boolean;
     provider_tool_execution_witness_bound?: boolean;
     provider_tool_execution_witness_sha256?: string;
+    provider_specific_tool_execution_required?: boolean;
+    provider_specific_tool_execution_bound?: boolean;
+    provider_specific_tool_execution_sha256?: string;
+    provider_specific_tool_name?: string;
+    provider_specific_tool_sha256?: string;
   };
 };
 
@@ -571,6 +593,11 @@ export type AgentAdapterOsIsolationProviderHelperCollectionInput = {
     provider_tool_execution_witness_required?: boolean;
     provider_tool_execution_witness_bound?: boolean;
     provider_tool_execution_witness_sha256?: string;
+    provider_specific_tool_execution_required?: boolean;
+    provider_specific_tool_execution_bound?: boolean;
+    provider_specific_tool_execution_sha256?: string;
+    provider_specific_tool_name?: string;
+    provider_specific_tool_sha256?: string;
   };
 };
 
@@ -663,6 +690,7 @@ export type AgentAdapterOsIsolationReview = {
     service_owned_probe: AgentAdapterOsIsolationReviewCheck;
     collected_probe_binding: AgentAdapterOsIsolationReviewCheck;
     provider_tool_execution_witness: AgentAdapterOsIsolationReviewCheck;
+    provider_specific_tool_execution: AgentAdapterOsIsolationReviewCheck;
     host_path_secret_free: AgentAdapterOsIsolationReviewCheck;
     non_authority: AgentAdapterOsIsolationReviewCheck;
   };
@@ -724,6 +752,11 @@ export type AgentAdapterOsIsolationProbe = {
     provider_tool_execution_witness_required?: boolean;
     provider_tool_execution_witness_bound?: boolean;
     provider_tool_execution_witness_sha256?: string;
+    provider_specific_tool_execution_required?: boolean;
+    provider_specific_tool_execution_bound?: boolean;
+    provider_specific_tool_execution_sha256?: string;
+    provider_specific_tool_name?: string;
+    provider_specific_tool_sha256?: string;
   };
   adapter_execution_isolation: {
     required_for_ga: true;
@@ -1172,6 +1205,11 @@ export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
     provider_tool_execution_witness_required: true;
     provider_tool_execution_witness_bound: boolean;
     provider_tool_execution_witness_sha256: string | null;
+    provider_specific_tool_execution_required: boolean;
+    provider_specific_tool_execution_bound: boolean;
+    provider_specific_tool_execution_sha256: string | null;
+    provider_specific_tool_name: string | null;
+    provider_specific_tool_sha256: string | null;
     diagnostics: string[];
     proof_authority: "none";
   };
@@ -1437,6 +1475,18 @@ function evidenceHasProviderToolExecutionWitnessFields(
   );
 }
 
+function evidenceHasProviderSpecificToolExecutionFields(
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(
+    evidence?.provider_specific_tool_execution_required === true &&
+      evidence.provider_specific_tool_execution_bound === true &&
+      isSha256(evidence.provider_specific_tool_execution_sha256) &&
+      isProviderToolName(evidence.provider_specific_tool_name) &&
+      isSha256(evidence.provider_specific_tool_sha256)
+  );
+}
+
 function providerHelperCollectionHasProviderToolExecutionWitness(
   collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
   evidence: AgentAdapterOsIsolationEvidence | undefined
@@ -1449,6 +1499,84 @@ function providerHelperCollectionHasProviderToolExecutionWitness(
       isSha256(witnessSha256) &&
       isSha256(evidence?.provider_tool_execution_witness_sha256) &&
       witnessSha256 === evidence.provider_tool_execution_witness_sha256
+  );
+}
+
+function providerHelperCollectionRequiresProviderSpecificToolExecution(
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(
+    collection?.provider_helper_collection.provider_specific_tool_execution_required === true ||
+      collection?.provider_helper_collection.provider_tool_execution_witness_required === true ||
+      collection?.provider_helper_collection.provider_tool_execution_witness_bound === true ||
+      evidence?.provider_specific_tool_execution_required === true ||
+      evidence?.provider_tool_execution_witness_required === true ||
+      evidence?.provider_tool_execution_witness_bound === true
+  );
+}
+
+function providerHelperCollectionHasProviderSpecificToolExecution(
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(
+    collection?.provider_helper_collection.provider_specific_tool_execution_required === true &&
+      collection.provider_helper_collection.provider_specific_tool_execution_bound === true &&
+      isSha256(collection.provider_helper_collection.provider_specific_tool_execution_sha256) &&
+      isProviderToolName(collection.provider_helper_collection.provider_specific_tool_name) &&
+      isSha256(collection.provider_helper_collection.provider_specific_tool_sha256) &&
+      evidenceHasProviderSpecificToolExecutionFields(evidence) &&
+      collection.provider_helper_collection.provider_specific_tool_execution_sha256 ===
+        evidence?.provider_specific_tool_execution_sha256 &&
+      collection.provider_helper_collection.provider_specific_tool_name ===
+        evidence?.provider_specific_tool_name &&
+      collection.provider_helper_collection.provider_specific_tool_sha256 ===
+        evidence?.provider_specific_tool_sha256
+  );
+}
+
+function providerHelperCollectionHasCurrentHostCapabilityProviderSpecificTool(input: {
+  projectRoot: string;
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined;
+  evidence: AgentAdapterOsIsolationEvidence | undefined;
+}): boolean {
+  const collection = input.collection;
+  const evidence = input.evidence;
+  const hostCapabilityProbeId = collection?.provider_helper_collection.host_capability_probe_id;
+  const hostCapabilityPath = collection?.provider_helper_collection.host_capability_probe_path;
+  const hostCapabilitySha256 = collection?.provider_helper_collection.host_capability_probe_sha256;
+  if (
+    !collection ||
+    !evidence ||
+    typeof hostCapabilityProbeId !== "string" ||
+    typeof hostCapabilityPath !== "string" ||
+    !isSha256(hostCapabilitySha256) ||
+    collection.provider !== evidence.provider ||
+    collection.provider_helper_collection.host_capability_status !== "provider_host_capability_observed"
+  ) {
+    return false;
+  }
+  const currentBundle = readProviderHostCapabilityProbeArtifact(input.projectRoot, hostCapabilityProbeId);
+  const currentTool = providerSpecificHostCapabilityTool({
+    hostCapability: currentBundle?.hostCapability,
+    provider: collection.provider
+  });
+  return Boolean(
+    currentBundle &&
+      currentBundle.artifact.path === hostCapabilityPath &&
+      currentBundle.artifact.sha256 === hostCapabilitySha256 &&
+      currentBundle.hostCapability.host_capability_probe_path === hostCapabilityPath &&
+      currentBundle.hostCapability.project_id === collection.project_id &&
+      currentBundle.hostCapability.adapter_id === collection.adapter_id &&
+      currentBundle.hostCapability.backend === collection.backend &&
+      currentBundle.hostCapability.provider === collection.provider &&
+      providerHostCapabilityIsObserved(currentBundle) &&
+      currentTool &&
+      currentTool.name === collection.provider_helper_collection.provider_specific_tool_name &&
+      currentTool.sha256 === collection.provider_helper_collection.provider_specific_tool_sha256 &&
+      currentTool.name === evidence.provider_specific_tool_name &&
+      currentTool.sha256 === evidence.provider_specific_tool_sha256
   );
 }
 
@@ -1506,6 +1634,33 @@ function evidenceHasCollectedProbeBinding(
           )
         )
     );
+    const providerSpecificToolRequired = providerHelperCollectionRequiresProviderSpecificToolExecution(
+      providerHelperCollection,
+      evidence
+    );
+    const providerSpecificToolBound = Boolean(
+      !providerSpecificToolRequired ||
+        (
+          evidenceHasProviderSpecificToolExecutionFields(evidence) &&
+          parsedProbe.evidence?.provider_specific_tool_execution_required === true &&
+          parsedProbe.evidence?.provider_specific_tool_execution_bound === true &&
+          isSha256(parsedProbe.evidence?.provider_specific_tool_execution_sha256) &&
+          parsedProbe.evidence?.provider_specific_tool_execution_sha256 ===
+            evidence.provider_specific_tool_execution_sha256 &&
+          parsedProbe.evidence?.provider_specific_tool_name === evidence.provider_specific_tool_name &&
+          parsedProbe.evidence?.provider_specific_tool_sha256 === evidence.provider_specific_tool_sha256 &&
+          (
+            providerHelperCollection
+              ? providerHelperCollectionHasProviderSpecificToolExecution(providerHelperCollection, evidence) &&
+                providerHelperCollectionHasCurrentHostCapabilityProviderSpecificTool({
+                  projectRoot,
+                  collection: providerHelperCollection,
+                  evidence
+                })
+              : true
+          )
+        )
+    );
     return Boolean(
       parsedProbe.schema_version === "comath.agent_adapter_os_isolation_probe.v1" &&
         parsedProbe.probe_id === evidence.probe_id &&
@@ -1519,6 +1674,7 @@ function evidenceHasCollectedProbeBinding(
         parsedProbe.evidence?.backend === evidence.backend &&
         parsedProbe.evidence?.provider === evidence.provider &&
         providerToolWitnessBound &&
+        providerSpecificToolBound &&
         parsedProbe.proof_authority === "none" &&
         parsedProbe.can_promote_claim === false &&
         parsedProbe.can_certify_ga === false
@@ -1599,6 +1755,12 @@ function buildVetoes(input: {
     vetoes.push({
       code: "adapter_os_isolation_provider_tool_execution_witness_missing",
       message: "Collected OS-isolation evidence must carry a provider-tool execution witness bound to the service-owned collection probe."
+    });
+  }
+  if (!input.checks.provider_specific_tool_execution.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_provider_specific_tool_execution_missing",
+      message: "Collected OS-isolation evidence must bind the provider-tool execution witness to the current host-capability provider tool."
     });
   }
   if (!input.checks.host_path_secret_free.ok) {
@@ -1850,6 +2012,19 @@ function isBoundedExecutionId(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_.:-]{1,160}$/.test(value);
 }
 
+function isProviderToolName(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_.:-]{1,160}$/.test(value);
+}
+
+function providerSpecificToolExpectationRequired(
+  expectation: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation | undefined
+): boolean {
+  return Boolean(
+    isProviderToolName(expectation?.host_capability_tool_name) &&
+      isSha256(expectation?.host_capability_tool_sha256)
+  );
+}
+
 function providerToolExecutionWitnessAccepted(
   value: unknown,
   input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput,
@@ -1905,6 +2080,13 @@ function providerToolExecutionWitnessSha256(
     !isSha256(witness.profile_sha256) ||
     !isSha256(witness.argv_sha256) ||
     !isSha256(witness.transcript_sha256) ||
+    (
+      (witness.host_capability_tool_name !== undefined || witness.host_capability_tool_sha256 !== undefined) &&
+        (
+          !isProviderToolName(witness.host_capability_tool_name) ||
+            !isSha256(witness.host_capability_tool_sha256)
+        )
+    ) ||
     witness.network_policy !== "disabled" ||
     witness.proof_authority !== "none"
   ) {
@@ -1921,6 +2103,8 @@ function providerToolExecutionWitnessSha256(
     tool_sha256: witness.tool_sha256.toLowerCase(),
     profile_sha256: witness.profile_sha256.toLowerCase(),
     argv_sha256: witness.argv_sha256.toLowerCase(),
+    host_capability_tool_name: witness.host_capability_tool_name ?? null,
+    host_capability_tool_sha256: witness.host_capability_tool_sha256?.toLowerCase() ?? null,
     transcript_sha256: witness.transcript_sha256.toLowerCase(),
     network_policy: witness.network_policy,
     proof_authority: "none"
@@ -1946,6 +2130,73 @@ function collectionProviderToolWitnessBound(
     return false;
   }
   return Boolean(providerToolExecutionWitnessSha256(witness));
+}
+
+function collectionProviderSpecificToolExecutionRequired(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): boolean {
+  const expectation =
+    collection?.provider_tool_execution_witness_expectation ??
+      input?.provider_tool_execution_witness_expectation;
+  return providerSpecificToolExpectationRequired(expectation);
+}
+
+function collectionProviderSpecificToolExecutionBound(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): boolean {
+  const expectation =
+    collection?.provider_tool_execution_witness_expectation ??
+      input?.provider_tool_execution_witness_expectation;
+  if (!providerSpecificToolExpectationRequired(expectation)) {
+    if (collection?.provider_specific_tool_execution_required === true) {
+      return Boolean(
+        collection.provider_specific_tool_execution_bound === true &&
+          isSha256(collection.provider_specific_tool_execution_sha256) &&
+          isProviderToolName(collection.provider_specific_tool_name) &&
+          isSha256(collection.provider_specific_tool_sha256)
+      );
+    }
+    return true;
+  }
+  const topLevelBindingConsistent = collection?.provider_specific_tool_execution_required === true
+    ? Boolean(
+        collection.provider_specific_tool_execution_bound === true &&
+          isSha256(collection.provider_specific_tool_execution_sha256) &&
+          collection.provider_specific_tool_name === expectation?.host_capability_tool_name &&
+          isSha256(collection.provider_specific_tool_sha256) &&
+          collection.provider_specific_tool_sha256.toLowerCase() ===
+            expectation?.host_capability_tool_sha256?.toLowerCase()
+      )
+    : true;
+  const witness = collection?.provider_tool_execution_witness;
+  return Boolean(
+    witness &&
+      collectionProviderToolWitnessBound(collection, input) &&
+      topLevelBindingConsistent &&
+      isProviderToolName(witness.host_capability_tool_name) &&
+      witness.host_capability_tool_name === expectation?.host_capability_tool_name &&
+      isSha256(witness.host_capability_tool_sha256) &&
+      witness.host_capability_tool_sha256.toLowerCase() === expectation?.host_capability_tool_sha256?.toLowerCase()
+  );
+}
+
+function providerSpecificToolExecutionSha256(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): string | null {
+  if (!collectionProviderSpecificToolExecutionBound(collection, input)) {
+    return null;
+  }
+  const witnessSha256 = providerToolExecutionWitnessSha256(collection?.provider_tool_execution_witness);
+  return witnessSha256;
 }
 
 function collectionProviderToolWitnessSatisfied(
@@ -1977,7 +2228,8 @@ function isCollectedOsIsolationProbe(input: {
       isSha256(collection.stdout_sha256) &&
       isSha256(collection.stderr_sha256) &&
       isSha256(collection.transcript_sha256) &&
-      collectionProviderToolWitnessSatisfied(collection)
+      collectionProviderToolWitnessSatisfied(collection) &&
+      collectionProviderSpecificToolExecutionBound(collection)
   );
 }
 
@@ -2574,6 +2826,33 @@ function providerHostCapabilityMatchesHelperHostInput(input: {
   );
 }
 
+const providerSpecificHostCapabilityToolNames: Partial<Record<AgentAdapterOsIsolationProvider, string[]>> = {
+  windows_appcontainer: ["windows_checknetisolation"],
+  oci_container: ["oci_docker_cli", "oci_podman_cli"],
+  nix_sandbox: ["nix_cli", "nix_store_cli"],
+  firejail: ["firejail_cli"],
+  macos_sandbox_exec: ["macos_sandbox_exec_cli"]
+};
+
+function providerSpecificHostCapabilityTool(input: {
+  hostCapability: AgentAdapterOsIsolationProviderHostCapabilityManifest | null | undefined;
+  provider: AgentAdapterOsIsolationProvider;
+}): { name: string; sha256: string } | null {
+  const allowedNames = providerSpecificHostCapabilityToolNames[input.provider] ?? [];
+  if (allowedNames.length === 0) {
+    return null;
+  }
+  const requiredTools = input.hostCapability?.provider_host_capability.required_tools ?? [];
+  const tool = requiredTools.find((entry) =>
+    allowedNames.includes(entry.name) &&
+      entry.present === true &&
+      isSha256(entry.binary_sha256)
+  );
+  return tool && isSha256(tool.binary_sha256)
+    ? { name: tool.name, sha256: tool.binary_sha256.toLowerCase() }
+    : null;
+}
+
 function classifySandboxLaunch(input: {
   knownProvider: AgentAdapterOsIsolationProvider | null;
   ready: boolean;
@@ -2955,7 +3234,15 @@ function providerHelperCollectionProbeFixedArgs(
         "--provider-tool-profile-sha256",
         expectation.profile_sha256,
         "--provider-tool-argv-sha256",
-        expectation.argv_sha256
+        expectation.argv_sha256,
+        ...(providerSpecificToolExpectationRequired(expectation)
+          ? [
+              "--provider-host-tool-name",
+              expectation.host_capability_tool_name as string,
+              "--provider-host-tool-sha256",
+              expectation.host_capability_tool_sha256 as string
+            ]
+          : [])
       ]
     : args;
 }
@@ -3562,11 +3849,19 @@ const providerToolExecutionWitnessArgvTemplate: AgentAdapterOsIsolationProviderT
 
 function providerToolExecutionArgvTemplateSha256(
   input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput,
-  argvPrefix: string[]
+  argvPrefix: string[],
+  providerSpecificTool?: { name: string; sha256: string } | null
 ): string {
+  const template: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation = providerSpecificTool
+    ? {
+        ...providerToolExecutionWitnessArgvTemplate,
+        host_capability_tool_name: providerSpecificTool.name,
+        host_capability_tool_sha256: providerSpecificTool.sha256
+      }
+    : providerToolExecutionWitnessArgvTemplate;
   return providerToolExecutionArgvSha256([
     ...argvPrefix,
-    ...providerHelperCollectionProbeFixedArgs(input, providerToolExecutionWitnessArgvTemplate)
+    ...providerHelperCollectionProbeFixedArgs(input, template)
   ]);
 }
 
@@ -3579,6 +3874,7 @@ function providerToolExecutionProfileSha256(input: AgentAdapterOsIsolationProvid
   argv_sha256: string;
   args_prefix_sha256: string | null;
   bundled_asset_sha256?: string | null;
+  provider_specific_tool?: { name: string; sha256: string } | null;
 }): string {
   return sha256Text(canonicalJson({
     schema_version: "comath.agent_adapter_os_isolation_provider_tool_profile.v1",
@@ -3601,13 +3897,18 @@ function providerToolExecutionProfileSha256(input: AgentAdapterOsIsolationProvid
     tool_sha256: profile.tool_sha256.toLowerCase(),
     argv_sha256: profile.argv_sha256.toLowerCase(),
     args_prefix_sha256: profile.args_prefix_sha256,
-    bundled_asset_sha256: profile.bundled_asset_sha256 ?? null
+    bundled_asset_sha256: profile.bundled_asset_sha256 ?? null,
+    provider_specific_tool_name: profile.provider_specific_tool?.name ?? null,
+    provider_specific_tool_sha256: profile.provider_specific_tool?.sha256?.toLowerCase() ?? null
   }));
 }
 
 function providerToolExecutionCallbackExpectation(
   input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
 ): AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation {
+  const providerSpecificTool = input.provider_specific_tool_name && isSha256(input.provider_specific_tool_sha256)
+    ? { name: input.provider_specific_tool_name, sha256: input.provider_specific_tool_sha256.toLowerCase() }
+    : null;
   const toolSha256 = sha256Text(canonicalJson({
     schema_version: "comath.agent_adapter_os_isolation_provider_tool_callback.v1",
     tool_source: "service_owned_provider_helper_collection_callback",
@@ -3615,15 +3916,18 @@ function providerToolExecutionCallbackExpectation(
     backend: input.backend,
     provider: input.provider
   }));
-  const argvSha256 = providerToolExecutionArgvTemplateSha256(input, []);
+  const argvSha256 = providerToolExecutionArgvTemplateSha256(input, [], providerSpecificTool);
   return {
     tool_sha256: toolSha256,
     argv_sha256: argvSha256,
+    host_capability_tool_name: providerSpecificTool?.name,
+    host_capability_tool_sha256: providerSpecificTool?.sha256,
     profile_sha256: providerToolExecutionProfileSha256(input, {
       tool_source: "service_owned_provider_helper_collection_callback",
       tool_sha256: toolSha256,
       argv_sha256: argvSha256,
-      args_prefix_sha256: null
+      args_prefix_sha256: null,
+      provider_specific_tool: providerSpecificTool
     })
   };
 }
@@ -4124,6 +4428,13 @@ function providerHelperCollectionOsEnforcementCompleteness(input: {
   ) {
     incompleteFacts.push("provider_tool_execution_witness");
   }
+  if (
+    incompleteFacts.length === 0 &&
+    collectionProviderSpecificToolExecutionRequired(input.collection, input.collectionProbeInput ?? undefined) &&
+    !collectionProviderSpecificToolExecutionBound(input.collection, input.collectionProbeInput ?? undefined)
+  ) {
+    incompleteFacts.push("provider_specific_tool_execution");
+  }
   return { complete: incompleteFacts.length === 0, incompleteFacts };
 }
 
@@ -4146,6 +4457,18 @@ function providerHelperCollectionForProbe(input: {
     )
       ? input.collection.provider_tool_execution_witness
       : undefined;
+  const expectation =
+    input.collection.provider_tool_execution_witness_expectation ??
+      input.collectionProbeInput?.provider_tool_execution_witness_expectation;
+  const providerSpecificToolRequired = providerSpecificToolExpectationRequired(expectation);
+  const providerSpecificToolBound = collectionProviderSpecificToolExecutionBound(
+    input.collection,
+    input.collectionProbeInput ?? undefined
+  );
+  const providerSpecificToolExecutionHash = providerSpecificToolExecutionSha256(
+    input.collection,
+    input.collectionProbeInput ?? undefined
+  );
   return {
     collection_source: input.collection.collection_source,
     process_isolation_enforced: input.collection.process_isolation_enforced,
@@ -4159,6 +4482,13 @@ function providerHelperCollectionForProbe(input: {
     transcript_sha256: input.collection.transcript_sha256,
     provider_tool_execution_witness_required: true,
     provider_tool_execution_witness: providerToolExecutionWitness,
+    provider_specific_tool_execution_required: providerSpecificToolRequired,
+    provider_specific_tool_execution_bound: providerSpecificToolRequired ? providerSpecificToolBound : undefined,
+    provider_specific_tool_execution_sha256: providerSpecificToolExecutionHash ?? undefined,
+    provider_specific_tool_name: providerSpecificToolRequired ? expectation?.host_capability_tool_name : undefined,
+    provider_specific_tool_sha256: providerSpecificToolRequired
+      ? expectation?.host_capability_tool_sha256?.toLowerCase()
+      : undefined,
     notes: sanitizeDiagnostics(input.collection.diagnostics).join(" ")
   };
 }
@@ -4251,17 +4581,29 @@ function configuredProviderHelperCollectionProbe(
   if (!configuredArgs.ok) {
     return incompleteProviderHelperCollectionProbe(input, configuredArgs.diagnostics);
   }
+  const providerSpecificTool = input.provider_specific_tool_name && isSha256(input.provider_specific_tool_sha256)
+    ? { name: input.provider_specific_tool_name, sha256: input.provider_specific_tool_sha256.toLowerCase() }
+    : null;
+  if (!providerSpecificTool) {
+    return incompleteProviderHelperCollectionProbe(input, [
+      ...configuredArgs.diagnostics,
+      "Configured provider-helper collection probe requires a service-observed provider-specific host tool from the current host-capability manifest."
+    ]);
+  }
   const toolSha256 = sha256FileSync(configuredProgram).sha256;
   const argsPrefixSha256 = configuredArgs.args.length > 0 ? sha256Text(canonicalJson(configuredArgs.args)) : null;
-  const argvSha256 = providerToolExecutionArgvTemplateSha256(input, configuredArgs.args);
+  const argvSha256 = providerToolExecutionArgvTemplateSha256(input, configuredArgs.args, providerSpecificTool);
   const expectation: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation = {
     tool_sha256: toolSha256,
     argv_sha256: argvSha256,
+    host_capability_tool_name: providerSpecificTool.name,
+    host_capability_tool_sha256: providerSpecificTool.sha256,
     profile_sha256: providerToolExecutionProfileSha256(input, {
       tool_source: "configured_provider_helper_collection_probe",
       tool_sha256: toolSha256,
       argv_sha256: argvSha256,
-      args_prefix_sha256: argsPrefixSha256
+      args_prefix_sha256: argsPrefixSha256,
+      provider_specific_tool: providerSpecificTool
     })
   };
   const fixedArgs = providerHelperCollectionProbeFixedArgs(input, expectation);
@@ -4420,6 +4762,8 @@ function providerHelperCollectionStatus(input: {
   collectionSourceAccepted: boolean;
   hashesMatch: boolean;
   providerToolWitnessBound: boolean;
+  providerSpecificToolExecutionRequired: boolean;
+  providerSpecificToolExecutionBound: boolean;
   onlyProviderToolWitnessMissing: boolean;
   osEnforcementComplete: boolean;
   probe: AgentAdapterOsIsolationProbe | null;
@@ -4446,10 +4790,20 @@ function providerHelperCollectionStatus(input: {
     input.collectionPresent &&
     input.collectionSourceAccepted &&
     input.hashesMatch &&
-    !input.providerToolWitnessBound &&
-    input.onlyProviderToolWitnessMissing
+      !input.providerToolWitnessBound &&
+      input.onlyProviderToolWitnessMissing
   ) {
     return "blocked_provider_helper_collection_provider_tool_witness_missing";
+  }
+  if (
+    input.collectionPresent &&
+    input.collectionSourceAccepted &&
+    input.hashesMatch &&
+    input.providerToolWitnessBound &&
+    input.providerSpecificToolExecutionRequired &&
+    !input.providerSpecificToolExecutionBound
+  ) {
+    return "blocked_provider_helper_collection_provider_specific_tool_binding_missing";
   }
   if (input.collectionPresent && input.collectionSourceAccepted && input.hashesMatch && !input.osEnforcementComplete) {
     return "blocked_provider_helper_collection_incomplete_os_enforcement";
@@ -4483,6 +4837,9 @@ function providerHelperCollectionReplayableNextAction(
   if (status === "blocked_provider_helper_collection_provider_tool_witness_missing") {
     return "Re-run the provider-specific service-owned collection probe so complete OS-enforcement facts are bound to an executed provider tool witness with tool/profile/argv/transcript hashes.";
   }
+  if (status === "blocked_provider_helper_collection_provider_specific_tool_binding_missing") {
+    return "Re-run the provider-specific service-owned collection probe so its executed-tool witness also binds the current host-capability provider tool name and hash.";
+  }
   if (status === "blocked_provider_helper_collection_incomplete_os_enforcement") {
     return "Re-run the service-owned provider-helper collection probe with complete OS-enforcement facts: process, filesystem, network, no-new-privileges, escape-prevention, service-owned source, and helper exit code.";
   }
@@ -4514,6 +4871,11 @@ function collectedEvidenceDetails(
   | "provider_tool_execution_witness_required"
   | "provider_tool_execution_witness_bound"
   | "provider_tool_execution_witness_sha256"
+  | "provider_specific_tool_execution_required"
+  | "provider_specific_tool_execution_bound"
+  | "provider_specific_tool_execution_sha256"
+  | "provider_specific_tool_name"
+  | "provider_specific_tool_sha256"
 > {
   if (!collection || collection.collection_source !== "service_owned_os_probe") {
     return {};
@@ -4529,7 +4891,21 @@ function collectedEvidenceDetails(
     transcript_sha256: isSha256(collection.transcript_sha256) ? collection.transcript_sha256.toLowerCase() : undefined,
     provider_tool_execution_witness_required: collection.provider_tool_execution_witness_required === true ? true : undefined,
     provider_tool_execution_witness_bound: Boolean(witnessSha256),
-    provider_tool_execution_witness_sha256: witnessSha256 ?? undefined
+    provider_tool_execution_witness_sha256: witnessSha256 ?? undefined,
+    provider_specific_tool_execution_required: collection.provider_specific_tool_execution_required === true ? true : undefined,
+    provider_specific_tool_execution_bound:
+      collection.provider_specific_tool_execution_required === true
+        ? collection.provider_specific_tool_execution_bound === true
+        : undefined,
+    provider_specific_tool_execution_sha256: isSha256(collection.provider_specific_tool_execution_sha256)
+      ? collection.provider_specific_tool_execution_sha256.toLowerCase()
+      : undefined,
+    provider_specific_tool_name: isProviderToolName(collection.provider_specific_tool_name)
+      ? collection.provider_specific_tool_name
+      : undefined,
+    provider_specific_tool_sha256: isSha256(collection.provider_specific_tool_sha256)
+      ? collection.provider_specific_tool_sha256.toLowerCase()
+      : undefined
   };
 }
 
@@ -5623,6 +5999,10 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     hostValidationBundle,
     hostCapabilityBundle
   });
+  const providerSpecificTool = providerSpecificHostCapabilityTool({
+    hostCapability: hostCapabilityBundle?.hostCapability,
+    provider
+  });
   const canCollectFromHelperExecution =
     bindingMatches && helperExecutionCollectable && runtimeAttestationBound && hostCapabilityBinding.bound;
   const providerHelperCollectionProbe =
@@ -5653,6 +6033,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
         stdout_sha256: helperExecution?.provider_helper_execution.stdout_sha256 as string,
         stderr_sha256: helperExecution?.provider_helper_execution.stderr_sha256 as string,
         transcript_sha256: helperExecution?.provider_helper_execution.transcript_sha256 as string,
+        provider_specific_tool_name: providerSpecificTool?.name ?? null,
+        provider_specific_tool_sha256: providerSpecificTool?.sha256 ?? null,
         platform: input.collection_environment?.platform
       }
     : null;
@@ -5677,6 +6059,18 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       : undefined;
   const providerToolWitnessSha256 = providerToolExecutionWitnessSha256(providerToolWitness);
   const providerToolWitnessBound = Boolean(providerToolWitnessSha256);
+  const providerSpecificToolExecutionRequired = collectionProviderSpecificToolExecutionRequired(
+    collection,
+    collectionProbeInput ?? undefined
+  );
+  const providerSpecificToolExecutionBound = collectionProviderSpecificToolExecutionBound(
+    collection,
+    collectionProbeInput ?? undefined
+  );
+  const providerSpecificToolExecutionHash = providerSpecificToolExecutionSha256(
+    collection,
+    collectionProbeInput ?? undefined
+  );
   const osEnforcementCompleteness = providerHelperCollectionOsEnforcementCompleteness({
     collection,
     hashesMatch,
@@ -5715,6 +6109,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     collectionSourceAccepted,
     hashesMatch,
     providerToolWitnessBound,
+    providerSpecificToolExecutionRequired,
+    providerSpecificToolExecutionBound,
     onlyProviderToolWitnessMissing:
       osEnforcementCompleteness.incompleteFacts.length === 1 &&
       osEnforcementCompleteness.incompleteFacts[0] === "provider_tool_execution_witness",
@@ -5772,6 +6168,13 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       provider_tool_execution_witness_required: true,
       provider_tool_execution_witness_bound: providerToolWitnessBound,
       provider_tool_execution_witness_sha256: providerToolWitnessSha256,
+      provider_specific_tool_execution_required: providerSpecificToolExecutionRequired,
+      provider_specific_tool_execution_bound: providerSpecificToolExecutionRequired
+        ? providerSpecificToolExecutionBound
+        : false,
+      provider_specific_tool_execution_sha256: providerSpecificToolExecutionHash,
+      provider_specific_tool_name: providerSpecificTool?.name ?? null,
+      provider_specific_tool_sha256: providerSpecificTool?.sha256 ?? null,
       diagnostics,
       proof_authority: "none"
     },
@@ -5824,6 +6227,11 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       host_capability_status: hostCapabilityBinding.host_capability_status,
       provider_tool_execution_witness_bound: providerToolWitnessBound,
       provider_tool_execution_witness_sha256: providerToolWitnessSha256,
+      provider_specific_tool_execution_required: providerSpecificToolExecutionRequired,
+      provider_specific_tool_execution_bound: providerSpecificToolExecutionRequired
+        ? providerSpecificToolExecutionBound
+        : false,
+      provider_specific_tool_name: providerSpecificTool?.name ?? null,
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false
@@ -6143,12 +6551,30 @@ export function reviewAgentAdapterOsIsolationReadiness(
     providerHelperCollection,
     evidence
   );
+  const providerSpecificToolExecutionRequired = providerHelperCollectionRequiresProviderSpecificToolExecution(
+    providerHelperCollection,
+    evidence
+  );
   const providerToolWitnessBound = !providerToolWitnessRequired ||
     (
       evidenceHasProviderToolExecutionWitnessFields(evidence) &&
       (
         providerHelperCollection
           ? providerHelperCollectionHasProviderToolExecutionWitness(providerHelperCollection, evidence)
+          : true
+      )
+    );
+  const providerSpecificToolExecutionBound = !providerSpecificToolExecutionRequired ||
+    (
+      evidenceHasProviderSpecificToolExecutionFields(evidence) &&
+      (
+        providerHelperCollection
+          ? providerHelperCollectionHasProviderSpecificToolExecution(providerHelperCollection, evidence) &&
+            providerHelperCollectionHasCurrentHostCapabilityProviderSpecificTool({
+              projectRoot,
+              collection: providerHelperCollection,
+              evidence
+            })
           : true
       )
     );
@@ -6170,6 +6596,10 @@ export function reviewAgentAdapterOsIsolationReadiness(
     provider_tool_execution_witness: check(
       providerToolWitnessBound,
       providerToolWitnessRequired ? evidence?.provider_tool_execution_witness_sha256 ?? null : "not_required"
+    ),
+    provider_specific_tool_execution: check(
+      providerSpecificToolExecutionBound,
+      providerSpecificToolExecutionRequired ? evidence?.provider_specific_tool_execution_sha256 ?? null : "not_required"
     ),
     host_path_secret_free: check(hostPathSecretFree, hostPathSecretFree),
     non_authority: check(nonAuthority, nonAuthority)

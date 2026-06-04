@@ -41,6 +41,8 @@ function providerToolExecutionWitness(probeInput) {
   assert.match(expectation.tool_sha256, /^[a-f0-9]{64}$/);
   assert.match(expectation.profile_sha256, /^[a-f0-9]{64}$/);
   assert.match(expectation.argv_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(expectation.host_capability_tool_name, "windows_checknetisolation");
+  assert.match(expectation.host_capability_tool_sha256, /^[a-f0-9]{64}$/);
   return {
     witness_source: "provider_specific_executed_tool",
     provider: probeInput.provider,
@@ -52,6 +54,8 @@ function providerToolExecutionWitness(probeInput) {
     tool_sha256: expectation.tool_sha256,
     profile_sha256: expectation.profile_sha256,
     argv_sha256: expectation.argv_sha256,
+    host_capability_tool_name: expectation.host_capability_tool_name,
+    host_capability_tool_sha256: expectation.host_capability_tool_sha256,
     transcript_sha256: probeInput.transcript_sha256,
     network_policy: "disabled",
     proof_authority: "none"
@@ -194,7 +198,7 @@ try {
         probe_source: "service_owned_provider_host_capability_probe",
         provider_host_capability_available: true,
         capability_facts: ["task182 configured helper execution host-validation prerequisite observed"],
-        required_tools: ["windows_appcontainer-task182-host-probe"],
+        required_tools: [{ name: "windows_checknetisolation", present: true, binary_sha256: helperBinarySha256, version: null }],
         kernel_features: ["task182-provider-host-capability"],
         diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
       };

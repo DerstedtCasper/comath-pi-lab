@@ -1,3 +1,32 @@
+# Goal 3 Task 204 / Provider-Specific Tool Binding Gate
+
+Scope: tighten complete provider-helper collection evidence so a Task203-valid provider-tool witness must also bind to a host-capability provider tool name/hash observed by the current service-owned capability probe.
+
+Changes:
+
+- Added `goal3-task204-agent-adapter-os-isolation-provider-specific-tool-binding.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_specific_tool_binding_gate`.
+- Added provider-specific tool binding fields to provider-helper collection manifests, nested probe/evidence details, audit payloads, and readiness review checks.
+- Required configured collection probes to receive service-derived `--provider-host-tool-*` expectations and to emit matching `provider_tool_execution_witness.host_capability_tool_*` fields.
+- Added missing provider-specific tool binding blockers and readiness vetoes for stale or incomplete collection evidence, including current host-capability artifact drift.
+- Registered Task204 in phase0 smoke and GA release criteria.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task204 initially failed because the capability ledger did not expose `agent_adapter_os_isolation_provider_specific_tool_binding_gate`; after partial implementation it also caught docs/smoke registration drift and a nested canonical probe `ok=true` escape when provider-specific tool binding was missing. A later focused RED caught readiness accepting evidence after the current host-capability artifact's provider tool hash drifted; the readiness re-read gate was added before GREEN.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task204 exited 0.
+- Adjacent provider-helper regressions exited 0: Task177, Task179, Task182, Task184, Task185, Task187, Task188, Task189, Task197, Task198, Task199, Task200, Task201, Task202, and Task203.
+- `node scripts/phase0-smoke.mjs` exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task204 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, Phase45 e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task 204 adds provenance and stale-evidence hardening only. The provider-specific tool binding does not alter Lean authority, live Pi execution status, provider coverage, or certify/complete release readiness.
+
+Residual risks: Goal 3 remains incomplete. This task does not ship provider-specific production sandbox helpers, execute container/Nix/Firejail/sandbox-exec tools by default, inspect daemon/socket/container/store/profile/sandbox-policy state, provide durable long-lived operator transport, broaden Lean/mathlib replay, or complete fully interactive real-Pi execution.
+
 # Goal 3 Task 203 / Provider Tool Execution Witness Gate
 
 Scope: tighten complete provider-helper collection evidence so complete OS-enforcement facts require a provider-specific executed-tool witness bound to service-derived collection-probe executable/profile/fixed-argv-template hashes and the current helper transcript before OS-isolation readiness can accept nested canonical evidence.
@@ -8,7 +37,7 @@ Changes:
 - Added `agent_adapter_os_isolation_provider_tool_execution_witness_gate`.
 - Added provider-tool witness binding to provider-helper collection manifests, nested probe/evidence details, audit payloads, and readiness review checks.
 - Required configured collection probes to receive service-derived `--provider-tool-*` expected hashes and to emit matching `provider_tool_execution_witness` fields.
-- Added stale pre-Task203 evidence rejection so old complete OS-fact artifacts without witness binding cannot satisfy readiness.
+- Added stale pre-Task203/pre-Task204 evidence rejection so old complete OS-fact artifacts without witness or provider-specific tool binding cannot satisfy readiness.
 - Registered Task203 in phase0 smoke and GA release criteria.
 - Updated README, AGENTS, TODO, adapter contracts, threat model, config sample, config README, REVIEW, and the Goal 3 tracker wording.
 
@@ -26,7 +55,7 @@ Verification:
 - Final `node scripts/phase0-smoke.mjs` exited 0 after tracker/review edits.
 - `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
 - `Test-Path -LiteralPath ".comath"` returned `False`.
-- Read-only code-path subagent review found stale pre-Task203 provider-helper collection/evidence acceptance without witness; readiness now vetoes stale nested canonical evidence when provider-helper collection context exists.
+- Read-only code-path subagent review found stale pre-Task203/pre-Task204 provider-helper collection/evidence acceptance without witness or current host-capability provider tool binding; readiness now vetoes stale nested canonical evidence when provider-helper collection context exists.
 - Read-only witness-semantics subagent review found the initial witness hashes were shape-only/self-attested; configured and bundled collection probe paths now bind witness hashes to service-derived executable/profile/fixed-argv-template expectations.
 
 Boundary notes: Task203 adds provenance and stale-evidence hardening only. A provider-tool witness is not proof authority, real-Pi evidence, broad provider support, or GA certification; it is a required binding gate before complete provider-helper collection evidence can satisfy adapter OS-isolation readiness.

@@ -90,7 +90,7 @@ function createCollectionProbeScript(projectRoot, { omitHostCapabilityHash = fal
       "  network_isolation_enforced: true,",
       "  no_new_privileges: true,",
       "  escape_prevention: true,",
-      "  provider_tool_execution_witness: { witness_source: 'provider_specific_executed_tool', provider: process.env.COMATH_OS_ISOLATION_PROVIDER, execution_id: `${valueAfter('--collection-id')}-TOOL`, collection_id: valueAfter('--collection-id'), helper_execution_id: valueAfter('--helper-execution-id'), runner_id: process.env.COMATH_PROVIDER_RUNNER_ID, launch_id: process.env.COMATH_SANDBOX_LAUNCH_ID, tool_sha256: valueAfter('--provider-tool-sha256'), profile_sha256: valueAfter('--provider-tool-profile-sha256'), argv_sha256: valueAfter('--provider-tool-argv-sha256'), transcript_sha256: valueAfter('--transcript-sha256'), network_policy: 'disabled', proof_authority: 'none' }",
+      "  provider_tool_execution_witness: { witness_source: 'provider_specific_executed_tool', provider: process.env.COMATH_OS_ISOLATION_PROVIDER, execution_id: `${valueAfter('--collection-id')}-TOOL`, collection_id: valueAfter('--collection-id'), helper_execution_id: valueAfter('--helper-execution-id'), runner_id: process.env.COMATH_PROVIDER_RUNNER_ID, launch_id: process.env.COMATH_SANDBOX_LAUNCH_ID, tool_sha256: valueAfter('--provider-tool-sha256'), profile_sha256: valueAfter('--provider-tool-profile-sha256'), argv_sha256: valueAfter('--provider-tool-argv-sha256'), host_capability_tool_name: valueAfter('--provider-host-tool-name'), host_capability_tool_sha256: valueAfter('--provider-host-tool-sha256'), transcript_sha256: valueAfter('--transcript-sha256'), network_policy: 'disabled', proof_authority: 'none' }",
       "};",
       "console.log(JSON.stringify(payload));",
       "console.error('collection probe stderr ok');"
@@ -235,7 +235,7 @@ try {
         probe_source: "service_owned_provider_host_capability_probe",
         provider_host_capability_available: true,
         capability_facts: ["task200 configured collection host capability prerequisite observed"],
-        required_tools: ["windows_appcontainer-task200-host-probe"],
+        required_tools: [{ name: "windows_checknetisolation", present: true, binary_sha256: helperBinarySha256, version: null }],
         kernel_features: ["task200-provider-host-capability"],
         diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
       };

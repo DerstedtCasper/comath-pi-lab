@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -40,6 +41,29 @@ const previousProviderHelperArgs = process.env[compatibleHelper.argsEnv];
 const previousFallbackHelper = process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER;
 const previousFallbackHelperArgs = process.env.COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON;
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task187-runtime-attestation-"));
+
+function sha256File(path) {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function providerHostCapabilityToolName(provider) {
+  if (provider === "windows_appcontainer") {
+    return "windows_checknetisolation";
+  }
+  if (provider === "oci_container") {
+    return "oci_docker_cli";
+  }
+  if (provider === "nix_sandbox") {
+    return "nix_cli";
+  }
+  if (provider === "firejail") {
+    return "firejail_cli";
+  }
+  if (provider === "macos_sandbox_exec") {
+    return "macos_sandbox_exec_cli";
+  }
+  throw new Error(`unsupported provider ${provider}`);
+}
 
 function writeHelperScript(path, mode) {
   const runtimeLines = mode === "bound"
@@ -144,7 +168,7 @@ async function routeRunnerHostAndExecution({ server, projectId, launch, script, 
         probe_source: "service_owned_provider_host_capability_probe",
         provider_host_capability_available: true,
         capability_facts: [`task187 runtime attestation ${suffix} host-validation prerequisite observed`],
-        required_tools: [`${compatibleProvider}-task187-host-probe`],
+        required_tools: [{ name: providerHostCapabilityToolName(compatibleProvider), present: true, binary_sha256: sha256File(process.execPath), version: null }],
         kernel_features: ["task187-provider-host-capability"],
         diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
       };
@@ -216,6 +240,8 @@ function providerToolExecutionWitness(probeInput) {
   assert.match(expectation.tool_sha256, /^[a-f0-9]{64}$/);
   assert.match(expectation.profile_sha256, /^[a-f0-9]{64}$/);
   assert.match(expectation.argv_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(expectation.host_capability_tool_name, providerHostCapabilityToolName(probeInput.provider));
+  assert.match(expectation.host_capability_tool_sha256, /^[a-f0-9]{64}$/);
   return {
     witness_source: "provider_specific_executed_tool",
     provider: probeInput.provider,
@@ -227,6 +253,8 @@ function providerToolExecutionWitness(probeInput) {
     tool_sha256: expectation.tool_sha256,
     profile_sha256: expectation.profile_sha256,
     argv_sha256: expectation.argv_sha256,
+    host_capability_tool_name: expectation.host_capability_tool_name,
+    host_capability_tool_sha256: expectation.host_capability_tool_sha256,
     transcript_sha256: probeInput.transcript_sha256,
     network_policy: "disabled",
     proof_authority: "none"
