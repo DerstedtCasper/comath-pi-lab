@@ -1,3 +1,33 @@
+# Goal 3 Task 209 / Provider-Specific Live Probe Collection Binding Gate
+
+Scope: tighten complete provider-helper collection evidence so Task208-valid service-owned live probe execution material must also be bound by the configured provider-helper collection probe stdout before nested canonical OS-isolation evidence can satisfy readiness.
+
+Changes:
+
+- Added `goal3-task209-agent-adapter-os-isolation-provider-specific-live-probe-collection-binding-gate.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_specific_live_probe_collection_binding_gate`.
+- Required configured collection probes to bind the service-executed `provider_specific_live_probe_execution` id/hash/tool/argv/stdout/stderr/transcript material before complete OS facts can satisfy nested canonical evidence.
+- Registered Task209 in phase0 smoke and GA release criteria.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task209 initially failed because missing collection-side live-probe binding still let complete configured collection facts pass (`true !== false`).
+- After the core implementation, focused Task209 reached the expected docs/capability registration failure before the public registration surfaces were synchronized.
+- After synchronization, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task209 exited 0.
+- Adjacent provider-helper regressions exited 0 for Task199, Task200, Task201, Task202, Task203, Task204, Task205, Task206, Task207, and Task208.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task209 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+- Read-only code review found no code-path issues; it flagged only missing diff-check/runtime-state evidence in this REVIEW/tracker record, which was repaired.
+
+Boundary notes: Task209 adds collection-side provenance and anti-drift hardening only. It does not alter Lean authority, live Pi execution status, provider coverage, real daemon/policy inspection, or release readiness by itself.
+
+Residual risks: Goal 3 remains incomplete. This task does not ship provider-specific production sandbox helpers, execute container/Nix/Firejail/sandbox-exec tools by default, inspect daemon/socket/container/store/profile/sandbox-policy state, provide durable long-lived operator transport, broaden Lean/mathlib replay, or complete fully interactive real-Pi execution.
+
 # Goal 3 Task 208 / Provider-Specific Live Probe Execution Gate
 
 Scope: tighten complete provider-helper collection evidence so Task207-valid live-probe-attempt material must also bind to a separately executed service-owned provider-specific live OS probe subprocess before nested canonical OS-isolation evidence can satisfy readiness.

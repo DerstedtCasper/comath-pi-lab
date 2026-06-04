@@ -55,6 +55,17 @@ function createHelperScript(projectRoot) {
   return helperScript;
 }
 
+const liveProbeExecutionBindingStatement = [
+  "payload.provider_specific_live_probe_execution_bound = true;",
+  "payload.provider_specific_live_probe_execution_id = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_ID;",
+  "payload.provider_specific_live_probe_execution_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_SHA256;",
+  "payload.provider_specific_live_probe_tool_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TOOL_SHA256;",
+  "payload.provider_specific_live_probe_argv_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_ARGV_SHA256;",
+  "payload.provider_specific_live_probe_stdout_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDOUT_SHA256;",
+  "payload.provider_specific_live_probe_stderr_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDERR_SHA256;",
+  "payload.provider_specific_live_probe_transcript_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TRANSCRIPT_SHA256;"
+].join(" ");
+
 function createCollectionProbeScript(projectRoot, { liveProbeMode }) {
   const collectionProbeScript = join(projectRoot, `task207-${liveProbeMode}-live-probe-attempt-collection-probe.mjs`);
   const includeLiveProbe = liveProbeMode !== "missing";
@@ -183,6 +194,7 @@ function createCollectionProbeScript(projectRoot, { liveProbeMode }) {
             "};"
           ].join("\n")
         : "",
+      includeLiveProbe ? liveProbeExecutionBindingStatement : "",
       "console.log(JSON.stringify(payload));",
       "console.error('collection probe stderr ok');"
     ].filter(Boolean).join("\n"),

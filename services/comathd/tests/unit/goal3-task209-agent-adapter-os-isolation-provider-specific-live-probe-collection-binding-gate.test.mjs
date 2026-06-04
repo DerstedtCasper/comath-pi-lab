@@ -28,7 +28,7 @@ function readRepoFile(relativePath) {
 }
 
 function createHelperScript(projectRoot) {
-  const helperScript = join(projectRoot, "task208-provider-helper.mjs");
+  const helperScript = join(projectRoot, "task209-provider-helper.mjs");
   writeFileSync(
     helperScript,
     [
@@ -54,19 +54,8 @@ function createHelperScript(projectRoot) {
   return helperScript;
 }
 
-const liveProbeExecutionBindingStatement = [
-  "payload.provider_specific_live_probe_execution_bound = true;",
-  "payload.provider_specific_live_probe_execution_id = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_ID;",
-  "payload.provider_specific_live_probe_execution_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_SHA256;",
-  "payload.provider_specific_live_probe_tool_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TOOL_SHA256;",
-  "payload.provider_specific_live_probe_argv_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_ARGV_SHA256;",
-  "payload.provider_specific_live_probe_stdout_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDOUT_SHA256;",
-  "payload.provider_specific_live_probe_stderr_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDERR_SHA256;",
-  "payload.provider_specific_live_probe_transcript_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TRANSCRIPT_SHA256;"
-].join(" ");
-
 function createLiveProbeScript(projectRoot, { mode }) {
-  const liveProbeScript = join(projectRoot, `task208-${mode}-provider-specific-live-probe.mjs`);
+  const liveProbeScript = join(projectRoot, `task209-${mode}-provider-specific-live-probe.mjs`);
   const wrongProfile = mode === "wrong-profile";
   writeFileSync(
     liveProbeScript,
@@ -112,8 +101,10 @@ function createLiveProbeScript(projectRoot, { mode }) {
   return liveProbeScript;
 }
 
-function createCollectionProbeScript(projectRoot) {
-  const collectionProbeScript = join(projectRoot, "task208-live-probe-execution-collection-probe.mjs");
+function createCollectionProbeScript(projectRoot, { bindingMode }) {
+  const collectionProbeScript = join(projectRoot, `task209-${bindingMode}-live-probe-collection-binding-probe.mjs`);
+  const includeLiveProbeExecutionBinding = bindingMode !== "missing-binding";
+  const wrongLiveProbeExecutionBinding = bindingMode === "wrong-binding";
   writeFileSync(
     collectionProbeScript,
     [
@@ -232,7 +223,20 @@ function createCollectionProbeScript(projectRoot) {
       "  network_policy: 'disabled',",
       "  proof_authority: 'none'",
       "};",
-      liveProbeExecutionBindingStatement,
+      ...(includeLiveProbeExecutionBinding
+        ? [
+            "payload.provider_specific_live_probe_execution_bound = true;",
+            "payload.provider_specific_live_probe_execution_id = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_ID;",
+            wrongLiveProbeExecutionBinding
+              ? "payload.provider_specific_live_probe_execution_sha256 = 'e'.repeat(64);"
+              : "payload.provider_specific_live_probe_execution_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_SHA256;",
+            "payload.provider_specific_live_probe_tool_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TOOL_SHA256;",
+            "payload.provider_specific_live_probe_argv_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_ARGV_SHA256;",
+            "payload.provider_specific_live_probe_stdout_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDOUT_SHA256;",
+            "payload.provider_specific_live_probe_stderr_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDERR_SHA256;",
+            "payload.provider_specific_live_probe_transcript_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TRANSCRIPT_SHA256;"
+          ]
+        : []),
       "console.log(JSON.stringify(payload));"
     ].join("\n"),
     "utf8"
@@ -240,7 +244,7 @@ function createCollectionProbeScript(projectRoot) {
   return collectionProbeScript;
 }
 
-function writeStalePreTask208Evidence(projectRoot, sourceCollection, staleProbeId) {
+function writeStalePreTask209Evidence(projectRoot, sourceCollection, staleProbeId) {
   const sourceProbe = sourceCollection.probe;
   const staleDir = join(projectRoot, ".comath", "release", "agent-adapter-os-isolation", staleProbeId);
   const collectionPath = `.comath/release/agent-adapter-os-isolation/${staleProbeId}/provider-helper-collection.json`;
@@ -314,53 +318,10 @@ async function postCollection(server, projectRoot, projectId, helperExecution, r
   });
 }
 
-const task208Capability = "agent_adapter_os_isolation_provider_specific_live_probe_execution_gate";
-const task208TestName = "goal3-task208-agent-adapter-os-isolation-provider-specific-live-probe-execution-gate.test.mjs";
+const Task209Capability = "agent_adapter_os_isolation_provider_specific_live_probe_collection_binding_gate";
+const Task209TestName = "goal3-task209-agent-adapter-os-isolation-provider-specific-live-probe-collection-binding-gate.test.mjs";
 
-assert.equal(
-  getComathdStatus().capabilities.includes(task208Capability),
-  true,
-  "Task208 capability ledger must advertise provider-specific live probe execution gating"
-);
-
-const smoke = readRepoFile("scripts/phase0-smoke.mjs");
-const gaReleaseCriteria = readRepoFile("docs/architecture/ga-release-criteria.md");
-assert.equal(smoke.includes(task208TestName), true, "phase0 smoke must discover the Task208 provider-specific live probe execution suite");
-assert.equal(gaReleaseCriteria.includes(task208TestName), true, "GA release criteria must list the Task208 provider-specific live probe execution suite");
-
-for (const [content, label] of [
-  [readRepoFile("README.md"), "README.md"],
-  [readRepoFile("AGENTS.md"), "AGENTS.md"],
-  [readRepoFile("TODO.md"), "TODO.md"],
-  [readRepoFile("REVIEW.md"), "REVIEW.md"],
-  [readRepoFile("goal-3/tasks.md"), "goal-3/tasks.md"],
-  [readRepoFile("docs/architecture/adapter-contracts.md"), "docs/architecture/adapter-contracts.md"],
-  [readRepoFile("docs/architecture/threat-model.md"), "docs/architecture/threat-model.md"],
-  [gaReleaseCriteria, "docs/architecture/ga-release-criteria.md"],
-  [readRepoFile("config/README.md"), "config/README.md"]
-]) {
-  assert.equal(content.includes("Task208"), true, `${label} must record the Task208 provider-specific live probe execution boundary`);
-  assert.match(
-    content,
-    /provider-specific live probe execution|provider_specific_live_probe_execution/i,
-    `${label} must name provider-specific live probe execution gating`
-  );
-  if (label !== "goal-3/tasks.md") {
-    assert.doesNotMatch(
-      content,
-      /Task208.{0,240}(?:certif(?:y|ies) GA|mathematical proof authority|real-Pi evidence|broad provider support|ships? production sandbox helpers?|inspects? daemon|inspects? sandbox policy)/is,
-      `${label} must not overclaim Task208 as proof, GA, real-Pi, broad provider support, production helper shipment, or real daemon/policy inspection`
-    );
-  }
-}
-
-assert.equal(
-  readRepoFile("config/comath.sample.json").includes('"providerSpecificLiveProbeExecutionRequired": true'),
-  true,
-  "sample config must record that configured complete provider-helper collection requires service-owned live probe execution binding"
-);
-
-const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task208-live-probe-execution-"));
+const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task209-live-probe-execution-"));
 const collectionProbeEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE";
 const collectionProbeArgsEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_COLLECTION_PROBE_ARGS_JSON";
 const liveProbeEnvVar = "COMATH_AGENT_ADAPTER_OSISO_WINDOWS_APPCONTAINER_LIVE_PROBE";
@@ -372,21 +333,22 @@ const previousLiveProbeArgsEnv = process.env[liveProbeArgsEnvVar];
 
 try {
   const init = initProject({
-    name: "Goal3 Task208 Adapter OS Isolation Provider-Specific Live Probe Execution",
+    name: "Goal3 Task209 Adapter OS Isolation Provider-Specific Live Probe Collection Binding",
     root_path: projectRoot
   });
   const projectId = init.project.project_id;
   const helperScript = createHelperScript(projectRoot);
-  const collectionProbeScript = createCollectionProbeScript(projectRoot);
+  const missingBindingCollectionProbeScript = createCollectionProbeScript(projectRoot, { bindingMode: "missing-binding" });
+  const wrongBindingCollectionProbeScript = createCollectionProbeScript(projectRoot, { bindingMode: "wrong-binding" });
+  const validBindingCollectionProbeScript = createCollectionProbeScript(projectRoot, { bindingMode: "valid-binding" });
   const validLiveProbeScript = createLiveProbeScript(projectRoot, { mode: "valid" });
-  const wrongLiveProbeScript = createLiveProbeScript(projectRoot, { mode: "wrong-profile" });
   const helperBinarySha256 = sha256File(process.execPath);
   process.env[collectionProbeEnvVar] = process.execPath;
-  process.env[collectionProbeArgsEnvVar] = JSON.stringify([collectionProbeScript]);
+  process.env[collectionProbeArgsEnvVar] = JSON.stringify([missingBindingCollectionProbeScript]);
 
   const launch = prepareAgentAdapterOsIsolationSandboxLaunch(projectRoot, {
     project_id: projectId,
-    launch_id: "ADAPTER-OSISO-LAUNCH-0208-READY",
+    launch_id: "ADAPTER-OSISO-LAUNCH-0209-READY",
     adapter_id: "codex-cli",
     backend: "external",
     actor: `${projectRoot} token=launch-secret`,
@@ -405,7 +367,7 @@ try {
 
   const readyRunner = prepareAgentAdapterOsIsolationProviderRunner(projectRoot, {
     project_id: projectId,
-    runner_id: "ADAPTER-OSISO-RUNNER-0208-READY",
+    runner_id: "ADAPTER-OSISO-RUNNER-0209-READY",
     launch_id: launch.launch_id,
     adapter_id: "codex-cli",
     backend: "external",
@@ -425,7 +387,7 @@ try {
 
   const hostCapability = probeAgentAdapterOsIsolationProviderHostCapability(projectRoot, {
     project_id: projectId,
-    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0208-READY",
+    host_capability_probe_id: "ADAPTER-OSISO-HOST-CAP-0209-READY",
     adapter_id: "codex-cli",
     backend: "external",
     actor: `${projectRoot} token=host-capability-secret`,
@@ -438,9 +400,9 @@ try {
       return {
         probe_source: "service_owned_provider_host_capability_probe",
         provider_host_capability_available: true,
-        capability_facts: [{ capability: "task208 provider-specific live probe execution candidate observed", observed: true, evidence_sha256: "b".repeat(64), notes: null }],
+        capability_facts: [{ capability: "Task209 Provider-Specific Live Probe Collection Binding candidate observed", observed: true, evidence_sha256: "b".repeat(64), notes: null }],
         required_tools: [{ name: "windows_checknetisolation", present: true, binary_sha256: helperBinarySha256, version: null }],
-        kernel_features: [{ name: "task208-provider-host-capability", observed: true, evidence_sha256: "c".repeat(64), notes: null }],
+        kernel_features: [{ name: "Task209-provider-host-capability", observed: true, evidence_sha256: "c".repeat(64), notes: null }],
         diagnostics: [`${projectRoot} host capability diagnostic must be scrubbed`, "host capability observed"]
       };
     }
@@ -449,7 +411,7 @@ try {
 
   const readyHost = validateAgentAdapterOsIsolationProviderHelperHost(projectRoot, {
     project_id: projectId,
-    host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0208-READY",
+    host_validation_id: "ADAPTER-OSISO-HELPER-HOST-0209-READY",
     host_capability_probe_id: hostCapability.host_capability_probe_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
@@ -473,7 +435,7 @@ try {
 
   const helperExecution = runAgentAdapterOsIsolationProviderHelperExecution(projectRoot, {
     project_id: projectId,
-    helper_execution_id: "ADAPTER-OSISO-HELPER-0208-READY",
+    helper_execution_id: "ADAPTER-OSISO-HELPER-0209-READY",
     host_validation_id: readyHost.host_validation_id,
     runner_id: readyRunner.runner_id,
     launch_id: launch.launch_id,
@@ -497,56 +459,54 @@ try {
   assert.equal(helperExecution.provider_helper_execution.runtime_attestation_bound, true);
 
   const server = createComathServer();
-  delete process.env[liveProbeEnvVar];
-  delete process.env[liveProbeArgsEnvVar];
-  const missingLiveProbeExecutionResponse = await postCollection(
-    server,
-    projectRoot,
-    projectId,
-    helperExecution,
-    readyRunner,
-    launch,
-    "ADAPTER-OSISO-HELPER-COLLECT-0208-MISSING-LIVE-EXEC",
-    "missing-live-exec-secret"
-  );
-  assert.equal(missingLiveProbeExecutionResponse.status, 200, JSON.stringify(missingLiveProbeExecutionResponse.body));
-  const missingLiveProbeExecution = missingLiveProbeExecutionResponse.body.collection;
-  assert.equal(missingLiveProbeExecution.ok, false, "configured complete facts must not satisfy collection without a service-owned live probe execution");
-  assert.equal(
-    missingLiveProbeExecution.collection_status,
-    "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing"
-  );
-  assert.equal(missingLiveProbeExecution.provider_helper_collection.provider_specific_live_probe_attempt_bound, true);
-  assert.equal(missingLiveProbeExecution.provider_helper_collection.provider_specific_live_probe_execution_required, true);
-  assert.equal(missingLiveProbeExecution.provider_helper_collection.provider_specific_live_probe_execution_bound, false);
-  assert.equal(missingLiveProbeExecution.probe.evidence.provider_specific_live_probe_attempt_bound, true);
-  assert.equal(missingLiveProbeExecution.probe.evidence.provider_specific_live_probe_execution_bound, false);
-  assert.equal(missingLiveProbeExecution.proof_authority, "none");
-  assert.equal(missingLiveProbeExecution.can_certify_ga, false);
-
-  process.env[liveProbeEnvVar] = process.execPath;
-  process.env[liveProbeArgsEnvVar] = JSON.stringify([wrongLiveProbeScript]);
-  const wrongLiveProbeExecutionResponse = await postCollection(
-    server,
-    projectRoot,
-    projectId,
-    helperExecution,
-    readyRunner,
-    launch,
-    "ADAPTER-OSISO-HELPER-COLLECT-0208-WRONG-LIVE-EXEC",
-    "wrong-live-exec-secret"
-  );
-  assert.equal(wrongLiveProbeExecutionResponse.status, 200, JSON.stringify(wrongLiveProbeExecutionResponse.body));
-  const wrongLiveProbeExecution = wrongLiveProbeExecutionResponse.body.collection;
-  assert.equal(wrongLiveProbeExecution.ok, false, "mismatched provider-specific live probe execution must fail closed");
-  assert.equal(
-    wrongLiveProbeExecution.collection_status,
-    "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing"
-  );
-  assert.equal(wrongLiveProbeExecution.provider_helper_collection.provider_specific_live_probe_execution_bound, false);
-
   process.env[liveProbeEnvVar] = process.execPath;
   process.env[liveProbeArgsEnvVar] = JSON.stringify([validLiveProbeScript]);
+  const missingLiveProbeCollectionBindingResponse = await postCollection(
+    server,
+    projectRoot,
+    projectId,
+    helperExecution,
+    readyRunner,
+    launch,
+    "ADAPTER-OSISO-HELPER-COLLECT-0209-MISSING-LIVE-BINDING",
+    "missing-live-binding-secret"
+  );
+  assert.equal(missingLiveProbeCollectionBindingResponse.status, 200, JSON.stringify(missingLiveProbeCollectionBindingResponse.body));
+  const missingLiveProbeCollectionBinding = missingLiveProbeCollectionBindingResponse.body.collection;
+  assert.equal(missingLiveProbeCollectionBinding.ok, false, "configured complete facts must not satisfy collection unless stdout binds the service-owned live probe execution");
+  assert.equal(
+    missingLiveProbeCollectionBinding.collection_status,
+    "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing"
+  );
+  assert.equal(missingLiveProbeCollectionBinding.provider_helper_collection.provider_specific_live_probe_attempt_bound, true);
+  assert.equal(missingLiveProbeCollectionBinding.provider_helper_collection.provider_specific_live_probe_execution_required, true);
+  assert.equal(missingLiveProbeCollectionBinding.provider_helper_collection.provider_specific_live_probe_execution_bound, false);
+  assert.equal(missingLiveProbeCollectionBinding.probe.evidence.provider_specific_live_probe_attempt_bound, true);
+  assert.equal(missingLiveProbeCollectionBinding.probe.evidence.provider_specific_live_probe_execution_bound, false);
+  assert.equal(missingLiveProbeCollectionBinding.proof_authority, "none");
+  assert.equal(missingLiveProbeCollectionBinding.can_certify_ga, false);
+
+  process.env[collectionProbeArgsEnvVar] = JSON.stringify([wrongBindingCollectionProbeScript]);
+  const wrongLiveProbeCollectionBindingResponse = await postCollection(
+    server,
+    projectRoot,
+    projectId,
+    helperExecution,
+    readyRunner,
+    launch,
+    "ADAPTER-OSISO-HELPER-COLLECT-0209-WRONG-LIVE-BINDING",
+    "wrong-live-binding-secret"
+  );
+  assert.equal(wrongLiveProbeCollectionBindingResponse.status, 200, JSON.stringify(wrongLiveProbeCollectionBindingResponse.body));
+  const wrongLiveProbeCollectionBinding = wrongLiveProbeCollectionBindingResponse.body.collection;
+  assert.equal(wrongLiveProbeCollectionBinding.ok, false, "mismatched collection-side live probe execution hash must fail closed");
+  assert.equal(
+    wrongLiveProbeCollectionBinding.collection_status,
+    "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing"
+  );
+  assert.equal(wrongLiveProbeCollectionBinding.provider_helper_collection.provider_specific_live_probe_execution_bound, false);
+
+  process.env[collectionProbeArgsEnvVar] = JSON.stringify([validBindingCollectionProbeScript]);
   const boundLiveProbeExecutionResponse = await postCollection(
     server,
     projectRoot,
@@ -554,7 +514,7 @@ try {
     helperExecution,
     readyRunner,
     launch,
-    "ADAPTER-OSISO-HELPER-COLLECT-0208-LIVE-EXEC-BOUND",
+    "ADAPTER-OSISO-HELPER-COLLECT-0209-LIVE-EXEC-BOUND",
     "live-exec-bound-secret"
   );
   assert.equal(boundLiveProbeExecutionResponse.status, 200, JSON.stringify(boundLiveProbeExecutionResponse.body));
@@ -575,10 +535,10 @@ try {
 
   const readiness = reviewAgentAdapterOsIsolationReadiness(projectRoot, {
     project_id: projectId,
-    review_id: "ADAPTER-OSISO-0208-LIVE-EXEC-BOUND-READINESS",
+    review_id: "ADAPTER-OSISO-0209-LIVE-EXEC-BOUND-READINESS",
     adapter_id: "codex-cli",
     backend: "external",
-    actor: "goal3-task208-live-exec-bound-test",
+    actor: "goal3-task209-live-exec-bound-test",
     evidence_path: boundLiveProbeExecution.probe.evidence_path
   });
   assert.equal(readiness.ok, true, "service-owned live-probe-execution-bound canonical evidence can satisfy OS-isolation readiness");
@@ -587,25 +547,25 @@ try {
   assert.equal(readiness.proof_authority, "none");
   assert.equal(readiness.can_certify_ga, false);
 
-  const stalePreTask208 = writeStalePreTask208Evidence(
+  const stalePreTask209 = writeStalePreTask209Evidence(
     projectRoot,
     boundLiveProbeExecution,
-    "ADAPTER-OSISO-HELPER-COLLECT-0208-STALE-PRE-TASK208"
+    "ADAPTER-OSISO-HELPER-COLLECT-0209-STALE-PRE-TASK209"
   );
   const staleReadiness = reviewAgentAdapterOsIsolationReadiness(projectRoot, {
     project_id: projectId,
-    review_id: "ADAPTER-OSISO-0208-STALE-PRE-TASK208-READINESS",
+    review_id: "ADAPTER-OSISO-0209-STALE-PRE-TASK209-READINESS",
     adapter_id: "codex-cli",
     backend: "external",
-    actor: "goal3-task208-stale-pre-task208-test",
-    evidence_path: stalePreTask208.probe.evidence_path
+    actor: "goal3-task209-stale-pre-task209-test",
+    evidence_path: stalePreTask209.probe.evidence_path
   });
-  assert.equal(staleReadiness.ok, false, "stale pre-Task208 canonical evidence without live-probe-execution binding must fail readiness");
+  assert.equal(staleReadiness.ok, false, "stale pre-Task209 canonical evidence without live-probe-execution binding must fail readiness");
   assert.equal(staleReadiness.checks.provider_specific_live_probe_execution.ok, false);
   assert.equal(
     staleReadiness.vetoes.some((veto) => veto.code === "adapter_os_isolation_provider_specific_live_probe_execution_missing"),
     true,
-    "stale pre-Task208 evidence must report the provider-specific live probe execution veto"
+    "stale pre-Task209 evidence must report the Provider-Specific Live Probe Collection Binding veto"
   );
 
   const events = readAuditEvents(projectRoot);
@@ -613,7 +573,7 @@ try {
     events.some(
       (event) =>
         event.event_type === "agent_adapter.os_isolation_provider_helper_collected" &&
-        event.payload.collection_id === "ADAPTER-OSISO-HELPER-COLLECT-0208-MISSING-LIVE-EXEC" &&
+        event.payload.collection_id === "ADAPTER-OSISO-HELPER-COLLECT-0209-MISSING-LIVE-BINDING" &&
         event.payload.collection_status === "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing" &&
         event.payload.provider_specific_live_probe_attempt_bound === true &&
         event.payload.provider_specific_live_probe_execution_bound === false &&
@@ -621,13 +581,13 @@ try {
         event.payload.can_certify_ga === false
     ),
     true,
-    "missing provider-specific live probe execution blocker must be audit-visible and non-authoritative"
+    "missing Provider-Specific Live Probe Collection Binding blocker must be audit-visible and non-authoritative"
   );
   assert.equal(
     events.some(
       (event) =>
         event.event_type === "agent_adapter.os_isolation_provider_helper_collected" &&
-        event.payload.collection_id === "ADAPTER-OSISO-HELPER-COLLECT-0208-LIVE-EXEC-BOUND" &&
+        event.payload.collection_id === "ADAPTER-OSISO-HELPER-COLLECT-0209-LIVE-EXEC-BOUND" &&
         event.payload.ok === true &&
         event.payload.provider_specific_live_probe_execution_bound === true &&
         /^[a-f0-9]{64}$/.test(event.payload.provider_specific_live_probe_execution_sha256) &&
@@ -635,7 +595,7 @@ try {
         event.payload.can_certify_ga === false
     ),
     true,
-    "provider-specific live-probe-execution-bound helper collection must be audit-visible and non-authoritative"
+    "provider-specific live-probe-collection-bound helper collection must be audit-visible and non-authoritative"
   );
 } finally {
   if (previousCollectionProbeEnv === undefined) {
@@ -661,4 +621,47 @@ try {
   rmSync(projectRoot, { recursive: true, force: true });
 }
 
-console.log("Goal 3 Task208 provider-specific live probe execution gate tests passed.");
+assert.equal(
+  getComathdStatus().capabilities.includes(Task209Capability),
+  true,
+  "Task209 capability ledger must advertise provider-specific live probe collection binding gating"
+);
+
+const smoke = readRepoFile("scripts/phase0-smoke.mjs");
+const gaReleaseCriteria = readRepoFile("docs/architecture/ga-release-criteria.md");
+assert.equal(smoke.includes(Task209TestName), true, "phase0 smoke must discover the Task209 provider-specific live probe collection binding suite");
+assert.equal(gaReleaseCriteria.includes(Task209TestName), true, "GA release criteria must list the Task209 provider-specific live probe collection binding suite");
+
+for (const [content, label] of [
+  [readRepoFile("README.md"), "README.md"],
+  [readRepoFile("AGENTS.md"), "AGENTS.md"],
+  [readRepoFile("TODO.md"), "TODO.md"],
+  [readRepoFile("REVIEW.md"), "REVIEW.md"],
+  [readRepoFile("goal-3/tasks.md"), "goal-3/tasks.md"],
+  [readRepoFile("docs/architecture/adapter-contracts.md"), "docs/architecture/adapter-contracts.md"],
+  [readRepoFile("docs/architecture/threat-model.md"), "docs/architecture/threat-model.md"],
+  [gaReleaseCriteria, "docs/architecture/ga-release-criteria.md"],
+  [readRepoFile("config/README.md"), "config/README.md"]
+]) {
+  assert.equal(content.includes("Task209"), true, `${label} must record the Task209 provider-specific live probe collection binding boundary`);
+  assert.match(
+    content,
+    /provider-specific live probe collection binding|provider_specific_live_probe_execution/i,
+    `${label} must name provider-specific live probe collection binding gating`
+  );
+  if (label !== "goal-3/tasks.md") {
+    assert.doesNotMatch(
+      content,
+      /Task209.{0,240}(?:certif(?:y|ies) GA|mathematical proof authority|real-Pi evidence|broad provider support|ships? production sandbox helpers?|inspects? daemon|inspects? sandbox policy)/is,
+      `${label} must not overclaim Task209 as proof, GA, real-Pi, broad provider support, production helper shipment, or real daemon/policy inspection`
+    );
+  }
+}
+
+assert.equal(
+  readRepoFile("config/comath.sample.json").includes('"providerSpecificLiveProbeCollectionBindingRequired": true'),
+  true,
+  "sample config must record that configured complete provider-helper collection requires collection-side live probe execution binding"
+);
+
+console.log("Goal 3 Task209 provider-specific live probe collection binding gate tests passed.");

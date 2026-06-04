@@ -5997,6 +5997,33 @@ function providerSpecificLiveProbeStdoutAccepted(
   );
 }
 
+function providerSpecificLiveProbeExecutionCollectionBindingAccepted(
+  parsed: Record<string, unknown> | null,
+  execution: AgentAdapterOsIsolationProviderSpecificLiveProbeExecution | undefined,
+  executionSha256: string | null
+): boolean {
+  return Boolean(
+    parsed &&
+      execution &&
+      isSha256(executionSha256) &&
+      parsed.provider_specific_live_probe_execution_bound === true &&
+      parsed.provider_specific_live_probe_execution_id === execution.execution_id &&
+      isSha256(parsed.provider_specific_live_probe_execution_sha256) &&
+      parsed.provider_specific_live_probe_execution_sha256.toLowerCase() === executionSha256.toLowerCase() &&
+      isSha256(parsed.provider_specific_live_probe_tool_sha256) &&
+      parsed.provider_specific_live_probe_tool_sha256.toLowerCase() === execution.live_probe_tool_sha256.toLowerCase() &&
+      isSha256(parsed.provider_specific_live_probe_argv_sha256) &&
+      parsed.provider_specific_live_probe_argv_sha256.toLowerCase() === execution.live_probe_argv_sha256.toLowerCase() &&
+      isSha256(parsed.provider_specific_live_probe_stdout_sha256) &&
+      parsed.provider_specific_live_probe_stdout_sha256.toLowerCase() === execution.live_probe_stdout_sha256.toLowerCase() &&
+      isSha256(parsed.provider_specific_live_probe_stderr_sha256) &&
+      parsed.provider_specific_live_probe_stderr_sha256.toLowerCase() === execution.live_probe_stderr_sha256.toLowerCase() &&
+      isSha256(parsed.provider_specific_live_probe_transcript_sha256) &&
+      parsed.provider_specific_live_probe_transcript_sha256.toLowerCase() ===
+        execution.live_probe_transcript_sha256.toLowerCase()
+  );
+}
+
 function configuredProviderSpecificLiveProbeExecution(
   input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput,
   expectation: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation
@@ -6206,14 +6233,34 @@ function configuredProviderHelperCollectionProbe(
     liveProbeExecutionResult.execution
   );
   const fixedArgs = providerHelperCollectionProbeFixedArgs(input, expectation);
-  const env = providerHelperEnv({
-    projectId: input.project_id,
-    runnerId: input.runner_id,
-    launchId: input.launch_id,
-    adapterId: input.adapter_id,
-    backend: input.backend,
-    provider: input.provider
-  });
+  const env = {
+    ...providerHelperEnv({
+      projectId: input.project_id,
+      runnerId: input.runner_id,
+      launchId: input.launch_id,
+      adapterId: input.adapter_id,
+      backend: input.backend,
+      provider: input.provider
+    }),
+    ...(liveProbeExecutionResult.execution && isSha256(liveProbeExecutionSha256)
+      ? {
+          COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_ID:
+            liveProbeExecutionResult.execution.execution_id,
+          COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_SHA256:
+            liveProbeExecutionSha256,
+          COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TOOL_SHA256:
+            liveProbeExecutionResult.execution.live_probe_tool_sha256,
+          COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_ARGV_SHA256:
+            liveProbeExecutionResult.execution.live_probe_argv_sha256,
+          COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDOUT_SHA256:
+            liveProbeExecutionResult.execution.live_probe_stdout_sha256,
+          COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDERR_SHA256:
+            liveProbeExecutionResult.execution.live_probe_stderr_sha256,
+          COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TRANSCRIPT_SHA256:
+            liveProbeExecutionResult.execution.live_probe_transcript_sha256
+        }
+      : {})
+  };
   const spawned = spawnSync(configuredProgram, [...configuredArgs.args, ...fixedArgs], {
     cwd: input.project_root,
     env,
@@ -6247,6 +6294,11 @@ function configuredProviderHelperCollectionProbe(
     ? parsed?.provider_specific_live_probe_attempt
     : undefined;
   const invalidLiveProbeAttempt = Boolean(parsed?.provider_specific_live_probe_attempt) && !liveProbeAttempt;
+  const liveProbeExecutionCollectionBinding = providerSpecificLiveProbeExecutionCollectionBindingAccepted(
+    parsed,
+    liveProbeExecutionResult.execution,
+    liveProbeExecutionSha256
+  );
   const accepted =
     !spawnError &&
     exitCode === 0 &&
@@ -6263,6 +6315,9 @@ function configuredProviderHelperCollectionProbe(
     invalidWitness ? "Configured provider-helper collection probe emitted an invalid provider-tool execution witness." : undefined,
     invalidFamilyWitness ? "Configured provider-helper collection probe emitted an invalid provider-family OS-enforcement witness." : undefined,
     invalidLiveProbeAttempt ? "Configured provider-helper collection probe emitted an invalid provider-specific live probe attempt." : undefined,
+    !liveProbeExecutionCollectionBinding
+      ? "Configured provider-helper collection probe did not bind the service-owned provider-specific live OS probe execution."
+      : undefined,
     timedOut ? "Configured provider-helper collection probe timed out." : undefined,
     spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined
   ].filter((entry): entry is string => Boolean(entry));
@@ -6285,9 +6340,13 @@ function configuredProviderHelperCollectionProbe(
     provider_family_os_enforcement_witness: familyWitness,
     provider_specific_live_probe_attempt: liveProbeAttempt,
     provider_specific_live_probe_execution_required: true,
-    provider_specific_live_probe_execution: liveProbeExecutionResult.execution,
-    provider_specific_live_probe_execution_bound: Boolean(liveProbeExecutionSha256),
-    provider_specific_live_probe_execution_sha256: liveProbeExecutionSha256 ?? undefined,
+    provider_specific_live_probe_execution: liveProbeExecutionCollectionBinding
+      ? liveProbeExecutionResult.execution
+      : undefined,
+    provider_specific_live_probe_execution_bound: liveProbeExecutionCollectionBinding,
+    provider_specific_live_probe_execution_sha256: liveProbeExecutionCollectionBinding
+      ? liveProbeExecutionSha256 ?? undefined
+      : undefined,
     provider_tool_execution_witness_expectation: expectation,
     diagnostics: baseDiagnostics
   };

@@ -55,6 +55,17 @@ function createHelperScript(projectRoot) {
   return helperScript;
 }
 
+const liveProbeExecutionBindingStatement = [
+  "payload.provider_specific_live_probe_execution_bound = true;",
+  "payload.provider_specific_live_probe_execution_id = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_ID;",
+  "payload.provider_specific_live_probe_execution_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_EXECUTION_SHA256;",
+  "payload.provider_specific_live_probe_tool_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TOOL_SHA256;",
+  "payload.provider_specific_live_probe_argv_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_ARGV_SHA256;",
+  "payload.provider_specific_live_probe_stdout_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDOUT_SHA256;",
+  "payload.provider_specific_live_probe_stderr_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_STDERR_SHA256;",
+  "payload.provider_specific_live_probe_transcript_sha256 = process.env.COMATH_PROVIDER_SPECIFIC_LIVE_PROBE_TRANSCRIPT_SHA256;"
+].join(" ");
+
 function createCollectionProbeScript(projectRoot, { profileMode }) {
   const collectionProbeScript = join(projectRoot, `task206-${profileMode}-family-profile-collection-probe.mjs`);
   const includeProfile = profileMode !== "missing";
@@ -161,6 +172,7 @@ function createCollectionProbeScript(projectRoot, { profileMode }) {
       includeProfile
         ? "payload.provider_specific_live_probe_attempt = { attempt_source: 'provider_specific_live_os_probe', provider: process.env.COMATH_OS_ISOLATION_PROVIDER, execution_id: `${valueAfter('--collection-id')}-LIVE`, collection_id: valueAfter('--collection-id'), helper_execution_id: valueAfter('--helper-execution-id'), runner_id: process.env.COMATH_PROVIDER_RUNNER_ID, launch_id: process.env.COMATH_SANDBOX_LAUNCH_ID, provider_family_execution_kind: 'windows_appcontainer_os_probe', provider_family_execution_profile_sha256: valueAfter('--provider-family-execution-profile-sha256'), provider_family_execution_argv_sha256: valueAfter('--provider-family-execution-argv-sha256'), provider_tool_sha256: valueAfter('--provider-tool-sha256'), provider_tool_profile_sha256: valueAfter('--provider-tool-profile-sha256'), provider_tool_argv_sha256: valueAfter('--provider-tool-argv-sha256'), transcript_sha256: valueAfter('--transcript-sha256'), collection_source: 'service_owned_os_probe', process_isolation_enforced: true, filesystem_scope_enforced: true, network_isolation_enforced: true, no_new_privileges: true, escape_prevention: true, adapter_process_exit_code: numberAfter('--helper-exit-code'), network_policy: 'disabled', proof_authority: 'none' };"
         : "",
+      includeProfile ? liveProbeExecutionBindingStatement : "",
       "console.log(JSON.stringify(payload));",
       "console.error('collection probe stderr ok');"
     ].filter(Boolean).join("\n"),
