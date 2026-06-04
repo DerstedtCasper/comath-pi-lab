@@ -1,3 +1,33 @@
+# Goal 3 Task 206 / Provider-Family Execution Profile Gate
+
+Scope: tighten complete provider-helper collection evidence so Task205-valid provider-family OS-enforcement witness material must also bind to a service-derived provider-family execution kind, profile hash, and argv hash before nested canonical OS-isolation evidence can satisfy readiness.
+
+Changes:
+
+- Added `goal3-task206-agent-adapter-os-isolation-provider-family-execution-profile-gate.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_family_execution_profile_gate`.
+- Added provider-family execution profile fields to provider-helper collection manifests, nested probe/evidence details, audit payloads, and readiness review checks.
+- Required configured collection probes to emit matching `provider_family_execution_profile` material before complete OS facts can satisfy nested canonical evidence.
+- Added missing provider-family execution profile blockers and readiness vetoes for missing, mismatched, or stale pre-Task206 collection evidence.
+- Registered Task206 in phase0 smoke and GA release criteria.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task206 initially failed because the service capability ledger did not advertise `agent_adapter_os_isolation_provider_family_execution_profile_gate`, then progressed to missing smoke/docs registration after the first implementation slice.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task206 exited 0.
+- Adjacent provider-helper regressions exited 0: Task177, Task179, Task182, Task184, Task185, Task187, Task188, Task189, Task197, Task198, Task199, Task200, Task201, Task202, Task203, Task204, and Task205.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task206 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, Phase45 e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task206 adds provenance and stale-evidence hardening only. The provider-family execution profile remains non-authoritative, non-release-grade, and non-shipping metadata.
+
+Residual risks: Goal 3 remains incomplete. This task does not ship provider-specific production sandbox helpers, execute container/Nix/Firejail/sandbox-exec tools by default, inspect daemon/socket/container/store/profile/sandbox-policy state, provide durable long-lived operator transport, broaden Lean/mathlib replay, or complete fully interactive real-Pi execution.
+
 # Goal 3 Task 205 / Provider-Family OS-Enforcement Witness Gate
 
 Scope: tighten complete provider-helper collection evidence so Task204-valid provider-tool and host-capability tool bindings must also carry `provider_family_os_enforcement_witness` material bound to the current provider family, helper transcript, host-capability artifact/tool binding, complete OS-enforcement facts, disabled network policy, and `proof_authority="none"`.

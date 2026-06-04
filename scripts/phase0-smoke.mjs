@@ -372,6 +372,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task203-agent-adapter-os-isolation-provider-tool-witness-gate.test.mjs",
   "goal3-task204-agent-adapter-os-isolation-provider-specific-tool-binding.test.mjs",
   "goal3-task205-agent-adapter-os-isolation-provider-family-enforcement-witness-gate.test.mjs",
+  "goal3-task206-agent-adapter-os-isolation-provider-family-execution-profile-gate.test.mjs",
   "goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs",
   "goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs",
   "goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs",
