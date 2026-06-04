@@ -21,6 +21,24 @@ function sha256File(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+function sortJson(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => sortJson(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortJson(value[key])]));
+  }
+  return value;
+}
+
+function canonicalJson(value) {
+  return `${JSON.stringify(sortJson(value))}\n`;
+}
+
+function sha256Text(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 function providerToolExecutionWitness(probeInput) {
   const expectation = probeInput.provider_tool_execution_witness_expectation;
   assert.match(expectation.tool_sha256, /^[a-f0-9]{64}$/);
@@ -146,6 +164,72 @@ function providerSpecificLiveProbeExecution(probeInput) {
     no_new_privileges: true,
     escape_prevention: true,
     adapter_process_exit_code: 0,
+    network_policy: "disabled",
+    proof_authority: "none"
+  };
+}
+
+function providerSpecificLiveProbeExecutionSha256(execution) {
+  return sha256Text(canonicalJson({
+    execution_source: "service_owned_provider_specific_live_os_probe",
+    provider: execution.provider,
+    execution_id: execution.execution_id,
+    collection_id: execution.collection_id,
+    helper_execution_id: execution.helper_execution_id,
+    runner_id: execution.runner_id,
+    launch_id: execution.launch_id,
+    provider_family_execution_kind: execution.provider_family_execution_kind,
+    provider_family_execution_profile_sha256: execution.provider_family_execution_profile_sha256.toLowerCase(),
+    provider_family_execution_argv_sha256: execution.provider_family_execution_argv_sha256.toLowerCase(),
+    provider_tool_sha256: execution.provider_tool_sha256.toLowerCase(),
+    provider_tool_profile_sha256: execution.provider_tool_profile_sha256.toLowerCase(),
+    provider_tool_argv_sha256: execution.provider_tool_argv_sha256.toLowerCase(),
+    transcript_sha256: execution.transcript_sha256.toLowerCase(),
+    live_probe_tool_sha256: execution.live_probe_tool_sha256.toLowerCase(),
+    live_probe_argv_sha256: execution.live_probe_argv_sha256.toLowerCase(),
+    live_probe_stdout_sha256: execution.live_probe_stdout_sha256.toLowerCase(),
+    live_probe_stderr_sha256: execution.live_probe_stderr_sha256.toLowerCase(),
+    live_probe_transcript_sha256: execution.live_probe_transcript_sha256.toLowerCase(),
+    collection_source: "service_owned_os_probe",
+    process_isolation_enforced: true,
+    filesystem_scope_enforced: true,
+    network_isolation_enforced: true,
+    no_new_privileges: true,
+    escape_prevention: true,
+    adapter_process_exit_code: 0,
+    network_policy: "disabled",
+    proof_authority: "none"
+  }));
+}
+
+function providerControlPlaneExecutionWitness(probeInput) {
+  const expectation = probeInput.provider_tool_execution_witness_expectation;
+  const liveProbeExecution = providerSpecificLiveProbeExecution(probeInput);
+  const liveProbeExecutionHash = providerSpecificLiveProbeExecutionSha256(liveProbeExecution);
+  return {
+    witness_source: "provider_control_plane_execution",
+    provider: probeInput.provider,
+    control_plane_kind: "windows_appcontainer_control_plane_execution",
+    execution_id: `${probeInput.collection_id}-CONTROL`,
+    collection_id: probeInput.collection_id,
+    helper_execution_id: probeInput.helper_execution_id,
+    runner_id: probeInput.runner_id,
+    launch_id: probeInput.launch_id,
+    provider_family_execution_kind: expectation.provider_family_execution_kind,
+    provider_family_execution_profile_sha256: expectation.provider_family_execution_profile_sha256,
+    provider_family_execution_argv_sha256: expectation.provider_family_execution_argv_sha256,
+    provider_tool_sha256: expectation.tool_sha256,
+    provider_tool_profile_sha256: expectation.profile_sha256,
+    provider_tool_argv_sha256: expectation.argv_sha256,
+    transcript_sha256: probeInput.transcript_sha256,
+    provider_specific_live_probe_execution_id: liveProbeExecution.execution_id,
+    provider_specific_live_probe_execution_sha256: liveProbeExecutionHash,
+    provider_specific_live_probe_tool_sha256: liveProbeExecution.live_probe_tool_sha256,
+    provider_specific_live_probe_argv_sha256: liveProbeExecution.live_probe_argv_sha256,
+    provider_specific_live_probe_stdout_sha256: liveProbeExecution.live_probe_stdout_sha256,
+    provider_specific_live_probe_stderr_sha256: liveProbeExecution.live_probe_stderr_sha256,
+    provider_specific_live_probe_transcript_sha256: liveProbeExecution.live_probe_transcript_sha256,
+    collection_source: "service_owned_os_probe",
     network_policy: "disabled",
     proof_authority: "none"
   };
@@ -570,6 +654,7 @@ try {
         provider_family_os_enforcement_witness: providerFamilyOsEnforcementWitness(probeInput),
         provider_specific_live_probe_attempt: providerSpecificLiveProbeAttempt(probeInput),
         provider_specific_live_probe_execution: providerSpecificLiveProbeExecution(probeInput),
+        provider_control_plane_execution_witness: providerControlPlaneExecutionWitness(probeInput),
         diagnostics: [`${projectRoot} collector diagnostic must be scrubbed`, "helper collection succeeded"]
       };
     }

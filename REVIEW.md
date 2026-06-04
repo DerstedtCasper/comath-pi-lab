@@ -1,3 +1,30 @@
+# Goal 3 Task 210 / Provider Control-Plane Execution Witness Gate
+
+Scope: tighten complete provider-helper collection evidence so Task209-valid live-probe-execution-bound material must also bind a provider control-plane execution witness before nested canonical OS-isolation evidence can satisfy readiness.
+
+Changes:
+
+- Added `goal3-task210-agent-adapter-os-isolation-provider-control-plane-execution-witness-gate.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_control_plane_execution_witness_gate`.
+- Added `provider_control_plane_execution_witness` material to provider-helper collection manifests, nested probe/evidence details, audit payloads, and readiness review checks.
+- Required the witness to bind the current provider-family execution profile, provider tool hashes, helper transcript hash, and service-executed provider-specific live probe id/hash/tool/argv/stdout/stderr/transcript material.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task210 failed because Task209-valid collection evidence without a provider control-plane execution witness incorrectly passed (`true !== false`).
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task210 exited 0.
+- Adjacent provider-helper regressions exited 0 for Task197, Task198, Task199, Task200, Task201, Task202, Task203, Task204, Task205, Task206, Task207, Task208, and Task209, plus Task170 and Task177/179/182/184/185/187/188/189 coverage for direct-host and legacy callback/configured helper behavior.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task210 discovered by the default runner.
+- `corepack pnpm test` exited 0, including phase0 smoke, Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- Final `node scripts/phase0-smoke.mjs` after REVIEW/tracker updates exited 0.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task210 adds provenance and stale-evidence hardening only. The provider control-plane execution witness remains non-authoritative, non-release-grade, and non-shipping metadata; all existing production-helper, host-inspection, Lean-authority, Pi-execution, provider-coverage, and release-certification residual risks remain open.
+
 # Goal 3 Task 209 / Provider-Specific Live Probe Collection Binding Gate
 
 Scope: tighten complete provider-helper collection evidence so Task208-valid service-owned live probe execution material must also be bound by the configured provider-helper collection probe stdout before nested canonical OS-isolation evidence can satisfy readiness.

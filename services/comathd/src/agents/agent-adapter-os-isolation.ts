@@ -35,6 +35,13 @@ export type AgentAdapterOsIsolationProviderFamilyExecutionKind =
   | "windows_appcontainer_os_probe"
   | "macos_sandbox_exec_os_probe";
 
+export type AgentAdapterOsIsolationProviderControlPlaneExecutionKind =
+  | "oci_container_control_plane_execution"
+  | "nix_sandbox_control_plane_execution"
+  | "firejail_control_plane_execution"
+  | "windows_appcontainer_control_plane_execution"
+  | "macos_sandbox_exec_control_plane_execution";
+
 export type AgentAdapterOsIsolationEvidence = {
   schema_version?: string;
   kind?: "agent_adapter_os_isolation_evidence";
@@ -79,6 +86,9 @@ export type AgentAdapterOsIsolationEvidence = {
   provider_specific_live_probe_execution_required?: boolean;
   provider_specific_live_probe_execution_bound?: boolean;
   provider_specific_live_probe_execution_sha256?: string;
+  provider_control_plane_execution_witness_required?: boolean;
+  provider_control_plane_execution_witness_bound?: boolean;
+  provider_control_plane_execution_witness_sha256?: string;
   proof_authority?: unknown;
   can_promote_claim?: unknown;
   can_certify_ga?: unknown;
@@ -208,6 +218,34 @@ export type AgentAdapterOsIsolationProviderSpecificLiveProbeExecution = {
   proof_authority: "none";
 };
 
+export type AgentAdapterOsIsolationProviderControlPlaneExecutionWitness = {
+  witness_source: "provider_control_plane_execution";
+  provider: AgentAdapterOsIsolationProvider;
+  control_plane_kind: AgentAdapterOsIsolationProviderControlPlaneExecutionKind;
+  execution_id: string;
+  collection_id: string;
+  helper_execution_id: string;
+  runner_id: string;
+  launch_id: string;
+  provider_family_execution_kind: AgentAdapterOsIsolationProviderFamilyExecutionKind;
+  provider_family_execution_profile_sha256: string;
+  provider_family_execution_argv_sha256: string;
+  provider_tool_sha256: string;
+  provider_tool_profile_sha256: string;
+  provider_tool_argv_sha256: string;
+  transcript_sha256: string;
+  provider_specific_live_probe_execution_id: string;
+  provider_specific_live_probe_execution_sha256: string;
+  provider_specific_live_probe_tool_sha256: string;
+  provider_specific_live_probe_argv_sha256: string;
+  provider_specific_live_probe_stdout_sha256: string;
+  provider_specific_live_probe_stderr_sha256: string;
+  provider_specific_live_probe_transcript_sha256: string;
+  collection_source: "service_owned_os_probe";
+  network_policy: "disabled";
+  proof_authority: "none";
+};
+
 export type AgentAdapterOsIsolationProbeCollection = {
   collection_source?: "service_owned_os_probe" | "operator_attested" | "unknown";
   process_isolation_enforced?: boolean;
@@ -243,6 +281,10 @@ export type AgentAdapterOsIsolationProbeCollection = {
   provider_specific_live_probe_execution?: AgentAdapterOsIsolationProviderSpecificLiveProbeExecution;
   provider_specific_live_probe_execution_bound?: boolean;
   provider_specific_live_probe_execution_sha256?: string;
+  provider_control_plane_execution_witness_required?: boolean;
+  provider_control_plane_execution_witness?: AgentAdapterOsIsolationProviderControlPlaneExecutionWitness;
+  provider_control_plane_execution_witness_bound?: boolean;
+  provider_control_plane_execution_witness_sha256?: string;
   notes?: string;
 };
 
@@ -603,6 +645,7 @@ export type AgentAdapterOsIsolationProviderHelperCollectionStatus =
   | "blocked_provider_helper_collection_provider_family_execution_profile_missing"
   | "blocked_provider_helper_collection_provider_specific_live_probe_attempt_missing"
   | "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing"
+  | "blocked_provider_helper_collection_provider_control_plane_execution_witness_missing"
   | "blocked_provider_helper_collection_incomplete_os_enforcement"
   | "blocked_provider_helper_collection_not_collected";
 
@@ -841,6 +884,7 @@ export type AgentAdapterOsIsolationReview = {
     provider_family_execution_profile: AgentAdapterOsIsolationReviewCheck;
     provider_specific_live_probe_attempt: AgentAdapterOsIsolationReviewCheck;
     provider_specific_live_probe_execution: AgentAdapterOsIsolationReviewCheck;
+    provider_control_plane_execution_witness: AgentAdapterOsIsolationReviewCheck;
     host_path_secret_free: AgentAdapterOsIsolationReviewCheck;
     non_authority: AgentAdapterOsIsolationReviewCheck;
   };
@@ -921,6 +965,9 @@ export type AgentAdapterOsIsolationProbe = {
     provider_specific_live_probe_execution_required?: boolean;
     provider_specific_live_probe_execution_bound?: boolean;
     provider_specific_live_probe_execution_sha256?: string;
+    provider_control_plane_execution_witness_required?: boolean;
+    provider_control_plane_execution_witness_bound?: boolean;
+    provider_control_plane_execution_witness_sha256?: string;
   };
   adapter_execution_isolation: {
     required_for_ga: true;
@@ -1388,6 +1435,9 @@ export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
     provider_specific_live_probe_execution_required: boolean;
     provider_specific_live_probe_execution_bound: boolean;
     provider_specific_live_probe_execution_sha256: string | null;
+    provider_control_plane_execution_witness_required: true;
+    provider_control_plane_execution_witness_bound: boolean;
+    provider_control_plane_execution_witness_sha256: string | null;
     diagnostics: string[];
     proof_authority: "none";
   };
@@ -1711,6 +1761,17 @@ function evidenceHasProviderSpecificLiveProbeExecutionFields(
   );
 }
 
+function evidenceHasProviderControlPlaneExecutionWitnessFields(
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(
+    evidence?.collection_source === "service_owned_os_probe" &&
+      evidence.provider_control_plane_execution_witness_required === true &&
+      evidence.provider_control_plane_execution_witness_bound === true &&
+      isSha256(evidence.provider_control_plane_execution_witness_sha256)
+  );
+}
+
 function providerHelperCollectionHasProviderToolExecutionWitness(
   collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
   evidence: AgentAdapterOsIsolationEvidence | undefined
@@ -1824,6 +1885,13 @@ function providerHelperCollectionRequiresProviderSpecificLiveProbeExecution(
   return Boolean(collection || evidence?.provider_specific_live_probe_execution_required === true);
 }
 
+function providerHelperCollectionRequiresProviderControlPlaneExecutionWitness(
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(collection || evidence?.provider_control_plane_execution_witness_required === true);
+}
+
 function providerHelperCollectionHasProviderSpecificLiveProbeAttempt(
   collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
   evidence: AgentAdapterOsIsolationEvidence | undefined
@@ -1851,6 +1919,21 @@ function providerHelperCollectionHasProviderSpecificLiveProbeExecution(
       isSha256(executionSha256) &&
       evidenceHasProviderSpecificLiveProbeExecutionFields(evidence) &&
       executionSha256 === evidence?.provider_specific_live_probe_execution_sha256
+  );
+}
+
+function providerHelperCollectionHasProviderControlPlaneExecutionWitness(
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  const witnessSha256 = collection?.provider_helper_collection.provider_control_plane_execution_witness_sha256;
+  return Boolean(
+    collection &&
+      collection.provider_helper_collection.provider_control_plane_execution_witness_required === true &&
+      collection.provider_helper_collection.provider_control_plane_execution_witness_bound === true &&
+      isSha256(witnessSha256) &&
+      evidenceHasProviderControlPlaneExecutionWitnessFields(evidence) &&
+      witnessSha256 === evidence?.provider_control_plane_execution_witness_sha256
   );
 }
 
@@ -2061,6 +2144,26 @@ function evidenceHasCollectedProbeBinding(
           )
         )
     );
+    const providerControlPlaneExecutionWitnessRequired = providerHelperCollectionRequiresProviderControlPlaneExecutionWitness(
+      providerHelperCollection,
+      evidence
+    );
+    const providerControlPlaneExecutionWitnessBound = Boolean(
+      !providerControlPlaneExecutionWitnessRequired ||
+        (
+          evidenceHasProviderControlPlaneExecutionWitnessFields(evidence) &&
+          parsedProbe.evidence?.provider_control_plane_execution_witness_required === true &&
+          parsedProbe.evidence?.provider_control_plane_execution_witness_bound === true &&
+          isSha256(parsedProbe.evidence?.provider_control_plane_execution_witness_sha256) &&
+          parsedProbe.evidence?.provider_control_plane_execution_witness_sha256 ===
+            evidence.provider_control_plane_execution_witness_sha256 &&
+          (
+            providerHelperCollection
+              ? providerHelperCollectionHasProviderControlPlaneExecutionWitness(providerHelperCollection, evidence)
+              : true
+          )
+        )
+    );
     return Boolean(
       parsedProbe.schema_version === "comath.agent_adapter_os_isolation_probe.v1" &&
         parsedProbe.probe_id === evidence.probe_id &&
@@ -2079,6 +2182,7 @@ function evidenceHasCollectedProbeBinding(
         providerFamilyExecutionProfileBound &&
         providerSpecificLiveProbeAttemptBound &&
         providerSpecificLiveProbeExecutionBound &&
+        providerControlPlaneExecutionWitnessBound &&
         parsedProbe.proof_authority === "none" &&
         parsedProbe.can_promote_claim === false &&
         parsedProbe.can_certify_ga === false
@@ -2189,6 +2293,12 @@ function buildVetoes(input: {
     vetoes.push({
       code: "adapter_os_isolation_provider_specific_live_probe_execution_missing",
       message: "Collected OS-isolation evidence must bind complete OS-enforcement facts to a service-owned provider-specific live probe execution transcript for the current provider family."
+    });
+  }
+  if (!input.checks.provider_control_plane_execution_witness.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_provider_control_plane_execution_witness_missing",
+      message: "Collected OS-isolation evidence must bind the provider-specific live probe execution to a provider control-plane execution witness for the current sandbox family."
     });
   }
   if (!input.checks.host_path_secret_free.ok) {
@@ -2452,9 +2562,25 @@ const providerFamilyExecutionKindByProvider: Partial<Record<AgentAdapterOsIsolat
   macos_sandbox_exec: "macos_sandbox_exec_os_probe"
 };
 
+const providerControlPlaneExecutionKindByProvider: Partial<Record<AgentAdapterOsIsolationProvider, AgentAdapterOsIsolationProviderControlPlaneExecutionKind>> = {
+  oci_container: "oci_container_control_plane_execution",
+  nix_sandbox: "nix_sandbox_control_plane_execution",
+  firejail: "firejail_control_plane_execution",
+  windows_appcontainer: "windows_appcontainer_control_plane_execution",
+  macos_sandbox_exec: "macos_sandbox_exec_control_plane_execution"
+};
+
 function isProviderFamilyExecutionKind(value: unknown): value is AgentAdapterOsIsolationProviderFamilyExecutionKind {
   return typeof value === "string" && Object.values(providerFamilyExecutionKindByProvider).includes(
     value as AgentAdapterOsIsolationProviderFamilyExecutionKind
+  );
+}
+
+function isProviderControlPlaneExecutionKind(
+  value: unknown
+): value is AgentAdapterOsIsolationProviderControlPlaneExecutionKind {
+  return typeof value === "string" && Object.values(providerControlPlaneExecutionKindByProvider).includes(
+    value as AgentAdapterOsIsolationProviderControlPlaneExecutionKind
   );
 }
 
@@ -2462,6 +2588,12 @@ function providerFamilyExecutionKindForProvider(
   provider: AgentAdapterOsIsolationProvider
 ): AgentAdapterOsIsolationProviderFamilyExecutionKind | null {
   return providerFamilyExecutionKindByProvider[provider] ?? null;
+}
+
+function providerControlPlaneExecutionKindForProvider(
+  provider: AgentAdapterOsIsolationProvider
+): AgentAdapterOsIsolationProviderControlPlaneExecutionKind | null {
+  return providerControlPlaneExecutionKindByProvider[provider] ?? null;
 }
 
 function providerSpecificToolExpectationRequired(
@@ -2946,6 +3078,190 @@ function providerSpecificLiveProbeExecutionSha256(
   }));
 }
 
+function providerControlPlaneExecutionWitnessAccepted(
+  witness: AgentAdapterOsIsolationProviderControlPlaneExecutionWitness | undefined,
+  input: AgentAdapterOsIsolationProviderHelperCollectionProbeInput,
+  expectation: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation | undefined,
+  liveProbeExecution: AgentAdapterOsIsolationProviderSpecificLiveProbeExecution | undefined
+): witness is AgentAdapterOsIsolationProviderControlPlaneExecutionWitness {
+  const liveProbeExecutionSha256 = providerSpecificLiveProbeExecutionSha256(liveProbeExecution);
+  const controlPlaneKind = providerControlPlaneExecutionKindForProvider(input.provider);
+  return Boolean(
+    witness &&
+      liveProbeExecution &&
+      isSha256(liveProbeExecutionSha256) &&
+      providerFamilyExecutionProfileRequired(expectation) &&
+      isProviderControlPlaneExecutionKind(controlPlaneKind) &&
+      witness.witness_source === "provider_control_plane_execution" &&
+      witness.provider === input.provider &&
+      witness.control_plane_kind === controlPlaneKind &&
+      isBoundedExecutionId(witness.execution_id) &&
+      witness.collection_id === input.collection_id &&
+      witness.helper_execution_id === input.helper_execution_id &&
+      witness.runner_id === input.runner_id &&
+      witness.launch_id === input.launch_id &&
+      witness.provider_family_execution_kind === expectation.provider_family_execution_kind &&
+      isSha256(witness.provider_family_execution_profile_sha256) &&
+      witness.provider_family_execution_profile_sha256.toLowerCase() ===
+        expectation.provider_family_execution_profile_sha256.toLowerCase() &&
+      isSha256(witness.provider_family_execution_argv_sha256) &&
+      witness.provider_family_execution_argv_sha256.toLowerCase() ===
+        expectation.provider_family_execution_argv_sha256.toLowerCase() &&
+      isSha256(witness.provider_tool_sha256) &&
+      witness.provider_tool_sha256.toLowerCase() === expectation.tool_sha256.toLowerCase() &&
+      isSha256(witness.provider_tool_profile_sha256) &&
+      witness.provider_tool_profile_sha256.toLowerCase() === expectation.profile_sha256.toLowerCase() &&
+      isSha256(witness.provider_tool_argv_sha256) &&
+      witness.provider_tool_argv_sha256.toLowerCase() === expectation.argv_sha256.toLowerCase() &&
+      isSha256(witness.transcript_sha256) &&
+      witness.transcript_sha256.toLowerCase() === input.transcript_sha256.toLowerCase() &&
+      witness.provider_specific_live_probe_execution_id === liveProbeExecution.execution_id &&
+      isSha256(witness.provider_specific_live_probe_execution_sha256) &&
+      witness.provider_specific_live_probe_execution_sha256.toLowerCase() === liveProbeExecutionSha256.toLowerCase() &&
+      isSha256(witness.provider_specific_live_probe_tool_sha256) &&
+      witness.provider_specific_live_probe_tool_sha256.toLowerCase() ===
+        liveProbeExecution.live_probe_tool_sha256.toLowerCase() &&
+      isSha256(witness.provider_specific_live_probe_argv_sha256) &&
+      witness.provider_specific_live_probe_argv_sha256.toLowerCase() ===
+        liveProbeExecution.live_probe_argv_sha256.toLowerCase() &&
+      isSha256(witness.provider_specific_live_probe_stdout_sha256) &&
+      witness.provider_specific_live_probe_stdout_sha256.toLowerCase() ===
+        liveProbeExecution.live_probe_stdout_sha256.toLowerCase() &&
+      isSha256(witness.provider_specific_live_probe_stderr_sha256) &&
+      witness.provider_specific_live_probe_stderr_sha256.toLowerCase() ===
+        liveProbeExecution.live_probe_stderr_sha256.toLowerCase() &&
+      isSha256(witness.provider_specific_live_probe_transcript_sha256) &&
+      witness.provider_specific_live_probe_transcript_sha256.toLowerCase() ===
+        liveProbeExecution.live_probe_transcript_sha256.toLowerCase() &&
+      witness.collection_source === "service_owned_os_probe" &&
+      witness.network_policy === "disabled" &&
+      witness.proof_authority === "none"
+  );
+}
+
+function providerControlPlaneExecutionWitnessSha256(
+  witness: AgentAdapterOsIsolationProviderControlPlaneExecutionWitness | undefined
+): string | null {
+  if (!witness) {
+    return null;
+  }
+  if (
+    witness.witness_source !== "provider_control_plane_execution" ||
+    !osEnforcedProviders.has(witness.provider) ||
+    !isProviderControlPlaneExecutionKind(witness.control_plane_kind) ||
+    providerControlPlaneExecutionKindForProvider(witness.provider) !== witness.control_plane_kind ||
+    !isBoundedExecutionId(witness.execution_id) ||
+    !isBoundedExecutionId(witness.collection_id) ||
+    !isBoundedExecutionId(witness.helper_execution_id) ||
+    !isBoundedExecutionId(witness.runner_id) ||
+    !isBoundedExecutionId(witness.launch_id) ||
+    !isProviderFamilyExecutionKind(witness.provider_family_execution_kind) ||
+    !isSha256(witness.provider_family_execution_profile_sha256) ||
+    !isSha256(witness.provider_family_execution_argv_sha256) ||
+    !isSha256(witness.provider_tool_sha256) ||
+    !isSha256(witness.provider_tool_profile_sha256) ||
+    !isSha256(witness.provider_tool_argv_sha256) ||
+    !isSha256(witness.transcript_sha256) ||
+    !isBoundedExecutionId(witness.provider_specific_live_probe_execution_id) ||
+    !isSha256(witness.provider_specific_live_probe_execution_sha256) ||
+    !isSha256(witness.provider_specific_live_probe_tool_sha256) ||
+    !isSha256(witness.provider_specific_live_probe_argv_sha256) ||
+    !isSha256(witness.provider_specific_live_probe_stdout_sha256) ||
+    !isSha256(witness.provider_specific_live_probe_stderr_sha256) ||
+    !isSha256(witness.provider_specific_live_probe_transcript_sha256) ||
+    witness.collection_source !== "service_owned_os_probe" ||
+    witness.network_policy !== "disabled" ||
+    witness.proof_authority !== "none"
+  ) {
+    return null;
+  }
+  return sha256Text(canonicalJson({
+    witness_source: "provider_control_plane_execution",
+    provider: witness.provider,
+    control_plane_kind: witness.control_plane_kind,
+    execution_id: witness.execution_id,
+    collection_id: witness.collection_id,
+    helper_execution_id: witness.helper_execution_id,
+    runner_id: witness.runner_id,
+    launch_id: witness.launch_id,
+    provider_family_execution_kind: witness.provider_family_execution_kind,
+    provider_family_execution_profile_sha256: witness.provider_family_execution_profile_sha256.toLowerCase(),
+    provider_family_execution_argv_sha256: witness.provider_family_execution_argv_sha256.toLowerCase(),
+    provider_tool_sha256: witness.provider_tool_sha256.toLowerCase(),
+    provider_tool_profile_sha256: witness.provider_tool_profile_sha256.toLowerCase(),
+    provider_tool_argv_sha256: witness.provider_tool_argv_sha256.toLowerCase(),
+    transcript_sha256: witness.transcript_sha256.toLowerCase(),
+    provider_specific_live_probe_execution_id: witness.provider_specific_live_probe_execution_id,
+    provider_specific_live_probe_execution_sha256:
+      witness.provider_specific_live_probe_execution_sha256.toLowerCase(),
+    provider_specific_live_probe_tool_sha256: witness.provider_specific_live_probe_tool_sha256.toLowerCase(),
+    provider_specific_live_probe_argv_sha256: witness.provider_specific_live_probe_argv_sha256.toLowerCase(),
+    provider_specific_live_probe_stdout_sha256: witness.provider_specific_live_probe_stdout_sha256.toLowerCase(),
+    provider_specific_live_probe_stderr_sha256: witness.provider_specific_live_probe_stderr_sha256.toLowerCase(),
+    provider_specific_live_probe_transcript_sha256:
+      witness.provider_specific_live_probe_transcript_sha256.toLowerCase(),
+    collection_source: "service_owned_os_probe",
+    network_policy: "disabled",
+    proof_authority: "none"
+  }));
+}
+
+function serviceDerivedProviderControlPlaneExecutionWitness(input: {
+  collectionProbeInput: AgentAdapterOsIsolationProviderHelperCollectionProbeInput;
+  expectation: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  liveProbeExecution: AgentAdapterOsIsolationProviderSpecificLiveProbeExecution | undefined;
+  liveProbeExecutionSha256: string | null;
+}): AgentAdapterOsIsolationProviderControlPlaneExecutionWitness | undefined {
+  const controlPlaneKind = providerControlPlaneExecutionKindForProvider(input.collectionProbeInput.provider);
+  if (
+    !controlPlaneKind ||
+    !providerFamilyExecutionProfileRequired(input.expectation) ||
+    !input.liveProbeExecution ||
+    !isSha256(input.liveProbeExecutionSha256)
+  ) {
+    return undefined;
+  }
+  const executionId = `CONTROL-${sha256Text(canonicalJson({
+    schema_version: "comath.agent_adapter_os_isolation_provider_control_plane_execution_witness_id.v1",
+    provider: input.collectionProbeInput.provider,
+    control_plane_kind: controlPlaneKind,
+    collection_id: input.collectionProbeInput.collection_id,
+    helper_execution_id: input.collectionProbeInput.helper_execution_id,
+    runner_id: input.collectionProbeInput.runner_id,
+    launch_id: input.collectionProbeInput.launch_id,
+    provider_family_execution_profile_sha256: input.expectation.provider_family_execution_profile_sha256,
+    provider_specific_live_probe_execution_id: input.liveProbeExecution.execution_id,
+    provider_specific_live_probe_execution_sha256: input.liveProbeExecutionSha256
+  })).slice(0, 32)}`;
+  return {
+    witness_source: "provider_control_plane_execution",
+    provider: input.collectionProbeInput.provider,
+    control_plane_kind: controlPlaneKind,
+    execution_id: executionId,
+    collection_id: input.collectionProbeInput.collection_id,
+    helper_execution_id: input.collectionProbeInput.helper_execution_id,
+    runner_id: input.collectionProbeInput.runner_id,
+    launch_id: input.collectionProbeInput.launch_id,
+    provider_family_execution_kind: input.expectation.provider_family_execution_kind,
+    provider_family_execution_profile_sha256: input.expectation.provider_family_execution_profile_sha256,
+    provider_family_execution_argv_sha256: input.expectation.provider_family_execution_argv_sha256,
+    provider_tool_sha256: input.expectation.tool_sha256,
+    provider_tool_profile_sha256: input.expectation.profile_sha256,
+    provider_tool_argv_sha256: input.expectation.argv_sha256,
+    transcript_sha256: input.collectionProbeInput.transcript_sha256,
+    provider_specific_live_probe_execution_id: input.liveProbeExecution.execution_id,
+    provider_specific_live_probe_execution_sha256: input.liveProbeExecutionSha256,
+    provider_specific_live_probe_tool_sha256: input.liveProbeExecution.live_probe_tool_sha256,
+    provider_specific_live_probe_argv_sha256: input.liveProbeExecution.live_probe_argv_sha256,
+    provider_specific_live_probe_stdout_sha256: input.liveProbeExecution.live_probe_stdout_sha256,
+    provider_specific_live_probe_stderr_sha256: input.liveProbeExecution.live_probe_stderr_sha256,
+    provider_specific_live_probe_transcript_sha256: input.liveProbeExecution.live_probe_transcript_sha256,
+    collection_source: "service_owned_os_probe",
+    network_policy: "disabled",
+    proof_authority: "none"
+  };
+}
+
 function collectionProviderToolWitnessBound(
   collection: (AgentAdapterOsIsolationProbeCollection & {
     provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
@@ -3281,6 +3597,82 @@ function providerSpecificLiveProbeExecutionSha256ForCollection(
     : null;
 }
 
+function collectionProviderControlPlaneExecutionWitnessBound(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): boolean {
+  const witness = providerControlPlaneExecutionWitnessForCollection(collection, input);
+  const witnessSha256 = providerControlPlaneExecutionWitnessSha256(witness);
+  const topLevelBindingConsistent = collection?.provider_control_plane_execution_witness_required === true
+    ? Boolean(
+        collection.provider_control_plane_execution_witness_bound === true &&
+          isSha256(collection.provider_control_plane_execution_witness_sha256) &&
+          witnessSha256 === collection.provider_control_plane_execution_witness_sha256
+      )
+    : true;
+  return Boolean(
+    witnessSha256 &&
+      topLevelBindingConsistent &&
+      collectionProviderSpecificLiveProbeExecutionBound(collection, input)
+  );
+}
+
+function providerControlPlaneExecutionWitnessForCollection(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): AgentAdapterOsIsolationProviderControlPlaneExecutionWitness | undefined {
+  const expectation =
+    collection?.provider_tool_execution_witness_expectation ??
+      input?.provider_tool_execution_witness_expectation;
+  const witness = collection?.provider_control_plane_execution_witness;
+  if (witness && !input) {
+    return witness;
+  }
+  if (!providerFamilyExecutionProfileRequired(expectation)) {
+    return undefined;
+  }
+  if (witness &&
+    input &&
+    providerControlPlaneExecutionWitnessAccepted(witness, input, expectation, collection?.provider_specific_live_probe_execution)
+  ) {
+    return witness;
+  }
+  if (collection?.provider_control_plane_execution_witness_required === true || !input) {
+    return undefined;
+  }
+  const liveProbeExecutionSha256 = providerSpecificLiveProbeExecutionSha256ForCollection(collection, input);
+  return serviceDerivedProviderControlPlaneExecutionWitness({
+    collectionProbeInput: input,
+    expectation,
+    liveProbeExecution: collection?.provider_specific_live_probe_execution,
+    liveProbeExecutionSha256
+  });
+}
+
+function providerControlPlaneExecutionWitnessSha256ForCollection(
+  collection: (AgentAdapterOsIsolationProbeCollection & {
+    provider_tool_execution_witness_expectation?: AgentAdapterOsIsolationProviderToolExecutionWitnessExpectation;
+  }) | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): string | null {
+  if (!collectionProviderControlPlaneExecutionWitnessBound(collection, input)) {
+    return null;
+  }
+  const witnessSha256 = providerControlPlaneExecutionWitnessSha256(
+    providerControlPlaneExecutionWitnessForCollection(collection, input)
+  );
+  if (isSha256(witnessSha256)) {
+    return witnessSha256;
+  }
+  return isSha256(collection?.provider_control_plane_execution_witness_sha256)
+    ? collection.provider_control_plane_execution_witness_sha256.toLowerCase()
+    : null;
+}
+
 function collectionProviderToolWitnessSatisfied(
   collection: AgentAdapterOsIsolationProbeCollection | undefined,
   input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
@@ -3323,6 +3715,15 @@ function collectionProviderSpecificLiveProbeExecutionSatisfied(
 ): boolean {
   return collection?.provider_specific_live_probe_execution_required === true
     ? collectionProviderSpecificLiveProbeExecutionBound(collection, input)
+    : true;
+}
+
+function collectionProviderControlPlaneExecutionWitnessSatisfied(
+  collection: AgentAdapterOsIsolationProbeCollection | undefined,
+  input?: AgentAdapterOsIsolationProviderHelperCollectionProbeInput
+): boolean {
+  return collection?.provider_control_plane_execution_witness_required === true
+    ? collectionProviderControlPlaneExecutionWitnessBound(collection, input)
     : true;
 }
 
@@ -5760,6 +6161,12 @@ function providerHelperCollectionOsEnforcementCompleteness(input: {
   ) {
     incompleteFacts.push("provider_specific_live_probe_execution");
   }
+  if (
+    incompleteFacts.length === 0 &&
+    !collectionProviderControlPlaneExecutionWitnessBound(input.collection, input.collectionProbeInput ?? undefined)
+  ) {
+    incompleteFacts.push("provider_control_plane_execution_witness");
+  }
   return { complete: incompleteFacts.length === 0, incompleteFacts };
 }
 
@@ -5851,6 +6258,14 @@ function providerHelperCollectionForProbe(input: {
     input.collection,
     input.collectionProbeInput ?? undefined
   );
+  const providerControlPlaneExecutionWitness = providerControlPlaneExecutionWitnessForCollection(
+    input.collection,
+    input.collectionProbeInput ?? undefined
+  );
+  const providerControlPlaneExecutionWitnessSha256 = providerControlPlaneExecutionWitnessSha256ForCollection(
+    input.collection,
+    input.collectionProbeInput ?? undefined
+  );
   return {
     collection_source: input.collection.collection_source,
     process_isolation_enforced: input.collection.process_isolation_enforced,
@@ -5888,6 +6303,10 @@ function providerHelperCollectionForProbe(input: {
     provider_specific_live_probe_execution: providerSpecificLiveProbeExecution,
     provider_specific_live_probe_execution_bound: Boolean(providerSpecificLiveProbeExecutionSha256),
     provider_specific_live_probe_execution_sha256: providerSpecificLiveProbeExecutionSha256 ?? undefined,
+    provider_control_plane_execution_witness_required: true,
+    provider_control_plane_execution_witness: providerControlPlaneExecutionWitness,
+    provider_control_plane_execution_witness_bound: Boolean(providerControlPlaneExecutionWitnessSha256),
+    provider_control_plane_execution_witness_sha256: providerControlPlaneExecutionWitnessSha256 ?? undefined,
     notes: sanitizeDiagnostics(input.collection.diagnostics).join(" ")
   };
 }
@@ -6299,6 +6718,30 @@ function configuredProviderHelperCollectionProbe(
     liveProbeExecutionResult.execution,
     liveProbeExecutionSha256
   );
+  const parsedControlPlaneWitness =
+    parsed?.provider_control_plane_execution_witness as
+      AgentAdapterOsIsolationProviderControlPlaneExecutionWitness | undefined;
+  const parsedControlPlaneWitnessAccepted = providerControlPlaneExecutionWitnessAccepted(
+    parsedControlPlaneWitness,
+    input,
+    expectation,
+    liveProbeExecutionResult.execution
+  );
+  const serviceControlPlaneWitness = !parsed?.provider_control_plane_execution_witness &&
+    liveProbeExecutionCollectionBinding
+    ? serviceDerivedProviderControlPlaneExecutionWitness({
+        collectionProbeInput: input,
+        expectation,
+        liveProbeExecution: liveProbeExecutionResult.execution,
+        liveProbeExecutionSha256
+      })
+    : undefined;
+  const controlPlaneWitness = parsedControlPlaneWitnessAccepted
+    ? parsedControlPlaneWitness
+    : serviceControlPlaneWitness;
+  const invalidControlPlaneWitness = Boolean(parsed?.provider_control_plane_execution_witness) &&
+    !parsedControlPlaneWitnessAccepted;
+  const controlPlaneWitnessSha256 = providerControlPlaneExecutionWitnessSha256(controlPlaneWitness);
   const accepted =
     !spawnError &&
     exitCode === 0 &&
@@ -6315,6 +6758,7 @@ function configuredProviderHelperCollectionProbe(
     invalidWitness ? "Configured provider-helper collection probe emitted an invalid provider-tool execution witness." : undefined,
     invalidFamilyWitness ? "Configured provider-helper collection probe emitted an invalid provider-family OS-enforcement witness." : undefined,
     invalidLiveProbeAttempt ? "Configured provider-helper collection probe emitted an invalid provider-specific live probe attempt." : undefined,
+    invalidControlPlaneWitness ? "Configured provider-helper collection probe emitted an invalid provider control-plane execution witness." : undefined,
     !liveProbeExecutionCollectionBinding
       ? "Configured provider-helper collection probe did not bind the service-owned provider-specific live OS probe execution."
       : undefined,
@@ -6347,6 +6791,10 @@ function configuredProviderHelperCollectionProbe(
     provider_specific_live_probe_execution_sha256: liveProbeExecutionCollectionBinding
       ? liveProbeExecutionSha256 ?? undefined
       : undefined,
+    provider_control_plane_execution_witness_required: true,
+    provider_control_plane_execution_witness: controlPlaneWitness,
+    provider_control_plane_execution_witness_bound: Boolean(controlPlaneWitnessSha256),
+    provider_control_plane_execution_witness_sha256: controlPlaneWitnessSha256 ?? undefined,
     provider_tool_execution_witness_expectation: expectation,
     diagnostics: baseDiagnostics
   };
@@ -6483,6 +6931,7 @@ function providerHelperCollectionStatus(input: {
   onlyProviderFamilyExecutionProfileMissing: boolean;
   onlyProviderSpecificLiveProbeAttemptMissing: boolean;
   onlyProviderSpecificLiveProbeExecutionMissing: boolean;
+  onlyProviderControlPlaneExecutionWitnessMissing: boolean;
   osEnforcementComplete: boolean;
   probe: AgentAdapterOsIsolationProbe | null;
 }): AgentAdapterOsIsolationProviderHelperCollectionStatus {
@@ -6563,6 +7012,16 @@ function providerHelperCollectionStatus(input: {
   ) {
     return "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing";
   }
+  if (
+    input.collectionPresent &&
+    input.collectionSourceAccepted &&
+    input.hashesMatch &&
+    input.providerToolWitnessBound &&
+    input.providerSpecificToolExecutionBound &&
+    input.onlyProviderControlPlaneExecutionWitnessMissing
+  ) {
+    return "blocked_provider_helper_collection_provider_control_plane_execution_witness_missing";
+  }
   if (input.collectionPresent && input.collectionSourceAccepted && input.hashesMatch && !input.osEnforcementComplete) {
     return "blocked_provider_helper_collection_incomplete_os_enforcement";
   }
@@ -6609,6 +7068,9 @@ function providerHelperCollectionReplayableNextAction(
   }
   if (status === "blocked_provider_helper_collection_provider_specific_live_probe_execution_missing") {
     return "Configure and run a service-owned provider-specific live OS probe executable so complete collection facts bind an executed live probe transcript for the current provider family execution profile.";
+  }
+  if (status === "blocked_provider_helper_collection_provider_control_plane_execution_witness_missing") {
+    return "Re-run the provider-specific service-owned collection probe so complete OS-enforcement facts bind a provider control-plane execution witness to the current live probe transcript and provider family execution profile.";
   }
   if (status === "blocked_provider_helper_collection_incomplete_os_enforcement") {
     return "Re-run the service-owned provider-helper collection probe with complete OS-enforcement facts: process, filesystem, network, no-new-privileges, escape-prevention, service-owned source, and helper exit code.";
@@ -6660,6 +7122,9 @@ function collectedEvidenceDetails(
   | "provider_specific_live_probe_execution_required"
   | "provider_specific_live_probe_execution_bound"
   | "provider_specific_live_probe_execution_sha256"
+  | "provider_control_plane_execution_witness_required"
+  | "provider_control_plane_execution_witness_bound"
+  | "provider_control_plane_execution_witness_sha256"
 > {
   if (!collection || collection.collection_source !== "service_owned_os_probe") {
     return {};
@@ -6671,6 +7136,15 @@ function collectedEvidenceDetails(
   const familyExecutionKind = providerFamilyExecutionKindForCollection(collection);
   const liveProbeAttemptSha256 = providerSpecificLiveProbeAttemptSha256ForCollection(collection);
   const liveProbeExecutionSha256 = providerSpecificLiveProbeExecutionSha256ForCollection(collection);
+  const controlPlaneWitnessSha256 =
+    providerControlPlaneExecutionWitnessSha256ForCollection(collection) ??
+    (
+      collection.provider_control_plane_execution_witness_required === true &&
+      collection.provider_control_plane_execution_witness_bound === true &&
+      isSha256(collection.provider_control_plane_execution_witness_sha256)
+        ? collection.provider_control_plane_execution_witness_sha256.toLowerCase()
+        : null
+    );
   return {
     collection_source: "service_owned_os_probe",
     adapter_process_exit_code: collected || typeof collection.adapter_process_exit_code === "number"
@@ -6716,7 +7190,11 @@ function collectedEvidenceDetails(
       collection.provider_specific_live_probe_execution_required === true
         ? Boolean(liveProbeExecutionSha256)
         : undefined,
-    provider_specific_live_probe_execution_sha256: liveProbeExecutionSha256 ?? undefined
+    provider_specific_live_probe_execution_sha256: liveProbeExecutionSha256 ?? undefined,
+    provider_control_plane_execution_witness_required:
+      collection.provider_control_plane_execution_witness_required === true ? true : undefined,
+    provider_control_plane_execution_witness_bound: Boolean(controlPlaneWitnessSha256),
+    provider_control_plane_execution_witness_sha256: controlPlaneWitnessSha256 ?? undefined
   };
 }
 
@@ -7913,6 +8391,11 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
   const providerSpecificLiveProbeExecutionBound = providerSpecificLiveProbeExecutionRequired
     ? Boolean(providerSpecificLiveProbeExecutionSha256)
     : false;
+  const providerControlPlaneExecutionWitnessSha256 = providerControlPlaneExecutionWitnessSha256ForCollection(
+    collection,
+    collectionProbeInput ?? undefined
+  );
+  const providerControlPlaneExecutionWitnessBound = Boolean(providerControlPlaneExecutionWitnessSha256);
   const osEnforcementCompleteness = providerHelperCollectionOsEnforcementCompleteness({
     collection,
     hashesMatch,
@@ -7968,6 +8451,9 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     onlyProviderSpecificLiveProbeExecutionMissing:
       osEnforcementCompleteness.incompleteFacts.length === 1 &&
       osEnforcementCompleteness.incompleteFacts[0] === "provider_specific_live_probe_execution",
+    onlyProviderControlPlaneExecutionWitnessMissing:
+      osEnforcementCompleteness.incompleteFacts.length === 1 &&
+      osEnforcementCompleteness.incompleteFacts[0] === "provider_control_plane_execution_witness",
     osEnforcementComplete: osEnforcementCompleteness.complete,
     probe
   });
@@ -8043,6 +8529,9 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       provider_specific_live_probe_execution_required: providerSpecificLiveProbeExecutionRequired,
       provider_specific_live_probe_execution_bound: providerSpecificLiveProbeExecutionBound,
       provider_specific_live_probe_execution_sha256: providerSpecificLiveProbeExecutionSha256,
+      provider_control_plane_execution_witness_required: true,
+      provider_control_plane_execution_witness_bound: providerControlPlaneExecutionWitnessBound,
+      provider_control_plane_execution_witness_sha256: providerControlPlaneExecutionWitnessSha256,
       diagnostics,
       proof_authority: "none"
     },
@@ -8110,6 +8599,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       provider_specific_live_probe_attempt_sha256: providerSpecificLiveProbeAttemptSha256,
       provider_specific_live_probe_execution_bound: providerSpecificLiveProbeExecutionBound,
       provider_specific_live_probe_execution_sha256: providerSpecificLiveProbeExecutionSha256,
+      provider_control_plane_execution_witness_bound: providerControlPlaneExecutionWitnessBound,
+      provider_control_plane_execution_witness_sha256: providerControlPlaneExecutionWitnessSha256,
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false
@@ -8449,6 +8940,10 @@ export function reviewAgentAdapterOsIsolationReadiness(
     providerHelperCollection,
     evidence
   );
+  const providerControlPlaneExecutionWitnessRequired = providerHelperCollectionRequiresProviderControlPlaneExecutionWitness(
+    providerHelperCollection,
+    evidence
+  );
   const providerToolWitnessBound = !providerToolWitnessRequired ||
     (
       evidenceHasProviderToolExecutionWitnessFields(evidence) &&
@@ -8508,6 +9003,15 @@ export function reviewAgentAdapterOsIsolationReadiness(
           : true
       )
     );
+  const providerControlPlaneExecutionWitnessBound = !providerControlPlaneExecutionWitnessRequired ||
+    (
+      evidenceHasProviderControlPlaneExecutionWitnessFields(evidence) &&
+      (
+        providerHelperCollection
+          ? providerHelperCollectionHasProviderControlPlaneExecutionWitness(providerHelperCollection, evidence)
+          : true
+      )
+    );
   const checks: AgentAdapterOsIsolationReview["checks"] = {
     evidence_artifact_bound: check(Boolean(evidenceBundle), evidenceBundle ? evidenceBundle.artifact.path : null),
     provider_os_enforced: check(providerOsEnforced, provider),
@@ -8553,6 +9057,12 @@ export function reviewAgentAdapterOsIsolationReadiness(
       providerSpecificLiveProbeExecutionBound,
       providerSpecificLiveProbeExecutionRequired
         ? evidence?.provider_specific_live_probe_execution_sha256 ?? null
+        : "not_required"
+    ),
+    provider_control_plane_execution_witness: check(
+      providerControlPlaneExecutionWitnessBound,
+      providerControlPlaneExecutionWitnessRequired
+        ? evidence?.provider_control_plane_execution_witness_sha256 ?? null
         : "not_required"
     ),
     host_path_secret_free: check(hostPathSecretFree, hostPathSecretFree),
