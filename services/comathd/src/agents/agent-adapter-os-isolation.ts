@@ -1988,6 +1988,20 @@ function providerHelperCollectionRequiresProviderToolExecutionWitness(
   return Boolean(collection || evidence?.provider_tool_execution_witness_required === true);
 }
 
+function evidenceRequiresProviderHelperCollectionManifest(
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  return Boolean(
+    evidence?.provider_tool_execution_witness_required === true ||
+      evidence?.provider_specific_tool_execution_required === true ||
+      evidence?.provider_family_os_enforcement_witness_required === true ||
+      evidence?.provider_family_execution_profile_required === true ||
+      evidence?.provider_specific_live_probe_attempt_required === true ||
+      evidence?.provider_specific_live_probe_execution_required === true ||
+      evidence?.provider_control_plane_execution_witness_required === true
+  );
+}
+
 function evidenceHasCollectedProbeBinding(
   projectRoot: string,
   artifact: AgentAdapterOsIsolationEvidenceArtifact | undefined,
@@ -2016,6 +2030,9 @@ function evidenceHasCollectedProbeBinding(
   try {
     const parsedProbe = JSON.parse(readFileSync(absoluteProbePath, "utf8")) as AgentAdapterOsIsolationProbe;
     const providerHelperCollection = readProviderHelperCollectionManifest(projectRoot, evidence.probe_id);
+    if (evidenceRequiresProviderHelperCollectionManifest(evidence) && !providerHelperCollection) {
+      return false;
+    }
     const providerToolWitnessRequired = providerHelperCollectionRequiresProviderToolExecutionWitness(
       providerHelperCollection,
       evidence
@@ -8916,6 +8933,8 @@ export function reviewAgentAdapterOsIsolationReadiness(
   const providerHelperCollection = evidence?.probe_id
     ? readProviderHelperCollectionManifest(projectRoot, evidence.probe_id)
     : null;
+  const providerHelperCollectionManifestPresent = !evidenceRequiresProviderHelperCollectionManifest(evidence) ||
+    Boolean(providerHelperCollection);
   const providerToolWitnessRequired = providerHelperCollectionRequiresProviderToolExecutionWitness(
     providerHelperCollection,
     evidence
@@ -8944,7 +8963,7 @@ export function reviewAgentAdapterOsIsolationReadiness(
     providerHelperCollection,
     evidence
   );
-  const providerToolWitnessBound = !providerToolWitnessRequired ||
+  const providerToolWitnessBound = providerHelperCollectionManifestPresent && (!providerToolWitnessRequired ||
     (
       evidenceHasProviderToolExecutionWitnessFields(evidence) &&
       (
@@ -8952,8 +8971,8 @@ export function reviewAgentAdapterOsIsolationReadiness(
           ? providerHelperCollectionHasProviderToolExecutionWitness(providerHelperCollection, evidence)
           : true
       )
-    );
-  const providerSpecificToolExecutionBound = !providerSpecificToolExecutionRequired ||
+    ));
+  const providerSpecificToolExecutionBound = providerHelperCollectionManifestPresent && (!providerSpecificToolExecutionRequired ||
     (
       evidenceHasProviderSpecificToolExecutionFields(evidence) &&
       (
@@ -8966,8 +8985,8 @@ export function reviewAgentAdapterOsIsolationReadiness(
             })
           : true
       )
-    );
-  const providerFamilyOsEnforcementWitnessBound = !providerFamilyOsEnforcementWitnessRequired ||
+    ));
+  const providerFamilyOsEnforcementWitnessBound = providerHelperCollectionManifestPresent && (!providerFamilyOsEnforcementWitnessRequired ||
     (
       evidenceHasProviderFamilyOsEnforcementWitnessFields(evidence) &&
       (
@@ -8975,8 +8994,8 @@ export function reviewAgentAdapterOsIsolationReadiness(
           ? providerHelperCollectionHasProviderFamilyOsEnforcementWitness(providerHelperCollection, evidence)
           : true
       )
-    );
-  const providerFamilyExecutionProfileBound = !providerFamilyExecutionProfileRequired ||
+    ));
+  const providerFamilyExecutionProfileBound = providerHelperCollectionManifestPresent && (!providerFamilyExecutionProfileRequired ||
     (
       evidenceHasProviderFamilyExecutionProfileFields(evidence) &&
       (
@@ -8984,8 +9003,8 @@ export function reviewAgentAdapterOsIsolationReadiness(
           ? providerHelperCollectionHasProviderFamilyExecutionProfile(providerHelperCollection, evidence)
         : true
       )
-    );
-  const providerSpecificLiveProbeAttemptBound = !providerSpecificLiveProbeAttemptRequired ||
+    ));
+  const providerSpecificLiveProbeAttemptBound = providerHelperCollectionManifestPresent && (!providerSpecificLiveProbeAttemptRequired ||
     (
       evidenceHasProviderSpecificLiveProbeAttemptFields(evidence) &&
       (
@@ -8993,8 +9012,8 @@ export function reviewAgentAdapterOsIsolationReadiness(
           ? providerHelperCollectionHasProviderSpecificLiveProbeAttempt(providerHelperCollection, evidence)
         : true
       )
-    );
-  const providerSpecificLiveProbeExecutionBound = !providerSpecificLiveProbeExecutionRequired ||
+    ));
+  const providerSpecificLiveProbeExecutionBound = providerHelperCollectionManifestPresent && (!providerSpecificLiveProbeExecutionRequired ||
     (
       evidenceHasProviderSpecificLiveProbeExecutionFields(evidence) &&
       (
@@ -9002,8 +9021,8 @@ export function reviewAgentAdapterOsIsolationReadiness(
           ? providerHelperCollectionHasProviderSpecificLiveProbeExecution(providerHelperCollection, evidence)
           : true
       )
-    );
-  const providerControlPlaneExecutionWitnessBound = !providerControlPlaneExecutionWitnessRequired ||
+    ));
+  const providerControlPlaneExecutionWitnessBound = providerHelperCollectionManifestPresent && (!providerControlPlaneExecutionWitnessRequired ||
     (
       evidenceHasProviderControlPlaneExecutionWitnessFields(evidence) &&
       (
@@ -9011,7 +9030,7 @@ export function reviewAgentAdapterOsIsolationReadiness(
           ? providerHelperCollectionHasProviderControlPlaneExecutionWitness(providerHelperCollection, evidence)
           : true
       )
-    );
+    ));
   const checks: AgentAdapterOsIsolationReview["checks"] = {
     evidence_artifact_bound: check(Boolean(evidenceBundle), evidenceBundle ? evidenceBundle.artifact.path : null),
     provider_os_enforced: check(providerOsEnforced, provider),

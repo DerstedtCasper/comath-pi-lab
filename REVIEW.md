@@ -1,3 +1,23 @@
+# Goal 3 Task 211 / Provider-Helper Witness Chain Check-Debug
+
+Scope: revalidate the Task202-210 bundled/configured provider-helper collection and provider-tool/family/live-probe/control-plane witness chain, including release-hardening suite discovery, route sanitization, config flags, public wording, blocker/veto wiring, no direct Pi collection/witness-chain consumer, runtime cleanliness, and missing collection-manifest fail-closed behavior.
+
+Changes:
+
+- Added `goal3-task211-agent-adapter-os-isolation-provider-helper-witness-chain-check-debug.test.mjs`.
+- Added `agent_adapter_os_isolation_provider_helper_witness_chain_check_debug`.
+- Registered Task211 in phase0 smoke and GA release criteria.
+- Synchronized README, AGENTS, TODO, adapter contracts, threat model, config README, REVIEW, and the Goal 3 tracker.
+- Added a runtime regression for Task210-shaped evidence whose `provider-helper-collection.json` disappears before readiness review.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task211 first failed because the service capability ledger did not advertise `agent_adapter_os_isolation_provider_helper_witness_chain_check_debug`.
+- A later focused RED caught the runtime gap directly: after a valid Task210-shaped provider-helper witness chain was produced, deleting `.comath/release/agent-adapter-os-isolation/<probe_id>/provider-helper-collection.json` still allowed readiness to return `ok=true`. The collected-probe binding and provider-helper readiness checks now fail closed when provider-helper witness-chain evidence lacks its collection manifest.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; focused Task211 exited 0; adjacent Task202-211 regressions exited 0 after correcting an initial manual Task210 filename typo in the command; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task211 discovered by the default runner; `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; and `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task211 is check-debug and release-hardening coverage only. It does not ship production helper binaries, inspect daemon/socket/container/store/profile/sandbox-policy state, prove OS enforcement from witness metadata, add a direct Pi collection/witness-chain consumer, affect Lean proof authority, provide real-Pi evidence, provide broad provider support, or certify GA.
+
 # Goal 3 Task 210 / Provider Control-Plane Execution Witness Gate
 
 Scope: tighten complete provider-helper collection evidence so Task209-valid live-probe-execution-bound material must also bind a provider control-plane execution witness before nested canonical OS-isolation evidence can satisfy readiness.
