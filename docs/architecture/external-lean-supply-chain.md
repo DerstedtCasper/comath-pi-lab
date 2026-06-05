@@ -58,6 +58,7 @@ Only `trusted_replay_dependency` may be imported by final proof artifacts.
 - Import prefix outside the approved set.
 - Agent-generated dependency metadata without service verification.
 - Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without Task214 dependency-material checks: a Mathlib `require`, pinned mathlib package revision, trusted mathlib4 source URL, recorded non-unknown license, and local `Mathlib` shadowing scan.
+- Final clean replay dependency artifacts using the legacy nonempty-file closure instead of Task215 `DependencyClosureV2` content and FinalReplayManifest v3 package revision binding.
 
 ## Evidence Pack Rule
 

@@ -133,6 +133,17 @@ function packageProvidesModule(moduleName: string, packages: DependencyClosureV2
   });
 }
 
+function isLeanToolchainModule(moduleName: string): boolean {
+  return (
+    moduleName === "Init" ||
+    moduleName.startsWith("Init.") ||
+    moduleName === "Std" ||
+    moduleName.startsWith("Std.") ||
+    moduleName === "Lake" ||
+    moduleName.startsWith("Lake.")
+  );
+}
+
 export function checkDependencyClosure(input: {
   projectRoot: string;
   leanRoot: string;
@@ -186,13 +197,16 @@ export function checkDependencyClosureV2(input: {
   const localModules = localModuleSet(input.leanRoot);
   const importClosure = Array.from(new Set(Object.values(imports).flat())).sort();
   const untrackedImports = importClosure.filter((moduleName) => {
+    if (isLeanToolchainModule(moduleName)) {
+      return false;
+    }
     if (!moduleAllowed(moduleName, input.allowedImportPrefixes)) {
       return true;
     }
     if (localModules.has(moduleName)) {
       return false;
     }
-    return !packageProvidesModule(moduleName, packages) && !moduleName.startsWith("Std") && !moduleName.startsWith("MathResearch");
+    return !packageProvidesModule(moduleName, packages);
   });
   const externalRoots = packages
     .filter((pkg) => pkg.trusted)

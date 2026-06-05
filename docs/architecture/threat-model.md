@@ -77,6 +77,8 @@ Task213 adds a campaign-native live Mathlib replay breadth gate to the Lean-auth
 
 Task214 adds a Mathlib dependency-material gate to the same opt-in Lean-authority surface. Mitigation: campaign-native Mathlib final replay requests must provide a Mathlib `require` in `lakefile.lean`, a `lake-manifest.json` mathlib package pinned to a 40-hex commit SHA, a trusted `leanprover-community/mathlib4` source URL, a non-unknown license, and no local `Mathlib` module shadowing before final replay workspace allocation. The blocker artifact remains non-authoritative and cannot promote a claim.
 
+Task215 upgrades the final clean replay dependency artifact from the legacy nonempty-file closure to `DependencyClosureV2`. Mitigation: final replay writes V2 `dependency_closure.json` content with package pins/licenses/trust, import closure, local shadowing, symlink escape, and hard-veto material, and FinalReplayManifest v3 dependency locks bind the V2 package revision list. A failed V2 dependency closure fails final replay even if Lean/Lake command stdout appears successful.
+
 Configured provider-helper execution args-prefix environment variables may be mistaken for an executed sandbox profile or public helper script. Mitigation: provider-specific `*_HELPER_ARGS_JSON` handles and the fallback args-prefix handle are host configuration only; public manifests record only the args-prefix hash and count, never the prefix argument values or helper script paths. The configured prefix can help run a service-owned helper asset after validated host binding, but helper execution still does not prove OS enforcement and cannot satisfy readiness without later canonical collected probe/evidence artifacts.
 
 ### Bundled Provider Helper Protocol Confusion

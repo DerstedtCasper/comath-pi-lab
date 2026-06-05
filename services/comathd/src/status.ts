@@ -60,6 +60,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "lean_equivalence_witness_materialization",
       "campaign_live_mathlib_replay_breadth_gate",
       "campaign_live_mathlib_dependency_material_gate",
+      "final_replay_dependency_closure_v2_binding",
       "proof_obligation_dag_planning",
       "campaign_scoped_ensemble_artifacts",
       "claim_scoped_final_replay_artifacts",

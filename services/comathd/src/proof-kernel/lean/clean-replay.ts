@@ -6,7 +6,7 @@ import { assertPathAllowed } from "../../security/path-policy.js";
 import { finalLeanReplaySchema, type FinalLeanReplay } from "../../types/schemas.js";
 import { nextSequentialId } from "../../utils/id.js";
 import { checkAxiomProfile } from "./axiom-profile.js";
-import { checkDependencyClosure } from "./dependency-closure.js";
+import { checkDependencyClosureV2, type DependencyClosureV2Package } from "./dependency-closure.js";
 import {
   appendFinalReplayRegistryEntryV3,
   createFinalReplayManifestV3,
@@ -21,12 +21,15 @@ export type CleanReplayResult = {
   final_replay: FinalLeanReplay;
   static_audit: ReturnType<typeof runStaticCheatScan>;
   axiom_profile: ReturnType<typeof checkAxiomProfile>;
-  dependency_closure: ReturnType<typeof checkDependencyClosure>;
+  dependency_closure: ReturnType<typeof checkDependencyClosureV2>;
   statement_equivalence: ReturnType<typeof checkStatementEquivalence>;
   lean_run_manifest_paths: string[];
   final_replay_manifest_v3_path?: string;
   third_party_replay_pack_path?: string;
 };
+
+const finalReplayAllowedImportPrefixes = ["Mathlib", "Std", "Init", "Lake", "MathResearch", "Audit"];
+const finalReplayTrustedExternalDependencies = ["mathlib"];
 
 function directElanTool(command: string, leanToolchain: string): string {
   const match = /^leanprover\/lean4:(v[0-9]+\.[0-9]+\.[0-9]+)$/.exec(leanToolchain.trim());
@@ -90,6 +93,20 @@ function write(path: string, content: string): void {
   writeFileSync(path, content, "utf8");
 }
 
+function externalRevisionsFromDependencyClosure(packages: DependencyClosureV2Package[]): Record<string, unknown>[] {
+  return packages
+    .map((pkg) => ({
+      name: pkg.name,
+      revision: pkg.revision ?? null,
+      url: pkg.url ?? null,
+      license: pkg.license,
+      source: pkg.source,
+      trusted: pkg.trusted,
+      build_status: pkg.build_status
+    }))
+    .sort((left, right) => String(left.name).localeCompare(String(right.name)));
+}
+
 export function runCleanLeanReplay(input: {
   projectRoot: string;
   project_id?: string;
@@ -146,12 +163,15 @@ export function runCleanLeanReplay(input: {
     leanRoot: cleanRoot,
     reportPath: staticAuditPathRel
   });
-  const dependency_closure = checkDependencyClosure({
+  const dependency_closure = checkDependencyClosureV2({
     projectRoot: input.projectRoot,
     leanRoot: cleanRoot,
     toolchainFile: join(cleanRoot, "lean-toolchain"),
     lakefile: join(cleanRoot, "lakefile.lean"),
-    reportPath: dependencyPathRel
+    lakeManifestFile: join(cleanRoot, "lake-manifest.json"),
+    reportPath: dependencyPathRel,
+    allowedImportPrefixes: finalReplayAllowedImportPrefixes,
+    trustedExternalDependencies: finalReplayTrustedExternalDependencies
   });
 
   const leanVersionOutput = runVersionCommand("lean", ["--version"], cleanRoot, leanToolchain);
@@ -341,7 +361,7 @@ export function runCleanLeanReplay(input: {
         lean_toolchain_path: join(cleanRoot, "lean-toolchain"),
         lake_manifest_path: join(cleanRoot, "lake-manifest.json"),
         lakefile_path: join(cleanRoot, "lakefile.lean"),
-        external_revisions: []
+        external_revisions: externalRevisionsFromDependencyClosure(dependency_closure.packages)
       },
       network_policy: "disabled",
       sandbox_policy: {

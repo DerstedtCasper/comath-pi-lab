@@ -1,3 +1,35 @@
+# Goal 3 Task 215 / Final Replay DependencyClosureV2 Binding
+
+Scope: upgrade the service-owned final clean replay dependency artifact from the legacy nonempty-file closure to `DependencyClosureV2`, while keeping the stable `dependency_closure.json` artifact slot and FinalReplayManifest v3 report binding.
+
+Changes:
+
+- Replaced `runCleanLeanReplay()`'s final replay dependency check with `checkDependencyClosureV2()`.
+- Kept final replay report paths stable while writing `schema_version: "comath.dependency_closure.v2"` content into `dependency_closure.json`.
+- Bound V2 Lake manifest package revision material into FinalReplayManifest v3 `dependency_lock.external_revisions`.
+- Added `final_replay_dependency_closure_v2_binding` to service capabilities.
+- Treated `Lake`, `Init`, and `Std` as Lean/Lake toolchain modules in `DependencyClosureV2` so `lakefile.lean`'s `import Lake` does not become an untracked theorem dependency.
+- Tightened V2 project-local import handling so a missing `MathResearch.*` module is still reported as `untracked_import:*` instead of passing by prefix alone.
+- Added `goal3-task215-final-replay-dependency-closure-v2-binding.test.mjs` and registered it in phase0 smoke / GA release criteria discovery.
+- Updated README, AGENTS, TODO, threat model, external Lean supply-chain docs, GA release criteria, REVIEW, and the Goal 3 tracker.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task215 failed because the final replay dependency closure had no V2 schema (`undefined !== "comath.dependency_closure.v2"`).
+- After the first global V2 wiring, adjacent Task102 and Task103 failed closed. Systematic debugging traced the root cause to `DependencyClosureV2` parsing `lakefile.lean` and flagging `import Lake` as `untracked_import:Lake`; `Lake` is now classified as a Lean/Lake toolchain module.
+- A later self-review RED caught a missing local-project import bypass: `import MathResearch.Missing` was not reported as untracked because the old V2 logic allowed the `MathResearch` prefix by itself. V2 now requires local project imports to resolve to clean-workspace modules unless a trusted package or Lean/Lake toolchain module provides them.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task215 exited 0.
+- Adjacent regressions exited 0: Task10, Task102, Task103, and Task214.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task215 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- Post-diff read-only review found no issues. It confirmed failed V2 dependency closure cannot promote through final replay, campaign completion, or ordinary promotion gates, and noted only the expected residual gaps below.
+
+Boundary notes: Task215 upgrades final replay dependency evidence and dependency-lock revision binding. It does not install or vendor mathlib, fetch Lake dependencies, execute a real non-toy Mathlib theorem replay on this host, close positive-matrix breadth, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
+
 # Goal 3 Task 214 / Campaign Live Mathlib Dependency Material Gate
 
 Scope: add an opt-in campaign-native Mathlib dependency-material gate so Task213-valid non-toy Mathlib-looking final replay requests cannot allocate a clean replay workspace unless theorem-specific Lake material is pinned and auditable.
