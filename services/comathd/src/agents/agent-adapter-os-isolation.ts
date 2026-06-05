@@ -387,6 +387,7 @@ export type AgentAdapterOsIsolationProviderRunnerResolution = {
   helper_profile_source?: "operator_configured_provider_helper" | "bundled_provider_helper_protocol_asset" | "missing";
   production_helper_configured?: boolean;
   bundled_protocol_asset?: boolean;
+  production_helper_profile_contract?: AgentAdapterOsIsolationProductionHelperProfileContract | null;
   diagnostics?: string[];
 };
 
@@ -422,6 +423,7 @@ export type AgentAdapterOsIsolationProviderHelperConfig = {
   helper_profile_source?: "operator_configured_provider_helper" | "bundled_provider_helper_protocol_asset" | "missing";
   production_helper_configured?: boolean;
   bundled_protocol_asset?: boolean;
+  production_helper_profile_contract?: AgentAdapterOsIsolationProductionHelperProfileContract | null;
   timeout_ms?: number;
   diagnostics?: string[];
 };
@@ -463,6 +465,7 @@ export type AgentAdapterOsIsolationProviderHelperHostValidationProbe = {
   helper_profile_source?: "operator_configured_provider_helper" | "bundled_provider_helper_protocol_asset" | "missing";
   production_helper_configured?: boolean;
   bundled_protocol_asset?: boolean;
+  production_helper_profile_contract?: AgentAdapterOsIsolationProductionHelperProfileContract | null;
   supported_platforms?: string[];
   self_test_required?: boolean;
   self_test_passed?: boolean;
@@ -543,6 +546,35 @@ export type AgentAdapterOsIsolationProviderHostCapabilityTool = {
   present: boolean;
   version: string | null;
   binary_sha256: string | null;
+};
+
+export type AgentAdapterOsIsolationProductionHelperProfileContract = {
+  contract_source: "service_owned_oci_container_production_helper_profile_contract";
+  provider: "oci_container";
+  provider_family: "oci_container";
+  helper_profile_source:
+    | "operator_configured_provider_helper"
+    | "bundled_provider_helper_protocol_asset";
+  production_helper_configured: boolean;
+  bundled_protocol_asset: boolean;
+  helper_binary_sha256: string;
+  accepted_profile_sources: readonly [
+    "operator_configured_provider_helper",
+    "bundled_provider_helper_protocol_asset"
+  ];
+  required_host_facility_tools: readonly ["oci_docker_cli", "oci_podman_cli"];
+  runtime_family: "docker_or_podman_oci";
+  runner_network_policy: "disabled";
+  no_new_privileges_required: true;
+  command_override_allowed: false;
+  environment_override_allowed: false;
+  daemon_or_socket_inspection_allowed: false;
+  container_launch_required_for_profile_contract: false;
+  caller_supplied_success_allowed: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+  profile_contract_sha256: string;
 };
 
 export type AgentAdapterOsIsolationProviderHostCapabilityKernelFeature = {
@@ -1131,6 +1163,7 @@ export type AgentAdapterOsIsolationProviderRunner = {
       | "missing";
     production_helper_configured: boolean;
     bundled_protocol_asset: boolean;
+    production_helper_profile_contract: AgentAdapterOsIsolationProductionHelperProfileContract | null;
     diagnostics: string[];
   };
   adapter_execution_isolation: {
@@ -1251,6 +1284,7 @@ export type AgentAdapterOsIsolationProviderHelperExecution = {
       | "missing";
     production_helper_configured: boolean;
     bundled_protocol_asset: boolean;
+    production_helper_profile_contract: AgentAdapterOsIsolationProductionHelperProfileContract | null;
     helper_configured: boolean;
     helper_binary_sha256: string | null;
     helper_args_prefix_sha256: string | null;
@@ -1355,6 +1389,7 @@ export type AgentAdapterOsIsolationProviderHelperHostValidation = {
       | "missing";
     production_helper_configured: boolean;
     bundled_protocol_asset: boolean;
+    production_helper_profile_contract: AgentAdapterOsIsolationProductionHelperProfileContract | null;
     supported_platforms: string[];
     platform: string | null;
     platform_supported: boolean;
@@ -1428,6 +1463,7 @@ export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
       | "missing";
     production_helper_configured: boolean;
     bundled_protocol_asset: boolean;
+    production_helper_profile_contract: AgentAdapterOsIsolationProductionHelperProfileContract | null;
     hashes_match_helper_execution: boolean;
     os_enforcement_complete: boolean;
     incomplete_os_enforcement_facts: string[];
@@ -4528,6 +4564,107 @@ function isServiceOwnedProviderRunnerResolution(
   );
 }
 
+function ociProductionHelperProfileContract(input: {
+  provider: AgentAdapterOsIsolationProvider;
+  helperProfileSource: "operator_configured_provider_helper" | "bundled_provider_helper_protocol_asset" | "missing";
+  productionHelperConfigured: boolean;
+  bundledProtocolAsset: boolean;
+  helperBinarySha256: string | null | undefined;
+}): AgentAdapterOsIsolationProductionHelperProfileContract | null {
+  if (input.provider !== "oci_container" || !isSha256(input.helperBinarySha256)) {
+    return null;
+  }
+  if (
+    input.helperProfileSource !== "operator_configured_provider_helper" &&
+    input.helperProfileSource !== "bundled_provider_helper_protocol_asset"
+  ) {
+    return null;
+  }
+  if (
+    input.helperProfileSource === "operator_configured_provider_helper" &&
+    input.productionHelperConfigured !== true
+  ) {
+    return null;
+  }
+  if (
+    input.helperProfileSource === "bundled_provider_helper_protocol_asset" &&
+    input.bundledProtocolAsset !== true
+  ) {
+    return null;
+  }
+  const material = {
+    contract_source: "service_owned_oci_container_production_helper_profile_contract" as const,
+    provider: "oci_container" as const,
+    provider_family: "oci_container" as const,
+    helper_profile_source: input.helperProfileSource,
+    production_helper_configured: input.helperProfileSource === "operator_configured_provider_helper",
+    bundled_protocol_asset: input.helperProfileSource === "bundled_provider_helper_protocol_asset",
+    helper_binary_sha256: input.helperBinarySha256.toLowerCase(),
+    accepted_profile_sources: [
+      "operator_configured_provider_helper",
+      "bundled_provider_helper_protocol_asset"
+    ] as const,
+    required_host_facility_tools: ["oci_docker_cli", "oci_podman_cli"] as const,
+    runtime_family: "docker_or_podman_oci" as const,
+    runner_network_policy: "disabled" as const,
+    no_new_privileges_required: true as const,
+    command_override_allowed: false as const,
+    environment_override_allowed: false as const,
+    daemon_or_socket_inspection_allowed: false as const,
+    container_launch_required_for_profile_contract: false as const,
+    caller_supplied_success_allowed: false as const,
+    proof_authority: "none" as const,
+    can_promote_claim: false as const,
+    can_certify_ga: false as const
+  };
+  return {
+    ...material,
+    profile_contract_sha256: sha256Text(canonicalJson(material))
+  };
+}
+
+function ociProductionHelperProfileContractSha256(
+  contract: AgentAdapterOsIsolationProductionHelperProfileContract | null | undefined
+): string | null {
+  if (!contract) {
+    return null;
+  }
+  const expected = ociProductionHelperProfileContract({
+    provider: contract.provider,
+    helperProfileSource: contract.helper_profile_source,
+    productionHelperConfigured: contract.production_helper_configured,
+    bundledProtocolAsset: contract.bundled_protocol_asset,
+    helperBinarySha256: contract.helper_binary_sha256
+  });
+  if (!expected || contract.profile_contract_sha256 !== expected.profile_contract_sha256) {
+    return null;
+  }
+  const { profile_contract_sha256: _expectedHash, ...expectedMaterial } = expected;
+  const { profile_contract_sha256: _actualHash, ...actualMaterial } = contract;
+  return canonicalJson(actualMaterial) === canonicalJson(expectedMaterial)
+    ? expected.profile_contract_sha256
+    : null;
+}
+
+function ociProductionHelperProfileContractsMatch(input: {
+  provider: AgentAdapterOsIsolationProvider;
+  candidate: AgentAdapterOsIsolationProductionHelperProfileContract | null | undefined;
+  expected: Array<AgentAdapterOsIsolationProductionHelperProfileContract | null | undefined>;
+}): boolean {
+  if (input.provider !== "oci_container") {
+    return true;
+  }
+  const candidateSha256 = ociProductionHelperProfileContractSha256(input.candidate);
+  return Boolean(
+    candidateSha256 &&
+      input.expected.length > 0 &&
+      input.expected.every((contract) => {
+        const expectedSha256 = ociProductionHelperProfileContractSha256(contract);
+        return Boolean(expectedSha256 && expectedSha256 === candidateSha256);
+      })
+  );
+}
+
 function defaultProviderRunnerResolver(
   input: AgentAdapterOsIsolationProviderRunnerResolverInput
 ): AgentAdapterOsIsolationProviderRunnerResolution {
@@ -5915,6 +6052,10 @@ function providerHelperHostValidationIsExecutable(
       hostValidation.provider_helper_host_ready === true &&
       hostValidation.provider_helper_host_validation.validation_source === "service_owned_provider_helper_host_validator" &&
       hostValidation.provider_helper_host_validation.hashes_match_provider_runner === true &&
+      (hostValidation.provider !== "oci_container" ||
+        ociProductionHelperProfileContractSha256(
+          hostValidation.provider_helper_host_validation.production_helper_profile_contract
+        ) !== null) &&
       hostValidation.provider_helper_host_validation.platform_supported === true &&
       hostValidation.provider_helper_host_validation.shell === false &&
       hostValidation.provider_helper_host_validation.network_policy === "disabled" &&
@@ -5977,6 +6118,11 @@ function providerHelperHostValidationMatchesExecutionInput(input: {
         runnerBinarySha256.toLowerCase() &&
       hostValidation.provider_helper_host_validation.helper_binary_sha256.toLowerCase() ===
         runnerBinarySha256.toLowerCase() &&
+      ociProductionHelperProfileContractsMatch({
+        provider: input.provider,
+        candidate: hostValidation.provider_helper_host_validation.production_helper_profile_contract,
+        expected: [runner.provider_runner_resolution.production_helper_profile_contract]
+      }) &&
       Boolean(hostValidation.host_capability_probe_id) &&
       hostValidation.provider_host_capability_artifact?.kind === "agent_adapter_os_isolation_provider_host_capability_probe" &&
       isSha256(hostValidation.provider_host_capability_artifact.sha256) &&
@@ -6013,6 +6159,10 @@ function providerHelperExecutionIsCollectable(
       isSha256(helperExecution.provider_helper_host_validation_binding.helper_binary_sha256) &&
       isSha256(helperExecution.provider_helper_host_validation_binding.runner_binary_sha256) &&
       helperExecution.provider_helper_execution.helper_source === "service_owned_provider_helper_config" &&
+      (helperExecution.provider !== "oci_container" ||
+        ociProductionHelperProfileContractSha256(
+          helperExecution.provider_helper_execution.production_helper_profile_contract
+        ) !== null) &&
       helperExecution.provider_helper_execution.helper_exit_code === 0 &&
       helperExecution.provider_helper_execution.shell === false &&
       helperExecution.provider_helper_execution.network_policy === "disabled" &&
@@ -7593,6 +7743,15 @@ export function prepareAgentAdapterOsIsolationProviderRunner(
   const bundledProtocolAsset =
     helperProfileSource === "bundled_provider_helper_protocol_asset" &&
     resolution?.bundled_protocol_asset === true;
+  const productionHelperProfileContract = ociProductionHelperProfileContract({
+    provider,
+    helperProfileSource,
+    productionHelperConfigured,
+    bundledProtocolAsset,
+    helperBinarySha256: resolved && isSha256(resolution?.runner_binary_sha256)
+      ? resolution.runner_binary_sha256
+      : null
+  });
   const diagnostics = [
     input.runner_environment?.platform ? `platform=${sanitizeProbeText(input.runner_environment.platform)}` : undefined,
     input.runner_environment?.notes ? sanitizeProbeText(input.runner_environment.notes) : undefined,
@@ -7643,6 +7802,7 @@ export function prepareAgentAdapterOsIsolationProviderRunner(
       helper_profile_source: resolved ? helperProfileSource : "missing",
       production_helper_configured: resolved ? productionHelperConfigured : false,
       bundled_protocol_asset: resolved ? bundledProtocolAsset : false,
+      production_helper_profile_contract: resolved ? productionHelperProfileContract : null,
       diagnostics
     },
     adapter_execution_isolation: {
@@ -7810,13 +7970,6 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   const declaredHashMatchesProgram = Boolean(
     helperHash && (!declaredHelperHash || declaredHelperHash === helperHash.sha256.toLowerCase())
   );
-  const hashesMatchProviderRunner = Boolean(
-    validationSourceAccepted &&
-      helperHash &&
-      declaredHashMatchesProgram &&
-      isSha256(runnerBinarySha256) &&
-      helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase()
-  );
   const supportedPlatforms = sanitizeSupportedPlatforms(validation?.supported_platforms);
   const platformSupported = Boolean(
     validationSourceAccepted &&
@@ -7835,6 +7988,26 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   const bundledProtocolAsset =
     helperProfileSource === "bundled_provider_helper_protocol_asset" &&
     validation?.bundled_protocol_asset === true;
+  const productionHelperProfileContract = ociProductionHelperProfileContract({
+    provider,
+    helperProfileSource,
+    productionHelperConfigured,
+    bundledProtocolAsset,
+    helperBinarySha256
+  });
+  const profileMatchesProviderRunner = ociProductionHelperProfileContractsMatch({
+    provider,
+    candidate: productionHelperProfileContract,
+    expected: [readyRunnerBundle?.runner.provider_runner_resolution.production_helper_profile_contract]
+  });
+  const binaryHashMatchesProviderRunner = Boolean(
+    validationSourceAccepted &&
+      helperHash &&
+      declaredHashMatchesProgram &&
+      isSha256(runnerBinarySha256) &&
+      helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase()
+  );
+  const hashesMatchProviderRunner = Boolean(binaryHashMatchesProviderRunner && profileMatchesProviderRunner);
   const helperHostReady = Boolean(
     validationSourceAccepted &&
       validation?.helper_host_ready === true &&
@@ -7861,6 +8034,9 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
     input.host_environment?.notes ? sanitizeProbeText(input.host_environment.notes) : undefined,
     ...hostCapabilityDiagnostics,
     ...sanitizeDiagnostics(validation?.diagnostics),
+    validationSourceAccepted && !profileMatchesProviderRunner
+      ? `${provider} provider-helper profile contract does not match the ready provider-runner manifest.`
+      : undefined,
     ok
       ? "Service-owned provider-helper host validator accepted the helper host configuration."
       : "No service-owned provider-helper host validation was accepted as OS-enforcement or readiness evidence."
@@ -7912,6 +8088,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
       helper_profile_source: validationSourceAccepted ? helperProfileSource : "missing",
       production_helper_configured: validationSourceAccepted ? productionHelperConfigured : false,
       bundled_protocol_asset: validationSourceAccepted ? bundledProtocolAsset : false,
+      production_helper_profile_contract: validationSourceAccepted ? productionHelperProfileContract : null,
       supported_platforms: supportedPlatforms,
       platform: validationPlatform,
       platform_supported: platformSupported,
@@ -8117,10 +8294,26 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
   const helperProgram = configAccepted ? config?.helper_program as string : null;
   const helperHash = helperProgram ? sha256FileSync(helperProgram) : null;
   const runnerBinarySha256 = readyRunnerBundle?.runner.provider_runner_resolution.runner_binary_sha256;
+  const productionHelperProfileContract = ociProductionHelperProfileContract({
+    provider,
+    helperProfileSource,
+    productionHelperConfigured,
+    bundledProtocolAsset,
+    helperBinarySha256: helperHash?.sha256 ?? null
+  });
+  const profileMatchesProviderRunnerAndHost = ociProductionHelperProfileContractsMatch({
+    provider,
+    candidate: productionHelperProfileContract,
+    expected: [
+      readyRunnerBundle?.runner.provider_runner_resolution.production_helper_profile_contract,
+      hostValidation?.provider_helper_host_validation.production_helper_profile_contract
+    ]
+  });
   const helperHashMatches = Boolean(
     helperHash &&
       isSha256(runnerBinarySha256) &&
-      helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase()
+      helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase() &&
+      profileMatchesProviderRunnerAndHost
   );
   const helperArgsPrefix = configAccepted ? sanitizeHelperArgsPrefix(config?.helper_args_prefix) : [];
   const helperArgsPrefixSha256 = helperArgsPrefix.length > 0 ? sha256Text(canonicalJson(helperArgsPrefix)) : null;
@@ -8195,6 +8388,9 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
     input.helper_environment?.notes ? sanitizeProbeText(input.helper_environment.notes) : undefined,
     ...hostValidationBindingDiagnostics,
     ...sanitizeDiagnostics(config?.diagnostics),
+    configAccepted && !profileMatchesProviderRunnerAndHost
+      ? `${provider} provider-helper execution profile contract does not match the ready runner and validated host.`
+      : undefined,
     spawnError?.message ? sanitizeProbeText(spawnError.message) : undefined,
     attempted && runtimeAttestation.bound
       ? "Provider helper runtime attestation binds the current project, helper execution, runner, launch, adapter, backend, provider, network policy, and proof authority."
@@ -8251,6 +8447,7 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
       helper_profile_source: configAccepted ? helperProfileSource : "missing",
       production_helper_configured: configAccepted ? productionHelperConfigured : false,
       bundled_protocol_asset: configAccepted ? bundledProtocolAsset : false,
+      production_helper_profile_contract: configAccepted ? productionHelperProfileContract : null,
       helper_configured: configAccepted,
       helper_binary_sha256: helperHash?.sha256 ?? null,
       helper_args_prefix_sha256: helperArgsPrefixSha256,
@@ -8618,6 +8815,8 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
       production_helper_configured:
         helperExecution?.provider_helper_execution.production_helper_configured === true,
       bundled_protocol_asset: helperExecution?.provider_helper_execution.bundled_protocol_asset === true,
+      production_helper_profile_contract:
+        helperExecution?.provider_helper_execution.production_helper_profile_contract ?? null,
       hashes_match_helper_execution: hashesMatch,
       os_enforcement_complete: osEnforcementCompleteness.complete,
       incomplete_os_enforcement_facts: osEnforcementCompleteness.incompleteFacts,

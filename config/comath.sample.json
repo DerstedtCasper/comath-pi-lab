@@ -68,6 +68,16 @@
         "providerSpecificLiveProbeExecutionRequired": true,
         "providerSpecificLiveProbeCollectionBindingRequired": true,
         "providerControlPlaneExecutionWitnessRequired": true,
+        "productionHelperProfileContractRequired": true,
+        "productionHelperProfileContractKind": "oci_container_docker_podman_profile_contract",
+        "productionHelperProfileSources": [
+          "operator_configured_provider_helper",
+          "bundled_provider_helper_protocol_asset"
+        ],
+        "requiredHostFacilityTools": [
+          "oci_docker_cli",
+          "oci_podman_cli"
+        ],
         "executionAssetHashBound": true,
         "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",

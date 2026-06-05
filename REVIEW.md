@@ -270,6 +270,25 @@ Verification:
 
 Boundary notes: Task213 is a breadth anti-confusion and fail-closed request gate. It does not install mathlib, provision a theorem-specific Lake package, clean-replay a real non-toy Mathlib theorem on this host, complete broad release-candidate proof breadth, make gate output proof authority, or certify GA. Promotion still requires service-owned Lean clean replay plus Lean Authority v3 packaging and ordinary promotion gates.
 
+# Goal 3 Task 222 / OCI Production-Helper Profile Contract
+
+Scope: add an OCI/Docker/Podman production-helper profile contract so release audits can distinguish operator-configured OCI helpers from bundled provider-helper protocol assets without treating either path as a Docker/Podman runner, daemon/socket/container probe, proof authority, OS-enforcement proof, readiness evidence by itself, real-Pi evidence, broad provider support, or GA certification.
+
+Changes:
+
+- Added a service-derived `production_helper_profile_contract` for OCI provider-runner, helper-host-validation, helper-execution, and provider-helper collection manifests.
+- Added `agent_adapter_os_isolation_oci_container_production_helper_profile_contract` and registered `goal3-task222-agent-adapter-os-isolation-oci-production-helper-profile-contract.test.mjs` in release-hardening discovery.
+- Updated README, AGENTS, TODO, adapter contracts, threat model, config sample/docs, GA release criteria, REVIEW, and tracker wording to keep the profile contract non-authoritative.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task222 first failed because the service capability ledger did not advertise `agent_adapter_os_isolation_oci_container_production_helper_profile_contract`; after code/build changes it progressed through smoke/docs/sample-config expectations before GREEN.
+- Read-only subagent review found a real profile-source drift gap: operator-configured OCI runner manifests could later drift to bundled helper validation/execution when the helper binary hash stayed the same. A follow-up RED reproduced operator-to-bundled drift at host-validation time; the fix now validates the OCI profile contract material/hash and requires profile-contract equality across runner, helper-host-validation, helper-execution, and provider-helper collection collectability.
+- After the drift fix, `corepack pnpm --filter @comath/comathd build` exited 0; focused Task222 exited 0; adjacent provider-helper regressions exited 0 for Task175, Task176, Task177, Task178, Task179, Task195, Task202, Task203, Task211, and Task212; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd test` exited 0 with Task222 discovered by the default runner; and `corepack pnpm test` exited 0 including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- Read-only frontier subagents converged on the OCI/Docker/Podman profile-lineage slice for Task222; real-Pi interactive UX and optional real installed-toolchain Mathlib smoke remain valid later frontiers.
+
+Boundary notes: Task222 does not ship a production OCI helper implementation, launch Docker/Podman containers, inspect Docker/Podman daemon/socket/container state, expose helper or socket paths, prove OS enforcement from profile lineage metadata, expose direct Pi collection/witness-chain payloads, affect Lean/mathlib proof authority, provide real-Pi evidence, provide broad provider support, or certify GA.
+
 # Goal 3 Task 212 / Windows AppContainer Production-Helper Profile Contract
 
 Scope: add a concrete Windows AppContainer production-helper profile contract so release audits can distinguish host operator configured helpers from bundled provider-helper protocol assets without treating either path as proof authority, OS-enforcement proof, real-Pi evidence, readiness evidence by itself, broad provider support, or GA certification.
