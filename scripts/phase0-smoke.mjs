@@ -380,6 +380,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task211-agent-adapter-os-isolation-provider-helper-witness-chain-check-debug.test.mjs",
   "goal3-task212-agent-adapter-os-isolation-windows-appcontainer-production-helper-profile-contract.test.mjs",
   "goal3-task213-campaign-live-mathlib-replay-breadth-gate.test.mjs",
+  "goal3-task214-campaign-live-mathlib-dependency-material-gate.test.mjs",
   "goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs",
   "goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs",
   "goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs",

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { importArtifact } from "../../artifacts/store.js";
 import { appendAuditEvent } from "../../audit/jsonl-writer.js";
 import { applyGatePromotedClaim, getClaim, registerClaim } from "../../claim/claim-store.js";
@@ -15,7 +15,7 @@ import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-c
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
 import { defaultVariants } from "../ensemble/variant-registry.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
-import type { LeanProjectFiles } from "../lean/lean-project.js";
+import { listLeanProjectFiles, type LeanProjectFiles } from "../lean/lean-project.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
 import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
 import { hasFormalReplayAuthorityPassEvidence, sanitizePublicFormalAuthorityVocabulary } from "./external-terminal-vocabulary.js";
@@ -999,12 +999,15 @@ function blockCampaignAtFinalReplay(input: {
 }): CampaignTickResult {
   const stage = input.stage ?? "final_global_replay";
   const blockerRel = writeSimpleStageArtifact(input.projectRoot, input.campaign, "final_replay_blocker.json", {
+    schema_version: "comath.campaign_final_replay_blocker.v1",
     campaign_id: input.campaign.campaign_id,
     root_claim_id: input.campaign.root_claim_id,
     obligation_id: input.obligation.obligation_id,
     reason: input.reason,
     locked_statement_structured: input.obligation.locked_statement_structured,
     required_replay_target: "service-owned Lean Authority v3 clean replay",
+    proof_authority: "none",
+    can_promote_claim: false,
     created_at: now()
   });
   const blocker = {
@@ -1175,6 +1178,132 @@ export function evaluateCampaignLiveMathlibReplayBreadthGate(
   };
 }
 
+export type CampaignLiveMathlibDependencyMaterialGateInput = {
+  packagingScope: "positive_matrix" | "campaign";
+  primaryDependency: string;
+  lakefileText: string;
+  lakeManifest: unknown;
+  lakeManifestReadError?: boolean;
+  localLeanFileRels?: string[];
+};
+
+export type CampaignLiveMathlibDependencyMaterialGateResult = {
+  schema_version: "comath.campaign_live_mathlib_dependency_material_gate.v1";
+  profile: "campaign_live_mathlib_non_toy";
+  result: "pass" | "fail";
+  hard_vetoes: string[];
+  primary_dependency: string;
+  mathlib_revision?: string;
+  mathlib_source?: string;
+  mathlib_license?: string;
+  proof_authority: "none";
+  can_promote_claim: false;
+};
+
+const trustedMathlibSourceUrls = new Set([
+  "https://github.com/leanprover-community/mathlib4",
+  "https://github.com/leanprover-community/mathlib4.git"
+]);
+
+function lakefileHasMathlibDependency(text: string): boolean {
+  return text
+    .split(/\r?\n/u)
+    .some((line) => /^\s*require\s+mathlib\b/u.test(line) && /github\.com\/leanprover-community\/mathlib4(?:\.git)?/u.test(line));
+}
+
+function manifestPackages(manifest: unknown): Record<string, unknown>[] {
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    return [];
+  }
+  const packages = (manifest as { packages?: unknown }).packages;
+  return Array.isArray(packages) ? packages.filter((pkg): pkg is Record<string, unknown> => Boolean(pkg) && typeof pkg === "object" && !Array.isArray(pkg)) : [];
+}
+
+function manifestPackageString(pkg: Record<string, unknown>, field: string): string | undefined {
+  const value = pkg[field];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function moduleNameFromLocalLeanRel(rel: string): string | undefined {
+  const normalized = normalizeRelPath(rel);
+  if (!normalized.endsWith(".lean")) {
+    return undefined;
+  }
+  const modulePath = normalized.slice(0, -".lean".length);
+  const parts = modulePath.split("/");
+  if (parts.some((part) => !/^[A-Za-z_][A-Za-z0-9_']*$/u.test(part))) {
+    return undefined;
+  }
+  return parts.join(".");
+}
+
+function isFloatingOrNonCommitRevision(revision: string): boolean {
+  const normalized = revision.trim();
+  return !/^[0-9a-f]{40}$/iu.test(normalized) || /^(main|master|nightly|latest)$/iu.test(normalized);
+}
+
+export function evaluateCampaignLiveMathlibDependencyMaterialGate(
+  input: CampaignLiveMathlibDependencyMaterialGateInput
+): CampaignLiveMathlibDependencyMaterialGateResult {
+  const hard_vetoes: string[] = [];
+
+  if (input.packagingScope !== "campaign") {
+    hard_vetoes.push("campaign_packaging_scope_required");
+  }
+  if (input.primaryDependency !== "Mathlib") {
+    hard_vetoes.push("mathlib_primary_dependency_required");
+  }
+  if (!lakefileHasMathlibDependency(input.lakefileText)) {
+    hard_vetoes.push("mathlib_lakefile_dependency_missing");
+  }
+  if (input.lakeManifestReadError) {
+    hard_vetoes.push("lake_manifest_unreadable");
+  }
+
+  const mathlibPackage = manifestPackages(input.lakeManifest).find((pkg) => manifestPackageString(pkg, "name") === "mathlib");
+  if (!mathlibPackage) {
+    hard_vetoes.push("mathlib_lake_manifest_package_missing");
+  }
+
+  const revision = mathlibPackage
+    ? (manifestPackageString(mathlibPackage, "rev") ?? manifestPackageString(mathlibPackage, "inputRev"))
+    : undefined;
+  const source = mathlibPackage ? manifestPackageString(mathlibPackage, "url") : undefined;
+  const license = mathlibPackage ? manifestPackageString(mathlibPackage, "license") : undefined;
+
+  if (mathlibPackage && !revision) {
+    hard_vetoes.push("mathlib_dependency_revision_missing");
+  }
+  if (revision && isFloatingOrNonCommitRevision(revision)) {
+    hard_vetoes.push("mathlib_dependency_revision_floating");
+  }
+  if (mathlibPackage && (!license || /^(unknown|none|n\/a)$/iu.test(license))) {
+    hard_vetoes.push("mathlib_dependency_license_unknown");
+  }
+  if (mathlibPackage && (!source || !trustedMathlibSourceUrls.has(source))) {
+    hard_vetoes.push("mathlib_dependency_source_untrusted");
+  }
+  for (const rel of input.localLeanFileRels ?? []) {
+    const moduleName = moduleNameFromLocalLeanRel(rel);
+    if (moduleName === "Mathlib" || moduleName?.startsWith("Mathlib.")) {
+      hard_vetoes.push(`local_module_shadowing:${moduleName}`);
+    }
+  }
+
+  return {
+    schema_version: "comath.campaign_live_mathlib_dependency_material_gate.v1",
+    profile: "campaign_live_mathlib_non_toy",
+    result: hard_vetoes.length === 0 ? "pass" : "fail",
+    hard_vetoes: Array.from(new Set(hard_vetoes)),
+    primary_dependency: input.primaryDependency,
+    ...(revision ? { mathlib_revision: revision } : {}),
+    ...(source ? { mathlib_source: source } : {}),
+    ...(license ? { mathlib_license: license } : {}),
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+}
+
 function parseFinalGlobalReplayRequestPayload(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
@@ -1281,6 +1410,27 @@ function parseFinalGlobalReplayRequestPayload(input: {
     });
     if (gate.result !== "pass") {
       throw new Error(`campaign_live_mathlib_replay_breadth_gate_failed:${gate.hard_vetoes.join(",")}`);
+    }
+    let lakeManifest: unknown;
+    let lakeManifestReadError = false;
+    const lakeManifestRel = normalizeRelPath(join(leanRootRel, dirname(lakefileRel), "lake-manifest.json"));
+    try {
+      lakeManifest = JSON.parse(
+        readFileSync(assertPathAllowed(input.projectRoot, lakeManifestRel, { purpose: "read", resolveRealpath: true }), "utf8")
+      ) as unknown;
+    } catch {
+      lakeManifestReadError = true;
+    }
+    const dependencyMaterialGate = evaluateCampaignLiveMathlibDependencyMaterialGate({
+      packagingScope,
+      primaryDependency: leanProject.primaryDependency,
+      lakefileText: readFileSync(leanProject.lakefile, "utf8"),
+      lakeManifest,
+      lakeManifestReadError,
+      localLeanFileRels: listLeanProjectFiles(leanProject.leanRoot).map((file) => relative(leanProject.leanRoot, file).replace(/\\/g, "/"))
+    });
+    if (dependencyMaterialGate.result !== "pass") {
+      throw new Error(`campaign_live_mathlib_dependency_material_gate_failed:${dependencyMaterialGate.hard_vetoes.join(",")}`);
     }
   }
 

@@ -57,8 +57,8 @@ Only `trusted_replay_dependency` may be imported by final proof artifacts.
 - Network fetch during final proof replay.
 - Import prefix outside the approved set.
 - Agent-generated dependency metadata without service verification.
+- Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without Task214 dependency-material checks: a Mathlib `require`, pinned mathlib package revision, trusted mathlib4 source URL, recorded non-unknown license, and local `Mathlib` shadowing scan.
 
 ## Evidence Pack Rule
 
 When redistribution is allowed, include the pinned dependency material or reproducible fetch instructions. When redistribution is not allowed, include hashes, source references, license notes, and replay instructions that require the third party to obtain the dependency under its own terms.
-

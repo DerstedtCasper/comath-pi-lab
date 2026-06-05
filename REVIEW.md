@@ -1,3 +1,33 @@
+# Goal 3 Task 214 / Campaign Live Mathlib Dependency Material Gate
+
+Scope: add an opt-in campaign-native Mathlib dependency-material gate so Task213-valid non-toy Mathlib-looking final replay requests cannot allocate a clean replay workspace unless theorem-specific Lake material is pinned and auditable.
+
+Changes:
+
+- Added `evaluateCampaignLiveMathlibDependencyMaterialGate()` and wired it into `replay_breadth_profile: "campaign_live_mathlib_non_toy"` final replay request parsing before final replay workspace allocation.
+- Required a Mathlib `require` in `lakefile.lean`, a `lake-manifest.json` mathlib package pinned to a 40-hex commit SHA, a trusted `leanprover-community/mathlib4` source URL, a non-unknown license, and no local `Mathlib` module shadowing.
+- Added `campaign_live_mathlib_dependency_material_gate` to service capabilities.
+- Added `goal3-task214-campaign-live-mathlib-dependency-material-gate.test.mjs` and registered it in phase0 smoke / GA release criteria discovery.
+- Marked final replay blocker artifacts with `schema_version`, `proof_authority: "none"`, and `can_promote_claim: false`.
+- Updated README, AGENTS, TODO, threat model, external Lean supply-chain docs, GA release criteria, REVIEW, and the Goal 3 tracker.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task214 failed because `../../dist/index.js` did not export `evaluateCampaignLiveMathlibDependencyMaterialGate`.
+- A follow-up focused RED caught the local `Mathlib` shadowing case after the test was strengthened; after rebuilding `dist`, focused Task214 exited 0.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task213 and Task214 exited 0.
+- Adjacent campaign final replay regressions Task102 and Task103 exited 0 after correcting an initial manual filename mistake that produced `MODULE_NOT_FOUND`.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task214 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+- Post-diff read-only reviewer requests were attempted twice but timed out and were closed without findings; no reviewer pass is claimed.
+
+Boundary notes: Task214 is a dependency-material preflight gate. It does not install mathlib, fetch dependencies, run Lean, prove a theorem, close the broader positive-matrix replay item, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA. Promotion still requires service-owned Lean clean replay plus Lean Authority v3 packaging and ordinary promotion gates.
+
 # Goal 3 Task 213 / Campaign Live Mathlib Replay Breadth Gate
 
 Scope: add an opt-in campaign-native live Mathlib replay breadth gate so Task213 evidence cannot be satisfied by historical toy smoke replay, positive-matrix paths, or default Nat/True proof fixtures.
