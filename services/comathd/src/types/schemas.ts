@@ -613,6 +613,7 @@ export const finalLeanReplaySchema = z
     axiom_profile_path: z.string().min(1),
     dependency_closure_path: z.string().min(1),
     statement_equivalence_path: z.string().min(1),
+    provisioning_diagnostic_path: z.string().min(1).optional(),
     artifact_hashes: z
       .object({
         stdout: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),

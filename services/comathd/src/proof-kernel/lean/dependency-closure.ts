@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { hashLeanProjectFiles, listLeanProjectFiles, sha256Buffer, sha256FileSync } from "./lean-project.js";
@@ -20,6 +20,10 @@ export type DependencyClosureV2Package = {
   source: "lake-manifest" | "local" | "unknown";
   trusted: boolean;
   build_status: "checked" | "blocked" | "unknown";
+  materialized_package_root?: string;
+  materialized_package_hash?: string;
+  materialized_file_hashes?: Record<string, string>;
+  materialized_symlinks?: string[];
 };
 
 export type DependencyClosureV2Report = {
@@ -71,13 +75,91 @@ function localModuleSet(leanRoot: string): Set<string> {
   );
 }
 
+function hashMaterializedPackageFiles(manifestDir: string, packageRelRoot: string): Record<string, string> {
+  const packageRoot = join(manifestDir, packageRelRoot);
+  const hashes: Record<string, string> = {};
+  if (existsSync(packageRoot) && lstatSync(packageRoot).isSymbolicLink()) {
+    return hashes;
+  }
+  const visit = (dir: string, relDir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === ".git") {
+        continue;
+      }
+      const path = join(dir, entry.name);
+      const rel = join(relDir, entry.name).replace(/\\/g, "/");
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        visit(path, rel);
+      } else if (entry.isFile()) {
+        hashes[rel] = sha256FileSync(path).sha256;
+      }
+    }
+  };
+  if (existsSync(packageRoot)) {
+    visit(packageRoot, packageRelRoot);
+  }
+  return Object.fromEntries(Object.entries(hashes).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function collectMaterializedPackageSymlinks(manifestDir: string, packageRelRoot: string): string[] {
+  const packageRoot = join(manifestDir, packageRelRoot);
+  const symlinks: string[] = [];
+  if (existsSync(packageRoot) && lstatSync(packageRoot).isSymbolicLink()) {
+    return [packageRelRoot];
+  }
+  const visit = (dir: string, relDir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      const rel = join(relDir, entry.name).replace(/\\/g, "/");
+      if (entry.isSymbolicLink()) {
+        symlinks.push(rel);
+        continue;
+      }
+      if (entry.isDirectory()) {
+        visit(path, rel);
+      }
+    }
+  };
+  if (existsSync(packageRoot)) {
+    visit(packageRoot, packageRelRoot);
+  }
+  return symlinks.sort();
+}
+
+function materializedPackageForManifestPackage(manifestDir: string, name: string): {
+  root?: string;
+  hash?: string;
+  file_hashes?: Record<string, string>;
+  symlinks?: string[];
+} {
+  if (name !== "mathlib") {
+    return {};
+  }
+  const root = ".lake/packages/mathlib";
+  const packageRoot = join(manifestDir, root);
+  if (!existsSync(packageRoot)) {
+    return {};
+  }
+  const file_hashes = hashMaterializedPackageFiles(manifestDir, root);
+  const symlinks = collectMaterializedPackageSymlinks(manifestDir, root);
+  const hash = Object.keys(file_hashes).length > 0 ? sha256Buffer(JSON.stringify({ root, files: file_hashes })) : undefined;
+  return { root, hash, file_hashes, symlinks };
+}
+
 function parseLakeManifestPackages(path: string, trustedNames: Set<string>): DependencyClosureV2Package[] {
   const parsed = JSON.parse(readFileSync(path, "utf8")) as { packages?: Array<Record<string, unknown>> };
+  const manifestDir = dirname(path);
   return (parsed.packages ?? []).map((pkg) => {
     const name = typeof pkg.name === "string" ? pkg.name : "unknown";
     const revision = typeof pkg.rev === "string" ? pkg.rev : typeof pkg.inputRev === "string" ? pkg.inputRev : undefined;
     const url = typeof pkg.url === "string" ? pkg.url : undefined;
     const license = typeof pkg.license === "string" && pkg.license.trim() ? pkg.license.trim() : "unknown";
+    const materialized = materializedPackageForManifestPackage(manifestDir, name);
+    const materializationRequired = trustedNames.has(name) && name === "mathlib";
+    const materializationChecked = !materializationRequired || Boolean(materialized.hash);
     return {
       name,
       revision,
@@ -85,7 +167,11 @@ function parseLakeManifestPackages(path: string, trustedNames: Set<string>): Dep
       license,
       source: "lake-manifest" as const,
       trusted: trustedNames.has(name),
-      build_status: revision && license !== "unknown" ? "checked" : "blocked"
+      build_status: revision && license !== "unknown" && materializationChecked ? "checked" : "blocked",
+      ...(materialized.root ? { materialized_package_root: materialized.root } : {}),
+      ...(materialized.hash ? { materialized_package_hash: materialized.hash } : {}),
+      ...(materialized.file_hashes ? { materialized_file_hashes: materialized.file_hashes } : {}),
+      ...(materialized.symlinks && materialized.symlinks.length > 0 ? { materialized_symlinks: materialized.symlinks } : {})
     };
   });
 }
@@ -225,6 +311,13 @@ export function checkDependencyClosureV2(input: {
     }
     if (pkg.license === "unknown") {
       vetoes.push(`unknown_license:${pkg.name}`);
+    }
+    if (pkg.trusted && pkg.name === "mathlib" && !pkg.materialized_package_hash) {
+      vetoes.push(`dependency_material_missing:${pkg.name}`);
+    }
+    for (const rel of pkg.materialized_symlinks ?? []) {
+      const symlinkKind = rel === pkg.materialized_package_root ? "root_symlink" : "symlink";
+      vetoes.push(`dependency_material_${symlinkKind}:${pkg.name}:${rel}`);
     }
     return vetoes;
   });

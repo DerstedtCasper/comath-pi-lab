@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { importArtifact } from "../../artifacts/store.js";
 import { appendAuditEvent } from "../../audit/jsonl-writer.js";
@@ -1044,6 +1044,7 @@ type FinalGlobalReplayRequest = {
   formalSpecLockPath: string;
   assumptionLedgerPath: string;
   assembledRequestPath?: string;
+  provisioningDiagnosticPath?: string;
 };
 
 function requireString(value: unknown, field: string): string {
@@ -1200,6 +1201,28 @@ export type CampaignLiveMathlibDependencyMaterialGateResult = {
   can_promote_claim: false;
 };
 
+export type CampaignLiveMathlibProvisioningDiagnosticInput = {
+  packagingScope: "positive_matrix" | "campaign";
+  primaryDependency: string;
+  leanRoot: string;
+  lakeManifest: unknown;
+};
+
+export type CampaignLiveMathlibProvisioningDiagnosticResult = {
+  schema_version: "comath.campaign_live_mathlib_provisioning_diagnostic.v1";
+  profile: "campaign_live_mathlib_non_toy";
+  result: "pass" | "fail";
+  hard_vetoes: string[];
+  primary_dependency: string;
+  mathlib_revision?: string;
+  materialized_package_root?: ".lake/packages/mathlib";
+  materialized_package_hash?: string;
+  materialized_file_hashes: Record<string, string>;
+  network_policy: "disabled";
+  proof_authority: "none";
+  can_promote_claim: false;
+};
+
 const trustedMathlibSourceUrls = new Set([
   "https://github.com/leanprover-community/mathlib4",
   "https://github.com/leanprover-community/mathlib4.git"
@@ -1240,6 +1263,60 @@ function moduleNameFromLocalLeanRel(rel: string): string | undefined {
 function isFloatingOrNonCommitRevision(revision: string): boolean {
   const normalized = revision.trim();
   return !/^[0-9a-f]{40}$/iu.test(normalized) || /^(main|master|nightly|latest)$/iu.test(normalized);
+}
+
+function hashMaterializedPackageFiles(root: string, relRoot: string): Record<string, string> {
+  const hashes: Record<string, string> = {};
+  const absoluteRoot = join(root, relRoot);
+  if (existsSync(absoluteRoot) && lstatSync(absoluteRoot).isSymbolicLink()) {
+    return hashes;
+  }
+  const visit = (dir: string, relDir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === ".git") {
+        continue;
+      }
+      const absolutePath = join(dir, entry.name);
+      const relPath = normalizeRelPath(join(relDir, entry.name));
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        visit(absolutePath, relPath);
+      } else if (entry.isFile()) {
+        hashes[relPath] = createHash("sha256").update(readFileSync(absolutePath)).digest("hex");
+      }
+    }
+  };
+  if (existsSync(absoluteRoot)) {
+    visit(absoluteRoot, relRoot);
+  }
+  return Object.fromEntries(Object.entries(hashes).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function collectMaterializedPackageSymlinks(root: string, relRoot: string): string[] {
+  const symlinks: string[] = [];
+  const absoluteRoot = join(root, relRoot);
+  if (existsSync(absoluteRoot) && lstatSync(absoluteRoot).isSymbolicLink()) {
+    return [relRoot];
+  }
+  const visit = (dir: string, relDir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const absolutePath = join(dir, entry.name);
+      const relPath = normalizeRelPath(join(relDir, entry.name));
+      if (entry.isSymbolicLink()) {
+        symlinks.push(relPath);
+        continue;
+      }
+      if (entry.isDirectory()) {
+        visit(absolutePath, relPath);
+      }
+    }
+  };
+  if (existsSync(absoluteRoot)) {
+    visit(absoluteRoot, relRoot);
+  }
+  return symlinks.sort();
 }
 
 export function evaluateCampaignLiveMathlibDependencyMaterialGate(
@@ -1299,6 +1376,67 @@ export function evaluateCampaignLiveMathlibDependencyMaterialGate(
     ...(revision ? { mathlib_revision: revision } : {}),
     ...(source ? { mathlib_source: source } : {}),
     ...(license ? { mathlib_license: license } : {}),
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+}
+
+export function evaluateCampaignLiveMathlibProvisioningDiagnostic(
+  input: CampaignLiveMathlibProvisioningDiagnosticInput
+): CampaignLiveMathlibProvisioningDiagnosticResult {
+  const hard_vetoes: string[] = [];
+  if (input.packagingScope !== "campaign") {
+    hard_vetoes.push("campaign_packaging_scope_required");
+  }
+  if (input.primaryDependency !== "Mathlib") {
+    hard_vetoes.push("mathlib_primary_dependency_required");
+  }
+
+  const mathlibPackage = manifestPackages(input.lakeManifest).find((pkg) => manifestPackageString(pkg, "name") === "mathlib");
+  if (!mathlibPackage) {
+    hard_vetoes.push("mathlib_lake_manifest_package_missing");
+  }
+  const revision = mathlibPackage
+    ? (manifestPackageString(mathlibPackage, "rev") ?? manifestPackageString(mathlibPackage, "inputRev"))
+    : undefined;
+  if (mathlibPackage && !revision) {
+    hard_vetoes.push("mathlib_dependency_revision_missing");
+  }
+  if (revision && isFloatingOrNonCommitRevision(revision)) {
+    hard_vetoes.push("mathlib_dependency_revision_floating");
+  }
+
+  const materializedPackageRoot = ".lake/packages/mathlib" as const;
+  const materializedPackagePath = join(input.leanRoot, ".lake", "packages", "mathlib");
+  const materialized_file_hashes = hashMaterializedPackageFiles(input.leanRoot, materializedPackageRoot);
+  const materializedSymlinks = collectMaterializedPackageSymlinks(input.leanRoot, materializedPackageRoot);
+  if (!existsSync(materializedPackagePath)) {
+    hard_vetoes.push("mathlib_package_materialization_missing");
+  } else if (lstatSync(materializedPackagePath).isSymbolicLink()) {
+    hard_vetoes.push(`mathlib_package_root_symlink_forbidden:${materializedPackageRoot}`);
+  } else if (Object.keys(materialized_file_hashes).length === 0) {
+    hard_vetoes.push("mathlib_package_materialization_empty");
+  }
+  if (existsSync(materializedPackagePath) && !existsSync(join(materializedPackagePath, "Mathlib.lean"))) {
+    hard_vetoes.push("mathlib_package_module_root_missing");
+  }
+  hard_vetoes.push(...materializedSymlinks.map((rel) => `mathlib_package_symlink_forbidden:${rel}`));
+  const materialized_package_hash =
+    Object.keys(materialized_file_hashes).length > 0
+      ? sha256Text(JSON.stringify({ root: materializedPackageRoot, files: materialized_file_hashes }))
+      : undefined;
+
+  return {
+    schema_version: "comath.campaign_live_mathlib_provisioning_diagnostic.v1",
+    profile: "campaign_live_mathlib_non_toy",
+    result: hard_vetoes.length === 0 ? "pass" : "fail",
+    hard_vetoes: Array.from(new Set(hard_vetoes)),
+    primary_dependency: input.primaryDependency,
+    ...(revision ? { mathlib_revision: revision } : {}),
+    ...(existsSync(materializedPackagePath) ? { materialized_package_root: materializedPackageRoot } : {}),
+    ...(materialized_package_hash ? { materialized_package_hash } : {}),
+    materialized_file_hashes,
+    network_policy: "disabled",
     proof_authority: "none",
     can_promote_claim: false
   };
@@ -1432,6 +1570,37 @@ function parseFinalGlobalReplayRequestPayload(input: {
     if (dependencyMaterialGate.result !== "pass") {
       throw new Error(`campaign_live_mathlib_dependency_material_gate_failed:${dependencyMaterialGate.hard_vetoes.join(",")}`);
     }
+    const provisioningDiagnostic = evaluateCampaignLiveMathlibProvisioningDiagnostic({
+      packagingScope,
+      primaryDependency: leanProject.primaryDependency,
+      leanRoot: leanProject.leanRoot,
+      lakeManifest
+    });
+    if (provisioningDiagnostic.result !== "pass") {
+      throw new Error(`campaign_live_mathlib_provisioning_diagnostic_failed:${provisioningDiagnostic.hard_vetoes.join(",")}`);
+    }
+    const diagnosticPath = writeSimpleStageArtifact(input.projectRoot, input.campaign, "mathlib_provisioning_diagnostic.json", {
+      ...provisioningDiagnostic,
+      campaign_id: input.campaign.campaign_id,
+      claim_id: input.campaign.root_claim_id,
+      theorem_name: leanProject.theoremName,
+      locked_statement_hash: leanProject.formalSpec.locked_statement_hash,
+      lakefile_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, lakefileRel))),
+      lake_manifest_hash: sha256RuntimeFile(input.projectRoot, lakeManifestRel),
+      theorem_file_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, theoremFileRel))),
+      diagnostic_is_proof_authority: false,
+      created_at: now()
+    });
+    return {
+      packagingScope,
+      taskId,
+      claimId,
+      leanProject,
+      formalSpecLockPath: normalizeRelPath(join(leanRootRel, formalSpecFileRel)),
+      assumptionLedgerPath: normalizeRelPath(join(leanRootRel, assumptionLedgerFileRel)),
+      assembledRequestPath: input.assembledRequestPath,
+      provisioningDiagnosticPath: diagnosticPath
+    };
   }
 
   return {
@@ -1997,7 +2166,8 @@ async function completeCampaignAtFinalGlobalReplay(input: {
       actor: input.actor,
       campaign_id: input.campaign.campaign_id,
       claim_id: request.claimId,
-      leanProject: request.leanProject
+      leanProject: request.leanProject,
+      provisioningDiagnosticPath: request.provisioningDiagnosticPath
     });
   } catch (error) {
     return blockCampaignAtFinalReplay({

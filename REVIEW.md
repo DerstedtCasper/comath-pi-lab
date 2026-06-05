@@ -1,3 +1,36 @@
+# Goal 3 Task 216 / Campaign Live Mathlib Provisioning Diagnostic
+
+Scope: add a non-authoritative provisioning diagnostic for opt-in campaign-native Mathlib final replay requests, and ensure final clean replay can carry locally materialized Mathlib package sources into the clean workspace.
+
+Changes:
+
+- Added `evaluateCampaignLiveMathlibProvisioningDiagnostic()` and wired it into `replay_breadth_profile: "campaign_live_mathlib_non_toy"` final replay request parsing after Task213/214 gates and before final replay workspace allocation.
+- Required locally materialized `.lake/packages/mathlib` source material, including `Mathlib.lean` and no package-internal symlinks, before opt-in campaign-native Mathlib replay can allocate `.comath/lean/final_replay`.
+- Recorded materialized Mathlib package file hashes and package hash as `proof_authority: "none"` provenance with `network_policy: "disabled"`.
+- Copied materialized `.lake/packages/mathlib` package sources into the final clean replay workspace when present and skipped symlink-bearing packages so closure fails closed instead of copying unsafe material.
+- Extended `DependencyClosureV2` package records and FinalReplayManifest v3 dependency-lock external revision entries with materialized package roots/hashes/file hashes/symlink lists and fail-closed `dependency_material_missing:mathlib` / `dependency_material_symlink:mathlib:*` vetoes.
+- Included copied `.lake/packages/mathlib` files in FinalReplayManifest v3 `source_hashes_after`, `clean_workspace_sha256`, and the third-party replay pack, while continuing to exclude unrelated `.lake` cache material.
+- Added `campaign_live_mathlib_provisioning_diagnostic` to service capabilities.
+- Added `goal3-task216-campaign-live-mathlib-provisioning-diagnostic.test.mjs` and registered it in phase0 smoke / GA release criteria discovery.
+- Updated README, AGENTS, TODO, threat model, external Lean supply-chain docs, GA release criteria, REVIEW, and the Goal 3 tracker.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task216 failed because `../../dist/index.js` did not export `evaluateCampaignLiveMathlibProvisioningDiagnostic`.
+- A follow-up focused RED caught a symlink-bearing `.lake/packages/mathlib` passing provisioning diagnostics; package-internal symlinks now fail before clean replay copy and are also recorded/vetoed by `DependencyClosureV2`.
+- Post-diff read-only review found three issues: copied Mathlib material was not included in FinalReplayManifest/replay-pack hashes, root `.lake/packages/mathlib` symlinks could bypass package-internal symlink checks, and passing provisioning diagnostics were computed but not durably recorded. All three were closed with focused regression coverage.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- Focused Task216 exited 0.
+- Adjacent regressions exited 0: Task213, Task214, Task215, Task102, Task103, Task10, and Task124.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task216 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task216 is a provisioning/materialization diagnostic and replay-workspace packaging hardening slice. It does not fetch mathlib, install/vendor dependencies, make provisioning metadata proof authority, execute a host-backed non-toy Mathlib theorem replay by itself, close positive-matrix breadth, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
+
 # Goal 3 Task 215 / Final Replay DependencyClosureV2 Binding
 
 Scope: upgrade the service-owned final clean replay dependency artifact from the legacy nonempty-file closure to `DependencyClosureV2`, while keeping the stable `dependency_closure.json` artifact slot and FinalReplayManifest v3 report binding.

@@ -1,4 +1,4 @@
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -93,6 +93,38 @@ function write(path: string, content: string): void {
   writeFileSync(path, content, "utf8");
 }
 
+function containsSymlink(root: string): boolean {
+  if (existsSync(root) && lstatSync(root).isSymbolicLink()) {
+    return true;
+  }
+  const visit = (dir: string): boolean => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isSymbolicLink()) {
+        return true;
+      }
+      if (entry.isDirectory() && visit(path)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  return existsSync(root) && visit(root);
+}
+
+function copyMaterializedMathlibPackage(sourceLeanRoot: string, cleanRoot: string): void {
+  const sourceMathlibPackage = join(sourceLeanRoot, ".lake", "packages", "mathlib");
+  if (!existsSync(sourceMathlibPackage)) {
+    return;
+  }
+  if (containsSymlink(sourceMathlibPackage)) {
+    return;
+  }
+  const targetMathlibPackage = join(cleanRoot, ".lake", "packages", "mathlib");
+  mkdirSync(dirname(targetMathlibPackage), { recursive: true });
+  cpSync(sourceMathlibPackage, targetMathlibPackage, { recursive: true });
+}
+
 function externalRevisionsFromDependencyClosure(packages: DependencyClosureV2Package[]): Record<string, unknown>[] {
   return packages
     .map((pkg) => ({
@@ -102,7 +134,11 @@ function externalRevisionsFromDependencyClosure(packages: DependencyClosureV2Pac
       license: pkg.license,
       source: pkg.source,
       trusted: pkg.trusted,
-      build_status: pkg.build_status
+      build_status: pkg.build_status,
+      ...(pkg.materialized_package_root ? { materialized_package_root: pkg.materialized_package_root } : {}),
+      ...(pkg.materialized_package_hash ? { materialized_package_hash: pkg.materialized_package_hash } : {}),
+      ...(pkg.materialized_file_hashes ? { materialized_file_hashes: pkg.materialized_file_hashes } : {}),
+      ...(pkg.materialized_symlinks ? { materialized_symlinks: pkg.materialized_symlinks } : {})
     }))
     .sort((left, right) => String(left.name).localeCompare(String(right.name)));
 }
@@ -114,6 +150,7 @@ export function runCleanLeanReplay(input: {
   campaign_id: string;
   claim_id: string;
   leanProject: LeanProjectFiles;
+  provisioningDiagnosticPath?: string;
 }): CleanReplayResult {
   const evidenceRootRel = join(".comath", "evidence", input.claim_id, "lean");
   const evidenceRoot = assertPathAllowed(input.projectRoot, evidenceRootRel, { purpose: "runtime-write" });
@@ -142,6 +179,7 @@ export function runCleanLeanReplay(input: {
   } else {
     write(join(cleanRoot, "lake-manifest.json"), `${JSON.stringify({ packages: [] }, null, 2)}\n`);
   }
+  copyMaterializedMathlibPackage(input.leanProject.leanRoot, cleanRoot);
   cpSync(join(input.leanProject.leanRoot, "MathResearch"), join(cleanRoot, "MathResearch"), { recursive: true });
   cpSync(join(input.leanProject.leanRoot, "Audit"), join(cleanRoot, "Audit"), { recursive: true });
   cpSync(join(input.leanProject.leanRoot, "FormalSpec"), join(cleanRoot, "FormalSpec"), { recursive: true });
@@ -321,6 +359,7 @@ export function runCleanLeanReplay(input: {
     axiom_profile_path: axiomPathRel.replace(/\\/g, "/"),
     dependency_closure_path: dependencyPathRel.replace(/\\/g, "/"),
     statement_equivalence_path: statementPathRel.replace(/\\/g, "/"),
+    ...(input.provisioningDiagnosticPath ? { provisioning_diagnostic_path: input.provisioningDiagnosticPath } : {}),
     artifact_hashes,
     result: allGatesPassed ? "pass" : "fail"
   });

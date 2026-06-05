@@ -97,13 +97,17 @@ function listWorkspaceFiles(cleanRoot: string): string[] {
   const visit = (dir: string) => {
     assertInside(cleanRoot, dir);
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === ".lake") {
-        continue;
-      }
       const path = join(dir, entry.name);
       const stat = lstatSync(path);
       if (stat.isSymbolicLink()) {
         throw new Error("final_replay_symlink_escape");
+      }
+      if (entry.name === ".lake") {
+        const mathlibPackageRoot = join(path, "packages", "mathlib");
+        if (existsSync(mathlibPackageRoot)) {
+          visit(mathlibPackageRoot);
+        }
+        continue;
       }
       if (entry.isDirectory()) {
         visit(path);

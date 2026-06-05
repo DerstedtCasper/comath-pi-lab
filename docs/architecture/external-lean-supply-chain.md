@@ -44,6 +44,7 @@ Only `trusted_replay_dependency` may be imported by final proof artifacts.
 - License remains compatible with release/export policy.
 - Network is disabled during final replay.
 - Final clean workspace contains only declared dependency material.
+- Campaign-native Mathlib replay has locally materialized `.lake/packages/mathlib` sources whose hashes are captured before final replay allocation.
 - FinalReplayManifest binds the dependency lock hash.
 
 ## Fail-Closed Cases
@@ -59,6 +60,7 @@ Only `trusted_replay_dependency` may be imported by final proof artifacts.
 - Agent-generated dependency metadata without service verification.
 - Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without Task214 dependency-material checks: a Mathlib `require`, pinned mathlib package revision, trusted mathlib4 source URL, recorded non-unknown license, and local `Mathlib` shadowing scan.
 - Final clean replay dependency artifacts using the legacy nonempty-file closure instead of Task215 `DependencyClosureV2` content and FinalReplayManifest v3 package revision binding.
+- Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without Task216 local Mathlib package materialization diagnostics: missing, empty, symlink-bearing, or rootless `.lake/packages/mathlib` material blocks before final replay workspace allocation and remains `proof_authority=none`.
 
 ## Evidence Pack Rule
 
