@@ -154,6 +154,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleOperatorTransportLease",
   "comath.release.piCodexLifecycleOperatorTransportHeartbeat",
   "comath.release.piCodexLifecycleGuidedRealPiExecution",
+  "comath.release.piCodexLifecycleInteractiveRealPi",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
   "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",
@@ -414,11 +415,13 @@ function requireToolExecutionConfirmation(name: string, input: Record<string, un
 }
 
 const privilegedProofAuthorityPattern =
-  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence)\b/gi;
+  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence|proof_success|kernel_checked)\b/gi;
 const publicTransportOverclaimPattern =
   /\b(?:long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided)\b/gi;
 
 const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
+const posixHostPathEchoPattern =
+  /(^|[\s"'=:(])\/(?:home|root|Users|tmp|var|mnt|media|srv|opt|etc|usr\/local|workspace|private|Volumes)\/[^\s<>"']*/g;
 const secretEchoPattern =
   /\b(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token)\s*[:=]\s*[A-Za-z0-9._-]+|Authorization:\s*Bearer\s*[A-Za-z0-9._-]+|\bsk-[A-Za-z0-9._-]+\b/gi;
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
@@ -431,6 +434,7 @@ function sanitizePublicProofAuthorityValue(value: unknown): unknown {
       .replace(privilegedProofAuthorityPattern, "unverified_formal_status")
       .replace(publicTransportOverclaimPattern, "bounded_transport_checkpoint_only")
       .replace(hostPathEchoPattern, "[redacted_host_path]")
+      .replace(posixHostPathEchoPattern, "$1[redacted_host_path]")
       .replace(secretEchoPattern, "[redacted_secret]");
   }
   if (Array.isArray(value)) {
@@ -469,6 +473,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleOperatorTransportLease" ||
     name === "comath.release.piCodexLifecycleOperatorTransportHeartbeat" ||
     name === "comath.release.piCodexLifecycleGuidedRealPiExecution" ||
+    name === "comath.release.piCodexLifecycleInteractiveRealPi" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
     name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe" ||
@@ -492,6 +497,17 @@ const PI_LIFECYCLE_CONTROL_PLAN_ACTIONS = ["plan", "status"] as const;
 const PI_LIFECYCLE_SESSION_ACTIONS = ["plan", "status", "resume-plan"] as const;
 const PI_LIFECYCLE_SESSION_STEP_IDS = [
   "run-real-pi-runtime-probe",
+  "run-codex-api-probe",
+  "review"
+] as const;
+const PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS = ["plan", "status", "resume-plan"] as const;
+const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
+  "run-real-pi-runtime-probe",
+  "lifecycle-operator-session",
+  "lifecycle-operator-transport-recovery",
+  "lifecycle-operator-transport-lease",
+  "lifecycle-operator-transport-heartbeat",
+  "lifecycle-guided-real-pi-execution",
   "run-codex-api-probe",
   "review"
 ] as const;
@@ -550,6 +566,65 @@ function publicDiagnosticEnvironment(value: unknown): Record<string, string> | u
 
 function optionalPublicOperatorText(input: Record<string, unknown>, field: string, fallback: string): string {
   return publicOperatorText(readString(input, field, { optional: true }) ?? fallback);
+}
+
+const trustedRuntimeStateRootPattern = new RegExp(`(^|[\\\\/])${["", "comath"].join("\\.")}([\\\\/]|$)`, "i");
+const encodedTrustedRuntimeStateRootPattern = /(?:^|%2f|%5c)%2ecomath(?:%2f|%5c|$)/i;
+const plannerTokenPathPattern = /[\\/]|%2f|%5c/i;
+const plannerSafeTokenPattern = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+
+function matchesPublicPattern(pattern: RegExp, value: string): boolean {
+  pattern.lastIndex = 0;
+  const result = pattern.test(value);
+  pattern.lastIndex = 0;
+  return result;
+}
+
+function decodePlannerFragment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function hasUnsafePlannerFragment(value: string): boolean {
+  const decoded = decodePlannerFragment(value);
+  return [value, decoded].some(
+    (candidate) =>
+      trustedRuntimeStateRootPattern.test(candidate) ||
+      encodedTrustedRuntimeStateRootPattern.test(candidate) ||
+      plannerTokenPathPattern.test(candidate) ||
+      matchesPublicPattern(hostPathEchoPattern, candidate) ||
+      matchesPublicPattern(posixHostPathEchoPattern, candidate) ||
+      matchesPublicPattern(secretEchoPattern, candidate)
+  );
+}
+
+function publicPlannerToken(value: string, fallback: string): string {
+  const sanitized = publicOperatorText(value).trim();
+  if (
+    !sanitized ||
+    !plannerSafeTokenPattern.test(sanitized) ||
+    hasUnsafePlannerFragment(value) ||
+    hasUnsafePlannerFragment(sanitized)
+  ) {
+    return fallback;
+  }
+  return sanitized;
+}
+
+function optionalPublicPlannerToken(input: Record<string, unknown>, field: string, fallback: string): string {
+  return publicPlannerToken(readString(input, field, { optional: true }) ?? fallback, fallback);
+}
+
+function optionalPublicPlannerPath(input: Record<string, unknown>, field: string, fallback: string): string {
+  const raw = readString(input, field, { optional: true });
+  if (!raw || hasUnsafePlannerFragment(raw)) {
+    return fallback;
+  }
+  const sanitized = publicOperatorText(raw);
+  return hasUnsafePlannerFragment(sanitized) ? fallback : sanitized;
 }
 
 function readLifecycleWalkthroughSessionKind(input: Record<string, unknown>): typeof PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS[number] {
@@ -695,6 +770,32 @@ function readLifecycleSessionSteps(input: Record<string, unknown>): Array<typeof
   return [...new Set(steps)] as Array<typeof PI_LIFECYCLE_SESSION_STEP_IDS[number]>;
 }
 
+function readInteractiveRealPiAction(input: Record<string, unknown>): typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS[number] {
+  const value = readString(input, "action");
+  if ((PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS as readonly string[]).includes(value)) {
+    return value as typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS[number];
+  }
+  throw new Error("action must be plan, status, or resume-plan");
+}
+
+function readInteractiveRealPiSteps(input: Record<string, unknown>): Array<typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS[number]> {
+  const value = input.completed_steps;
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error("completed_steps must be an array");
+  }
+  const allowed = new Set<string>(PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS);
+  const steps = value.map(String);
+  for (const step of steps) {
+    if (!allowed.has(step)) {
+      throw new Error(`unsupported interactive real-Pi checkpoint step: ${step}`);
+    }
+  }
+  return [...new Set(steps)] as Array<typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS[number]>;
+}
+
 function sanitizeLifecycleOperatorSessionArtifacts(value: unknown): Record<string, string>[] {
   if (!Array.isArray(value)) {
     return [];
@@ -709,6 +810,156 @@ function sanitizeLifecycleOperatorSessionArtifacts(value: unknown): Record<strin
       path: publicOperatorText(readString(record, "path"))
     };
   });
+}
+
+function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>): Record<string, unknown> {
+  const projectId = publicPlannerToken(readString(input, "project_id"), "PROJECT");
+  const actor = publicPlannerToken(readString(input, "actor"), "operator");
+  const piHostLabel = publicPlannerToken(readString(input, "pi_host_label"), "real-pi-host");
+  const sessionId = publicPlannerToken(readString(input, "session_id"), "LIFECYCLE-SESSION");
+  const action = readInteractiveRealPiAction(input);
+  const sessionKind = readLifecycleWalkthroughSessionKind(input);
+  const completedSteps = readInteractiveRealPiSteps(input);
+  const completed = new Set<string>(completedSteps);
+  const probeId = optionalPublicPlannerToken(input, "probe_id", `${projectId}-REAL-PI-RUNTIME`);
+  const validationId = optionalPublicPlannerToken(input, "validation_id", `${projectId}-CODEX-API`);
+  const reviewId = optionalPublicPlannerToken(input, "review_id", `${projectId}-LIFECYCLE-REVIEW`);
+  const transportRecoveryId = optionalPublicPlannerToken(
+    input,
+    "transport_recovery_id",
+    `${sessionId}-TRANSPORT-RECOVERY`
+  );
+  const transportLeaseId = optionalPublicPlannerToken(input, "transport_lease_id", `${sessionId}-TRANSPORT-LEASE`);
+  const transportHeartbeatId = optionalPublicPlannerToken(
+    input,
+    "transport_heartbeat_id",
+    `${sessionId}-TRANSPORT-HEARTBEAT`
+  );
+  const executionId = optionalPublicPlannerToken(input, "execution_id", `${sessionId}-GUIDED-EXECUTION`);
+  const sessionManifestPath = optionalPublicPlannerPath(
+    input,
+    "session_manifest_path",
+    `service-owned-pi-lifecycle/${sessionId}/operator-session-manifest.json`
+  );
+  const transportRecoveryPath = optionalPublicPlannerPath(
+    input,
+    "transport_recovery_path",
+    `service-owned-pi-lifecycle/${transportRecoveryId}/operator-transport-recovery.json`
+  );
+  const transportLeasePath = optionalPublicPlannerPath(
+    input,
+    "transport_lease_path",
+    `service-owned-pi-lifecycle/${transportLeaseId}/operator-transport-lease.json`
+  );
+  const piInstallTranscriptPath = optionalPublicPlannerPath(
+    input,
+    "pi_install_transcript_path",
+    `service-owned-pi-lifecycle/${probeId}/pi-install-transcript.md`
+  );
+  const runtimeRegistrationSnapshotPath = optionalPublicPlannerPath(
+    input,
+    "runtime_registration_snapshot_path",
+    `service-owned-pi-lifecycle/${probeId}/runtime-registration-snapshot.json`
+  );
+
+  const commandByStep: Record<typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS[number], string> = {
+    "run-real-pi-runtime-probe":
+      `/cm:release lifecycle-control run-real-pi-runtime-probe --project-id ${projectId} --probe-id ${probeId} ` +
+      `--pi-host-label ${piHostLabel} --session-kind ${sessionKind}`,
+    "lifecycle-operator-session":
+      `/cm:release lifecycle-operator-session --project-id ${projectId} --session-id ${sessionId} ` +
+      `--pi-host-label ${piHostLabel} --session-status recoverable_operator_session --session-kind ${sessionKind}`,
+    "lifecycle-operator-transport-recovery":
+      `/cm:release lifecycle-operator-transport-recovery --project-id ${projectId} --session-id ${sessionId} ` +
+      `--transport-recovery-id ${transportRecoveryId} --session-manifest-path ${sessionManifestPath}`,
+    "lifecycle-operator-transport-lease":
+      `/cm:release lifecycle-operator-transport-lease --project-id ${projectId} --session-id ${sessionId} ` +
+      `--transport-recovery-id ${transportRecoveryId} --transport-lease-id ${transportLeaseId} ` +
+      `--session-manifest-path ${sessionManifestPath} --transport-recovery-path ${transportRecoveryPath}`,
+    "lifecycle-operator-transport-heartbeat":
+      `/cm:release lifecycle-operator-transport-heartbeat --project-id ${projectId} --session-id ${sessionId} ` +
+      `--transport-recovery-id ${transportRecoveryId} --transport-lease-id ${transportLeaseId} ` +
+      `--transport-heartbeat-id ${transportHeartbeatId} --session-manifest-path ${sessionManifestPath} ` +
+      `--transport-recovery-path ${transportRecoveryPath} --transport-lease-path ${transportLeasePath}`,
+    "lifecycle-guided-real-pi-execution":
+      `/cm:release lifecycle-guided-real-pi-execution --project-id ${projectId} --execution-id ${executionId} ` +
+      `--real-pi-runtime-probe-id ${probeId} --pi-install-transcript-path ${piInstallTranscriptPath} ` +
+      `--runtime-registration-snapshot-path ${runtimeRegistrationSnapshotPath} --session-id ${sessionId} ` +
+      `--session-manifest-path ${sessionManifestPath} --transport-recovery-id ${transportRecoveryId} ` +
+      `--transport-recovery-path ${transportRecoveryPath} --transport-lease-id ${transportLeaseId} ` +
+      `--transport-lease-path ${transportLeasePath} --pi-host-label ${piHostLabel}`,
+    "run-codex-api-probe":
+      `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
+    review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
+  };
+  const nextStep =
+    PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS.find((step) => !completed.has(step)) ??
+    PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS[PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS.length - 1];
+
+  return {
+    schema_version: "comath.pi.lifecycle.interactive_real_pi_checkpoint_ux.v1",
+    project_id: projectId,
+    actor,
+    pi_host_label: piHostLabel,
+    session_id: sessionId,
+    action,
+    session_kind: sessionKind,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    direct_trusted_state_mutation: false,
+    durable_transport_provided: false,
+    long_lived_sse_provided: false,
+    long_lived_websocket_provided: false,
+    interactive_policy: {
+      pi_tool_readonly: true,
+      writes_comath_state: false,
+      calls_comathd: false,
+      executes_lifecycle_actions: false,
+      mutating_steps_require_host_confirmation: true
+    },
+    checkpoint_inputs: {
+      probe_id: probeId,
+      validation_id: validationId,
+      review_id: reviewId,
+      session_manifest_path: sessionManifestPath,
+      transport_recovery_id: transportRecoveryId,
+      transport_recovery_path: transportRecoveryPath,
+      transport_lease_id: transportLeaseId,
+      transport_lease_path: transportLeasePath,
+      transport_heartbeat_id: transportHeartbeatId,
+      execution_id: executionId,
+      pi_install_transcript_path: piInstallTranscriptPath,
+      runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath
+    },
+    cursors: {
+      operator_event_cursor: optionalPublicOperatorText(input, "operator_event_cursor", "not_provided"),
+      stdout_cursor: optionalPublicOperatorText(input, "stdout_cursor", "not_provided"),
+      stderr_cursor: optionalPublicOperatorText(input, "stderr_cursor", "not_provided")
+    },
+    last_result_summary: optionalPublicOperatorText(input, "last_result_summary", "not_provided"),
+    completed_steps: completedSteps,
+    ordered_steps: PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS.map((step, index) => ({
+      order: index + 1,
+      action_id: step,
+      command: publicOperatorText(commandByStep[step]),
+      requires_host_confirmation: true,
+      auto_executes: false,
+      proof_authority: "none"
+    })),
+    next_action: {
+      action_id: nextStep,
+      command: publicOperatorText(commandByStep[nextStep]),
+      requires_host_confirmation: true,
+      auto_executes: false,
+      proof_authority: "none"
+    },
+    boundary_notes: [
+      "This Pi UX surface is a read-only checkpoint planner.",
+      "It does not call comathd, write trusted runtime state, execute lifecycle actions, or open durable transport.",
+      "Host-confirmed lifecycle commands remain the only way to produce service-owned evidence."
+    ]
+  };
 }
 
 function buildPiCodexLifecycleSession(input: Record<string, unknown>): Record<string, unknown> {
@@ -1434,6 +1685,10 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
 
   if (name === "comath.release.piCodexLifecycleSession") {
     return publicToolResult(name, Promise.resolve(buildPiCodexLifecycleSession(input)));
+  }
+
+  if (name === "comath.release.piCodexLifecycleInteractiveRealPi") {
+    return publicToolResult(name, Promise.resolve(buildPiCodexLifecycleInteractiveRealPi(input)));
   }
 
   if (name === "comath.release.piCodexLifecycleOperatorSession") {
@@ -2617,6 +2872,40 @@ export function createComathTools(): ToolDescriptor[] {
           next_recommended_route: stringProp
         }
       )
+    },
+    {
+      name: "comath.release.piCodexLifecycleInteractiveRealPi",
+      description:
+        "Render a read-only interactive real-Pi checkpoint UX over existing lifecycle evidence commands without calling comathd, mutating trusted state, proof authority, GA certification, or durable transport claims.",
+      mutates: false,
+      input_schema: objectSchema(["project_id", "actor", "pi_host_label", "session_id", "action"], {
+        project_id: stringProp,
+        actor: stringProp,
+        pi_host_label: stringProp,
+        session_id: stringProp,
+        action: { type: "string", enum: [...PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS] },
+        session_kind: { type: "string", enum: [...PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS] },
+        completed_steps: {
+          type: "array",
+          items: { type: "string", enum: [...PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS] }
+        },
+        probe_id: stringProp,
+        validation_id: stringProp,
+        review_id: stringProp,
+        session_manifest_path: stringProp,
+        transport_recovery_id: stringProp,
+        transport_recovery_path: stringProp,
+        transport_lease_id: stringProp,
+        transport_lease_path: stringProp,
+        transport_heartbeat_id: stringProp,
+        execution_id: stringProp,
+        pi_install_transcript_path: stringProp,
+        runtime_registration_snapshot_path: stringProp,
+        operator_event_cursor: stringProp,
+        stdout_cursor: stringProp,
+        stderr_cursor: stringProp,
+        last_result_summary: stringProp
+      })
     },
     {
       name: "comath.release.agentAdapterOsIsolationProbe",
@@ -3949,6 +4238,38 @@ async function handleReleaseCommand(
         review_id: optionValue(parsed.args, "--review-id"),
         current_step: optionValue(parsed.args, "--current-step"),
         completed_steps: optionValues(parsed.args, "--completed-step"),
+        stdout_cursor: optionValue(parsed.args, "--stdout-cursor"),
+        stderr_cursor: optionValue(parsed.args, "--stderr-cursor"),
+        last_result_summary: optionValue(parsed.args, "--last-result-summary")
+      })
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-interactive-real-pi") {
+    const action = requiredOption(optionValue(parsed.args, "--action") ?? firstPositional(parsed.args), "action");
+    await notifyRuntimeResult(
+      ctx,
+      await executeComathTool(client, "comath.release.piCodexLifecycleInteractiveRealPi", {
+        project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+        actor: actorFrom(options, parsed.args),
+        pi_host_label: requiredOption(optionValue(parsed.args, "--pi-host-label"), "pi_host_label"),
+        session_id: requiredOption(optionValue(parsed.args, "--session-id"), "session_id"),
+        action,
+        session_kind: optionValue(parsed.args, "--session-kind"),
+        completed_steps: optionValues(parsed.args, "--completed-step"),
+        probe_id: optionValue(parsed.args, "--probe-id"),
+        validation_id: optionValue(parsed.args, "--validation-id"),
+        review_id: optionValue(parsed.args, "--review-id"),
+        session_manifest_path: optionValue(parsed.args, "--session-manifest-path"),
+        transport_recovery_id: optionValue(parsed.args, "--transport-recovery-id"),
+        transport_recovery_path: optionValue(parsed.args, "--transport-recovery-path"),
+        transport_lease_id: optionValue(parsed.args, "--transport-lease-id"),
+        transport_lease_path: optionValue(parsed.args, "--transport-lease-path"),
+        transport_heartbeat_id: optionValue(parsed.args, "--transport-heartbeat-id"),
+        execution_id: optionValue(parsed.args, "--execution-id"),
+        pi_install_transcript_path: optionValue(parsed.args, "--pi-install-transcript-path"),
+        runtime_registration_snapshot_path: optionValue(parsed.args, "--runtime-registration-snapshot-path"),
+        operator_event_cursor: optionValue(parsed.args, "--operator-event-cursor"),
         stdout_cursor: optionValue(parsed.args, "--stdout-cursor"),
         stderr_cursor: optionValue(parsed.args, "--stderr-cursor"),
         last_result_summary: optionValue(parsed.args, "--last-result-summary")

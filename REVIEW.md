@@ -1,3 +1,36 @@
+# Goal 3 Task 223 / Interactive Real-Pi Checkpoint UX
+
+Scope: add a read-only Pi-side interactive real-Pi checkpoint planner over the existing host-confirmed lifecycle command chain without creating service-owned evidence, durable transport, proof authority, or GA certification.
+
+Changes:
+
+- Added `goal3-task223-pi-interactive-real-pi-checkpoint-ux.test.mjs`.
+- Added `comath.release.piCodexLifecycleInteractiveRealPi` as a non-mutating Pi tool that renders ordered checkpoint plans for runtime probe, operator session, transport recovery, bounded lease, heartbeat/rebind, guided execution, Codex API probe, and review.
+- Added `/cm:release lifecycle-interactive-real-pi` command handling without Pi host confirmation because the planner is read-only and does not call `comathd`.
+- Registered the tool in Pi runtime executable metadata, runtime-registration subcommands, Phase6/Phase26 exposure guards, and the Pi package test script.
+- Hardened planner IDs and checkpoint paths so path-shaped IDs, encoded trusted runtime roots, caller-supplied trusted runtime paths, Pi/Linux host paths, and broader proof-success vocabulary do not echo into public plans.
+- Synchronized README, AGENTS, TODO, threat model, GA release criteria, phase0 smoke, REVIEW, and the Goal 3 tracker without claiming full real-Pi execution or durable transport.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task223 failed because `comath.release.piCodexLifecycleInteractiveRealPi` was not registered.
+- Read-only subagent review found two follow-up issues: path-shaped IDs could reintroduce trusted runtime roots into fallback planner paths, and POSIX Pi paths plus `proof_success` / `kernel_checked` were not covered by the public sanitizer. Follow-up adversarial coverage now exercises poisoned IDs, encoded trusted runtime roots, Pi host paths, and broader proof-success vocabulary.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- Focused Task223 exited 0 after the review hardening.
+- Adjacent Task165 and Task221 Pi lifecycle consumer regressions exited 0.
+- Phase6 and Phase26 Pi exposure/registration regressions exited 0 from the package cwd after two manual wrong-cwd reruns exposed no product regression.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task223 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Task222 focused regression exited 0 after preserving the historical `Task213-222 summary` anchor in `TODO.md`.
+- Phase17 integrity evaluation exited 0 after removing `.comath` literals from Pi source defaults.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task223 is a read-only UX/checkpoint planner only. It does not call `comathd`, write `.comath`, echo caller-supplied trusted runtime paths or path-shaped IDs, auto-execute lifecycle actions, accept model-supplied confirmation ids, produce service-owned evidence, provide durable long-lived SSE/WebSocket transport, provide proof authority, or certify GA. Existing mutating lifecycle checkpoints remain host-confirmed service commands.
+
 # Goal 3 Task 221 / Pi Operator Transport Lease Heartbeat Rebind
 
 Scope: add bounded, append-only operator transport heartbeat/rebind checkpoints for Task220-bound leases, plus Pi consumer wiring and lease-kind vocabulary parity.
