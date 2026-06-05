@@ -17,6 +17,7 @@ import { finalReplayManifestV3Schema, type FinalReplayManifestV3 } from "../../t
 import { sha256Buffer, sha256FileSync } from "./lean-project.js";
 import { appendAuditEvent, readAuditEvents } from "../../audit/jsonl-writer.js";
 import { hasLeanRunManifestProvenanceIndexV1, verifyLeanRunManifestV3Evidence } from "./lean-run-manifest-v3.js";
+import { dependencyClosureV2PackagesToExternalRevisions } from "./dependency-closure.js";
 
 type HashRef = { sha256: string; size_bytes: number };
 
@@ -140,6 +141,60 @@ function reportHash(projectRoot: string, path: string): HashRef {
 function readJsonInsideProject(projectRoot: string, path: string): unknown {
   const absolute = assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true });
   return JSON.parse(readFileSync(absolute, "utf8"));
+}
+
+function dependencyLockFileHashVetoes(projectRoot: string, manifest: FinalReplayManifestV3): string[] {
+  const checks: Array<[string, string, string, string]> = [
+    ["lean_toolchain", "lean-toolchain", manifest.dependency_lock.lean_toolchain_path, manifest.dependency_lock.lean_toolchain_sha256],
+    ["lake_manifest", "lake-manifest.json", manifest.dependency_lock.lake_manifest_path, manifest.dependency_lock.lake_manifest_sha256],
+    ["lakefile", "lakefile.lean", manifest.dependency_lock.lakefile_path, manifest.dependency_lock.lakefile_sha256]
+  ];
+  const vetoes: string[] = [];
+  for (const [name, cleanWorkspaceRel, path, expected] of checks) {
+    const expectedPath = normalizedStoredPath(join(manifest.clean_workspace_path, cleanWorkspaceRel));
+    if (normalizedStoredPath(path) !== expectedPath) {
+      vetoes.push(`final_replay_dependency_lock_path_mismatch:${name}`);
+    }
+    try {
+      const absolute = assertPathAllowed(projectRoot, path, { purpose: "read", resolveRealpath: true });
+      if (name === "lean_toolchain" && readFileSync(absolute, "utf8").trim() !== manifest.dependency_lock.lean_toolchain) {
+        vetoes.push("final_replay_dependency_lock_toolchain_mismatch");
+      }
+      if (sha256FileSync(absolute).sha256 !== expected) {
+        vetoes.push(`final_replay_dependency_lock_hash_mismatch:${name}`);
+      }
+    } catch {
+      vetoes.push(`final_replay_dependency_lock_unreadable:${name}`);
+    }
+  }
+  if (sha256Text(canonicalJson(manifest.dependency_lock.external_revisions)) !== manifest.dependency_lock.external_revisions_sha256) {
+    vetoes.push("final_replay_dependency_lock_external_revisions_hash_mismatch");
+  }
+  return vetoes;
+}
+
+function dependencyClosureV2ExternalRevisionVetoes(projectRoot: string, manifest: FinalReplayManifestV3): string[] {
+  try {
+    const report = readJsonInsideProject(projectRoot, manifest.report_paths.dependency_closure);
+    if (!report || typeof report !== "object") {
+      return [];
+    }
+    const record = report as Record<string, unknown>;
+    if (record.schema_version !== "comath.dependency_closure.v2" || !Array.isArray(record.packages)) {
+      return [];
+    }
+    const expectedExternalRevisions = dependencyClosureV2PackagesToExternalRevisions(
+      record.packages.filter((pkg): pkg is { name: string } & Record<string, unknown> => (
+        Boolean(pkg) && typeof pkg === "object" && typeof (pkg as Record<string, unknown>).name === "string"
+      ))
+    );
+    if (canonicalJson(expectedExternalRevisions) !== canonicalJson(manifest.dependency_lock.external_revisions)) {
+      return ["final_replay_dependency_lock_external_revisions_mismatch"];
+    }
+    return [];
+  } catch {
+    return ["final_replay_dependency_closure_unreadable"];
+  }
 }
 
 function dependencyLock(input: {
@@ -432,6 +487,8 @@ export function verifyFinalReplayManifestV3(
   } catch (error) {
     vetoes.push(error instanceof Error ? error.message : "final_replay_clean_workspace_unreadable");
   }
+  vetoes.push(...dependencyLockFileHashVetoes(projectRoot, manifest));
+  vetoes.push(...dependencyClosureV2ExternalRevisionVetoes(projectRoot, manifest));
 
   const artifactPaths: Record<string, string> = {
     stdout: manifest.stdout_path,

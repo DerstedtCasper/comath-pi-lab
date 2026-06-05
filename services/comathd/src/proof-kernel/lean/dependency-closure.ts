@@ -46,6 +46,26 @@ export type DependencyClosureV2Report = {
   warnings: string[];
 };
 
+export function dependencyClosureV2PackagesToExternalRevisions(
+  packages: Array<Partial<DependencyClosureV2Package> & { name: string }>
+): Record<string, unknown>[] {
+  return packages
+    .map((pkg) => ({
+      name: pkg.name,
+      revision: pkg.revision ?? null,
+      url: pkg.url ?? null,
+      license: pkg.license,
+      source: pkg.source,
+      trusted: pkg.trusted,
+      build_status: pkg.build_status,
+      ...(pkg.materialized_package_root ? { materialized_package_root: pkg.materialized_package_root } : {}),
+      ...(pkg.materialized_package_hash ? { materialized_package_hash: pkg.materialized_package_hash } : {}),
+      ...(pkg.materialized_file_hashes ? { materialized_file_hashes: pkg.materialized_file_hashes } : {}),
+      ...(pkg.materialized_symlinks ? { materialized_symlinks: pkg.materialized_symlinks } : {})
+    }))
+    .sort((left, right) => String(left.name).localeCompare(String(right.name)));
+}
+
 function parseLeanImports(path: string): string[] {
   return readFileSync(path, "utf8")
     .split(/\r?\n/)

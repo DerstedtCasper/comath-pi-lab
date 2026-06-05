@@ -6,7 +6,7 @@ import { assertPathAllowed } from "../../security/path-policy.js";
 import { finalLeanReplaySchema, type FinalLeanReplay } from "../../types/schemas.js";
 import { nextSequentialId } from "../../utils/id.js";
 import { checkAxiomProfile } from "./axiom-profile.js";
-import { checkDependencyClosureV2, type DependencyClosureV2Package } from "./dependency-closure.js";
+import { checkDependencyClosureV2, dependencyClosureV2PackagesToExternalRevisions } from "./dependency-closure.js";
 import {
   appendFinalReplayRegistryEntryV3,
   createFinalReplayManifestV3,
@@ -123,24 +123,6 @@ function copyMaterializedMathlibPackage(sourceLeanRoot: string, cleanRoot: strin
   const targetMathlibPackage = join(cleanRoot, ".lake", "packages", "mathlib");
   mkdirSync(dirname(targetMathlibPackage), { recursive: true });
   cpSync(sourceMathlibPackage, targetMathlibPackage, { recursive: true });
-}
-
-function externalRevisionsFromDependencyClosure(packages: DependencyClosureV2Package[]): Record<string, unknown>[] {
-  return packages
-    .map((pkg) => ({
-      name: pkg.name,
-      revision: pkg.revision ?? null,
-      url: pkg.url ?? null,
-      license: pkg.license,
-      source: pkg.source,
-      trusted: pkg.trusted,
-      build_status: pkg.build_status,
-      ...(pkg.materialized_package_root ? { materialized_package_root: pkg.materialized_package_root } : {}),
-      ...(pkg.materialized_package_hash ? { materialized_package_hash: pkg.materialized_package_hash } : {}),
-      ...(pkg.materialized_file_hashes ? { materialized_file_hashes: pkg.materialized_file_hashes } : {}),
-      ...(pkg.materialized_symlinks ? { materialized_symlinks: pkg.materialized_symlinks } : {})
-    }))
-    .sort((left, right) => String(left.name).localeCompare(String(right.name)));
 }
 
 export function runCleanLeanReplay(input: {
@@ -400,7 +382,7 @@ export function runCleanLeanReplay(input: {
         lean_toolchain_path: join(cleanRoot, "lean-toolchain"),
         lake_manifest_path: join(cleanRoot, "lake-manifest.json"),
         lakefile_path: join(cleanRoot, "lakefile.lean"),
-        external_revisions: externalRevisionsFromDependencyClosure(dependency_closure.packages)
+        external_revisions: dependencyClosureV2PackagesToExternalRevisions(dependency_closure.packages)
       },
       network_policy: "disabled",
       sandbox_policy: {

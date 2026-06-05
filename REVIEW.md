@@ -1,3 +1,34 @@
+# Goal 3 Task 217 / Final Replay Dependency Lock Consistency
+
+Scope: harden FinalReplayManifest v3 verification so dependency-lock material cannot be semantically tampered while preserving the existing Lean/kernel proof-authority boundary.
+
+Changes:
+
+- Added `goal3-task217-final-replay-dependency-lock-consistency.test.mjs`.
+- Added `final_replay_dependency_lock_consistency_gate` to service capabilities.
+- Extracted `dependencyClosureV2PackagesToExternalRevisions()` so clean replay creation and manifest verification use the same canonical V2 package-to-lock projection.
+- Hardened `verifyFinalReplayManifestV3()` to keep `lean-toolchain`, `lake-manifest.json`, and `lakefile.lean` dependency-lock file paths fixed to the clean workspace, recompute their hashes, and bind `lean_toolchain` text to the clean `lean-toolchain` file.
+- Hardened `verifyFinalReplayManifestV3()` to recompute `external_revisions_sha256` and compare V2 dependency-lock external revisions against `dependency_closure.json` package material when the report is `comath.dependency_closure.v2`.
+- Registered Task217 in phase0 smoke / GA release criteria discovery.
+- Updated README, AGENTS, TODO, threat model, external Lean supply-chain docs, GA release criteria, REVIEW, and the Goal 3 tracker.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task217 failed because a FinalReplayManifest with a tampered `dependency_lock.lakefile_sha256` still verified as ok.
+- A follow-up focused regression covers same-hash project-local dependency-lock path substitution; the verifier now emits `final_replay_dependency_lock_path_mismatch:*`.
+- Read-only review found a missing `dependency_lock.lean_toolchain` text consistency check; focused coverage now rejects toolchain-text tampering with `final_replay_dependency_lock_toolchain_mismatch`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task217 exited 0.
+- Adjacent regressions exited 0: Task8, Task10, Task214, Task215, Task216, and the corrected Task102/103 campaign final-authority tests.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task217 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task217 is verifier consistency hardening only. It does not fetch or vendor mathlib, run a host-backed non-toy Mathlib replay, validate a full Lake elaborated import graph, make dependency metadata proof authority, broaden positive-matrix replay, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
+
 # Goal 3 Task 216 / Campaign Live Mathlib Provisioning Diagnostic
 
 Scope: add a non-authoritative provisioning diagnostic for opt-in campaign-native Mathlib final replay requests, and ensure final clean replay can carry locally materialized Mathlib package sources into the clean workspace.
