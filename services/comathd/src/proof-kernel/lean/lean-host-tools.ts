@@ -48,6 +48,17 @@ export function serviceToolBinary(command: "lean" | "lake", leanToolchain: strin
   return findExecutableOnPath(command);
 }
 
+function assertSafeWindowsCommandScriptToken(value: string): void {
+  if (/[\r\n"&|<>^%!]/u.test(value)) {
+    throw new Error("windows_command_script_unsafe_argument");
+  }
+}
+
+function quoteWindowsCommandScriptToken(value: string): string {
+  assertSafeWindowsCommandScriptToken(value);
+  return `"${value}"`;
+}
+
 export function runLeanToolCommand(
   command: string,
   args: string[],
@@ -60,7 +71,11 @@ export function runLeanToolCommand(
       : command;
   const windowsCommandScript = process.platform === "win32" && /\.(?:cmd|bat)$/iu.test(executable);
   const result = windowsCommandScript
-    ? spawnSync("cmd.exe", ["/d", "/s", "/c", "call", executable, ...args], { cwd, encoding: "utf8", timeout: 30_000 })
+    ? spawnSync("cmd.exe", ["/d", "/s", "/c", ["call", executable, ...args].map(quoteWindowsCommandScriptToken).join(" ")], {
+        cwd,
+        encoding: "utf8",
+        timeout: 30_000
+      })
     : spawnSync(executable, args, { cwd, encoding: "utf8", timeout: 30_000 });
   return {
     exit_code: result.status ?? 1,
