@@ -29,6 +29,8 @@ Verification:
 - `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
 - `Test-Path -LiteralPath ".comath"` returned `False`.
 
+Commit: `1d44983` (`Add goal3 task223 interactive real-Pi UX`)
+
 Boundary notes: Task223 is a read-only UX/checkpoint planner only. It does not call `comathd`, write `.comath`, echo caller-supplied trusted runtime paths or path-shaped IDs, auto-execute lifecycle actions, accept model-supplied confirmation ids, produce service-owned evidence, provide durable long-lived SSE/WebSocket transport, provide proof authority, or certify GA. Existing mutating lifecycle checkpoints remain host-confirmed service commands.
 
 # Goal 3 Task 221 / Pi Operator Transport Lease Heartbeat Rebind
