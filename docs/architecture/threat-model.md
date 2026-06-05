@@ -1,4 +1,4 @@
-﻿# Threat Model
+# Threat Model
 
 CoMath is a local research workbench. Its highest-value assets are theorem boundary integrity, replay authenticity, dependency provenance, evidence hashes, user attachments, API credentials, and runtime project state under `.comath/`.
 
@@ -83,6 +83,8 @@ Task216 adds a campaign-native Mathlib provisioning diagnostic to the same Lean-
 
 Task217 hardens FinalReplayManifest v3 dependency-lock verification. Mitigation: manifest verification keeps the `lean-toolchain`, `lakefile.lean`, and `lake-manifest.json` dependency-lock paths fixed to the clean workspace, recomputes their hashes, binds `lean_toolchain` text to the clean `lean-toolchain` file, verifies `external_revisions_sha256`, and compares dependency-lock external revisions to `DependencyClosureV2` package material when the dependency closure report is V2. Tampered lock paths, hashes, toolchain text, or package material fail closed before local evidence can satisfy final-replay verification.
 
+Task218 adds a campaign-native Mathlib host replay diagnostic before final replay allocation. Mitigation: Task213-216-valid `campaign_live_mathlib_non_toy` requests must write `mathlib_host_replay_diagnostic.json` with service-owned Lean/Lake version probes, expected Lean toolchain match, binary hashes, replay plan, provisioning-diagnostic hash, safe replay arguments, and lakefile-declared build targets. Missing Lean/Lake binaries, failed probes, toolchain mismatch, unsafe replay arguments, or undeclared build targets fail closed as replayable blockers before `.comath/lean/final_replay` is allocated. Windows command-script Lean/Lake helpers are invoked only after replay arguments are checked for command metacharacters. This diagnostic remains `proof_authority=none`, records no executable absolute paths, and cannot promote a claim without the later network-disabled Lean clean replay and ordinary promotion gates.
+
 Configured provider-helper execution args-prefix environment variables may be mistaken for an executed sandbox profile or public helper script. Mitigation: provider-specific `*_HELPER_ARGS_JSON` handles and the fallback args-prefix handle are host configuration only; public manifests record only the args-prefix hash and count, never the prefix argument values or helper script paths. The configured prefix can help run a service-owned helper asset after validated host binding, but helper execution still does not prove OS enforcement and cannot satisfy readiness without later canonical collected probe/evidence artifacts.
 
 ### Bundled Provider Helper Protocol Confusion
@@ -108,5 +110,5 @@ Provider-helper collection bridge manifests may be mistaken for readiness eviden
 - Adapter sandbox-launch preflight is not equivalent to actually executing adapters inside an OS-enforced sandbox.
 - Adapter provider-runner contracts, provider host capability probes, provider-helper host validations, provider-helper execution attempts, provider-helper collection bridge manifests, sandbox-execution probe bridging, and Pi consumer wiring are not equivalent to broad production OS-enforced execution across OCI/Nix/Firejail/AppContainer/macOS helpers and hosts.
 - Injected-client Codex API tests are not live production account validation.
-- Goal 3 positive acceptance breadth is representative unless the full 100-task matrix is clean-replayed.
+- Broad matrix-style proof campaigns are final-release-candidate audit debt. During product-completion work, representative acceptance harnesses and 1-3 theorem-specific Lean/mathlib smokes may validate product behavior, but they are not broad mathematical coverage or proof authority.
 - Documentation must continue to distinguish implemented trust gates from final global GA completion.

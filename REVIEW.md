@@ -1,3 +1,31 @@
+# Goal 3 Task 218 / Campaign Live Mathlib Host Replay Diagnostic
+
+Scope: add a non-authoritative host replay availability diagnostic for opt-in campaign-native Mathlib final replay requests before final replay workspace allocation.
+
+Changes:
+
+- Added `goal3-task218-campaign-live-mathlib-host-replay-diagnostic.test.mjs`.
+- Added `campaign_live_mathlib_host_replay_diagnostic` to service capabilities.
+- Added `evaluateCampaignLiveMathlibHostReplayDiagnostic()` and wired it into `replay_breadth_profile: "campaign_live_mathlib_non_toy"` final replay request parsing after Task216 provisioning diagnostics and before `.comath/lean/final_replay` allocation.
+- Persisted `mathlib_host_replay_diagnostic.json` on both pass and fail with service-owned Lean/Lake version probe hashes, expected Lean toolchain match, binary hashes, replay plan, provisioning-diagnostic hash, and `proof_authority: "none"`.
+- Extracted shared Lean/Lake host tool resolution and command execution helpers so the diagnostic and final clean replay use the same direct-elan-or-PATH resolution semantics.
+- Hardened Windows `.cmd`/`.bat` host tool execution through `cmd.exe /d /s /c call`, with the resolved command script path quoted, replay arguments checked for command metacharacters, and unsafe arguments returning structured probe failure instead of being interpreted by `cmd.exe`.
+- Required Task218 host diagnostics to reject unsafe theorem/audit/build-target replay arguments and nonempty build targets that are not declared by the request's `lakefile.lean` before `.comath/lean/final_replay` allocation.
+- Bound the successful host diagnostic path into the final clean replay artifact as `host_replay_diagnostic_path`.
+- Registered Task218 in phase0 smoke / GA release criteria discovery.
+- Updated README, AGENTS, TODO, threat model, external Lean supply-chain docs, GA release criteria, REVIEW, and the Goal 3 tracker.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task218 failed because `../../dist/index.js` did not export `evaluateCampaignLiveMathlibHostReplayDiagnostic`.
+- A systematic-debugging pass investigated a focused Task218 timeout and found `runLeanToolCommand("lean", ...)` could resolve fake `.cmd` binaries for hashing while execution fell through to the old PATH elan shim. The shared helper now executes the resolved service tool binary and handles Windows command scripts explicitly.
+- Read-only review found a Windows `.cmd` argument-injection risk and a pre-allocation build-target validation gap. Follow-up RED coverage failed when `MathResearch & echo injected` passed host diagnostics; the diagnostic now rejects unsafe replay arguments and undeclared build targets before final replay allocation.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task218 exited 0.
+- Adjacent regressions exited 0: Task213, Task214, Task215, Task216, and Task217.
+
+Boundary notes: Task218 is a host availability/version/binary diagnostic only. It does not fetch or vendor Mathlib, prove the theorem, create a FinalReplayManifest v3 by itself, validate a full Lake elaborated import graph, make host diagnostics proof authority, complete broad release-candidate proof breadth, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
+
 # Goal 3 Task 217 / Final Replay Dependency Lock Consistency
 
 Scope: harden FinalReplayManifest v3 verification so dependency-lock material cannot be semantically tampered while preserving the existing Lean/kernel proof-authority boundary.
@@ -27,7 +55,7 @@ Verification:
 - `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
 - `Test-Path -LiteralPath ".comath"` returned `False`.
 
-Boundary notes: Task217 is verifier consistency hardening only. It does not fetch or vendor mathlib, run a host-backed non-toy Mathlib replay, validate a full Lake elaborated import graph, make dependency metadata proof authority, broaden positive-matrix replay, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
+Boundary notes: Task217 is verifier consistency hardening only. It does not fetch or vendor mathlib, run a host-backed non-toy Mathlib replay, validate a full Lake elaborated import graph, make dependency metadata proof authority, complete broad release-candidate proof breadth, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
 
 # Goal 3 Task 216 / Campaign Live Mathlib Provisioning Diagnostic
 
@@ -60,7 +88,7 @@ Verification:
 - `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
 - `Test-Path -LiteralPath ".comath"` returned `False`.
 
-Boundary notes: Task216 is a provisioning/materialization diagnostic and replay-workspace packaging hardening slice. It does not fetch mathlib, install/vendor dependencies, make provisioning metadata proof authority, execute a host-backed non-toy Mathlib theorem replay by itself, close positive-matrix breadth, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
+Boundary notes: Task216 is a provisioning/materialization diagnostic and replay-workspace packaging hardening slice. It does not fetch mathlib, install/vendor dependencies, make provisioning metadata proof authority, execute a host-backed non-toy Mathlib theorem replay by itself, complete broad release-candidate proof breadth, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
 
 # Goal 3 Task 215 / Final Replay DependencyClosureV2 Binding
 
@@ -92,7 +120,7 @@ Verification:
 - `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
 - Post-diff read-only review found no issues. It confirmed failed V2 dependency closure cannot promote through final replay, campaign completion, or ordinary promotion gates, and noted only the expected residual gaps below.
 
-Boundary notes: Task215 upgrades final replay dependency evidence and dependency-lock revision binding. It does not install or vendor mathlib, fetch Lake dependencies, execute a real non-toy Mathlib theorem replay on this host, close positive-matrix breadth, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
+Boundary notes: Task215 upgrades final replay dependency evidence and dependency-lock revision binding. It does not install or vendor mathlib, fetch Lake dependencies, execute a real non-toy Mathlib theorem replay on this host, complete broad release-candidate proof breadth, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA.
 
 # Goal 3 Task 214 / Campaign Live Mathlib Dependency Material Gate
 
@@ -122,7 +150,7 @@ Verification:
 - `Test-Path -LiteralPath ".comath"` returned `False`.
 - Post-diff read-only reviewer requests were attempted twice but timed out and were closed without findings; no reviewer pass is claimed.
 
-Boundary notes: Task214 is a dependency-material preflight gate. It does not install mathlib, fetch dependencies, run Lean, prove a theorem, close the broader positive-matrix replay item, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA. Promotion still requires service-owned Lean clean replay plus Lean Authority v3 packaging and ordinary promotion gates.
+Boundary notes: Task214 is a dependency-material preflight gate. It does not install mathlib, fetch dependencies, run Lean, prove a theorem, close the broad release-candidate proof breadth item, ship production OS-isolation helpers, provide durable Pi/operator transport, or certify GA. Promotion still requires service-owned Lean clean replay plus Lean Authority v3 packaging and ordinary promotion gates.
 
 # Goal 3 Task 213 / Campaign Live Mathlib Replay Breadth Gate
 
@@ -148,7 +176,7 @@ Verification:
 - `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
 - A local bare Lean probe for `import Mathlib` exited 1 with `unknown module prefix 'Mathlib'`, so Task213 does not claim an environment-backed live Mathlib proof replay on this host.
 
-Boundary notes: Task213 is a breadth anti-confusion and fail-closed request gate. It does not install mathlib, provision a theorem-specific Lake package, clean-replay a real non-toy Mathlib theorem on this host, close the positive-matrix breadth item, make gate output proof authority, or certify GA. Promotion still requires service-owned Lean clean replay plus Lean Authority v3 packaging and ordinary promotion gates.
+Boundary notes: Task213 is a breadth anti-confusion and fail-closed request gate. It does not install mathlib, provision a theorem-specific Lake package, clean-replay a real non-toy Mathlib theorem on this host, complete broad release-candidate proof breadth, make gate output proof authority, or certify GA. Promotion still requires service-owned Lean clean replay plus Lean Authority v3 packaging and ordinary promotion gates.
 
 # Goal 3 Task 212 / Windows AppContainer Production-Helper Profile Contract
 
@@ -1972,7 +2000,7 @@ Verification evidence:
 
 Boundary notes: Task145 adds tamper-evident policy evidence for public diagnostic archives only. It does not provide OS-level immutable storage, does not perform external notarization, does not make public archives restorable, does not promote claims, and does not weaken Lean Authority v3 source-report or final packaging gates.
 
-Residual risks: Goal 3 remains incomplete. Task145 closes one public archive policy-evidence gap, but richer visual review workflows, real OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, and final GA audit remain open.
+Residual risks: Goal 3 remains incomplete. Task145 closes one public archive policy-evidence gap, but richer visual review workflows, real OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, and final GA audit remain open.
 
 # Goal 3 Task 144 / Public Archive Review Error Contract
 
@@ -1998,7 +2026,7 @@ Verification evidence:
 
 Boundary notes: Task144 changes only the public archive review error contract for referenced public report material. It does not make public archives restorable, does not alter internal source-report fidelity, does not promote claims, and does not weaken Lean Authority v3 gates.
 
-Residual risks: Goal 3 remains incomplete. Task144 closes one remaining service-side public review error leak, but richer visual review workflows, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, and final GA audit remain open.
+Residual risks: Goal 3 remains incomplete. Task144 closes one remaining service-side public review error leak, but richer visual review workflows, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, and final GA audit remain open.
 
 # Goal 3 Task 143 / Pi Public Release Review Consumer
 
@@ -2028,7 +2056,7 @@ Verification evidence:
 
 Boundary notes: Task143 is a Pi consumer and presentation hardening task only. It does not change service-side release archive semantics, does not make public archives restorable, does not promote claims, and does not weaken final Lean Authority v3 packaging gates.
 
-Residual risks: Goal 3 remains incomplete. Task143 closes the Pi public release review consumer gap, but richer visual review workflows, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, and final GA audit remain open.
+Residual risks: Goal 3 remains incomplete. Task143 closes the Pi public release review consumer gap, but richer visual review workflows, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, and final GA audit remain open.
 
 # Goal 3 Task 142 / Public Archive Review Gate
 
@@ -2054,7 +2082,7 @@ Verification evidence:
 
 Boundary notes: Task142 adds a public archive review gate only. It does not make public archives restorable, does not certify proofs, does not change final authority packaging, and does not weaken internal restore fidelity.
 
-Residual risks: Goal 3 remains incomplete. Task142 closes the discovered final public archive review gap for service-side manifests and route payloads, but it does not add Pi/UI review-export ergonomics, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+Residual risks: Goal 3 remains incomplete. Task142 closes the discovered final public archive review gap for service-side manifests and route payloads, but it does not add Pi/UI review-export ergonomics, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, or final GA audit.
 
 # Goal 3 Task 141 / Source-Review Public Archive Contract
 
@@ -2083,7 +2111,7 @@ Verification evidence:
 
 Boundary notes: Task141 adds a public diagnostic package assembly surface only. It does not make public archives restorable, does not promote claims, does not alter internal snapshot restore fidelity, and does not make Markdown/HTML/JSON reports proof authority.
 
-Residual risks: Goal 3 remains incomplete. Task141 closes the discovered source-review public archive assembly gap for generated Markdown/HTML/JSON report presentation, but it does not complete final GA public archive review, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+Residual risks: Goal 3 remains incomplete. Task141 closes the discovered source-review public archive assembly gap for generated Markdown/HTML/JSON report presentation, but it does not complete final GA public archive review, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, or final GA audit.
 
 # Goal 3 Task 140 / Pi Relative Snapshot Manifest Contract
 
@@ -2110,7 +2138,7 @@ Verification evidence:
 
 Boundary notes: Task140 is Pi extension consumer/metadata hardening only. It does not change service-side snapshot resolution, persisted snapshot manifests, direct internal restore fidelity, public download non-restorability, replay semantics, or proof-authority gates.
 
-Residual risks: Goal 3 remains incomplete. Task140 closes the discovered Pi-host project-relative snapshot manifest UX gap, but it does not audit any future source-review package assembly route, generated HTML/Markdown download renderers, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+Residual risks: Goal 3 remains incomplete. Task140 closes the discovered Pi-host project-relative snapshot manifest UX gap, but it does not audit any future source-review package assembly route, generated HTML/Markdown download renderers, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, or final GA audit.
 
 # Goal 3 Task 139 / Public Snapshot Export Path Contract
 
@@ -2137,7 +2165,7 @@ Verification evidence:
 
 Boundary notes: Task139 is public route response hardening only. It does not rewrite persisted snapshot manifests, does not change public snapshot copy contents, does not weaken direct `internal_restore` fidelity, and does not promote snapshot or replay diagnostics into proof authority.
 
-Residual risks: Goal 3 remains incomplete. Task139 closes the discovered public snapshot export path/contract leak, but it does not audit any future source-review package assembly route, generated HTML/Markdown download renderers, real Pi-host UX around project-relative snapshot manifests, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+Residual risks: Goal 3 remains incomplete. Task139 closes the discovered public snapshot export path/contract leak, but it does not audit any future source-review package assembly route, generated HTML/Markdown download renderers, real Pi-host UX around project-relative snapshot manifests, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, or final GA audit.
 
 # Goal 3 Task 138 / Snapshot Route Public Path Contract
 
@@ -2164,7 +2192,7 @@ Verification evidence:
 
 Boundary notes: Task138 is public route response hardening only. It does not change persisted snapshot manifests, public snapshot export paths, direct internal restore fidelity, public download non-restorability, runner replay semantics, or proof authority gates.
 
-Residual risks: Goal 3 remains incomplete. Task138 closes the discovered snapshot verify/restore/replay public route host-path echo surface, but it does not yet audit any future source-review package assembly route, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+Residual risks: Goal 3 remains incomplete. Task138 closes the discovered snapshot verify/restore/replay public route host-path echo surface, but it does not yet audit any future source-review package assembly route, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, or final GA audit.
 
 # Goal 3 Task 137 / Public Paper Export Path Contract
 
@@ -2190,7 +2218,7 @@ Verification evidence:
 
 Boundary notes: Task137 is public route response hardening only. It does not rewrite persisted paper artifacts, does not change `exportPaper()` internal return fidelity, does not change snapshot restore rules, and does not make paper export material proof authority.
 
-Residual risks: Goal 3 remains incomplete. Task137 closes the discovered public paper export host-path leak and adds explicit non-authoritative archive semantics for that route, but it does not yet fully audit snapshot verify/restore route response path echoes, any future source-review package assembly route, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+Residual risks: Goal 3 remains incomplete. Task137 closes the discovered public paper export host-path leak and adds explicit non-authoritative archive semantics for that route, but it does not yet fully audit snapshot verify/restore route response path echoes, any future source-review package assembly route, OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, or final GA audit.
 
 # Goal 3 Task 136 / Public Paper And Literature Route Sanitizer
 
@@ -2216,7 +2244,7 @@ Verification evidence:
 
 Boundary notes: Task136 is response-surface hardening only. It does not rewrite persisted paper/literature evidence, does not change claim promotion gates, and does not make citation, paper, or export material proof authority.
 
-Residual risks: Goal 3 remains incomplete. Task136 closes the discovered public paper/literature route vocabulary leaks, but it does not provide OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+Residual risks: Goal 3 remains incomplete. Task136 closes the discovered public paper/literature route vocabulary leaks, but it does not provide OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, or final GA audit.
 
 # Goal 3 Task 135 / Public Generated Report Snapshot Sanitizer
 
@@ -2241,7 +2269,7 @@ Verification evidence:
 
 Boundary notes: Task135 preserves the Task133 split: default/public snapshots remain sanitized `public_download` artifacts with `can_restore=false`, while explicit `internal_restore` snapshots preserve byte-for-byte generated paper/report material and remain local restore sources only.
 
-Residual risks: Goal 3 remains incomplete. Task135 closes the discovered generated paper/report public-snapshot leak, but it does not provide OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, broader live Lean positive-matrix replay, full real-host Pi/Codex lifecycle validation, or final GA audit.
+Residual risks: Goal 3 remains incomplete. Task135 closes the discovered generated paper/report public-snapshot leak, but it does not provide OS-level immutable storage, external notarization, richer Lean/mathlib dependency fetching, nontrivial theorem synthesis, final-release-candidate Lean/mathlib breadth audit, full real-host Pi/Codex lifecycle validation, or final GA audit.
 
 # Goal 3 Task 134 / Release Public Archive Contract Metadata
 
@@ -2408,7 +2436,7 @@ Verification evidence:
 
 Boundary notes: Task97 is final-authority/no-cheat gate hardening only. It does not install Lean, fetch mathlib, execute fresh clean replay, promote any positive-matrix task, broaden theorem coverage, or complete Goal 3 GA.
 
-Residual risks: broader live Lean/mathlib positive-matrix replay, production Pi/Codex lifecycle validation, OS-level sandboxing, and final GA audit remain open. Local `lean` and `lake` still resolve to elan shims but fail because no default Lean toolchain is configured.
+Residual risks: final-release-candidate Lean/mathlib breadth audit, production Pi/Codex lifecycle validation, OS-level sandboxing, and final GA audit remain open. Local `lean` and `lake` still resolve to elan shims but fail because no default Lean toolchain is configured.
 
 # Goal 3 Task 96 / Positive-Matrix Batch Consumer Semantics Hardening
 
@@ -2429,7 +2457,7 @@ Verification evidence:
 
 Boundary notes: Task96 is consumer-semantics hardening only. It does not install Lean, fetch mathlib, execute fresh clean replay, promote any positive-matrix task, broaden theorem coverage, or complete Goal 3 GA.
 
-Residual risks: a read-only subagent flagged the legacy `hasHashBoundFreshProofKernelReplay()` promotion-gate OR branch as a higher-risk remaining final replay binding audit target. Broader live Lean/mathlib positive-matrix replay, production Pi/Codex lifecycle validation, OS-level sandboxing, and final GA audit remain open.
+Residual risks: a read-only subagent flagged the legacy `hasHashBoundFreshProofKernelReplay()` promotion-gate OR branch as a higher-risk remaining final replay binding audit target. Final-release-candidate Lean/mathlib breadth audit, production Pi/Codex lifecycle validation, OS-level sandboxing, and final GA audit remain open.
 
 # Goal 3 Task 95 / Real Replay Toolchain Mismatch Blocker Contract
 
@@ -2437,9 +2465,9 @@ Scope: make the real positive-matrix Lean replay path fail closed when the decla
 
 Work performed:
 
-- Added `goal3-task95-real-replay-toolchain-mismatch-blocker.test.mjs`. RED showed `runServiceOwnedLeanCommandV3()` threw `lean_toolchain_mismatch` through the positive-matrix executor instead of returning a structured blocker.
+- Added `goal3-task95-real-replay-toolchain-mismatch-blocker.test.mjs`. RED showed `runServiceOwnedLeanCommandV3()` threw `lean_toolchain_mismatch` through the existing replay executor instead of returning a structured blocker.
 - Added a dedicated blocker code, `lean_toolchain_mismatch_for_live_replay`, for real replay setup mismatches.
-- Hardened the generic positive-matrix executor, PM-002 legacy executor, and final replay completion boundary so Lean/Lake/toolchain metadata failures are converted into non-authoritative replayable blockers before any replay command runs.
+- Hardened the generic existing replay executor, PM-002 legacy executor, and final replay completion boundary so Lean/Lake/toolchain metadata failures are converted into non-authoritative replayable blockers before any replay command runs.
 - Preserved archive and environment diagnostic semantics: mismatch archives remain `proof_authority: none`, `can_promote_claim: false`, and diagnostic-only.
 
 Verification evidence:
@@ -2461,7 +2489,7 @@ Scope: close the Task91-93 check-debug gap where final-authority derived binding
 Work performed:
 
 - Added `goal3-task94-final-authority-formal-spec-schema-gate.test.mjs`. RED showed malformed FormalSpecLock / AssumptionLedger material still returned `verified_final_authority_evidence`; GREEN now requires explicit `schema_version`, `task_id`, `claim_id`, `statement_hash` / `formal_spec_lock_hash`, theorem identity, and `proof_authority: "none"` in both packaging and ordinary promotion-gate derived binding checks.
-- Added `goal3-task94-positive-matrix-consumer-semantics.test.mjs`. RED showed `runGoal3GaAcceptanceWorkflow()` rewrote the first positive-matrix seed into `representative_verified_fixture` with `lean_kernel_clean_replay`; GREEN now leaves the 100-task positive matrix as replayable blockers and keeps the representative proof workflow separate.
+- Added `goal3-task94-positive-matrix-consumer-semantics.test.mjs`. RED showed `runGoal3GaAcceptanceWorkflow()` rewrote the first positive-matrix seed into `representative_verified_fixture` with `lean_kernel_clean_replay`; GREEN now leaves the broad matrix-style positive campaign as replayable blockers and keeps the representative proof workflow separate.
 - Reworked default `@comath/comathd` test execution through `scripts/run-default-tests.mjs` after Windows rejected the previous long package test command line.
 - Updated final-authority positive fixtures to carry explicit claim-bound FormalSpecLock / AssumptionLedger binding fields.
 - Added a Goal 3 supersession note to `docs/progress/product-readiness-matrix.md`; also corrected the external agent prompt source so only Lean4/mathlib clean replay is proof authority, with computation/literature/search/votes remaining evidence or hints only.

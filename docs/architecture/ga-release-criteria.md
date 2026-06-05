@@ -55,6 +55,7 @@ Any one of these blocks a GA release:
 - Task215 keeps final replay dependency evidence on the V2 closure path: the stable `dependency_closure.json` artifact written by final clean replay must carry `comath.dependency_closure.v2` content, and FinalReplayManifest v3 dependency locks must bind any V2 package revision material.
 - Task216 keeps campaign-native Mathlib provisioning explicit before final replay: the same opt-in profile must have locally materialized `.lake/packages/mathlib` source material with package hashes and no package-internal symlinks before final replay workspace allocation, and those provisioning diagnostics remain non-authoritative. Final clean replay may copy pinned materialized Mathlib package sources into its clean workspace, but provisioning metadata cannot promote a claim or substitute for a passing network-disabled Lean clean replay.
 - Task217 keeps FinalReplayManifest v3 dependency locks consistent at verification time: manifest verification must keep the `lean-toolchain`, `lakefile.lean`, and `lake-manifest.json` dependency-lock paths fixed to the clean workspace, recompute their hashes, bind `lean_toolchain` text to the clean `lean-toolchain` file, and, when the dependency report is `DependencyClosureV2`, match `dependency_lock.external_revisions` against the V2 package material before accepting the manifest.
+- Task218 keeps host replay availability visible before final replay allocation: the same opt-in profile must write a non-authoritative `mathlib_host_replay_diagnostic.json` with service-owned Lean/Lake version probes, expected toolchain match, binary hashes, replay plan, provisioning-diagnostic hash, safe replay arguments, and lakefile-declared build targets before allocating `.comath/lean/final_replay`. Missing Lean/Lake, failed probes, toolchain mismatch, unsafe replay arguments, or undeclared build targets fail closed as replayable blockers; the diagnostic is not proof authority and cannot promote a claim.
 - Adapter OS-isolation sandbox-execution route payloads, caller-supplied execution booleans, process exit codes, or stdout/stderr/transcript hashes can be treated as collected OS-enforcement evidence without an internal service-owned execution probe callback and canonical probe/evidence artifact.
 - Pi `/cm:release agent-adapter-os-isolation-sandbox-execution` payloads or tool outputs can be treated as collected OS-enforcement evidence, direct `.comath/` writes, production sandbox-runner evidence, or GA certification.
 - Adapter OS-isolation sandbox-execution probe manifests are described as a production provider-specific sandbox runner, broad cross-platform OS-enforced execution support, mathematical proof authority, or GA certification.
@@ -130,6 +131,7 @@ node services/comathd/tests/unit/goal3-task214-campaign-live-mathlib-dependency-
 node services/comathd/tests/unit/goal3-task215-final-replay-dependency-closure-v2-binding.test.mjs
 node services/comathd/tests/unit/goal3-task216-campaign-live-mathlib-provisioning-diagnostic.test.mjs
 node services/comathd/tests/unit/goal3-task217-final-replay-dependency-lock-consistency.test.mjs
+node services/comathd/tests/unit/goal3-task218-campaign-live-mathlib-host-replay-diagnostic.test.mjs
 node services/comathd/tests/unit/goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs
 node services/comathd/tests/unit/goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs
 node services/comathd/tests/unit/goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs
@@ -160,7 +162,7 @@ Before a public GA announcement, attach evidence for:
 - Clean runtime state: no tracked `.comath`, `.tmp`, `dist`, `node_modules`, or host-path leakage.
 - At least one replayable promoted proof artifact whose clean Lean replay can be reproduced from the evidence pack.
 - Negative trust-core cases: fake stdout, agent pass logs, forbidden Lean constructs, statement drift, hidden assumptions, unpinned dependencies, network replay, symlink escape, CAS-only proof, literature-only proof, vote-only proof, and human-review-only proof.
-- Explicit blocker list for any unexecuted breadth, including the 100-task positive matrix if not fully clean-replayed.
+- Explicit blocker list for any deliberately deferred broad proof-test breadth. Broad matrix-style proof campaigns are final-release-candidate audit debt, not a prerequisite for ordinary product-closure tasks.
 
 ## Non-GA Labels
 

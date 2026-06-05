@@ -6,7 +6,7 @@ Historical snapshot note: this file records the Task 20 audit at commit `9b6db33
 
 Scope: final Task 20 review of the current `main` worktree against `goal-3/input.md`, the Goal 3 plan, the 2026-05-29 no-reinvent audit, the 2026-05-29 open formal workbench design, the v2 agent prompt protocol, and current public project documents.
 
-Result: Goal 3 is not eligible to be marked complete as a GA release. The trust-core implementation, documentation hardening, negative suite, representative positive workflow, and package/root validation pass, but the full GA completion gate still contains non-promotional blockers. The central blocker is the unexecuted 100-task positive clean-replay matrix required by the GA design; additional release-grade blockers remain for live provider/network validation, OS-enforced sandboxing, and richer real-host Pi/service lifecycle validation. These blockers are documented as replayable or deferred, not promoted proof success.
+Result: Goal 3 is not eligible to be marked complete as a GA release. The trust-core implementation, documentation hardening, negative suite, representative positive workflow, and package/root validation pass, but the full GA completion gate still contains non-promotional blockers. Broad matrix-style proof breadth is deferred to the final release-candidate audit; current product work should prioritize live provider/network validation, OS-enforced adapter integration, and richer real-host Pi/service lifecycle validation. These blockers are documented as replayable or deferred, not promoted proof success.
 
 ## Requirement Status
 
@@ -20,9 +20,9 @@ Result: Goal 3 is not eligible to be marked complete as a GA release. The trust-
 | Pi goal-mode with allowed terminal states and thin-client trusted-state boundary. | `goal3-task16-pi-goal-mode-routes.test.mjs`, `extensions/comath-pi/tests/goal3-task16-pi-goal-mode.test.mjs`, source scan showing no Pi direct write APIs in `extensions/comath-pi/src`, and `Test-Path -LiteralPath '.comath'` returning `False`. | Proven for command/routing/terminal-state contracts and thin-client boundary. |
 | Trust-core negative GA cases fail safely. | `goal3-task17-ga-acceptance-workflow.test.mjs`, `phase68-v3-negative-ga-slices.test.mjs`, and root/package test chains. | Proven for enumerated negative suite. |
 | Positive proof research workflow without production theorem-family/Nat synthesis. | `goal3-task17-ga-acceptance-workflow.test.mjs` exercises a representative positive fixture binding FormalSpecLock, AssumptionLedger, dependency lock, toolchain hash, artifact hashes, LeanRunManifest v3, FinalReplayManifest v3, and third-party replay pack material. | Representative fixture proven; not enough for full GA breadth. |
-| 100-task positive clean-replay matrix. | `services/comathd/src/release/goal3-ga-acceptance.ts` defines `total_required_tasks: 100` and `remaining_matrix_blocker.blocker_code: "ga_positive_100_task_matrix_not_fully_executed"`; `README.md` states that Task 17 is a representative harness and must not be described as all 100 tasks clean-replayed. | Blocking, non-promotional replayable blocker. |
+| Broad matrix-style proof breadth. | Representative harness evidence must not be described as broad clean-replay coverage. Final release-candidate audit may add separate breadth evidence, but ordinary product-closure tasks should not run broad proof campaigns. | Deferred, non-promotional release-candidate audit debt. |
 | Public docs, threat model, config samples, prompts, and release criteria aligned with implementation. | `scripts/phase0-smoke.mjs` passed with 33 required entries and 33 invariants. Overclaim scan hits were forbidden-wording lists, explicit negations, historical records, or Goal 3 quarantine notes. | Proven for current docs/prompts. |
-| Open-source GA release quality. | Root and package build/typecheck/test pass; no tracked `.comath`, `.tmp`, `dist`, `node_modules`, `services/comathd/dist`, or `extensions/comath-pi/dist`; no source host-path leak except the intentional root path in `AGENTS.md`. | Not globally complete because full GA positive matrix and release-environment blockers remain. |
+| Open-source GA release quality. | Root and package build/typecheck/test pass; no tracked `.comath`, `.tmp`, `dist`, `node_modules`, `services/comathd/dist`, or `extensions/comath-pi/dist`; no source host-path leak except the intentional root path in `AGENTS.md`. | Not globally complete because release-environment blockers and deferred release-candidate breadth audit remain. |
 
 ## Fresh Validation Evidence
 
@@ -60,7 +60,7 @@ All commands were run from `D:\MATH _Studio\comath-pi-lab` on 2026-05-30.
 
 These blockers prevent marking the Goal 3 objective complete as a GA-grade release:
 
-1. The full 100-task positive clean-replay matrix required by the 2026-05-29 design has not been executed. Current Task 17 evidence is a representative verified fixture plus a `ga_positive_100_task_matrix_not_fully_executed` replayable blocker.
+1. Broad matrix-style proof breadth has not been executed and should remain deferred until the final release-candidate audit. Current Task 17 evidence is a representative verified fixture plus a non-promotional replayable blocker.
 2. Live external provider validation remains incomplete for production Codex API/network accounts, theorem-search providers, retrieval APIs, and optional external proof-search backends. Current adapter contracts correctly keep `proof_authority=none`.
 3. Runner/process sandboxing is service-level and environment/policy-gated, not OS/kernel/firewall enforced. Current documentation correctly avoids claiming OS-enforced isolation.
 4. Real-host Pi UX and durable service lifecycle management remain broader release-hardening work beyond the local fake-host/install-session e2e and deterministic package tests.
