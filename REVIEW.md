@@ -1,3 +1,22 @@
+# Goal 3 Task 212 / Windows AppContainer Production-Helper Profile Contract
+
+Scope: add a concrete Windows AppContainer production-helper profile contract so release audits can distinguish host operator configured helpers from bundled provider-helper protocol assets without treating either path as proof authority, OS-enforcement proof, real-Pi evidence, readiness evidence by itself, broad provider support, or GA certification.
+
+Changes:
+
+- Added manifest lineage fields across provider-runner, helper-host-validation, helper-execution, and provider-helper collection records: `helper_profile_source`, `production_helper_configured`, and `bundled_protocol_asset`.
+- Added `agent_adapter_os_isolation_windows_appcontainer_production_helper_profile_contract` and registered `goal3-task212-agent-adapter-os-isolation-windows-appcontainer-production-helper-profile-contract.test.mjs` in release-hardening discovery.
+- Extended the focused Task212 test so both env-configured Windows AppContainer helpers and bundled provider-helper protocol assets carry profile lineage through host-validation, helper-execution, and collection surfaces.
+- Updated README, AGENTS, TODO, adapter contracts, threat model, config sample/docs, GA release criteria, REVIEW, and tracker wording to keep the profile contract non-authoritative.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task212 first failed because the service capability ledger did not advertise the new profile-contract capability, and then failed on missing README documentation after code/build changes.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; focused Task212 exited 0; adjacent provider-helper regressions exited 0 for Task170, Task181, Task188, Task202, Task203, Task204, Task205, Task206, Task207, Task208, Task209, Task210, and Task211; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task212 discovered by the default runner; `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; and `Test-Path -LiteralPath ".comath"` returned `False`.
+- Read-only subagent review found no issues. It noted that the first Task212 test version asserted the bundled profile only at provider-runner level; the focused test was then strengthened to cover bundled host-validation, helper-execution, and collection lineage as well.
+
+Boundary notes: Task212 does not ship a production Windows AppContainer helper implementation, does not execute adapters under AppContainer, does not inspect AppContainer policy state, does not prove OS enforcement from profile lineage metadata, does not expose direct Pi collection/witness-chain payloads, does not affect Lean/mathlib proof authority, does not provide real-Pi evidence, does not provide broad provider support, and does not certify GA.
+
 # Goal 3 Task 211 / Provider-Helper Witness Chain Check-Debug
 
 Scope: revalidate the Task202-210 bundled/configured provider-helper collection and provider-tool/family/live-probe/control-plane witness chain, including release-hardening suite discovery, route sanitization, config flags, public wording, blocker/veto wiring, no direct Pi collection/witness-chain consumer, runtime cleanliness, and missing collection-manifest fail-closed behavior.

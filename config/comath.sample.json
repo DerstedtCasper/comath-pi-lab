@@ -167,6 +167,11 @@
         "providerSpecificLiveProbeExecutionRequired": true,
         "providerSpecificLiveProbeCollectionBindingRequired": true,
         "providerControlPlaneExecutionWitnessRequired": true,
+        "productionHelperProfileContractRequired": true,
+        "productionHelperProfileSources": [
+          "operator_configured_provider_helper",
+          "bundled_provider_helper_protocol_asset"
+        ],
         "executionAssetHashBound": true,
         "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",

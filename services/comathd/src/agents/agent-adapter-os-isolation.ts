@@ -384,6 +384,9 @@ export type AgentAdapterOsIsolationProviderRunnerResolution = {
   runner_available?: boolean;
   runner_binary_sha256?: string;
   runner_version?: string;
+  helper_profile_source?: "operator_configured_provider_helper" | "bundled_provider_helper_protocol_asset" | "missing";
+  production_helper_configured?: boolean;
+  bundled_protocol_asset?: boolean;
   diagnostics?: string[];
 };
 
@@ -416,6 +419,9 @@ export type AgentAdapterOsIsolationProviderHelperConfig = {
   helper_program?: string;
   helper_args_prefix?: string[];
   helper_version?: string;
+  helper_profile_source?: "operator_configured_provider_helper" | "bundled_provider_helper_protocol_asset" | "missing";
+  production_helper_configured?: boolean;
+  bundled_protocol_asset?: boolean;
   timeout_ms?: number;
   diagnostics?: string[];
 };
@@ -454,6 +460,9 @@ export type AgentAdapterOsIsolationProviderHelperHostValidationProbe = {
   helper_program?: string;
   helper_binary_sha256?: string;
   helper_version?: string;
+  helper_profile_source?: "operator_configured_provider_helper" | "bundled_provider_helper_protocol_asset" | "missing";
+  production_helper_configured?: boolean;
+  bundled_protocol_asset?: boolean;
   supported_platforms?: string[];
   self_test_required?: boolean;
   self_test_passed?: boolean;
@@ -1116,6 +1125,12 @@ export type AgentAdapterOsIsolationProviderRunner = {
     runner_available: boolean;
     runner_binary_sha256: string | null;
     runner_version: string | null;
+    helper_profile_source:
+      | "operator_configured_provider_helper"
+      | "bundled_provider_helper_protocol_asset"
+      | "missing";
+    production_helper_configured: boolean;
+    bundled_protocol_asset: boolean;
     diagnostics: string[];
   };
   adapter_execution_isolation: {
@@ -1230,6 +1245,12 @@ export type AgentAdapterOsIsolationProviderHelperExecution = {
   };
   provider_helper_execution: {
     helper_source: "service_owned_provider_helper_config" | "missing";
+    helper_profile_source:
+      | "operator_configured_provider_helper"
+      | "bundled_provider_helper_protocol_asset"
+      | "missing";
+    production_helper_configured: boolean;
+    bundled_protocol_asset: boolean;
     helper_configured: boolean;
     helper_binary_sha256: string | null;
     helper_args_prefix_sha256: string | null;
@@ -1328,6 +1349,12 @@ export type AgentAdapterOsIsolationProviderHelperHostValidation = {
     runner_binary_sha256: string | null;
     hashes_match_provider_runner: boolean;
     helper_version: string | null;
+    helper_profile_source:
+      | "operator_configured_provider_helper"
+      | "bundled_provider_helper_protocol_asset"
+      | "missing";
+    production_helper_configured: boolean;
+    bundled_protocol_asset: boolean;
     supported_platforms: string[];
     platform: string | null;
     platform_supported: boolean;
@@ -1395,6 +1422,12 @@ export type AgentAdapterOsIsolationProviderHelperCollectionManifest = {
   probe: AgentAdapterOsIsolationProbe | null;
   provider_helper_collection: {
     probe_source: "service_owned_provider_helper_collection_probe" | "missing";
+    helper_profile_source:
+      | "operator_configured_provider_helper"
+      | "bundled_provider_helper_protocol_asset"
+      | "missing";
+    production_helper_configured: boolean;
+    bundled_protocol_asset: boolean;
     hashes_match_helper_execution: boolean;
     os_enforcement_complete: boolean;
     incomplete_os_enforcement_facts: string[];
@@ -4518,6 +4551,9 @@ function defaultProviderRunnerResolver(
       runner_available: true,
       runner_binary_sha256: helperHash.sha256,
       runner_version: bundledHelper.version,
+      helper_profile_source: "bundled_provider_helper_protocol_asset",
+      production_helper_configured: false,
+      bundled_protocol_asset: true,
       diagnostics: [
         `${input.provider} provider runner is using the bundled CoMath provider-helper protocol asset for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
         ...bundledHelper.diagnostics,
@@ -4545,6 +4581,9 @@ function defaultProviderRunnerResolver(
     runner_available: true,
     runner_binary_sha256: helperHash.sha256,
     runner_version: `${input.provider}-helper-env-configured`,
+    helper_profile_source: "operator_configured_provider_helper",
+    production_helper_configured: true,
+    bundled_protocol_asset: false,
     diagnostics: [
       `${providerEnvVar} resolved to a service-owned provider helper executable for platform=${sanitizeProbeText(input.platform ?? "unknown")}.`,
       "Configured helper assets prepare only a provider runner contract; canonical OS-enforcement evidence still requires service-owned collection."
@@ -5115,6 +5154,9 @@ function defaultProviderHelperConfigResolver(
           helper_program: bundledHelper.program,
           helper_args_prefix: bundledHelper.argsPrefix,
           helper_version: bundledHelper.version,
+          helper_profile_source: "bundled_provider_helper_protocol_asset",
+          production_helper_configured: false,
+          bundled_protocol_asset: true,
           timeout_ms: 10_000,
           diagnostics: bundledHelper.diagnostics
         }
@@ -5155,6 +5197,9 @@ function defaultProviderHelperConfigResolver(
     helper_program: configuredProgram,
     helper_args_prefix: configuredArgs.args,
     helper_version: `${input.provider}-helper-env-configured`,
+    helper_profile_source: "operator_configured_provider_helper",
+    production_helper_configured: true,
+    bundled_protocol_asset: false,
     timeout_ms: 10_000,
     diagnostics: [
       `${providerEnvVar} resolved to a service-owned helper executable.`,
@@ -5193,6 +5238,9 @@ function defaultProviderHelperHostValidator(
         diagnostics: bundledHelper.diagnostics
       },
       providerLabel: "bundled CoMath provider-helper protocol asset",
+      helperProfileSource: "bundled_provider_helper_protocol_asset",
+      productionHelperConfigured: false,
+      bundledProtocolAsset: true,
       supportedPlatforms,
       hostPlatform
     });
@@ -5216,6 +5264,9 @@ function defaultProviderHelperHostValidator(
     input,
     helperProgram: configuredProgram,
     helperVersion: `${input.provider}-helper-env-configured`,
+    helperProfileSource: "operator_configured_provider_helper",
+    productionHelperConfigured: true,
+    bundledProtocolAsset: false,
     configuredArgs,
     providerLabel: providerEnvVar,
     supportedPlatforms,
@@ -5227,6 +5278,9 @@ function runDefaultProviderHelperHostValidator(input: {
   input: AgentAdapterOsIsolationProviderHelperHostValidatorInput;
   helperProgram: string;
   helperVersion: string;
+  helperProfileSource: "operator_configured_provider_helper" | "bundled_provider_helper_protocol_asset";
+  productionHelperConfigured: boolean;
+  bundledProtocolAsset: boolean;
   configuredArgs: {
     ok: boolean;
     args: string[];
@@ -5237,7 +5291,18 @@ function runDefaultProviderHelperHostValidator(input: {
   supportedPlatforms: string[];
   hostPlatform: NodeJS.Platform;
 }): AgentAdapterOsIsolationProviderHelperHostValidationProbe {
-  const { input: validatorInput, helperProgram, helperVersion, configuredArgs, providerLabel, supportedPlatforms, hostPlatform } = input;
+  const {
+    input: validatorInput,
+    helperProgram,
+    helperVersion,
+    helperProfileSource,
+    productionHelperConfigured,
+    bundledProtocolAsset,
+    configuredArgs,
+    providerLabel,
+    supportedPlatforms,
+    hostPlatform
+  } = input;
   const helperHash = sha256FileSync(helperProgram);
   if (!configuredArgs.ok) {
     return {
@@ -5246,6 +5311,9 @@ function runDefaultProviderHelperHostValidator(input: {
       helper_program: helperProgram,
       helper_binary_sha256: helperHash.sha256,
       helper_version: helperVersion,
+      helper_profile_source: helperProfileSource,
+      production_helper_configured: productionHelperConfigured,
+      bundled_protocol_asset: bundledProtocolAsset,
       supported_platforms: supportedPlatforms,
       self_test_required: true,
       self_test_passed: false,
@@ -5319,6 +5387,9 @@ function runDefaultProviderHelperHostValidator(input: {
     helper_program: helperProgram,
     helper_binary_sha256: helperHash.sha256,
     helper_version: helperVersion,
+    helper_profile_source: helperProfileSource,
+    production_helper_configured: productionHelperConfigured,
+    bundled_protocol_asset: bundledProtocolAsset,
     supported_platforms: supportedPlatforms,
     self_test_required: true,
     self_test_passed: selfTestPassed,
@@ -7512,6 +7583,16 @@ export function prepareAgentAdapterOsIsolationProviderRunner(
   const status = providerRunnerStatus({ launchReady, launchMatches, resolution, resolved });
   const argvTemplate = providerRunnerArgvTemplate(provider);
   const environmentPolicy = providerRunnerEnvironmentPolicy(provider);
+  const helperProfileSource = resolution?.helper_profile_source === "operator_configured_provider_helper" ||
+    resolution?.helper_profile_source === "bundled_provider_helper_protocol_asset"
+      ? resolution.helper_profile_source
+      : "missing";
+  const productionHelperConfigured =
+    helperProfileSource === "operator_configured_provider_helper" &&
+    resolution?.production_helper_configured === true;
+  const bundledProtocolAsset =
+    helperProfileSource === "bundled_provider_helper_protocol_asset" &&
+    resolution?.bundled_protocol_asset === true;
   const diagnostics = [
     input.runner_environment?.platform ? `platform=${sanitizeProbeText(input.runner_environment.platform)}` : undefined,
     input.runner_environment?.notes ? sanitizeProbeText(input.runner_environment.notes) : undefined,
@@ -7559,6 +7640,9 @@ export function prepareAgentAdapterOsIsolationProviderRunner(
       runner_version: resolved && typeof resolution?.runner_version === "string"
         ? sanitizeProbeText(resolution.runner_version)
         : null,
+      helper_profile_source: resolved ? helperProfileSource : "missing",
+      production_helper_configured: resolved ? productionHelperConfigured : false,
+      bundled_protocol_asset: resolved ? bundledProtocolAsset : false,
       diagnostics
     },
     adapter_execution_isolation: {
@@ -7741,6 +7825,16 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   );
   const selfTestRequired = validationSourceAccepted && validation?.self_test_required === true;
   const selfTestPassed = validationSourceAccepted && validation?.self_test_passed === true;
+  const helperProfileSource = validation?.helper_profile_source === "operator_configured_provider_helper" ||
+    validation?.helper_profile_source === "bundled_provider_helper_protocol_asset"
+      ? validation.helper_profile_source
+      : "missing";
+  const productionHelperConfigured =
+    helperProfileSource === "operator_configured_provider_helper" &&
+    validation?.production_helper_configured === true;
+  const bundledProtocolAsset =
+    helperProfileSource === "bundled_provider_helper_protocol_asset" &&
+    validation?.bundled_protocol_asset === true;
   const helperHostReady = Boolean(
     validationSourceAccepted &&
       validation?.helper_host_ready === true &&
@@ -7815,6 +7909,9 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
       helper_version: validationSourceAccepted && typeof validation?.helper_version === "string"
         ? sanitizeProbeText(validation.helper_version)
         : null,
+      helper_profile_source: validationSourceAccepted ? helperProfileSource : "missing",
+      production_helper_configured: validationSourceAccepted ? productionHelperConfigured : false,
+      bundled_protocol_asset: validationSourceAccepted ? bundledProtocolAsset : false,
       supported_platforms: supportedPlatforms,
       platform: validationPlatform,
       platform_supported: platformSupported,
@@ -7991,6 +8088,16 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
       }) ?? undefined
     : undefined;
   const configAccepted = providerHelperConfigAccepted(config);
+  const helperProfileSource = config?.helper_profile_source === "operator_configured_provider_helper" ||
+    config?.helper_profile_source === "bundled_provider_helper_protocol_asset"
+      ? config.helper_profile_source
+      : "missing";
+  const productionHelperConfigured =
+    helperProfileSource === "operator_configured_provider_helper" &&
+    config?.production_helper_configured === true;
+  const bundledProtocolAsset =
+    helperProfileSource === "bundled_provider_helper_protocol_asset" &&
+    config?.bundled_protocol_asset === true;
   const fixedArgs = providerHelperFixedArgs({
     helperExecutionId,
     runnerId: input.runner_id,
@@ -8141,6 +8248,9 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
     },
     provider_helper_execution: {
       helper_source: configAccepted ? "service_owned_provider_helper_config" : "missing",
+      helper_profile_source: configAccepted ? helperProfileSource : "missing",
+      production_helper_configured: configAccepted ? productionHelperConfigured : false,
+      bundled_protocol_asset: configAccepted ? bundledProtocolAsset : false,
       helper_configured: configAccepted,
       helper_binary_sha256: helperHash?.sha256 ?? null,
       helper_args_prefix_sha256: helperArgsPrefixSha256,
@@ -8504,6 +8614,10 @@ export function collectAgentAdapterOsIsolationProviderHelperExecutionEvidence(
     probe,
     provider_helper_collection: {
       probe_source: collectionSourceAccepted ? "service_owned_provider_helper_collection_probe" : "missing",
+      helper_profile_source: helperExecution?.provider_helper_execution.helper_profile_source ?? "missing",
+      production_helper_configured:
+        helperExecution?.provider_helper_execution.production_helper_configured === true,
+      bundled_protocol_asset: helperExecution?.provider_helper_execution.bundled_protocol_asset === true,
       hashes_match_helper_execution: hashesMatch,
       os_enforcement_complete: osEnforcementCompleteness.complete,
       incomplete_os_enforcement_facts: osEnforcementCompleteness.incompleteFacts,
