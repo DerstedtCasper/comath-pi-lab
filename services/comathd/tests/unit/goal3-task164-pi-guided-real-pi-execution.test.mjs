@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createComathServer,
+  executeProfileAgentRun,
   getComathdStatus,
   initProject,
   openPiCodexLifecycleOperatorTransportLease,
@@ -11,11 +12,29 @@ import {
   probePiCodexRealPiInstallRuntimeRegistration,
   readAuditEvents,
   recordPiCodexLifecycleGuidedRealPiExecution,
-  recoverPiCodexLifecycleOperatorTransport
+  recoverPiCodexLifecycleOperatorTransport,
+  spawnWorkstream
 } from "../../dist/index.js";
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function writeAgentRunAdapterFixture() {
+  const dir = join(projectRoot, ".tmp", "task164-fixtures");
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, "guided-real-pi-adapter.mjs");
+  writeFileSync(
+    path,
+    [
+      "process.stdout.write('task164 stdout\\n');",
+      "process.stderr.write('task164 stderr\\n');",
+      "process.stdout.write('# Agent Report\\n\\n## Input Context\\nTask164 guided execution fixture.\\n\\n## Actions Taken\\nEmitted bounded logs.\\n\\n## Claims Proposed\\nproof_authority: none\\n\\n## Evidence Produced\\nRuntime logs only.\\n\\n## Graph Patch\\nNone.\\n\\n## Blockers\\nNone.\\n\\n## Failed Routes\\nNone.\\n\\n## Self-Review\\nNo authority.\\n\\n## Next Actions\\nContinue.\\n');",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+  return path;
 }
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task164-guided-real-pi-execution-"));
@@ -30,6 +49,24 @@ try {
   process.env.COMATH_PI_CODEX_LIFECYCLE_ALLOWED_PROGRAMS = JSON.stringify([process.execPath]);
   const init = initProject({ name: "Goal3 Task164 Guided Real Pi Execution Project", root_path: projectRoot });
   const projectId = init.project.project_id;
+  const workstream = spawnWorkstream(projectRoot, {
+    project_id: projectId,
+    kind: "proof_route",
+    goal: "Task164 guided real-Pi bounded lease logs.",
+    created_by: "goal3-task164"
+  });
+  const agentRun = await executeProfileAgentRun(projectRoot, {
+    project_id: projectId,
+    campaign_id: "CAM-0164",
+    workstream_id: workstream.workstream_id,
+    profile_id: "reviewer",
+    program: process.execPath,
+    adapter_args: [writeAgentRunAdapterFixture()],
+    goal: "Run Task164 guided execution fixture.",
+    context_path: `.comath/workstreams/${workstream.workstream_id}/spec.yaml`,
+    actor: "goal3-task164-agent-run"
+  });
+  const agentRunLogSessionRoute = `/agent/run/${agentRun.run.id}/log-session`;
 
   assert.equal(
     typeof recordPiCodexLifecycleGuidedRealPiExecution,
@@ -95,7 +132,7 @@ try {
     actor: "goal3-task164-recovery-test",
     session_manifest_path: session.session_manifest_path,
     transport_kind: "bounded_sse_snapshot",
-    observed_route: "/agent/run/RUN-0164/log-session",
+    observed_route: agentRunLogSessionRoute,
     requested_cursor: {
       operator_event_cursor: "event:4",
       stdout_cursor: "stdout:128",
@@ -115,7 +152,7 @@ try {
     session_manifest_path: session.session_manifest_path,
     transport_recovery_path: recovery.transport_recovery_path,
     transport_kind: "bounded_live_polling_lease",
-    lease_route: "/agent/run/RUN-0164/log-session",
+    lease_route: agentRunLogSessionRoute,
     requested_cursor: {
       operator_event_cursor: "event:5",
       stdout_cursor: "stdout:160",
@@ -372,6 +409,84 @@ try {
       }),
     { code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_LEASE_INVALID_BOUNDARY" },
     "guided execution must reject poisoned bounded transport lease artifacts"
+  );
+  writeFileSync(leasePath, leaseBeforePoison, "utf8");
+
+  const leaseWithTamperedLogSessionBinding = readJson(leasePath);
+  leaseWithTamperedLogSessionBinding.agent_run_log_session_binding.body_sha256 = "0".repeat(64);
+  writeFileSync(leasePath, JSON.stringify(leaseWithTamperedLogSessionBinding, null, 2), "utf8");
+  assert.throws(
+    () =>
+      recordPiCodexLifecycleGuidedRealPiExecution(projectRoot, {
+        project_id: projectId,
+        execution_id: "LIFE-GUIDED-EXEC-0164-TAMPERED-LOG-SESSION",
+        actor: "goal3-task164-test",
+        real_pi_runtime_probe_id: "LIFE-PI-RUNTIME-0164",
+        pi_install_transcript_path: realPiProbe.pi_install_transcript_path,
+        runtime_registration_snapshot_path: realPiProbe.runtime_registration_snapshot_path,
+        session_id: "LIFE-OP-SESSION-0164",
+        session_manifest_path: session.session_manifest_path,
+        transport_recovery_id: "LIFE-TRANSPORT-0164",
+        transport_recovery_path: recovery.transport_recovery_path,
+        transport_lease_id: "LIFE-TRANSPORT-LEASE-0164",
+        transport_lease_path: lease.transport_lease_path,
+        execution_outcome: "operator_guided_run_observed"
+      }),
+    { code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_LEASE_INVALID_BOUNDARY" },
+    "guided execution must reject lease artifacts with tampered AgentRun log-session body hashes"
+  );
+  writeFileSync(leasePath, leaseBeforePoison, "utf8");
+
+  const expiredLease = readJson(leasePath);
+  expiredLease.lease_started_at = "2000-01-01T00:00:00.000Z";
+  expiredLease.lease_expires_at = "2000-01-01T00:01:00.000Z";
+  expiredLease.lease_ttl_ms = 60_000;
+  writeFileSync(leasePath, JSON.stringify(expiredLease, null, 2), "utf8");
+  assert.throws(
+    () =>
+      recordPiCodexLifecycleGuidedRealPiExecution(projectRoot, {
+        project_id: projectId,
+        execution_id: "LIFE-GUIDED-EXEC-0164-EXPIRED-LEASE",
+        actor: "goal3-task164-test",
+        real_pi_runtime_probe_id: "LIFE-PI-RUNTIME-0164",
+        pi_install_transcript_path: realPiProbe.pi_install_transcript_path,
+        runtime_registration_snapshot_path: realPiProbe.runtime_registration_snapshot_path,
+        session_id: "LIFE-OP-SESSION-0164",
+        session_manifest_path: session.session_manifest_path,
+        transport_recovery_id: "LIFE-TRANSPORT-0164",
+        transport_recovery_path: recovery.transport_recovery_path,
+        transport_lease_id: "LIFE-TRANSPORT-LEASE-0164",
+        transport_lease_path: lease.transport_lease_path,
+        execution_outcome: "operator_guided_run_observed"
+      }),
+    { code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_LEASE_INVALID_BOUNDARY" },
+    "guided execution must reject expired bounded operator transport leases"
+  );
+  writeFileSync(leasePath, leaseBeforePoison, "utf8");
+
+  const leaseWithoutLogSessionBinding = readJson(leasePath);
+  delete leaseWithoutLogSessionBinding.operator_transport_log_session_bound;
+  delete leaseWithoutLogSessionBinding.agent_run_log_session_binding;
+  writeFileSync(leasePath, JSON.stringify(leaseWithoutLogSessionBinding, null, 2), "utf8");
+  assert.throws(
+    () =>
+      recordPiCodexLifecycleGuidedRealPiExecution(projectRoot, {
+        project_id: projectId,
+        execution_id: "LIFE-GUIDED-EXEC-0164-UNBOUND-LEASE",
+        actor: "goal3-task164-test",
+        real_pi_runtime_probe_id: "LIFE-PI-RUNTIME-0164",
+        pi_install_transcript_path: realPiProbe.pi_install_transcript_path,
+        runtime_registration_snapshot_path: realPiProbe.runtime_registration_snapshot_path,
+        session_id: "LIFE-OP-SESSION-0164",
+        session_manifest_path: session.session_manifest_path,
+        transport_recovery_id: "LIFE-TRANSPORT-0164",
+        transport_recovery_path: recovery.transport_recovery_path,
+        transport_lease_id: "LIFE-TRANSPORT-LEASE-0164",
+        transport_lease_path: lease.transport_lease_path,
+        execution_outcome: "operator_guided_run_observed"
+      }),
+    { code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_LEASE_INVALID_BOUNDARY" },
+    "guided execution must reject pre-Task220 lease artifacts without service-owned AgentRun log-session binding"
   );
   writeFileSync(leasePath, leaseBeforePoison, "utf8");
 

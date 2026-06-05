@@ -1,3 +1,36 @@
+# Goal 3 Task 220 / Pi Operator Transport Lease AgentRun Log-Session Binding
+
+Scope: bind bounded Pi/operator transport leases to service-owned `AgentRun` log-session evidence before lease persistence and before guided real-Pi execution consumes a lease artifact.
+
+Changes:
+
+- Added `goal3-task220-pi-operator-transport-lease-agentrun-log-session-binding.test.mjs`.
+- Added `pi_codex_operator_transport_lease_agentrun_log_session_binding` to service capabilities.
+- Added `PiCodexLifecycleOperatorTransportLogSessionBinding` and bound leases to canonical `/agent/run/<run-id>/log-session` routes through the existing `formatAgentRunLogSseSession()` service path.
+- Rejected arbitrary, stale, missing, or wrong-project log-session routes before writing a lease artifact.
+- Persisted non-authoritative route/run/cursor/event-count/body-hash provenance on bounded lease artifacts and lease-open audit events.
+- Hardened guided real-Pi execution lease consumption so pre-Task220 or tampered lease artifacts without service-owned log-session binding fail closed.
+- Re-bound persisted log-session provenance during guided execution consumption and rejected tampered body hashes, cursor/event-count/complete drift, expired leases, and valid same-project AgentRun routes that do not match the recovery checkpoint route.
+- Updated Task162/164/166 fixtures to create real service-owned AgentRuns instead of synthetic `RUN-*` route text.
+- Registered Task220 in phase0 smoke / GA release criteria discovery and synchronized README, AGENTS, TODO, threat model, GA release criteria, REVIEW, and the Goal 3 tracker.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task220 failed because unbound route text was accepted and a lease artifact was written.
+- Follow-up RED was observed after the initial GREEN path: Task164 failed because guided execution still accepted an old lease artifact with no `agent_run_log_session_binding`.
+- Read-only review found that expired leases, tampered binding body hashes, and same-project unrelated AgentRun routes were still accepted. Follow-up RED coverage failed for tampered body hashes, expired leases, and recovery-route mismatch; the service now rebinds persisted lease provenance to current service-owned AgentRun logs, enforces lease expiry/status/TTL, and requires the lease route to match the recovery checkpoint route.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task220 exited 0.
+- Adjacent Task162, Task164, Task166, and Phase50 regressions exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task220 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task220 is bounded lease provenance and route-integrity hardening only. It does not provide durable long-lived transport, indefinite WebSocket/SSE operator sessions, fully interactive end-to-end real-Pi execution, OS-enforced adapter isolation, mathematical proof authority, or GA certification.
+
 # Goal 3 Task 219 / Campaign Live Mathlib Import Graph Diagnostic
 
 Scope: add a non-authoritative Lean/Lake-produced import-graph diagnostic for opt-in campaign-native Mathlib final replay requests before final replay workspace allocation.

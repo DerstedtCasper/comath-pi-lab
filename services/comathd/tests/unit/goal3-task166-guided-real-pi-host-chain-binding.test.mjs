@@ -1,23 +1,60 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  executeProfileAgentRun,
   initProject,
   openPiCodexLifecycleOperatorTransportLease,
   persistPiCodexLifecycleOperatorSession,
   probePiCodexRealPiInstallRuntimeRegistration,
   recordPiCodexLifecycleGuidedRealPiExecution,
-  recoverPiCodexLifecycleOperatorTransport
+  recoverPiCodexLifecycleOperatorTransport,
+  spawnWorkstream
 } from "../../dist/index.js";
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task166-guided-host-chain-"));
 const previousAllowedPrograms = process.env.COMATH_PI_CODEX_LIFECYCLE_ALLOWED_PROGRAMS;
 
+function writeAgentRunAdapterFixture() {
+  const dir = join(projectRoot, ".tmp", "task166-fixtures");
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, "guided-host-chain-adapter.mjs");
+  writeFileSync(
+    path,
+    [
+      "process.stdout.write('task166 stdout\\n');",
+      "process.stderr.write('task166 stderr\\n');",
+      "process.stdout.write('# Agent Report\\n\\n## Input Context\\nTask166 host-chain fixture.\\n\\n## Actions Taken\\nEmitted bounded logs.\\n\\n## Claims Proposed\\nproof_authority: none\\n\\n## Evidence Produced\\nRuntime logs only.\\n\\n## Graph Patch\\nNone.\\n\\n## Blockers\\nNone.\\n\\n## Failed Routes\\nNone.\\n\\n## Self-Review\\nNo authority.\\n\\n## Next Actions\\nContinue.\\n');",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+  return path;
+}
+
 try {
   process.env.COMATH_PI_CODEX_LIFECYCLE_ALLOWED_PROGRAMS = JSON.stringify([process.execPath]);
   const init = initProject({ name: "Goal3 Task166 Guided Host Chain Project", root_path: projectRoot });
   const projectId = init.project.project_id;
+  const workstream = spawnWorkstream(projectRoot, {
+    project_id: projectId,
+    kind: "proof_route",
+    goal: "Task166 guided host-chain bounded lease logs.",
+    created_by: "goal3-task166"
+  });
+  const agentRun = await executeProfileAgentRun(projectRoot, {
+    project_id: projectId,
+    campaign_id: "CAM-0166",
+    workstream_id: workstream.workstream_id,
+    profile_id: "reviewer",
+    program: process.execPath,
+    adapter_args: [writeAgentRunAdapterFixture()],
+    goal: "Run Task166 host-chain fixture.",
+    context_path: `.comath/workstreams/${workstream.workstream_id}/spec.yaml`,
+    actor: "goal3-task166-agent-run"
+  });
+  const agentRunLogSessionRoute = `/agent/run/${agentRun.run.id}/log-session`;
 
   const realPiProbe = probePiCodexRealPiInstallRuntimeRegistration(
     projectRoot,
@@ -65,7 +102,7 @@ try {
     actor: "goal3-task166-recovery-test",
     session_manifest_path: session.session_manifest_path,
     transport_kind: "bounded_sse_snapshot",
-    observed_route: "/agent/run/RUN-0166/log-session",
+    observed_route: agentRunLogSessionRoute,
     requested_cursor: {
       operator_event_cursor: "event:2",
       stdout_cursor: "stdout:64",
@@ -85,7 +122,7 @@ try {
     session_manifest_path: session.session_manifest_path,
     transport_recovery_path: recovery.transport_recovery_path,
     transport_kind: "bounded_live_polling_lease",
-    lease_route: "/agent/run/RUN-0166/log-session",
+    lease_route: agentRunLogSessionRoute,
     requested_cursor: {
       operator_event_cursor: "event:3",
       stdout_cursor: "stdout:96",
@@ -151,7 +188,7 @@ try {
     actor: "goal3-task166-aligned-recovery-test",
     session_manifest_path: alignedSession.session_manifest_path,
     transport_kind: "bounded_sse_snapshot",
-    observed_route: "/agent/run/RUN-0166-ALIGNED/log-session",
+    observed_route: agentRunLogSessionRoute,
     requested_cursor: {
       operator_event_cursor: "event:4",
       stdout_cursor: "stdout:128",
@@ -170,7 +207,7 @@ try {
     session_manifest_path: alignedSession.session_manifest_path,
     transport_recovery_path: alignedRecovery.transport_recovery_path,
     transport_kind: "bounded_live_polling_lease",
-    lease_route: "/agent/run/RUN-0166-ALIGNED/log-session",
+    lease_route: agentRunLogSessionRoute,
     requested_cursor: {
       operator_event_cursor: "event:5",
       stdout_cursor: "stdout:160",

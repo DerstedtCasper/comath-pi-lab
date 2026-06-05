@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
+import { formatAgentRunLogSseSession, type AgentRunLogCursor } from "../agents/agent-run-observability.js";
 import { validateCodexApiAccountNetworkConnectivity } from "../agents/agent-adapter-packages.js";
 import { ComathError } from "../errors.js";
 import { assertPathAllowed } from "../security/path-policy.js";
@@ -556,6 +557,22 @@ export type PiCodexLifecycleOperatorTransportLeaseArtifact = {
   size_bytes: number;
 };
 
+export type PiCodexLifecycleOperatorTransportLogSessionBinding = {
+  binding_source: "service_owned_agent_run_log_session";
+  project_id: string;
+  run_id: string;
+  route: string;
+  content_type: "text/event-stream; charset=utf-8";
+  cursor: AgentRunLogCursor;
+  next_cursor: AgentRunLogCursor;
+  event_count: number;
+  complete: boolean;
+  body_sha256: string;
+  proof_authority: "none";
+  durable_transport_provided: false;
+  long_lived_sse_provided: false;
+};
+
 export type PiCodexLifecycleOperatorTransportLease = {
   schema_version: "comath.pi_codex_lifecycle_operator_transport_lease.v1";
   transport_lease_id: string;
@@ -582,6 +599,8 @@ export type PiCodexLifecycleOperatorTransportLease = {
   next_recommended_route: string;
   transport_lease_path: string;
   transport_lease_artifact: PiCodexLifecycleOperatorTransportLeaseArtifact;
+  operator_transport_log_session_bound: true;
+  agent_run_log_session_binding: PiCodexLifecycleOperatorTransportLogSessionBinding;
   durable_recovery_checkpoint_required: true;
   bounded_live_transport_lease_provided: true;
   durable_transport_provided: false;
@@ -1570,6 +1589,98 @@ function sanitizeOperatorTransportCursor(
   };
 }
 
+function parseOperatorTransportCursorOffset(value: string, prefix: "stdout" | "stderr"): number {
+  const match = new RegExp(`^${prefix}:(\\d+)$`, "u").exec(value);
+  if (!match) {
+    return 0;
+  }
+  const offset = Number(match[1]);
+  return Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
+}
+
+function parseAgentRunLogSessionRoute(rawRoute: string): { runId: string; route: string } | null {
+  const match = /(?:^|\s)\/agent\/run\/([^/\s?#]+)\/log-session(?:[?#][^\s]*)?(?=$|\s)/u.exec(rawRoute);
+  if (!match) {
+    return null;
+  }
+  try {
+    const runId = decodeURIComponent(match[1] ?? "");
+    if (!runId || /[\r\n]/u.test(runId)) {
+      return null;
+    }
+    return {
+      runId,
+      route: `/agent/run/${encodeURIComponent(runId)}/log-session`
+    };
+  } catch {
+    return null;
+  }
+}
+
+function assertOperatorTransportLeaseRouteMatchesRecovery(rawLeaseRoute: string, rawRecoveryRoute: string): void {
+  const leaseRoute = parseAgentRunLogSessionRoute(rawLeaseRoute);
+  const recoveryRoute = parseAgentRunLogSessionRoute(rawRecoveryRoute);
+  if (!leaseRoute || !recoveryRoute || leaseRoute.route !== recoveryRoute.route) {
+    throw new ComathError(
+      "Pi/Codex lifecycle operator transport lease route must match the recovery AgentRun log session",
+      {
+        statusCode: 400,
+        code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_ROUTE_UNBOUND"
+      }
+    );
+  }
+}
+
+function bindOperatorTransportLogSession(input: {
+  projectRoot: string;
+  projectId: string;
+  rawRoute: string;
+  cursor: PiCodexLifecycleOperatorTransportRecoveryCursor;
+  actor: string;
+}): PiCodexLifecycleOperatorTransportLogSessionBinding {
+  const parsedRoute = parseAgentRunLogSessionRoute(input.rawRoute);
+  if (!parsedRoute) {
+    throw new ComathError("Pi/Codex lifecycle operator transport lease route is not a service-owned AgentRun log session", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_ROUTE_UNBOUND"
+    });
+  }
+  try {
+    const session = formatAgentRunLogSseSession(input.projectRoot, {
+      project_id: input.projectId,
+      run_id: parsedRoute.runId,
+      cursor: {
+        stdout: parseOperatorTransportCursorOffset(input.cursor.stdout_cursor, "stdout"),
+        stderr: parseOperatorTransportCursorOffset(input.cursor.stderr_cursor, "stderr")
+      },
+      max_bytes: 1024,
+      max_events: 3,
+      retry_ms: 500,
+      actor: input.actor
+    });
+    return {
+      binding_source: "service_owned_agent_run_log_session",
+      project_id: session.project_id,
+      run_id: session.run_id,
+      route: parsedRoute.route,
+      content_type: session.content_type,
+      cursor: session.events[0]?.stream.cursor ?? { stdout: 0, stderr: 0 },
+      next_cursor: session.next_cursor,
+      event_count: session.events.length,
+      complete: session.complete,
+      body_sha256: sha256Text(session.body),
+      proof_authority: "none",
+      durable_transport_provided: false,
+      long_lived_sse_provided: false
+    };
+  } catch {
+    throw new ComathError("Pi/Codex lifecycle operator transport lease route is not bound to a readable AgentRun log session", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_ROUTE_UNBOUND"
+    });
+  }
+}
+
 function resolveOperatorTransportSessionManifestPath(
   projectRoot: string,
   sessionId: string,
@@ -1784,11 +1895,29 @@ function readOperatorTransportRecoveryCheckpoint(
   };
 }
 
-function assertOperatorTransportLeaseBoundary(lease: PiCodexLifecycleOperatorTransportLeaseBody): void {
+function assertOperatorTransportLeaseBoundary(projectRoot: string, lease: PiCodexLifecycleOperatorTransportLeaseBody): void {
+  const logSessionBinding = lease.agent_run_log_session_binding;
+  const parsedLogSessionRoute =
+    typeof logSessionBinding?.route === "string" ? parseAgentRunLogSessionRoute(logSessionBinding.route) : null;
+  const leaseStartedAtMs =
+    typeof lease.lease_started_at === "string" ? Date.parse(lease.lease_started_at) : Number.NaN;
+  const leaseExpiresAtMs =
+    typeof lease.lease_expires_at === "string" ? Date.parse(lease.lease_expires_at) : Number.NaN;
   if (
     lease.proof_authority !== "none" ||
     lease.can_promote_claim !== false ||
     lease.can_certify_ga !== false ||
+    lease.lease_status !== "bounded_operator_transport_lease_open" ||
+    !Number.isFinite(leaseStartedAtMs) ||
+    !Number.isFinite(leaseExpiresAtMs) ||
+    leaseExpiresAtMs <= leaseStartedAtMs ||
+    leaseExpiresAtMs <= Date.now() ||
+    !Number.isSafeInteger(lease.lease_ttl_ms) ||
+    lease.lease_ttl_ms <= 0 ||
+    leaseExpiresAtMs - leaseStartedAtMs !== lease.lease_ttl_ms ||
+    !Number.isSafeInteger(lease.heartbeat_interval_ms) ||
+    lease.heartbeat_interval_ms <= 0 ||
+    lease.heartbeat_required !== true ||
     lease.durable_recovery_checkpoint_required !== true ||
     lease.bounded_live_transport_lease_provided !== true ||
     lease.durable_transport_provided !== false ||
@@ -1797,13 +1926,77 @@ function assertOperatorTransportLeaseBoundary(lease: PiCodexLifecycleOperatorTra
     lease.long_lived_websocket_provided !== false ||
     lease.long_lived_sse_provided !== false ||
     lease.pi_direct_write_allowed !== false ||
-    lease.direct_trusted_state_mutation !== false
+    lease.direct_trusted_state_mutation !== false ||
+    lease.operator_transport_log_session_bound !== true ||
+    logSessionBinding?.binding_source !== "service_owned_agent_run_log_session" ||
+    logSessionBinding.project_id !== lease.project_id ||
+    logSessionBinding.route !== lease.lease_route ||
+    parsedLogSessionRoute === null ||
+    parsedLogSessionRoute.route !== logSessionBinding.route ||
+    parsedLogSessionRoute.runId !== logSessionBinding.run_id ||
+    logSessionBinding.content_type !== "text/event-stream; charset=utf-8" ||
+    !isAgentRunLogCursor(logSessionBinding.cursor) ||
+    !isAgentRunLogCursor(logSessionBinding.next_cursor) ||
+    !Number.isSafeInteger(logSessionBinding.event_count) ||
+    logSessionBinding.event_count < 0 ||
+    typeof logSessionBinding.complete !== "boolean" ||
+    !/^[a-f0-9]{64}$/u.test(logSessionBinding.body_sha256) ||
+    logSessionBinding.proof_authority !== "none" ||
+    logSessionBinding.durable_transport_provided !== false ||
+    logSessionBinding.long_lived_sse_provided !== false
   ) {
     throw new ComathError("Pi/Codex guided real-Pi execution lease violates non-authority boundaries", {
       statusCode: 400,
       code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_LEASE_INVALID_BOUNDARY"
     });
   }
+  const reboundLogSessionBinding = bindOperatorTransportLogSession({
+    projectRoot,
+    projectId: lease.project_id,
+    rawRoute: lease.lease_route,
+    cursor: lease.requested_cursor,
+    actor: "pi_codex_guided_real_pi_execution_lease_boundary"
+  });
+  if (
+    reboundLogSessionBinding.project_id !== logSessionBinding.project_id ||
+    reboundLogSessionBinding.run_id !== logSessionBinding.run_id ||
+    reboundLogSessionBinding.route !== logSessionBinding.route ||
+    reboundLogSessionBinding.content_type !== logSessionBinding.content_type ||
+    !agentRunLogCursorEqual(reboundLogSessionBinding.cursor, logSessionBinding.cursor) ||
+    !agentRunLogCursorEqual(reboundLogSessionBinding.next_cursor, logSessionBinding.next_cursor) ||
+    reboundLogSessionBinding.event_count !== logSessionBinding.event_count ||
+    reboundLogSessionBinding.complete !== logSessionBinding.complete ||
+    reboundLogSessionBinding.body_sha256 !== logSessionBinding.body_sha256 ||
+    reboundLogSessionBinding.proof_authority !== logSessionBinding.proof_authority ||
+    reboundLogSessionBinding.durable_transport_provided !== logSessionBinding.durable_transport_provided ||
+    reboundLogSessionBinding.long_lived_sse_provided !== logSessionBinding.long_lived_sse_provided
+  ) {
+    throw new ComathError("Pi/Codex guided real-Pi execution lease log-session binding does not match service-owned logs", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_LEASE_INVALID_BOUNDARY"
+    });
+  }
+}
+
+function isAgentRunLogCursor(value: unknown): value is AgentRunLogCursor {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const cursor = value as Partial<AgentRunLogCursor>;
+  const stdout = cursor.stdout;
+  const stderr = cursor.stderr;
+  return (
+    typeof stdout === "number" &&
+    Number.isSafeInteger(stdout) &&
+    stdout >= 0 &&
+    typeof stderr === "number" &&
+    Number.isSafeInteger(stderr) &&
+    stderr >= 0
+  );
+}
+
+function agentRunLogCursorEqual(left: AgentRunLogCursor, right: AgentRunLogCursor): boolean {
+  return left.stdout === right.stdout && left.stderr === right.stderr;
 }
 
 function readOperatorTransportLeaseArtifact(
@@ -1856,7 +2049,7 @@ function readOperatorTransportLeaseArtifact(
       code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_LEASE_MISMATCH"
     });
   }
-  assertOperatorTransportLeaseBoundary(parsed);
+  assertOperatorTransportLeaseBoundary(projectRoot, parsed);
   return {
     lease: parsed,
     artifact: {
@@ -2181,6 +2374,16 @@ export function openPiCodexLifecycleOperatorTransportLease(
   }
   const startedAt = new Date();
   const transportLeasePath = operatorTransportLeasePath(leaseId);
+  const requestedCursor = sanitizeOperatorTransportCursor(input.requested_cursor ?? recovery.requested_cursor);
+  const rawLeaseRoute = input.lease_route ?? recovery.observed_route;
+  assertOperatorTransportLeaseRouteMatchesRecovery(rawLeaseRoute, recovery.observed_route);
+  const logSessionBinding = bindOperatorTransportLogSession({
+    projectRoot,
+    projectId,
+    rawRoute: rawLeaseRoute,
+    cursor: requestedCursor,
+    actor: sanitizeOperatorTransportText(input.actor)
+  });
   const body: PiCodexLifecycleOperatorTransportLeaseBody = {
     schema_version: "comath.pi_codex_lifecycle_operator_transport_lease.v1",
     transport_lease_id: leaseId,
@@ -2192,8 +2395,8 @@ export function openPiCodexLifecycleOperatorTransportLease(
     lease_expires_at: new Date(startedAt.getTime() + leaseTtlMs).toISOString(),
     lease_status: "bounded_operator_transport_lease_open",
     transport_kind: transportKind,
-    lease_route: sanitizeOperatorTransportText(input.lease_route ?? recovery.observed_route),
-    requested_cursor: sanitizeOperatorTransportCursor(input.requested_cursor ?? recovery.requested_cursor),
+    lease_route: logSessionBinding.route,
+    requested_cursor: requestedCursor,
     client_epoch: clientEpoch,
     heartbeat_interval_ms: heartbeatIntervalMs,
     lease_ttl_ms: leaseTtlMs,
@@ -2206,6 +2409,8 @@ export function openPiCodexLifecycleOperatorTransportLease(
     transport_recovery_artifact: recoveryArtifact,
     next_recommended_route: sanitizeOperatorSessionText(manifest.next_recommended_route),
     transport_lease_path: transportLeasePath,
+    operator_transport_log_session_bound: true,
+    agent_run_log_session_binding: logSessionBinding,
     durable_recovery_checkpoint_required: true,
     bounded_live_transport_lease_provided: true,
     durable_transport_provided: false,
@@ -2251,6 +2456,11 @@ export function openPiCodexLifecycleOperatorTransportLease(
       session_manifest_path: sessionManifestPath,
       transport_recovery_path: recoveryPath,
       transport_lease_path: transportLeasePath,
+      operator_transport_log_session_bound: true,
+      agent_run_id: logSessionBinding.run_id,
+      agent_run_log_session_route: logSessionBinding.route,
+      agent_run_log_session_body_sha256: logSessionBinding.body_sha256,
+      agent_run_log_session_event_count: logSessionBinding.event_count,
       heartbeat_interval_ms: heartbeatIntervalMs,
       lease_ttl_ms: leaseTtlMs,
       durable_recovery_checkpoint_required: true,

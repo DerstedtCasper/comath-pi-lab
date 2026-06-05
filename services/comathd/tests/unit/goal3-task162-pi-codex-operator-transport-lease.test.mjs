@@ -4,16 +4,35 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createComathServer,
+  executeProfileAgentRun,
   getComathdStatus,
   initProject,
   openPiCodexLifecycleOperatorTransportLease,
   persistPiCodexLifecycleOperatorSession,
   readAuditEvents,
-  recoverPiCodexLifecycleOperatorTransport
+  recoverPiCodexLifecycleOperatorTransport,
+  spawnWorkstream
 } from "../../dist/index.js";
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function writeAgentRunAdapterFixture() {
+  const dir = join(projectRoot, ".tmp", "task162-fixtures");
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, "operator-lease-adapter.mjs");
+  writeFileSync(
+    path,
+    [
+      "process.stdout.write('task162 stdout\\n');",
+      "process.stderr.write('task162 stderr\\n');",
+      "process.stdout.write('# Agent Report\\n\\n## Input Context\\nTask162 lease fixture.\\n\\n## Actions Taken\\nEmitted bounded logs.\\n\\n## Claims Proposed\\nproof_authority: none\\n\\n## Evidence Produced\\nRuntime logs only.\\n\\n## Graph Patch\\nNone.\\n\\n## Blockers\\nNone.\\n\\n## Failed Routes\\nNone.\\n\\n## Self-Review\\nNo authority.\\n\\n## Next Actions\\nContinue.\\n');",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+  return path;
 }
 
 const projectRoot = mkdtempSync(join(tmpdir(), "comath-goal3-task162-operator-transport-lease-"));
@@ -26,6 +45,24 @@ const transportOverclaimTerms =
 try {
   const init = initProject({ name: "Goal3 Task162 Operator Transport Lease Project", root_path: projectRoot });
   const projectId = init.project.project_id;
+  const workstream = spawnWorkstream(projectRoot, {
+    project_id: projectId,
+    kind: "proof_route",
+    goal: "Task162 bounded operator transport lease logs.",
+    created_by: "goal3-task162"
+  });
+  const agentRun = await executeProfileAgentRun(projectRoot, {
+    project_id: projectId,
+    campaign_id: "CAM-0162",
+    workstream_id: workstream.workstream_id,
+    profile_id: "reviewer",
+    program: process.execPath,
+    adapter_args: [writeAgentRunAdapterFixture()],
+    goal: "Run Task162 lease fixture.",
+    context_path: `.comath/workstreams/${workstream.workstream_id}/spec.yaml`,
+    actor: "goal3-task162-agent-run"
+  });
+  const agentRunLogSessionRoute = `/agent/run/${agentRun.run.id}/log-session`;
   const artifactInputPath = ".comath/release/pi-codex-lifecycle/task162-input/runtime-registration.json";
   const artifactAbsolutePath = join(projectRoot, artifactInputPath);
   mkdirSync(join(projectRoot, ".comath/release/pi-codex-lifecycle/task162-input"), { recursive: true });
@@ -62,7 +99,7 @@ try {
     actor: "goal3-task162-recovery-test",
     session_manifest_path: session.session_manifest_path,
     transport_kind: "bounded_sse_snapshot",
-    observed_route: "/agent/run/RUN-0162/log-session",
+    observed_route: agentRunLogSessionRoute,
     requested_cursor: {
       operator_event_cursor: "event:7",
       stdout_cursor: "stdout:256",
@@ -85,7 +122,7 @@ try {
     session_manifest_path: session.session_manifest_path,
     transport_recovery_path: recovery.transport_recovery_path,
     transport_kind: "bounded_live_polling_lease",
-    lease_route: `/agent/run/RUN-0162/log-session ${projectRoot}\\route-secret.txt token=plain-token terminal transport recovered live`,
+    lease_route: `${agentRunLogSessionRoute} ${projectRoot}\\route-secret.txt token=plain-token terminal transport recovered live`,
     requested_cursor: {
       operator_event_cursor: "event:8 Authorization: Bearer plain-token",
       stdout_cursor: "stdout:320 sk-task162-secret long-lived websocket",
@@ -173,7 +210,7 @@ try {
         session_manifest_path: session.session_manifest_path,
         transport_recovery_path: recovery.transport_recovery_path,
         transport_kind: "bounded_live_sse_lease",
-        lease_route: "/agent/run/RUN-0162/log-session?duplicate=true",
+        lease_route: `${agentRunLogSessionRoute}?duplicate=true`,
         requested_cursor: {
           operator_event_cursor: "event:99",
           stdout_cursor: "stdout:999",
@@ -311,7 +348,7 @@ try {
       session_manifest_path: session.session_manifest_path,
       transport_recovery_path: recovery.transport_recovery_path,
       transport_kind: "bounded_live_polling_lease",
-      lease_route: "/agent/run/RUN-0162/log-session",
+      lease_route: agentRunLogSessionRoute,
       requested_cursor: {
         operator_event_cursor: "event:16",
         stdout_cursor: "stdout:640",
