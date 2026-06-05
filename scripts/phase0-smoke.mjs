@@ -384,6 +384,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task215-final-replay-dependency-closure-v2-binding.test.mjs",
   "goal3-task216-campaign-live-mathlib-provisioning-diagnostic.test.mjs",
   "goal3-task217-final-replay-dependency-lock-consistency.test.mjs",
+  "goal3-task218-campaign-live-mathlib-host-replay-diagnostic.test.mjs",
   "goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs",
   "goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs",
   "goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs",

@@ -614,6 +614,7 @@ export const finalLeanReplaySchema = z
     dependency_closure_path: z.string().min(1),
     statement_equivalence_path: z.string().min(1),
     provisioning_diagnostic_path: z.string().min(1).optional(),
+    host_replay_diagnostic_path: z.string().min(1).optional(),
     artifact_hashes: z
       .object({
         stdout: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),

@@ -1,7 +1,5 @@
 import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { delimiter, dirname, join, relative } from "node:path";
-import { spawnSync } from "node:child_process";
+import { dirname, join, relative } from "node:path";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { finalLeanReplaySchema, type FinalLeanReplay } from "../../types/schemas.js";
 import { nextSequentialId } from "../../utils/id.js";
@@ -14,6 +12,7 @@ import {
 } from "./final-replay-manifest-v3.js";
 import { hashLeanProjectFiles, sha256FileSync, type LeanProjectFiles } from "./lean-project.js";
 import { runServiceOwnedLeanCommandV3 } from "./lean-run-manifest-v3.js";
+import { runLeanToolCommand, runLeanToolVersionCommand, serviceToolBinary } from "./lean-host-tools.js";
 import { checkStatementEquivalence } from "./statement-equivalence.js";
 import { runStaticCheatScan } from "./static-cheat-scan.js";
 
@@ -30,63 +29,6 @@ export type CleanReplayResult = {
 
 const finalReplayAllowedImportPrefixes = ["Mathlib", "Std", "Init", "Lake", "MathResearch", "Audit"];
 const finalReplayTrustedExternalDependencies = ["mathlib"];
-
-function directElanTool(command: string, leanToolchain: string): string {
-  const match = /^leanprover\/lean4:(v[0-9]+\.[0-9]+\.[0-9]+)$/.exec(leanToolchain.trim());
-  if (!match || (command !== "lake" && command !== "lean")) {
-    return command;
-  }
-  const exe = process.platform === "win32" ? `${command}.exe` : command;
-  const toolchainDir = `leanprover--lean4---${match[1]}`;
-  const elanHome = process.env.ELAN_HOME ?? join(homedir(), ".elan");
-  const direct = join(elanHome, "toolchains", toolchainDir, "bin", exe);
-  return existsSync(direct) ? direct : command;
-}
-
-function findExecutableOnPath(command: string): string | undefined {
-  const pathValue = process.env.PATH ?? "";
-  const extensions = process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";") : [""];
-  for (const dir of pathValue.split(delimiter).filter(Boolean)) {
-    for (const extension of extensions) {
-      const candidate = join(dir, process.platform === "win32" && extension && !command.toLowerCase().endsWith(extension.toLowerCase()) ? `${command}${extension}` : command);
-      if (existsSync(candidate)) {
-        return candidate;
-      }
-    }
-  }
-  return undefined;
-}
-
-function serviceToolBinary(command: "lean" | "lake", leanToolchain: string): string | undefined {
-  const direct = directElanTool(command, leanToolchain);
-  if (direct !== command && existsSync(direct)) {
-    return direct;
-  }
-  return findExecutableOnPath(command);
-}
-
-function runCommand(
-  command: string,
-  args: string[],
-  cwd: string,
-  leanToolchain: string
-): { exit_code: number; stdout: string; stderr: string } {
-  const result = spawnSync(directElanTool(command, leanToolchain), args, { cwd, encoding: "utf8", timeout: 30_000 });
-  return {
-    exit_code: result.status ?? 1,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? (result.error ? String(result.error) : "")
-  };
-}
-
-function runVersionCommand(command: string, args: string[], cwd: string, leanToolchain: string): string {
-  const result = spawnSync(directElanTool(command, leanToolchain), args, { cwd, encoding: "utf8", timeout: 30_000 });
-  const output = `${result.stdout ?? ""}\n${result.stderr ?? (result.error ? String(result.error) : "")}`;
-  if ((result.status ?? 1) !== 0 && !output.trim()) {
-    throw new Error(`${command}_version_missing`);
-  }
-  return output;
-}
 
 function write(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
@@ -133,6 +75,7 @@ export function runCleanLeanReplay(input: {
   claim_id: string;
   leanProject: LeanProjectFiles;
   provisioningDiagnosticPath?: string;
+  hostReplayDiagnosticPath?: string;
 }): CleanReplayResult {
   const evidenceRootRel = join(".comath", "evidence", input.claim_id, "lean");
   const evidenceRoot = assertPathAllowed(input.projectRoot, evidenceRootRel, { purpose: "runtime-write" });
@@ -194,8 +137,8 @@ export function runCleanLeanReplay(input: {
     trustedExternalDependencies: finalReplayTrustedExternalDependencies
   });
 
-  const leanVersionOutput = runVersionCommand("lean", ["--version"], cleanRoot, leanToolchain);
-  const lakeVersionOutput = runVersionCommand("lake", ["--version"], cleanRoot, leanToolchain);
+  const leanVersionOutput = runLeanToolVersionCommand("lean", ["--version"], cleanRoot, leanToolchain);
+  const lakeVersionOutput = runLeanToolVersionCommand("lake", ["--version"], cleanRoot, leanToolchain);
   const cleanInputs = [
     join(cleanRoot, "lean-toolchain"),
     join(cleanRoot, "lakefile.lean"),
@@ -238,7 +181,7 @@ export function runCleanLeanReplay(input: {
     network_policy: "disabled",
     sandbox: "none",
     proof_authority: "lean_kernel_check",
-    run: (command) => runCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
+    run: (command) => runLeanToolCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
   });
   const finalReplayCommand = ["lake", "build", ...input.leanProject.buildTargets];
   const build = runServiceOwnedLeanCommandV3({
@@ -258,7 +201,7 @@ export function runCleanLeanReplay(input: {
     network_policy: "disabled",
     sandbox: "none",
     proof_authority: "lean_kernel_check",
-    run: (command) => runCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
+    run: (command) => runLeanToolCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
   });
   const audit = runServiceOwnedLeanCommandV3({
     projectRoot: input.projectRoot,
@@ -277,7 +220,7 @@ export function runCleanLeanReplay(input: {
     network_policy: "disabled",
     sandbox: "none",
     proof_authority: "lean_kernel_check",
-    run: (command) => runCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
+    run: (command) => runLeanToolCommand(command[0], command.slice(1), cleanRoot, leanToolchain)
   });
   const stdout = [theoremCheck.stdout, build.stdout, audit.stdout].filter(Boolean).join("\n");
   const stderr = [theoremCheck.stderr, build.stderr, audit.stderr].filter(Boolean).join("\n");
@@ -342,6 +285,7 @@ export function runCleanLeanReplay(input: {
     dependency_closure_path: dependencyPathRel.replace(/\\/g, "/"),
     statement_equivalence_path: statementPathRel.replace(/\\/g, "/"),
     ...(input.provisioningDiagnosticPath ? { provisioning_diagnostic_path: input.provisioningDiagnosticPath } : {}),
+    ...(input.hostReplayDiagnosticPath ? { host_replay_diagnostic_path: input.hostReplayDiagnosticPath } : {}),
     artifact_hashes,
     result: allGatesPassed ? "pass" : "fail"
   });

@@ -15,7 +15,15 @@ import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-c
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
 import { defaultVariants } from "../ensemble/variant-registry.js";
 import { runCleanLeanReplay, type CleanReplayResult } from "../lean/clean-replay.js";
-import { listLeanProjectFiles, type LeanProjectFiles } from "../lean/lean-project.js";
+import {
+  parseExpectedLeanToolchainVersion,
+  parseLakeVersionOutput,
+  parseLeanVersionOutput,
+  runLeanToolCommand,
+  serviceToolBinary,
+  type LeanHostCommandResult
+} from "../lean/lean-host-tools.js";
+import { listLeanProjectFiles, sha256FileSync, type LeanProjectFiles } from "../lean/lean-project.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
 import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
 import { hasFormalReplayAuthorityPassEvidence, sanitizePublicFormalAuthorityVocabulary } from "./external-terminal-vocabulary.js";
@@ -1045,6 +1053,7 @@ type FinalGlobalReplayRequest = {
   assumptionLedgerPath: string;
   assembledRequestPath?: string;
   provisioningDiagnosticPath?: string;
+  hostReplayDiagnosticPath?: string;
 };
 
 function requireString(value: unknown, field: string): string {
@@ -1221,6 +1230,50 @@ export type CampaignLiveMathlibProvisioningDiagnosticResult = {
   network_policy: "disabled";
   proof_authority: "none";
   can_promote_claim: false;
+};
+
+export type CampaignLiveMathlibHostReplayDiagnosticInput = {
+  packagingScope: "positive_matrix" | "campaign";
+  primaryDependency: string;
+  leanRoot: string;
+  leanToolchain: string;
+  theoremFileRel: string;
+  auditFileRel: string;
+  buildTargets: string[];
+};
+
+type CampaignLiveMathlibHostReplayVersionProbe = {
+  exit_code: number;
+  stdout_sha256: string;
+  stderr_sha256: string;
+  output_sha256: string;
+};
+
+export type CampaignLiveMathlibHostReplayDiagnosticResult = {
+  schema_version: "comath.campaign_live_mathlib_host_replay_diagnostic.v1";
+  profile: "campaign_live_mathlib_non_toy";
+  result: "pass" | "fail";
+  hard_vetoes: string[];
+  primary_dependency: string;
+  lean_toolchain: string;
+  expected_lean_version?: string;
+  lean_version?: string;
+  lake_version?: string;
+  lean_version_probe?: CampaignLiveMathlibHostReplayVersionProbe;
+  lake_version_probe?: CampaignLiveMathlibHostReplayVersionProbe;
+  lean_binary_sha256?: string;
+  lake_binary_sha256?: string;
+  probe_source: "service_owned_process";
+  tool_resolution_strategy: "elan_direct_or_path";
+  replay_plan: {
+    theorem_check: string[];
+    final_replay: string[];
+    audit_check: string[];
+  };
+  network_policy: "disabled";
+  proof_authority: "none";
+  can_promote_claim: false;
+  diagnostic_is_proof_authority: false;
 };
 
 const trustedMathlibSourceUrls = new Set([
@@ -1442,6 +1495,127 @@ export function evaluateCampaignLiveMathlibProvisioningDiagnostic(
   };
 }
 
+function hostReplayProbeOutput(probe: LeanHostCommandResult): string {
+  return `${probe.stdout}\n${probe.stderr}`;
+}
+
+function summarizeHostReplayProbe(probe: LeanHostCommandResult): CampaignLiveMathlibHostReplayVersionProbe {
+  return {
+    exit_code: probe.exit_code,
+    stdout_sha256: sha256Text(probe.stdout),
+    stderr_sha256: sha256Text(probe.stderr),
+    output_sha256: sha256Text(hostReplayProbeOutput(probe))
+  };
+}
+
+function hashHostToolBinary(path: string, vetoes: string[], code: string): string | undefined {
+  try {
+    return sha256FileSync(path).sha256;
+  } catch {
+    vetoes.push(code);
+    return undefined;
+  }
+}
+
+export function evaluateCampaignLiveMathlibHostReplayDiagnostic(
+  input: CampaignLiveMathlibHostReplayDiagnosticInput
+): CampaignLiveMathlibHostReplayDiagnosticResult {
+  const hard_vetoes: string[] = [];
+  if (input.packagingScope !== "campaign") {
+    hard_vetoes.push("campaign_packaging_scope_required");
+  }
+  if (input.primaryDependency !== "Mathlib") {
+    hard_vetoes.push("mathlib_primary_dependency_required");
+  }
+  if (!existsSync(input.leanRoot)) {
+    hard_vetoes.push("lean_root_missing");
+  }
+  if (!existsSync(join(input.leanRoot, input.theoremFileRel))) {
+    hard_vetoes.push("theorem_file_missing");
+  }
+  if (!existsSync(join(input.leanRoot, input.auditFileRel))) {
+    hard_vetoes.push("audit_file_missing");
+  }
+  if (input.buildTargets.length === 0) {
+    hard_vetoes.push("empty_build_targets_forbidden");
+  }
+
+  const expectedLeanVersion = parseExpectedLeanToolchainVersion(input.leanToolchain);
+  if (!input.leanToolchain.trim()) {
+    hard_vetoes.push("lean_toolchain_missing");
+  } else if (!expectedLeanVersion) {
+    hard_vetoes.push("lean_toolchain_parse_failure");
+  }
+
+  const leanBinaryFile = serviceToolBinary("lean", input.leanToolchain);
+  const lakeBinaryFile = serviceToolBinary("lake", input.leanToolchain);
+  const lean_binary_sha256 = leanBinaryFile ? hashHostToolBinary(leanBinaryFile, hard_vetoes, "lean_binary_hash_failed") : undefined;
+  const lake_binary_sha256 = lakeBinaryFile ? hashHostToolBinary(lakeBinaryFile, hard_vetoes, "lake_binary_hash_failed") : undefined;
+  if (!leanBinaryFile) {
+    hard_vetoes.push("lean_binary_missing");
+  }
+  if (!lakeBinaryFile) {
+    hard_vetoes.push("lake_binary_missing");
+  }
+
+  let lean_version: string | undefined;
+  let lake_version: string | undefined;
+  let lean_version_probe: CampaignLiveMathlibHostReplayVersionProbe | undefined;
+  let lake_version_probe: CampaignLiveMathlibHostReplayVersionProbe | undefined;
+  if (existsSync(input.leanRoot) && leanBinaryFile) {
+    const probe = runLeanToolCommand("lean", ["--version"], input.leanRoot, input.leanToolchain);
+    lean_version_probe = summarizeHostReplayProbe(probe);
+    if (probe.exit_code !== 0) {
+      hard_vetoes.push("lean_version_probe_failed");
+    }
+    lean_version = parseLeanVersionOutput(hostReplayProbeOutput(probe));
+    if (!lean_version) {
+      hard_vetoes.push("lean_version_parse_failed");
+    }
+    if (expectedLeanVersion && lean_version && expectedLeanVersion !== lean_version) {
+      hard_vetoes.push("lean_toolchain_version_mismatch");
+    }
+  }
+  if (existsSync(input.leanRoot) && lakeBinaryFile) {
+    const probe = runLeanToolCommand("lake", ["--version"], input.leanRoot, input.leanToolchain);
+    lake_version_probe = summarizeHostReplayProbe(probe);
+    if (probe.exit_code !== 0) {
+      hard_vetoes.push("lake_version_probe_failed");
+    }
+    lake_version = parseLakeVersionOutput(hostReplayProbeOutput(probe));
+    if (!lake_version) {
+      hard_vetoes.push("lake_version_parse_failed");
+    }
+  }
+
+  return {
+    schema_version: "comath.campaign_live_mathlib_host_replay_diagnostic.v1",
+    profile: "campaign_live_mathlib_non_toy",
+    result: hard_vetoes.length === 0 ? "pass" : "fail",
+    hard_vetoes: Array.from(new Set(hard_vetoes)),
+    primary_dependency: input.primaryDependency,
+    lean_toolchain: input.leanToolchain,
+    ...(expectedLeanVersion ? { expected_lean_version: expectedLeanVersion } : {}),
+    ...(lean_version ? { lean_version } : {}),
+    ...(lake_version ? { lake_version } : {}),
+    ...(lean_version_probe ? { lean_version_probe } : {}),
+    ...(lake_version_probe ? { lake_version_probe } : {}),
+    ...(lean_binary_sha256 ? { lean_binary_sha256 } : {}),
+    ...(lake_binary_sha256 ? { lake_binary_sha256 } : {}),
+    probe_source: "service_owned_process",
+    tool_resolution_strategy: "elan_direct_or_path",
+    replay_plan: {
+      theorem_check: ["lake", "env", "lean", input.theoremFileRel],
+      final_replay: ["lake", "build", ...input.buildTargets],
+      audit_check: ["lake", "env", "lean", input.auditFileRel]
+    },
+    network_policy: "disabled",
+    proof_authority: "none",
+    can_promote_claim: false,
+    diagnostic_is_proof_authority: false
+  };
+}
+
 function parseFinalGlobalReplayRequestPayload(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
@@ -1591,6 +1765,44 @@ function parseFinalGlobalReplayRequestPayload(input: {
       diagnostic_is_proof_authority: false,
       created_at: now()
     });
+    const hostReplayDiagnostic = evaluateCampaignLiveMathlibHostReplayDiagnostic({
+      packagingScope,
+      primaryDependency: leanProject.primaryDependency,
+      leanRoot: leanProject.leanRoot,
+      leanToolchain: readFileSync(leanProject.toolchainFile, "utf8").trim(),
+      theoremFileRel,
+      auditFileRel,
+      buildTargets: leanProject.buildTargets
+    });
+    const hostReplayDiagnosticPath = writeSimpleStageArtifact(input.projectRoot, input.campaign, "mathlib_host_replay_diagnostic.json", {
+      ...hostReplayDiagnostic,
+      campaign_id: input.campaign.campaign_id,
+      claim_id: input.campaign.root_claim_id,
+      theorem_name: leanProject.theoremName,
+      locked_statement_hash: leanProject.formalSpec.locked_statement_hash,
+      lean_root_rel: leanRootRel,
+      theorem_file_rel: theoremFileRel,
+      audit_file_rel: auditFileRel,
+      build_targets: leanProject.buildTargets,
+      replay_command: leanProject.replayCommand,
+      provisioning_diagnostic_path: diagnosticPath,
+      provisioning_diagnostic_hash: sha256RuntimeFile(input.projectRoot, diagnosticPath),
+      ...(provisioningDiagnostic.mathlib_revision ? { mathlib_revision: provisioningDiagnostic.mathlib_revision } : {}),
+      ...(provisioningDiagnostic.materialized_package_root
+        ? { materialized_package_root: provisioningDiagnostic.materialized_package_root }
+        : {}),
+      ...(provisioningDiagnostic.materialized_package_hash
+        ? { materialized_package_hash: provisioningDiagnostic.materialized_package_hash }
+        : {}),
+      lakefile_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, lakefileRel))),
+      lake_manifest_hash: sha256RuntimeFile(input.projectRoot, lakeManifestRel),
+      theorem_file_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, theoremFileRel))),
+      diagnostic_is_proof_authority: false,
+      created_at: now()
+    });
+    if (hostReplayDiagnostic.result !== "pass") {
+      throw new Error(`campaign_live_mathlib_host_replay_diagnostic_failed:${hostReplayDiagnostic.hard_vetoes.join(",")}`);
+    }
     return {
       packagingScope,
       taskId,
@@ -1599,7 +1811,8 @@ function parseFinalGlobalReplayRequestPayload(input: {
       formalSpecLockPath: normalizeRelPath(join(leanRootRel, formalSpecFileRel)),
       assumptionLedgerPath: normalizeRelPath(join(leanRootRel, assumptionLedgerFileRel)),
       assembledRequestPath: input.assembledRequestPath,
-      provisioningDiagnosticPath: diagnosticPath
+      provisioningDiagnosticPath: diagnosticPath,
+      hostReplayDiagnosticPath
     };
   }
 
@@ -2167,7 +2380,8 @@ async function completeCampaignAtFinalGlobalReplay(input: {
       campaign_id: input.campaign.campaign_id,
       claim_id: request.claimId,
       leanProject: request.leanProject,
-      provisioningDiagnosticPath: request.provisioningDiagnosticPath
+      provisioningDiagnosticPath: request.provisioningDiagnosticPath,
+      hostReplayDiagnosticPath: request.hostReplayDiagnosticPath
     });
   } catch (error) {
     return blockCampaignAtFinalReplay({
