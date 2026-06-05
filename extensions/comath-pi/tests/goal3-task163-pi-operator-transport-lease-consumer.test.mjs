@@ -28,8 +28,8 @@ assert.deepEqual(transportLeaseTool.input_schema.required, [
 ]);
 assert.deepEqual(transportLeaseTool.input_schema.properties.transport_kind.enum, [
   "bounded_live_polling_lease",
-  "bounded_sse_snapshot_lease",
-  "manual_terminal_resume_lease",
+  "bounded_live_sse_lease",
+  "manual_terminal_polling_lease",
   "unknown"
 ]);
 
@@ -85,7 +85,7 @@ const directResult = await executeComathTool(client, "comath.release.piCodexLife
   session_manifest_path: ".comath/release/pi-codex-lifecycle/LIFE-OP-SESSION-0163/operator-session-manifest.json",
   transport_recovery_path: ".comath/release/pi-codex-lifecycle/LIFE-TRANSPORT-0163/operator-transport-recovery.json",
   lease_route: "/agent/run/RUN-0163/log-session token=plain-token long-lived websocket provided",
-  transport_kind: "bounded_sse_snapshot_lease",
+  transport_kind: "bounded_live_sse_lease",
   requested_cursor: {
     operator_event_cursor: "event:43 Authorization: Bearer plain-token",
     stdout_cursor: "stdout:256 sk-task163-secret indefinite SSE open",
@@ -111,7 +111,7 @@ assert.deepEqual(calls.at(-1).body, {
   session_manifest_path: ".comath/release/pi-codex-lifecycle/LIFE-OP-SESSION-0163/operator-session-manifest.json",
   transport_recovery_path: ".comath/release/pi-codex-lifecycle/LIFE-TRANSPORT-0163/operator-transport-recovery.json",
   lease_route: "/agent/run/RUN-0163/log-session [redacted_secret] bounded_transport_checkpoint_only provided",
-  transport_kind: "bounded_sse_snapshot_lease",
+  transport_kind: "bounded_live_sse_lease",
   requested_cursor: {
     operator_event_cursor: "event:43 [redacted_secret]",
     stdout_cursor: "stdout:256 [redacted_secret] bounded_transport_checkpoint_only open",

@@ -94,7 +94,8 @@ for (const tool of registration.tools) {
 
 const serialized = JSON.stringify(registration);
 assert.equal(serialized.includes("http://"), false);
-assert.equal(serialized.includes("client"), false);
+assert.equal(serialized.includes("baseUrl"), false);
+assert.equal(serialized.includes("COMATHD_BASE_URL"), false);
 assert.equal(serialized.includes(".comath/claims"), false);
 
 const packageJsonPath = resolve(process.cwd(), "package.json");
@@ -184,6 +185,7 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.release.piCodexLifecycleOperatorSession",
       "comath.release.piCodexLifecycleOperatorTransportRecovery",
       "comath.release.piCodexLifecycleOperatorTransportLease",
+      "comath.release.piCodexLifecycleOperatorTransportHeartbeat",
       "comath.release.piCodexLifecycleGuidedRealPiExecution",
       "comath.release.agentAdapterOsIsolationProbe",
       "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",

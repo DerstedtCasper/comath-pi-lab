@@ -203,6 +203,7 @@ function commandMetadata(command: string): Pick<
         "lifecycle-operator-session",
         "lifecycle-operator-transport-recovery",
         "lifecycle-operator-transport-lease",
+        "lifecycle-operator-transport-heartbeat",
         "lifecycle-guided-real-pi-execution",
         "agent-adapter-os-isolation-probe",
         "agent-adapter-os-isolation-sandbox-execution",

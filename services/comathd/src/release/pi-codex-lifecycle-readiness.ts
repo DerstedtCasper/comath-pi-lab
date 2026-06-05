@@ -620,6 +620,87 @@ type PiCodexLifecycleOperatorTransportLeaseBody = Omit<
   "transport_lease_artifact"
 >;
 
+export type PiCodexLifecycleOperatorTransportHeartbeatInput = {
+  project_id: string;
+  session_id: string;
+  actor: string;
+  transport_recovery_id: string;
+  transport_lease_id: string;
+  transport_heartbeat_id?: string;
+  session_manifest_path?: string;
+  transport_recovery_path?: string;
+  transport_lease_path?: string;
+  requested_cursor?: Partial<PiCodexLifecycleOperatorTransportRecoveryCursor>;
+  client_epoch?: number;
+  last_seen_event_id?: string;
+  heartbeat_reason?: string;
+};
+
+export type PiCodexLifecycleOperatorTransportHeartbeatArtifact = {
+  kind: "operator_transport_heartbeat";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexLifecycleOperatorTransportHeartbeat = {
+  schema_version: "comath.pi_codex_lifecycle_operator_transport_heartbeat.v1";
+  transport_heartbeat_id: string;
+  transport_lease_id: string;
+  transport_recovery_id: string;
+  project_id: string;
+  session_id: string;
+  actor: string;
+  created_at: string;
+  heartbeat_status: "operator_transport_heartbeat_rebound";
+  transport_kind: PiCodexLifecycleOperatorTransportLeaseKind;
+  lease_route: string;
+  requested_cursor: PiCodexLifecycleOperatorTransportRecoveryCursor;
+  client_epoch: number;
+  heartbeat_interval_ms: number;
+  lease_ttl_ms: number;
+  lease_started_at: string;
+  lease_expires_at: string;
+  heartbeat_required: true;
+  last_seen_event_id: string;
+  heartbeat_reason: string;
+  session_manifest_path: string;
+  session_manifest_artifact: PiCodexLifecycleOperatorSessionManifestArtifact;
+  transport_recovery_path: string;
+  transport_recovery_artifact: PiCodexLifecycleOperatorTransportRecoveryArtifact;
+  transport_lease_path: string;
+  lease_artifact: PiCodexLifecycleOperatorTransportLeaseArtifact;
+  next_recommended_route: string;
+  transport_heartbeat_path: string;
+  transport_heartbeat_artifact: PiCodexLifecycleOperatorTransportHeartbeatArtifact;
+  operator_transport_lease_bound: true;
+  operator_transport_log_session_rebound: true;
+  agent_run_log_session_binding: PiCodexLifecycleOperatorTransportLogSessionBinding;
+  lease_still_valid: true;
+  durable_recovery_checkpoint_required: true;
+  bounded_live_transport_lease_bound: true;
+  bounded_heartbeat_checkpoint_provided: true;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexLifecycleOperatorTransportHeartbeatBody = Omit<
+  PiCodexLifecycleOperatorTransportHeartbeat,
+  "transport_heartbeat_artifact"
+>;
+
+type OperatorTransportLeaseBoundaryOptions = {
+  allowLiveLogGrowth?: boolean;
+};
+
 export type PiCodexGuidedRealPiExecutionOutcome =
   | "operator_guided_run_observed"
   | "replayable_release_blocker_recorded";
@@ -859,6 +940,22 @@ function assertOperatorTransportLeaseId(value: string | undefined): string {
     });
   }
   return leaseId;
+}
+
+function assertOperatorTransportHeartbeatId(value: string | undefined): string {
+  const heartbeatId = value ?? `LIFE-TRANSPORT-HEARTBEAT-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (
+    !/^[A-Za-z0-9._-]+$/.test(heartbeatId) ||
+    heartbeatId === "." ||
+    heartbeatId === ".." ||
+    heartbeatId.split(".").some((segment) => segment.length === 0)
+  ) {
+    throw new ComathError("invalid Pi/Codex lifecycle operator transport heartbeat id", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_HEARTBEAT_INVALID_ID"
+    });
+  }
+  return heartbeatId;
 }
 
 function assertGuidedRealPiExecutionId(value: string | undefined): string {
@@ -1553,6 +1650,12 @@ function operatorTransportLeasePath(leaseId: string): string {
   );
 }
 
+function operatorTransportHeartbeatPath(heartbeatId: string): string {
+  return normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", heartbeatId, "operator-transport-heartbeat.json")
+  );
+}
+
 function readOperatorSessionCreatedAt(projectRoot: string, sessionManifestPath: string, fallback: string): string {
   const absolutePath = assertPathAllowed(projectRoot, sessionManifestPath, { purpose: "read" });
   if (!existsSync(absolutePath)) {
@@ -1895,7 +1998,11 @@ function readOperatorTransportRecoveryCheckpoint(
   };
 }
 
-function assertOperatorTransportLeaseBoundary(projectRoot: string, lease: PiCodexLifecycleOperatorTransportLeaseBody): void {
+function assertOperatorTransportLeaseBoundary(
+  projectRoot: string,
+  lease: PiCodexLifecycleOperatorTransportLeaseBody,
+  options: OperatorTransportLeaseBoundaryOptions = {}
+): void {
   const logSessionBinding = lease.agent_run_log_session_binding;
   const parsedLogSessionRoute =
     typeof logSessionBinding?.route === "string" ? parseAgentRunLogSessionRoute(logSessionBinding.route) : null;
@@ -1957,20 +2064,31 @@ function assertOperatorTransportLeaseBoundary(projectRoot: string, lease: PiCode
     cursor: lease.requested_cursor,
     actor: "pi_codex_guided_real_pi_execution_lease_boundary"
   });
-  if (
-    reboundLogSessionBinding.project_id !== logSessionBinding.project_id ||
-    reboundLogSessionBinding.run_id !== logSessionBinding.run_id ||
-    reboundLogSessionBinding.route !== logSessionBinding.route ||
-    reboundLogSessionBinding.content_type !== logSessionBinding.content_type ||
-    !agentRunLogCursorEqual(reboundLogSessionBinding.cursor, logSessionBinding.cursor) ||
-    !agentRunLogCursorEqual(reboundLogSessionBinding.next_cursor, logSessionBinding.next_cursor) ||
-    reboundLogSessionBinding.event_count !== logSessionBinding.event_count ||
-    reboundLogSessionBinding.complete !== logSessionBinding.complete ||
-    reboundLogSessionBinding.body_sha256 !== logSessionBinding.body_sha256 ||
-    reboundLogSessionBinding.proof_authority !== logSessionBinding.proof_authority ||
-    reboundLogSessionBinding.durable_transport_provided !== logSessionBinding.durable_transport_provided ||
-    reboundLogSessionBinding.long_lived_sse_provided !== logSessionBinding.long_lived_sse_provided
-  ) {
+  const sameLogSessionIdentity =
+    reboundLogSessionBinding.project_id === logSessionBinding.project_id &&
+    reboundLogSessionBinding.run_id === logSessionBinding.run_id &&
+    reboundLogSessionBinding.route === logSessionBinding.route &&
+    reboundLogSessionBinding.content_type === logSessionBinding.content_type &&
+    agentRunLogCursorEqual(reboundLogSessionBinding.cursor, logSessionBinding.cursor) &&
+    reboundLogSessionBinding.proof_authority === logSessionBinding.proof_authority &&
+    reboundLogSessionBinding.durable_transport_provided === logSessionBinding.durable_transport_provided &&
+    reboundLogSessionBinding.long_lived_sse_provided === logSessionBinding.long_lived_sse_provided;
+  const exactLogSessionSnapshot =
+    sameLogSessionIdentity &&
+    agentRunLogCursorEqual(reboundLogSessionBinding.next_cursor, logSessionBinding.next_cursor) &&
+    reboundLogSessionBinding.event_count === logSessionBinding.event_count &&
+    reboundLogSessionBinding.complete === logSessionBinding.complete &&
+    reboundLogSessionBinding.body_sha256 === logSessionBinding.body_sha256;
+  const liveLogSessionAdvanced =
+    options.allowLiveLogGrowth === true &&
+    sameLogSessionIdentity &&
+    agentRunLogCursorAtLeast(reboundLogSessionBinding.next_cursor, logSessionBinding.next_cursor) &&
+    reboundLogSessionBinding.event_count >= logSessionBinding.event_count &&
+    logSessionBinding.complete !== true &&
+    // Heartbeats may observe additional bytes or terminal completion after the bounded lease snapshot.
+    (agentRunLogCursorGreater(reboundLogSessionBinding.next_cursor, logSessionBinding.next_cursor) ||
+      reboundLogSessionBinding.complete === true);
+  if (!exactLogSessionSnapshot && !liveLogSessionAdvanced) {
     throw new ComathError("Pi/Codex guided real-Pi execution lease log-session binding does not match service-owned logs", {
       statusCode: 400,
       code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_LEASE_INVALID_BOUNDARY"
@@ -1999,13 +2117,22 @@ function agentRunLogCursorEqual(left: AgentRunLogCursor, right: AgentRunLogCurso
   return left.stdout === right.stdout && left.stderr === right.stderr;
 }
 
+function agentRunLogCursorAtLeast(left: AgentRunLogCursor, right: AgentRunLogCursor): boolean {
+  return left.stdout >= right.stdout && left.stderr >= right.stderr;
+}
+
+function agentRunLogCursorGreater(left: AgentRunLogCursor, right: AgentRunLogCursor): boolean {
+  return left.stdout > right.stdout || left.stderr > right.stderr;
+}
+
 function readOperatorTransportLeaseArtifact(
   projectRoot: string,
   projectId: string,
   sessionId: string,
   recoveryId: string,
   leaseId: string,
-  leasePath: string
+  leasePath: string,
+  options: OperatorTransportLeaseBoundaryOptions = {}
 ): {
   lease: PiCodexLifecycleOperatorTransportLeaseBody;
   artifact: PiCodexLifecycleOperatorTransportLeaseArtifact;
@@ -2049,7 +2176,7 @@ function readOperatorTransportLeaseArtifact(
       code: "PI_CODEX_GUIDED_REAL_PI_EXECUTION_LEASE_MISMATCH"
     });
   }
-  assertOperatorTransportLeaseBoundary(projectRoot, parsed);
+  assertOperatorTransportLeaseBoundary(projectRoot, parsed, options);
   return {
     lease: parsed,
     artifact: {
@@ -2467,6 +2594,222 @@ export function openPiCodexLifecycleOperatorTransportLease(
       bounded_live_transport_lease_provided: true,
       durable_transport_provided: false,
       live_transport_open: true,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
+export function heartbeatPiCodexLifecycleOperatorTransportLease(
+  projectRoot: string,
+  input: PiCodexLifecycleOperatorTransportHeartbeatInput
+): PiCodexLifecycleOperatorTransportHeartbeat {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const sessionId = assertOperatorSessionId(input.session_id);
+  const recoveryId = assertOperatorTransportRecoveryId(input.transport_recovery_id);
+  const leaseId = assertOperatorTransportLeaseId(input.transport_lease_id);
+  const heartbeatId = assertOperatorTransportHeartbeatId(input.transport_heartbeat_id);
+  const clientEpoch = assertOperatorTransportClientEpoch(input.client_epoch);
+  let sessionManifestPath: string;
+  let sessionBundle: ReturnType<typeof readOperatorTransportSessionManifest>;
+  try {
+    sessionManifestPath = resolveOperatorTransportSessionManifestPath(
+      projectRoot,
+      sessionId,
+      input.session_manifest_path
+    );
+    sessionBundle = readOperatorTransportSessionManifest(projectRoot, projectId, sessionId, sessionManifestPath);
+  } catch (error) {
+    if (error instanceof ComathError) {
+      throw new ComathError("Pi/Codex lifecycle operator transport heartbeat session is invalid", {
+        statusCode: error.statusCode,
+        code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_HEARTBEAT_SESSION_INVALID"
+      });
+    }
+    throw error;
+  }
+
+  let recoveryPath: string;
+  let recoveryBundle: ReturnType<typeof readOperatorTransportRecoveryCheckpoint>;
+  try {
+    recoveryPath = resolveOperatorTransportRecoveryPath(projectRoot, recoveryId, input.transport_recovery_path);
+    recoveryBundle = readOperatorTransportRecoveryCheckpoint(projectRoot, projectId, sessionId, recoveryId, recoveryPath);
+  } catch (error) {
+    if (error instanceof ComathError) {
+      throw new ComathError("Pi/Codex lifecycle operator transport heartbeat recovery checkpoint is invalid", {
+        statusCode: error.statusCode,
+        code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_HEARTBEAT_RECOVERY_INVALID"
+      });
+    }
+    throw error;
+  }
+  const { manifest, artifact: sessionManifestArtifact } = sessionBundle;
+  const { recovery, artifact: recoveryArtifact } = recoveryBundle;
+  if (
+    recovery.session_manifest_path !== sessionManifestPath ||
+    recovery.session_manifest_artifact.sha256 !== sessionManifestArtifact.sha256 ||
+    recovery.client_epoch > clientEpoch
+  ) {
+    throw new ComathError("Pi/Codex lifecycle operator transport heartbeat recovery is stale", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_HEARTBEAT_RECOVERY_INVALID"
+    });
+  }
+
+  const leasePath = input.transport_lease_path
+    ? projectRelativePath(
+        projectRoot,
+        assertPathAllowed(projectRoot, input.transport_lease_path, { purpose: "read", resolveRealpath: true })
+      )
+    : operatorTransportLeasePath(leaseId);
+  let leaseBundle: ReturnType<typeof readOperatorTransportLeaseArtifact>;
+  try {
+    leaseBundle = readOperatorTransportLeaseArtifact(projectRoot, projectId, sessionId, recoveryId, leaseId, leasePath, {
+      allowLiveLogGrowth: true
+    });
+  } catch (error) {
+    if (error instanceof ComathError) {
+      throw new ComathError("Pi/Codex lifecycle operator transport heartbeat lease is invalid or expired", {
+        statusCode: error.statusCode,
+        code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_HEARTBEAT_LEASE_INVALID"
+      });
+    }
+    throw error;
+  }
+  const { lease, artifact: leaseArtifact } = leaseBundle;
+  if (
+    lease.session_manifest_path !== sessionManifestPath ||
+    lease.session_manifest_artifact.sha256 !== sessionManifestArtifact.sha256 ||
+    lease.transport_recovery_path !== recoveryPath ||
+    lease.transport_recovery_artifact.sha256 !== recoveryArtifact.sha256 ||
+    lease.client_epoch > clientEpoch
+  ) {
+    throw new ComathError("Pi/Codex lifecycle operator transport heartbeat artifacts do not share one chain", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_HEARTBEAT_CHAIN_MISMATCH"
+    });
+  }
+  try {
+    assertOperatorTransportLeaseRouteMatchesRecovery(lease.lease_route, recovery.observed_route);
+  } catch (error) {
+    if (error instanceof ComathError) {
+      throw new ComathError("Pi/Codex lifecycle operator transport heartbeat lease route is unbound", {
+        statusCode: error.statusCode,
+        code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_HEARTBEAT_LEASE_INVALID"
+      });
+    }
+    throw error;
+  }
+
+  const requestedCursor = sanitizeOperatorTransportCursor(input.requested_cursor ?? lease.requested_cursor);
+  const logSessionBinding = bindOperatorTransportLogSession({
+    projectRoot,
+    projectId,
+    rawRoute: lease.lease_route,
+    cursor: requestedCursor,
+    actor: sanitizeOperatorTransportText(input.actor)
+  });
+  const heartbeatPath = operatorTransportHeartbeatPath(heartbeatId);
+  const absoluteHeartbeatPath = assertPathAllowed(projectRoot, heartbeatPath, { purpose: "runtime-write" });
+  if (existsSync(absoluteHeartbeatPath)) {
+    throw new ComathError("Pi/Codex lifecycle operator transport heartbeat already exists", {
+      statusCode: 409,
+      code: "PI_CODEX_LIFECYCLE_OPERATOR_TRANSPORT_HEARTBEAT_ALREADY_EXISTS"
+    });
+  }
+
+  const body: PiCodexLifecycleOperatorTransportHeartbeatBody = {
+    schema_version: "comath.pi_codex_lifecycle_operator_transport_heartbeat.v1",
+    transport_heartbeat_id: heartbeatId,
+    transport_lease_id: leaseId,
+    transport_recovery_id: recoveryId,
+    project_id: projectId,
+    session_id: sessionId,
+    actor: sanitizeOperatorTransportText(input.actor),
+    created_at: new Date().toISOString(),
+    heartbeat_status: "operator_transport_heartbeat_rebound",
+    transport_kind: lease.transport_kind,
+    lease_route: lease.lease_route,
+    requested_cursor: requestedCursor,
+    client_epoch: clientEpoch,
+    heartbeat_interval_ms: lease.heartbeat_interval_ms,
+    lease_ttl_ms: lease.lease_ttl_ms,
+    lease_started_at: lease.lease_started_at,
+    lease_expires_at: lease.lease_expires_at,
+    heartbeat_required: true,
+    last_seen_event_id: sanitizeOperatorTransportText(input.last_seen_event_id ?? lease.last_seen_event_id),
+    heartbeat_reason: sanitizeOperatorTransportText(input.heartbeat_reason ?? "bounded_operator_transport_heartbeat"),
+    session_manifest_path: sessionManifestPath,
+    session_manifest_artifact: sessionManifestArtifact,
+    transport_recovery_path: recoveryPath,
+    transport_recovery_artifact: recoveryArtifact,
+    transport_lease_path: leasePath,
+    lease_artifact: leaseArtifact,
+    next_recommended_route: sanitizeOperatorSessionText(manifest.next_recommended_route),
+    transport_heartbeat_path: heartbeatPath,
+    operator_transport_lease_bound: true,
+    operator_transport_log_session_rebound: true,
+    agent_run_log_session_binding: logSessionBinding,
+    lease_still_valid: true,
+    durable_recovery_checkpoint_required: true,
+    bounded_live_transport_lease_bound: true,
+    bounded_heartbeat_checkpoint_provided: true,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const artifactText = canonicalJson(body);
+  mkdirSync(dirname(absoluteHeartbeatPath), { recursive: true });
+  writeFileSync(absoluteHeartbeatPath, artifactText, "utf8");
+  const result: PiCodexLifecycleOperatorTransportHeartbeat = {
+    ...body,
+    transport_heartbeat_artifact: {
+      kind: "operator_transport_heartbeat",
+      path: heartbeatPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_lifecycle_operator_transport_heartbeat_recorded",
+    actor: sanitizeOperatorTransportText(input.actor),
+    target_id: projectId,
+    payload: {
+      transport_heartbeat_id: heartbeatId,
+      transport_lease_id: leaseId,
+      transport_recovery_id: recoveryId,
+      session_id: sessionId,
+      transport_kind: lease.transport_kind,
+      session_manifest_path: sessionManifestPath,
+      transport_recovery_path: recoveryPath,
+      transport_lease_path: leasePath,
+      transport_heartbeat_path: heartbeatPath,
+      operator_transport_lease_bound: true,
+      operator_transport_log_session_rebound: true,
+      agent_run_id: logSessionBinding.run_id,
+      agent_run_log_session_route: logSessionBinding.route,
+      agent_run_log_session_body_sha256: logSessionBinding.body_sha256,
+      agent_run_log_session_event_count: logSessionBinding.event_count,
+      heartbeat_interval_ms: lease.heartbeat_interval_ms,
+      lease_ttl_ms: lease.lease_ttl_ms,
+      bounded_heartbeat_checkpoint_provided: true,
+      durable_transport_provided: false,
+      live_transport_open: false,
       indefinite_stream_open: false,
       long_lived_websocket_provided: false,
       long_lived_sse_provided: false,

@@ -1,3 +1,36 @@
+# Goal 3 Task 221 / Pi Operator Transport Lease Heartbeat Rebind
+
+Scope: add bounded, append-only operator transport heartbeat/rebind checkpoints for Task220-bound leases, plus Pi consumer wiring and lease-kind vocabulary parity.
+
+Changes:
+
+- Added `goal3-task221-pi-operator-transport-lease-heartbeat-rebind.test.mjs`.
+- Added `heartbeatPiCodexLifecycleOperatorTransportLease()` and `POST /release/pi-codex-lifecycle/operator-transport-heartbeat`.
+- Added `comath.pi_codex_lifecycle_operator_transport_heartbeat.v1` artifacts under `.comath/release/pi-codex-lifecycle/<heartbeat-id>/operator-transport-heartbeat.json`.
+- Added `pi_codex_operator_transport_lease_heartbeat_rebind` to service capabilities.
+- Heartbeat recording now reads a live Task220-bound lease, verifies the session/recovery/lease artifact chain, rejects stale client epochs, re-runs service-owned `AgentRun` log-session formatting for the requested cursor, and writes only a new heartbeat artifact without mutating session, recovery, or lease files.
+- Static tampering, expired, wrong-project, wrong-chain, stale-client, non-monotonic live-log, or unreadable lease material fails closed before heartbeat persistence; same-route/same-run live log growth is accepted only as bounded rebind provenance.
+- Added Pi tool/command wiring through `comath.release.piCodexLifecycleOperatorTransportHeartbeat` and `/cm:release lifecycle-operator-transport-heartbeat` with host confirmation and public-output sanitization.
+- Fixed Pi lease-kind vocabulary to match comathd: `bounded_live_sse_lease` and `manual_terminal_polling_lease`.
+- Registered Task221 in phase0 smoke / GA release criteria discovery and synchronized README, AGENTS, TODO, threat model, GA release criteria, REVIEW, and the Goal 3 tracker.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task221 failed because `../../dist/index.js` did not export `heartbeatPiCodexLifecycleOperatorTransportLease`.
+- Pi consumer RED was observed before implementation: `comath.release.piCodexLifecycleOperatorTransportHeartbeat` was not registered.
+- Read-only review found that the first implementation re-used strict lease snapshot equality and would reject valid heartbeats after a live AgentRun log-session advanced. Follow-up RED coverage reproduced that failure; the service now keeps strict equality for ordinary lease consumers while heartbeat accepts only same-route/same-run monotonic cursor or completion advance.
+- After implementation and review fix, focused Task221 service and Pi consumer tests exited 0.
+- Adjacent Task220, Task164, Task166, Task163, phase26, and phase6 regressions exited 0 during implementation; Task220, Task164, and Task166 were re-run after the live-growth fix and exited 0.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task221 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task221 is bounded checkpointing and lease rebind provenance only. It does not mutate leases, extend into durable long-lived SSE/WebSocket transport, provide proof authority, replace an operator-controlled real-Pi run, implement a CoMath transport stack, or certify GA.
+
 # Goal 3 Task 220 / Pi Operator Transport Lease AgentRun Log-Session Binding
 
 Scope: bind bounded Pi/operator transport leases to service-owned `AgentRun` log-session evidence before lease persistence and before guided real-Pi execution consumes a lease artifact.

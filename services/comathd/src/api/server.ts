@@ -53,6 +53,7 @@ import { assembleSourceReviewPublicArchive } from "../release/source-review-publ
 import { reviewGoal3PublicArchiveSurfaces } from "../release/public-archive-review.js";
 import {
   collectPiCodexLifecycleEvidence,
+  heartbeatPiCodexLifecycleOperatorTransportLease,
   openPiCodexLifecycleOperatorTransportLease,
   persistPiCodexLifecycleOperatorSession,
   probePiCodexProductionCodexAccountNetwork,
@@ -499,6 +500,15 @@ async function route(method: string, path: string, body: unknown, context: Route
         const body = payload as Parameters<typeof openPiCodexLifecycleOperatorTransportLease>[1] & { project_root: string };
         return {
           lease: openPiCodexLifecycleOperatorTransportLease(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/operator-transport-heartbeat",
+      (payload) => {
+        const body = payload as Parameters<typeof heartbeatPiCodexLifecycleOperatorTransportLease>[1] & { project_root: string };
+        return {
+          heartbeat: heartbeatPiCodexLifecycleOperatorTransportLease(body.project_root, body)
         };
       }
     ],

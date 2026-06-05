@@ -152,6 +152,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleOperatorSession",
   "comath.release.piCodexLifecycleOperatorTransportRecovery",
   "comath.release.piCodexLifecycleOperatorTransportLease",
+  "comath.release.piCodexLifecycleOperatorTransportHeartbeat",
   "comath.release.piCodexLifecycleGuidedRealPiExecution",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
@@ -466,6 +467,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleOperatorSession" ||
     name === "comath.release.piCodexLifecycleOperatorTransportRecovery" ||
     name === "comath.release.piCodexLifecycleOperatorTransportLease" ||
+    name === "comath.release.piCodexLifecycleOperatorTransportHeartbeat" ||
     name === "comath.release.piCodexLifecycleGuidedRealPiExecution" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
@@ -513,8 +515,8 @@ const PI_LIFECYCLE_OPERATOR_TRANSPORT_KINDS = [
 ] as const;
 const PI_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_KINDS = [
   "bounded_live_polling_lease",
-  "bounded_sse_snapshot_lease",
-  "manual_terminal_resume_lease",
+  "bounded_live_sse_lease",
+  "manual_terminal_polling_lease",
   "unknown"
 ] as const;
 const AGENT_ADAPTER_OS_ISOLATION_PROVIDERS = [
@@ -1520,6 +1522,36 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.piCodexLifecycleOperatorTransportHeartbeat") {
+    const sessionManifestPath = readString(input, "session_manifest_path", { optional: true });
+    const transportRecoveryPath = readString(input, "transport_recovery_path", { optional: true });
+    const transportLeasePath = readString(input, "transport_lease_path", { optional: true });
+    const lastSeenEventId = readString(input, "last_seen_event_id", { optional: true });
+    const heartbeatReason = readString(input, "heartbeat_reason", { optional: true });
+    const clientEpoch = readNumber(input, "client_epoch");
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/operator-transport-heartbeat", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        session_id: readString(input, "session_id"),
+        transport_recovery_id: readString(input, "transport_recovery_id"),
+        transport_lease_id: readString(input, "transport_lease_id"),
+        transport_heartbeat_id: readString(input, "transport_heartbeat_id"),
+        ...(sessionManifestPath === undefined ? {} : { session_manifest_path: publicOperatorText(sessionManifestPath) }),
+        ...(transportRecoveryPath === undefined ? {} : { transport_recovery_path: publicOperatorText(transportRecoveryPath) }),
+        ...(transportLeasePath === undefined ? {} : { transport_lease_path: publicOperatorText(transportLeasePath) }),
+        ...(input.requested_cursor === undefined
+          ? {}
+          : { requested_cursor: sanitizePublicProofAuthorityValue(input.requested_cursor) }),
+        ...(clientEpoch === undefined ? {} : { client_epoch: clientEpoch }),
+        ...(lastSeenEventId === undefined ? {} : { last_seen_event_id: publicOperatorText(lastSeenEventId) }),
+        ...(heartbeatReason === undefined ? {} : { heartbeat_reason: publicOperatorText(heartbeatReason) })
+      })
+    );
+  }
+
   if (name === "comath.release.piCodexLifecycleGuidedRealPiExecution") {
     const sessionManifestPath = readString(input, "session_manifest_path", { optional: true });
     const transportRecoveryPath = readString(input, "transport_recovery_path", { optional: true });
@@ -2492,6 +2524,46 @@ export function createComathTools(): ToolDescriptor[] {
           lease_ttl_ms: { type: "number", minimum: 0 },
           last_seen_event_id: stringProp,
           open_reason: stringProp
+        }
+      )
+    },
+    {
+      name: "comath.release.piCodexLifecycleOperatorTransportHeartbeat",
+      description:
+        "Append a service-owned bounded Pi/Codex lifecycle operator transport heartbeat/rebind checkpoint through comathd without Pi direct writes or long-lived transport claims.",
+      mutates: true,
+      input_schema: objectSchema(
+        [
+          "project_root",
+          "project_id",
+          "actor",
+          "session_id",
+          "transport_recovery_id",
+          "transport_lease_id",
+          "transport_heartbeat_id"
+        ],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          actor: stringProp,
+          session_id: stringProp,
+          transport_recovery_id: stringProp,
+          transport_lease_id: stringProp,
+          transport_heartbeat_id: stringProp,
+          session_manifest_path: stringProp,
+          transport_recovery_path: stringProp,
+          transport_lease_path: stringProp,
+          requested_cursor: {
+            type: "object",
+            properties: {
+              operator_event_cursor: stringProp,
+              stdout_cursor: stringProp,
+              stderr_cursor: stringProp
+            }
+          },
+          client_epoch: { type: "number", minimum: 0 },
+          last_seen_event_id: stringProp,
+          heartbeat_reason: stringProp
         }
       )
     },
@@ -3979,6 +4051,45 @@ async function handleReleaseCommand(
           last_seen_event_id: optionValue(parsed.args, "--last-seen-event-id"),
           open_reason: optionValue(parsed.args, "--open-reason"),
           transport_kind: optionValue(parsed.args, "--transport-kind")
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-operator-transport-heartbeat") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.piCodexLifecycleOperatorTransportHeartbeat"
+    );
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle operator transport heartbeat tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          session_id: requiredOption(optionValue(parsed.args, "--session-id"), "session_id"),
+          transport_recovery_id: requiredOption(
+            optionValue(parsed.args, "--transport-recovery-id"),
+            "transport_recovery_id"
+          ),
+          transport_lease_id: requiredOption(optionValue(parsed.args, "--transport-lease-id"), "transport_lease_id"),
+          transport_heartbeat_id: requiredOption(
+            optionValue(parsed.args, "--transport-heartbeat-id"),
+            "transport_heartbeat_id"
+          ),
+          session_manifest_path: optionValue(parsed.args, "--session-manifest-path"),
+          transport_recovery_path: optionValue(parsed.args, "--transport-recovery-path"),
+          transport_lease_path: optionValue(parsed.args, "--transport-lease-path"),
+          requested_cursor: parseLifecycleOperatorTransportCursor(parsed.args),
+          client_epoch: numberOptionValue(parsed.args, "--client-epoch"),
+          last_seen_event_id: optionValue(parsed.args, "--last-seen-event-id"),
+          heartbeat_reason: optionValue(parsed.args, "--heartbeat-reason")
         },
         ctx
       )
