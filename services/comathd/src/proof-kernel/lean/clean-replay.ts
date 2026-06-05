@@ -76,6 +76,7 @@ export function runCleanLeanReplay(input: {
   leanProject: LeanProjectFiles;
   provisioningDiagnosticPath?: string;
   hostReplayDiagnosticPath?: string;
+  importGraphDiagnosticPath?: string;
 }): CleanReplayResult {
   const evidenceRootRel = join(".comath", "evidence", input.claim_id, "lean");
   const evidenceRoot = assertPathAllowed(input.projectRoot, evidenceRootRel, { purpose: "runtime-write" });
@@ -286,6 +287,7 @@ export function runCleanLeanReplay(input: {
     statement_equivalence_path: statementPathRel.replace(/\\/g, "/"),
     ...(input.provisioningDiagnosticPath ? { provisioning_diagnostic_path: input.provisioningDiagnosticPath } : {}),
     ...(input.hostReplayDiagnosticPath ? { host_replay_diagnostic_path: input.hostReplayDiagnosticPath } : {}),
+    ...(input.importGraphDiagnosticPath ? { import_graph_diagnostic_path: input.importGraphDiagnosticPath } : {}),
     artifact_hashes,
     result: allGatesPassed ? "pass" : "fail"
   });
@@ -319,7 +321,8 @@ export function runCleanLeanReplay(input: {
         static_audit: staticAuditPathRel,
         axiom_profile: axiomPathRel,
         dependency_closure: dependencyPathRel,
-        statement_equivalence: statementPathRel
+        statement_equivalence: statementPathRel,
+        ...(input.importGraphDiagnosticPath ? { import_graph_diagnostic: input.importGraphDiagnosticPath } : {})
       },
       lean_run_manifest_paths: leanRunManifestPaths,
       dependency_lock: {

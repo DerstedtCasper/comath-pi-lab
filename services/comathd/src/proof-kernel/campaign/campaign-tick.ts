@@ -1054,6 +1054,7 @@ type FinalGlobalReplayRequest = {
   assembledRequestPath?: string;
   provisioningDiagnosticPath?: string;
   hostReplayDiagnosticPath?: string;
+  importGraphDiagnosticPath?: string;
 };
 
 function requireString(value: unknown, field: string): string {
@@ -1243,11 +1244,25 @@ export type CampaignLiveMathlibHostReplayDiagnosticInput = {
   lakefileText: string;
 };
 
+export type CampaignLiveMathlibImportGraphDiagnosticInput = {
+  packagingScope: "positive_matrix" | "campaign";
+  primaryDependency: string;
+  leanRoot: string;
+  leanToolchain: string;
+  theoremFileRel: string;
+  auditFileRel: string;
+};
+
 type CampaignLiveMathlibHostReplayVersionProbe = {
   exit_code: number;
   stdout_sha256: string;
   stderr_sha256: string;
   output_sha256: string;
+};
+
+type CampaignLiveMathlibImportGraphProbe = CampaignLiveMathlibHostReplayVersionProbe & {
+  command: string[];
+  output_contains_primary_dependency: boolean;
 };
 
 export type CampaignLiveMathlibHostReplayDiagnosticResult = {
@@ -1275,6 +1290,24 @@ export type CampaignLiveMathlibHostReplayDiagnosticResult = {
   proof_authority: "none";
   can_promote_claim: false;
   diagnostic_is_proof_authority: false;
+};
+
+export type CampaignLiveMathlibImportGraphDiagnosticResult = {
+  schema_version: "comath.campaign_live_mathlib_import_graph_diagnostic.v1";
+  profile: "campaign_live_mathlib_non_toy";
+  result: "pass" | "fail";
+  hard_vetoes: string[];
+  primary_dependency: string;
+  lean_toolchain: string;
+  theorem_import_graph_probe?: CampaignLiveMathlibImportGraphProbe;
+  audit_import_graph_probe?: CampaignLiveMathlibImportGraphProbe;
+  lake_binary_sha256?: string;
+  probe_source: "service_owned_process";
+  import_graph_source: "lake_env_lean_deps";
+  network_policy: "disabled";
+  proof_authority: "none";
+  can_promote_claim: false;
+  import_graph_is_proof_authority: false;
 };
 
 const trustedMathlibSourceUrls = new Set([
@@ -1519,7 +1552,7 @@ function hashHostToolBinary(path: string, vetoes: string[], code: string): strin
 }
 
 function containsUnsafeReplayCommandArgument(value: string): boolean {
-  return /[\r\n"&|<>^%!]/u.test(value);
+  return value.startsWith("-") || /[\r\n"&|<>^%!]/u.test(value);
 }
 
 function declaredLakeBuildTargets(lakefileText: string): Set<string> {
@@ -1649,6 +1682,107 @@ export function evaluateCampaignLiveMathlibHostReplayDiagnostic(
     proof_authority: "none",
     can_promote_claim: false,
     diagnostic_is_proof_authority: false
+  };
+}
+
+function importGraphOutputContainsPrimaryDependency(output: string, primaryDependency: string): boolean {
+  const escaped = primaryDependency.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(?:^|[/\\\\.])${escaped}(?:[/\\\\.]|$)`, "iu").test(output);
+}
+
+function summarizeImportGraphProbe(
+  command: string[],
+  probe: LeanHostCommandResult,
+  primaryDependency: string
+): CampaignLiveMathlibImportGraphProbe {
+  return {
+    command,
+    exit_code: probe.exit_code,
+    stdout_sha256: sha256Text(probe.stdout),
+    stderr_sha256: sha256Text(probe.stderr),
+    output_sha256: sha256Text(hostReplayProbeOutput(probe)),
+    output_contains_primary_dependency: importGraphOutputContainsPrimaryDependency(probe.stdout, primaryDependency)
+  };
+}
+
+export function evaluateCampaignLiveMathlibImportGraphDiagnostic(
+  input: CampaignLiveMathlibImportGraphDiagnosticInput
+): CampaignLiveMathlibImportGraphDiagnosticResult {
+  const hard_vetoes: string[] = [];
+  if (input.packagingScope !== "campaign") {
+    hard_vetoes.push("campaign_packaging_scope_required");
+  }
+  if (input.primaryDependency !== "Mathlib") {
+    hard_vetoes.push("mathlib_primary_dependency_required");
+  }
+  if (!existsSync(input.leanRoot)) {
+    hard_vetoes.push("lean_root_missing");
+  }
+  if (!existsSync(join(input.leanRoot, input.theoremFileRel))) {
+    hard_vetoes.push("theorem_file_missing");
+  }
+  if (!existsSync(join(input.leanRoot, input.auditFileRel))) {
+    hard_vetoes.push("audit_file_missing");
+  }
+  if (containsUnsafeReplayCommandArgument(input.theoremFileRel)) {
+    hard_vetoes.push("unsafe_theorem_file_argument");
+  }
+  if (containsUnsafeReplayCommandArgument(input.auditFileRel)) {
+    hard_vetoes.push("unsafe_audit_file_argument");
+  }
+
+  const lakeBinaryFile = serviceToolBinary("lake", input.leanToolchain);
+  const lake_binary_sha256 = lakeBinaryFile ? hashHostToolBinary(lakeBinaryFile, hard_vetoes, "lake_binary_hash_failed") : undefined;
+  if (!lakeBinaryFile) {
+    hard_vetoes.push("lake_binary_missing");
+  }
+
+  const theoremCommand = ["lake", "env", "lean", "--deps", input.theoremFileRel];
+  const auditCommand = ["lake", "env", "lean", "--deps", input.auditFileRel];
+  let theorem_import_graph_probe: CampaignLiveMathlibImportGraphProbe | undefined;
+  let audit_import_graph_probe: CampaignLiveMathlibImportGraphProbe | undefined;
+  if (existsSync(input.leanRoot) && lakeBinaryFile) {
+    const theoremProbe = runLeanToolCommand("lake", theoremCommand.slice(1), input.leanRoot, input.leanToolchain);
+    theorem_import_graph_probe = summarizeImportGraphProbe(theoremCommand, theoremProbe, input.primaryDependency);
+    if (theoremProbe.exit_code !== 0) {
+      hard_vetoes.push("theorem_import_graph_probe_failed");
+    }
+    if (!theoremProbe.stdout.trim()) {
+      hard_vetoes.push("theorem_import_graph_output_empty");
+    }
+    if (!theorem_import_graph_probe.output_contains_primary_dependency) {
+      hard_vetoes.push("theorem_import_graph_primary_dependency_missing");
+    }
+
+    const auditProbe = runLeanToolCommand("lake", auditCommand.slice(1), input.leanRoot, input.leanToolchain);
+    audit_import_graph_probe = summarizeImportGraphProbe(auditCommand, auditProbe, input.primaryDependency);
+    if (auditProbe.exit_code !== 0) {
+      hard_vetoes.push("audit_import_graph_probe_failed");
+    }
+    if (!auditProbe.stdout.trim()) {
+      hard_vetoes.push("audit_import_graph_output_empty");
+    }
+    if (!audit_import_graph_probe.output_contains_primary_dependency) {
+      hard_vetoes.push("audit_import_graph_primary_dependency_missing");
+    }
+  }
+
+  return {
+    schema_version: "comath.campaign_live_mathlib_import_graph_diagnostic.v1",
+    profile: "campaign_live_mathlib_non_toy",
+    result: hard_vetoes.length === 0 ? "pass" : "fail",
+    hard_vetoes: Array.from(new Set(hard_vetoes)),
+    primary_dependency: input.primaryDependency,
+    lean_toolchain: input.leanToolchain,
+    ...(theorem_import_graph_probe ? { theorem_import_graph_probe } : {}),
+    ...(audit_import_graph_probe ? { audit_import_graph_probe } : {}),
+    ...(lake_binary_sha256 ? { lake_binary_sha256 } : {}),
+    probe_source: "service_owned_process",
+    import_graph_source: "lake_env_lean_deps",
+    network_policy: "disabled",
+    proof_authority: "none",
+    can_promote_claim: false,
+    import_graph_is_proof_authority: false
   };
 }
 
@@ -1840,6 +1974,35 @@ function parseFinalGlobalReplayRequestPayload(input: {
     if (hostReplayDiagnostic.result !== "pass") {
       throw new Error(`campaign_live_mathlib_host_replay_diagnostic_failed:${hostReplayDiagnostic.hard_vetoes.join(",")}`);
     }
+    const importGraphDiagnostic = evaluateCampaignLiveMathlibImportGraphDiagnostic({
+      packagingScope,
+      primaryDependency: leanProject.primaryDependency,
+      leanRoot: leanProject.leanRoot,
+      leanToolchain: readFileSync(leanProject.toolchainFile, "utf8").trim(),
+      theoremFileRel,
+      auditFileRel
+    });
+    const importGraphDiagnosticPath = writeSimpleStageArtifact(input.projectRoot, input.campaign, "mathlib_import_graph_diagnostic.json", {
+      ...importGraphDiagnostic,
+      campaign_id: input.campaign.campaign_id,
+      claim_id: input.campaign.root_claim_id,
+      theorem_name: leanProject.theoremName,
+      locked_statement_hash: leanProject.formalSpec.locked_statement_hash,
+      lean_root_rel: leanRootRel,
+      theorem_file_rel: theoremFileRel,
+      audit_file_rel: auditFileRel,
+      host_replay_diagnostic_path: hostReplayDiagnosticPath,
+      host_replay_diagnostic_hash: sha256RuntimeFile(input.projectRoot, hostReplayDiagnosticPath),
+      lakefile_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, lakefileRel))),
+      lake_manifest_hash: sha256RuntimeFile(input.projectRoot, lakeManifestRel),
+      theorem_file_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, theoremFileRel))),
+      audit_file_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, auditFileRel))),
+      diagnostic_is_proof_authority: false,
+      created_at: now()
+    });
+    if (importGraphDiagnostic.result !== "pass") {
+      throw new Error(`campaign_live_mathlib_import_graph_diagnostic_failed:${importGraphDiagnostic.hard_vetoes.join(",")}`);
+    }
     return {
       packagingScope,
       taskId,
@@ -1849,7 +2012,8 @@ function parseFinalGlobalReplayRequestPayload(input: {
       assumptionLedgerPath: normalizeRelPath(join(leanRootRel, assumptionLedgerFileRel)),
       assembledRequestPath: input.assembledRequestPath,
       provisioningDiagnosticPath: diagnosticPath,
-      hostReplayDiagnosticPath
+      hostReplayDiagnosticPath,
+      importGraphDiagnosticPath
     };
   }
 
@@ -2418,7 +2582,8 @@ async function completeCampaignAtFinalGlobalReplay(input: {
       claim_id: request.claimId,
       leanProject: request.leanProject,
       provisioningDiagnosticPath: request.provisioningDiagnosticPath,
-      hostReplayDiagnosticPath: request.hostReplayDiagnosticPath
+      hostReplayDiagnosticPath: request.hostReplayDiagnosticPath,
+      importGraphDiagnosticPath: request.importGraphDiagnosticPath
     });
   } catch (error) {
     return blockCampaignAtFinalReplay({

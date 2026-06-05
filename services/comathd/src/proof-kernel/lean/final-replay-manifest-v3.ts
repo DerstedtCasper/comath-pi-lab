@@ -244,6 +244,7 @@ export function createFinalReplayManifestV3(input: {
     axiom_profile: string;
     dependency_closure: string;
     statement_equivalence: string;
+    import_graph_diagnostic?: string;
   };
   lean_run_manifest_paths: string[];
   dependency_lock: {
@@ -271,7 +272,10 @@ export function createFinalReplayManifestV3(input: {
     static_audit: rel(input.projectRoot, input.report_paths.static_audit),
     axiom_profile: rel(input.projectRoot, input.report_paths.axiom_profile),
     dependency_closure: rel(input.projectRoot, input.report_paths.dependency_closure),
-    statement_equivalence: rel(input.projectRoot, input.report_paths.statement_equivalence)
+    statement_equivalence: rel(input.projectRoot, input.report_paths.statement_equivalence),
+    ...(input.report_paths.import_graph_diagnostic
+      ? { import_graph_diagnostic: rel(input.projectRoot, input.report_paths.import_graph_diagnostic) }
+      : {})
   };
   const artifact_hashes = {
     stdout: reportHash(input.projectRoot, input.stdout_path),
@@ -279,7 +283,10 @@ export function createFinalReplayManifestV3(input: {
     static_audit: reportHash(input.projectRoot, input.report_paths.static_audit),
     axiom_profile: reportHash(input.projectRoot, input.report_paths.axiom_profile),
     dependency_closure: reportHash(input.projectRoot, input.report_paths.dependency_closure),
-    statement_equivalence: reportHash(input.projectRoot, input.report_paths.statement_equivalence)
+    statement_equivalence: reportHash(input.projectRoot, input.report_paths.statement_equivalence),
+    ...(input.report_paths.import_graph_diagnostic
+      ? { import_graph_diagnostic: reportHash(input.projectRoot, input.report_paths.import_graph_diagnostic) }
+      : {})
   };
 
   return finalReplayManifestV3Schema.parse({
@@ -496,7 +503,8 @@ export function verifyFinalReplayManifestV3(
     static_audit: manifest.report_paths.static_audit,
     axiom_profile: manifest.report_paths.axiom_profile,
     dependency_closure: manifest.report_paths.dependency_closure,
-    statement_equivalence: manifest.report_paths.statement_equivalence
+    statement_equivalence: manifest.report_paths.statement_equivalence,
+    ...(manifest.report_paths.import_graph_diagnostic ? { import_graph_diagnostic: manifest.report_paths.import_graph_diagnostic } : {})
   };
   for (const [key, relativePath] of Object.entries(artifactPaths)) {
     const expected = manifest.artifact_hashes[key as keyof typeof manifest.artifact_hashes];
@@ -529,6 +537,7 @@ export function writeThirdPartyReplayPackV3(
     clean_workspace_sha256: manifest.clean_workspace_sha256,
     source_hashes_after: manifest.source_hashes_after,
     artifact_hashes: manifest.artifact_hashes,
+    report_paths: manifest.report_paths,
     dependency_lock: manifest.dependency_lock,
     lean_run_manifest_paths: manifest.lean_run_manifest_paths
   };

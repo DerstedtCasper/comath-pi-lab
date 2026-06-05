@@ -615,6 +615,7 @@ export const finalLeanReplaySchema = z
     statement_equivalence_path: z.string().min(1),
     provisioning_diagnostic_path: z.string().min(1).optional(),
     host_replay_diagnostic_path: z.string().min(1).optional(),
+    import_graph_diagnostic_path: z.string().min(1).optional(),
     artifact_hashes: z
       .object({
         stdout: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
@@ -688,7 +689,8 @@ export const finalReplayManifestV3Schema = z
         static_audit: z.string().min(1),
         axiom_profile: z.string().min(1),
         dependency_closure: z.string().min(1),
-        statement_equivalence: z.string().min(1)
+        statement_equivalence: z.string().min(1),
+        import_graph_diagnostic: z.string().min(1).optional()
       })
       .strict(),
     artifact_hashes: z
@@ -698,7 +700,8 @@ export const finalReplayManifestV3Schema = z
         static_audit: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
         axiom_profile: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
         dependency_closure: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
-        statement_equivalence: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict()
+        statement_equivalence: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict(),
+        import_graph_diagnostic: z.object({ sha256, size_bytes: z.number().int().nonnegative() }).strict().optional()
       })
       .strict(),
     lean_run_manifest_paths: z.array(z.string().min(1)).default([]),

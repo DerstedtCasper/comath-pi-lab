@@ -245,6 +245,7 @@ function expectedReplayPackHashes(finalReplayManifest: Record<string, unknown>):
     clean_workspace_sha256: finalReplayManifest.clean_workspace_sha256,
     source_hashes_after: finalReplayManifest.source_hashes_after,
     artifact_hashes: finalReplayManifest.artifact_hashes,
+    report_paths: finalReplayManifest.report_paths,
     dependency_lock: finalReplayManifest.dependency_lock,
     lean_run_manifest_paths: finalReplayManifest.lean_run_manifest_paths
   };

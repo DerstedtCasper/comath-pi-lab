@@ -46,6 +46,7 @@ Only `trusted_replay_dependency` may be imported by final proof artifacts.
 - Final clean workspace contains only declared dependency material.
 - Campaign-native Mathlib replay has locally materialized `.lake/packages/mathlib` sources whose hashes are captured before final replay allocation.
 - Campaign-native Mathlib replay has a host replay diagnostic with service-owned Lean/Lake version probes, expected toolchain match, binary hashes, safe replay arguments, and lakefile-declared build targets captured before final replay allocation.
+- Campaign-native Mathlib replay has an import-graph diagnostic with service-owned `lake env lean --deps` theorem/audit probes, stdout/stderr/output hashes, host-diagnostic hash, deps-stdout-only coarse Mathlib presence, option-argument rejection, and FinalReplayManifest v3 / replay-pack path-hash binding captured before final replay allocation.
 - FinalReplayManifest binds the dependency lock hash.
 - FinalReplayManifest verification keeps dependency-lock file paths inside the clean workspace, recomputes their hashes, binds the toolchain text to `lean-toolchain`, and matches V2 dependency package material before accepting the manifest.
 
@@ -65,6 +66,7 @@ Only `trusted_replay_dependency` may be imported by final proof artifacts.
 - Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without Task216 local Mathlib package materialization diagnostics: missing, empty, symlink-bearing, or rootless `.lake/packages/mathlib` material blocks before final replay workspace allocation and remains `proof_authority=none`.
 - FinalReplayManifest v3 artifacts whose dependency-lock file paths, hashes, toolchain text, or V2 external revision material no longer match the clean workspace and `dependency_closure.json`.
 - Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without Task218 host replay availability diagnostics: missing Lean/Lake binaries, failed version probes, Lean toolchain mismatch, unsafe replay arguments, or undeclared build targets block before final replay workspace allocation and remain `proof_authority=none`.
+- Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without Task219 Lean/Lake-produced import-graph diagnostics: failed `lake env lean --deps` probes, empty deps stdout, stderr-only dependency mentions, option-shaped theorem/audit file args, or missing primary-dependency evidence block before final replay workspace allocation and remain `proof_authority=none`.
 
 ## Evidence Pack Rule
 

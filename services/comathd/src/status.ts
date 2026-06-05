@@ -62,6 +62,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "campaign_live_mathlib_dependency_material_gate",
       "campaign_live_mathlib_provisioning_diagnostic",
       "campaign_live_mathlib_host_replay_diagnostic",
+      "campaign_live_mathlib_import_graph_diagnostic",
       "final_replay_dependency_closure_v2_binding",
       "final_replay_dependency_lock_consistency_gate",
       "proof_obligation_dag_planning",
