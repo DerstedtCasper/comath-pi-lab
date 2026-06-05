@@ -59,6 +59,11 @@ function quoteWindowsCommandScriptToken(value: string): string {
   return `"${value}"`;
 }
 
+function formatWindowsCommandScriptArg(value: string): string {
+  assertSafeWindowsCommandScriptToken(value);
+  return /\s/u.test(value) ? `"${value}"` : value;
+}
+
 export function runLeanToolCommand(
   command: string,
   args: string[],
@@ -70,11 +75,24 @@ export function runLeanToolCommand(
       ? (serviceToolBinary(command, leanToolchain) ?? directElanTool(command, leanToolchain))
       : command;
   const windowsCommandScript = process.platform === "win32" && /\.(?:cmd|bat)$/iu.test(executable);
+  let commandLine: string | undefined;
+  if (windowsCommandScript) {
+    try {
+      commandLine = ["call", quoteWindowsCommandScriptToken(executable), ...args.map(formatWindowsCommandScriptArg)].join(" ");
+    } catch (error) {
+      return {
+        exit_code: 1,
+        stdout: "",
+        stderr: error instanceof Error ? error.message : "windows_command_script_unsafe_argument"
+      };
+    }
+  }
   const result = windowsCommandScript
-    ? spawnSync("cmd.exe", ["/d", "/s", "/c", ["call", executable, ...args].map(quoteWindowsCommandScriptToken).join(" ")], {
+    ? spawnSync("cmd.exe", ["/d", "/s", "/c", commandLine ?? ""], {
         cwd,
         encoding: "utf8",
-        timeout: 30_000
+        timeout: 30_000,
+        windowsVerbatimArguments: true
       })
     : spawnSync(executable, args, { cwd, encoding: "utf8", timeout: 30_000 });
   return {

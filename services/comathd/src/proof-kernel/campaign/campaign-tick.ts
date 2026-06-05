@@ -1240,6 +1240,7 @@ export type CampaignLiveMathlibHostReplayDiagnosticInput = {
   theoremFileRel: string;
   auditFileRel: string;
   buildTargets: string[];
+  lakefileText: string;
 };
 
 type CampaignLiveMathlibHostReplayVersionProbe = {
@@ -1517,6 +1518,21 @@ function hashHostToolBinary(path: string, vetoes: string[], code: string): strin
   }
 }
 
+function containsUnsafeReplayCommandArgument(value: string): boolean {
+  return /[\r\n"&|<>^%!]/u.test(value);
+}
+
+function declaredLakeBuildTargets(lakefileText: string): Set<string> {
+  const targets = new Set<string>();
+  for (const line of lakefileText.split(/\r?\n/u)) {
+    const match = /^\s*(?:lean_lib|lean_exe)\s+([A-Za-z_][A-Za-z0-9_'.]*)\b/u.exec(line);
+    if (match) {
+      targets.add(match[1]);
+    }
+  }
+  return targets;
+}
+
 export function evaluateCampaignLiveMathlibHostReplayDiagnostic(
   input: CampaignLiveMathlibHostReplayDiagnosticInput
 ): CampaignLiveMathlibHostReplayDiagnosticResult {
@@ -1538,6 +1554,26 @@ export function evaluateCampaignLiveMathlibHostReplayDiagnostic(
   }
   if (input.buildTargets.length === 0) {
     hard_vetoes.push("empty_build_targets_forbidden");
+  }
+  if (containsUnsafeReplayCommandArgument(input.theoremFileRel)) {
+    hard_vetoes.push("unsafe_theorem_file_argument");
+  }
+  if (containsUnsafeReplayCommandArgument(input.auditFileRel)) {
+    hard_vetoes.push("unsafe_audit_file_argument");
+  }
+  for (const target of input.buildTargets) {
+    if (target.startsWith("-") || containsUnsafeReplayCommandArgument(target)) {
+      hard_vetoes.push("unsafe_build_target_argument");
+    }
+  }
+  const declaredTargets = declaredLakeBuildTargets(input.lakefileText);
+  if (declaredTargets.size === 0) {
+    hard_vetoes.push("lake_build_targets_missing_from_lakefile");
+  }
+  for (const target of input.buildTargets) {
+    if (!declaredTargets.has(target)) {
+      hard_vetoes.push(`lake_build_target_not_declared:${target}`);
+    }
   }
 
   const expectedLeanVersion = parseExpectedLeanToolchainVersion(input.leanToolchain);
@@ -1772,7 +1808,8 @@ function parseFinalGlobalReplayRequestPayload(input: {
       leanToolchain: readFileSync(leanProject.toolchainFile, "utf8").trim(),
       theoremFileRel,
       auditFileRel,
-      buildTargets: leanProject.buildTargets
+      buildTargets: leanProject.buildTargets,
+      lakefileText: readFileSync(leanProject.lakefile, "utf8")
     });
     const hostReplayDiagnosticPath = writeSimpleStageArtifact(input.projectRoot, input.campaign, "mathlib_host_replay_diagnostic.json", {
       ...hostReplayDiagnostic,

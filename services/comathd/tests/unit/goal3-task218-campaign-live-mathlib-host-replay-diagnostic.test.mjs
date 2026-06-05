@@ -244,7 +244,8 @@ try {
     leanToolchain: "leanprover/lean4:v4.23.0",
     theoremFileRel: "MathResearch/Target.lean",
     auditFileRel: "Audit/TargetAudit.lean",
-    buildTargets: ["MathResearch"]
+    buildTargets: ["MathResearch"],
+    lakefileText: mathlibLakefile()
   });
   assert.equal(missingDiagnostic.schema_version, "comath.campaign_live_mathlib_host_replay_diagnostic.v1");
   assert.equal(missingDiagnostic.result, "fail");
@@ -279,7 +280,8 @@ try {
     leanToolchain: "leanprover/lean4:v4.23.0",
     theoremFileRel: "MathResearch/Target.lean",
     auditFileRel: "Audit/TargetAudit.lean",
-    buildTargets: ["MathResearch"]
+    buildTargets: ["MathResearch"],
+    lakefileText: mathlibLakefile()
   });
   assert.equal(mismatchDiagnostic.result, "fail");
   assert.ok(mismatchDiagnostic.hard_vetoes.includes("lean_toolchain_version_mismatch"));
