@@ -1085,6 +1085,96 @@ function usesPositiveMatrixReleasePath(path: string): boolean {
   return normalized === ".comath/release/positive_matrix" || normalized.startsWith(".comath/release/positive_matrix/");
 }
 
+export type CampaignLiveMathlibReplayBreadthGateInput = {
+  packagingScope: "positive_matrix" | "campaign";
+  primaryDependency: string;
+  canonicalProposition: string;
+  normalizedStatement: string;
+  theoremSource: string;
+  leanRootRel: string;
+  theoremFileRel: string;
+  replayCommand: string;
+  buildTargets: string[];
+};
+
+export type CampaignLiveMathlibReplayBreadthGateResult = {
+  schema_version: "comath.campaign_live_mathlib_replay_breadth_gate.v1";
+  profile: "campaign_live_mathlib_non_toy";
+  result: "pass" | "fail";
+  hard_vetoes: string[];
+  toy_patterns_detected: string[];
+  primary_dependency: string;
+  proof_authority: "none";
+  can_promote_claim: false;
+};
+
+function containsToyTrue(text: string): boolean {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return /^\(*\s*True\s*\)*$/u.test(normalized) || /\b:\s*\(*\s*True\s*\)*(?=\s|:=|$)/u.test(normalized);
+}
+
+function containsDefaultNatParameter(text: string): boolean {
+  return /(?:\(|\s)n\s*:\s*Nat(?:\)|\s|,|$)/u.test(text);
+}
+
+function containsByTactic(text: string, tactic: "trivial" | "omega"): boolean {
+  return new RegExp(`:=\\s*by\\s*(?:\\r?\\n\\s*)?${tactic}\\b`, "u").test(text);
+}
+
+export function evaluateCampaignLiveMathlibReplayBreadthGate(
+  input: CampaignLiveMathlibReplayBreadthGateInput
+): CampaignLiveMathlibReplayBreadthGateResult {
+  const hard_vetoes: string[] = [];
+  const toy_patterns_detected: string[] = [];
+  const allStatementText = [input.canonicalProposition, input.normalizedStatement, input.theoremSource].join("\n");
+
+  if (input.packagingScope !== "campaign") {
+    hard_vetoes.push("campaign_packaging_scope_required");
+  }
+  if (input.primaryDependency !== "Mathlib") {
+    hard_vetoes.push("mathlib_primary_dependency_required");
+  }
+  if (!/^\s*import\s+Mathlib(?:\s|$)/mu.test(input.theoremSource)) {
+    hard_vetoes.push("mathlib_import_missing");
+  }
+  if (usesPositiveMatrixReleasePath(input.leanRootRel) || usesPositiveMatrixReleasePath(join(input.leanRootRel, input.theoremFileRel))) {
+    hard_vetoes.push("positive_matrix_release_path_forbidden");
+  }
+  if (containsToyTrue(input.canonicalProposition) || containsToyTrue(input.normalizedStatement) || containsToyTrue(input.theoremSource)) {
+    hard_vetoes.push("toy_true_statement_forbidden");
+    toy_patterns_detected.push("True");
+  }
+  if (containsDefaultNatParameter(allStatementText)) {
+    hard_vetoes.push("toy_default_nat_parameter_forbidden");
+    toy_patterns_detected.push("n : Nat");
+  }
+  if (containsByTactic(input.theoremSource, "trivial")) {
+    hard_vetoes.push("toy_trivial_proof_forbidden");
+    toy_patterns_detected.push("by trivial");
+  }
+  if (containsByTactic(input.theoremSource, "omega")) {
+    hard_vetoes.push("toy_omega_proof_forbidden");
+    toy_patterns_detected.push("by omega");
+  }
+  if (input.buildTargets.length === 0) {
+    hard_vetoes.push("empty_build_targets_forbidden");
+  }
+  if (!/^lake\s+build\b/u.test(input.replayCommand.trim())) {
+    hard_vetoes.push("lake_build_replay_command_required");
+  }
+
+  return {
+    schema_version: "comath.campaign_live_mathlib_replay_breadth_gate.v1",
+    profile: "campaign_live_mathlib_non_toy",
+    result: hard_vetoes.length === 0 ? "pass" : "fail",
+    hard_vetoes: Array.from(new Set(hard_vetoes)),
+    toy_patterns_detected: Array.from(new Set(toy_patterns_detected)),
+    primary_dependency: input.primaryDependency,
+    proof_authority: "none",
+    can_promote_claim: false
+  };
+}
+
 function parseFinalGlobalReplayRequestPayload(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
@@ -1165,6 +1255,33 @@ function parseFinalGlobalReplayRequestPayload(input: {
   }
   if (leanProject.formalSpec.locked_statement_hash !== obligation.statement_hash) {
     throw new Error("final_replay_request_statement_hash_drift");
+  }
+
+  const replayBreadthProfile =
+    typeof request.replay_breadth_profile === "string"
+      ? request.replay_breadth_profile
+      : typeof leanProjectRaw.replay_breadth_profile === "string"
+        ? leanProjectRaw.replay_breadth_profile
+        : undefined;
+  if (replayBreadthProfile !== undefined && replayBreadthProfile !== "campaign_live_mathlib_non_toy") {
+    throw new Error("final_replay_request_replay_breadth_profile_invalid");
+  }
+  if (replayBreadthProfile === "campaign_live_mathlib_non_toy") {
+    const theoremSource = readFileSync(leanProject.theoremFile, "utf8");
+    const gate = evaluateCampaignLiveMathlibReplayBreadthGate({
+      packagingScope,
+      primaryDependency: leanProject.primaryDependency,
+      canonicalProposition: leanProject.canonicalProposition,
+      normalizedStatement: leanProject.formalSpec.normalized_statement,
+      theoremSource,
+      leanRootRel,
+      theoremFileRel,
+      replayCommand: leanProject.replayCommand,
+      buildTargets: leanProject.buildTargets
+    });
+    if (gate.result !== "pass") {
+      throw new Error(`campaign_live_mathlib_replay_breadth_gate_failed:${gate.hard_vetoes.join(",")}`);
+    }
   }
 
   return {

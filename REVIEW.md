@@ -1,3 +1,29 @@
+# Goal 3 Task 213 / Campaign Live Mathlib Replay Breadth Gate
+
+Scope: add an opt-in campaign-native live Mathlib replay breadth gate so Task213 evidence cannot be satisfied by historical toy smoke replay, positive-matrix paths, or default Nat/True proof fixtures.
+
+Changes:
+
+- Added `evaluateCampaignLiveMathlibReplayBreadthGate()` and wired `replay_breadth_profile: "campaign_live_mathlib_non_toy"` into final replay request parsing before final replay workspace allocation.
+- Added `campaign_live_mathlib_replay_breadth_gate` to service capabilities.
+- Added `goal3-task213-campaign-live-mathlib-replay-breadth-gate.test.mjs` and registered it in phase0 smoke / GA release criteria discovery.
+- Updated README, AGENTS, TODO, threat model, GA release criteria, REVIEW, and the Goal 3 tracker.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task213 failed because `../../dist/index.js` did not export `evaluateCampaignLiveMathlibReplayBreadthGate`.
+- Read-only review found that parenthesized `True` could bypass the non-toy gate and that the focused suite did not assert every advertised veto. A follow-up RED reproduced the bypass with `: (True) := by exact True.intro`; `containsToyTrue()` now rejects parenthesized `True`, and the focused suite covers missing Mathlib dependency/import, default `n : Nat`, `by omega`, positive-matrix paths, and non-campaign scope.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task213 exited 0.
+- Adjacent campaign final replay regressions Task102 and Task103 exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task213 discovered by the default runner.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- A local bare Lean probe for `import Mathlib` exited 1 with `unknown module prefix 'Mathlib'`, so Task213 does not claim an environment-backed live Mathlib proof replay on this host.
+
+Boundary notes: Task213 is a breadth anti-confusion and fail-closed request gate. It does not install mathlib, provision a theorem-specific Lake package, clean-replay a real non-toy Mathlib theorem on this host, close the positive-matrix breadth item, make gate output proof authority, or certify GA. Promotion still requires service-owned Lean clean replay plus Lean Authority v3 packaging and ordinary promotion gates.
+
 # Goal 3 Task 212 / Windows AppContainer Production-Helper Profile Contract
 
 Scope: add a concrete Windows AppContainer production-helper profile contract so release audits can distinguish host operator configured helpers from bundled provider-helper protocol assets without treating either path as proof authority, OS-enforcement proof, real-Pi evidence, readiness evidence by itself, broad provider support, or GA certification.
