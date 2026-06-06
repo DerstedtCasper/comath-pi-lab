@@ -1,3 +1,28 @@
+# Goal 3 Task 233 / Operator-Service Transport Check-Debug
+
+Scope: revalidate the Task220-231 operator/service transport and prepared handoff chain through focused release-hardening coverage, without adding a new transport route, Pi mutating tool, background stream owner, direct trusted-state mutation, Lean execution, proof authority, claim promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task233-pi-operator-service-transport-check-debug.test.mjs`.
+- Added `pi_codex_operator_service_transport_check_debug` to the service capability ledger.
+- Registered Task233 in phase0 smoke, GA release criteria, threat model, README, AGENTS, TODO, REVIEW, and the Goal 3 tracker.
+- The focused suite exercises existing automatic real-Pi orchestration, maintained transport contract, continuity checkpoint, duplicate-id rejection, stale/tampered Task225 contract rejection, missing contract-hash rejection, service route sanitization, public authority flags, and audit non-authority boundaries.
+
+Verification:
+- TDD RED was observed before implementation: focused Task233 failed because `getComathdStatus().capabilities` did not advertise `pi_codex_operator_service_transport_check_debug`.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task233 exited 0.
+- Adjacent Task220, Task221, Task225, and Task229 service regressions exited 0.
+- Adjacent Task226, Task230, and Task231 Pi regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` initially exposed a stale TODO compatibility anchor because the Task232 regression still requires the literal `Task213-232 summary`; after restoring that anchor while retaining Task233 text, focused Task232 and Task233 exited 0 and the final `@comath/comathd test` exited 0 with Task233 discovered by the default runner.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 including phase0 smoke, Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task233 is check-debug coverage only. It keeps the existing Node HTTP AgentRun log-session route plus Pi `fetch`/`getText` primitive visible and non-authoritative; it does not create a new service route, new Pi tool, WebSocket/SSE owner, direct Pi write path, unattended executor, Lean replay, proof authority, claim promotion, real-host execution completion, or GA certification.
+
 # Goal 3 Task 232 / Nix Production-Helper Profile Contract
 
 Scope: add a Nix sandbox production-helper profile contract so release audits can distinguish operator-configured Nix helpers from bundled provider-helper protocol assets without treating either path as a Nix runner, Nix store/profile probe, proof authority, OS-enforcement proof, readiness evidence by itself, real-Pi evidence, broad provider support, or GA certification.
