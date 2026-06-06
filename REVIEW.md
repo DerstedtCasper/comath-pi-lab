@@ -1,3 +1,28 @@
+# Goal 3 Task 235 / macOS Sandbox-Exec Production-Helper Profile Contract
+
+Scope: add a macOS `sandbox-exec` production-helper profile contract to the existing provider-helper lineage path, without adding a macOS runner, running `sandbox-exec`, inspecting sandbox profile/policy state, treating helper metadata as OS-enforcement proof, changing Lean proof authority, creating real-Pi evidence, or certifying GA.
+
+Implementation notes:
+- Added `goal3-task235-agent-adapter-os-isolation-macos-sandbox-exec-production-helper-profile-contract.test.mjs`.
+- Extended the service-derived `production_helper_profile_contract` generator from OCI/Nix/Firejail to macOS `sandbox-exec`.
+- Added `agent_adapter_os_isolation_macos_sandbox_exec_production_helper_profile_contract` to the service capability ledger.
+- Registered macOS profile-contract metadata in sample config, phase0 smoke, GA release criteria, adapter contracts, threat model, README, AGENTS, TODO, REVIEW, and the Goal 3 tracker.
+
+Verification:
+- TDD RED was observed before implementation: focused Task235 failed because `getComathdStatus().capabilities` did not advertise `agent_adapter_os_isolation_macos_sandbox_exec_production_helper_profile_contract`.
+- Read-only code review found one Important boundary gap: Darwin deployments could misconfigure the macOS helper env var to the `sandbox-exec` facility tool itself. A follow-up RED regression first reproduced this as an accepted bad runner; the implementation now rejects `sandbox-exec` / `sandbox-exec.exe` as a macOS provider-helper protocol executable at runner, config resolver, host-validation, and execution gates before any spawn.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `node --check services/comathd/tests/unit/goal3-task235-agent-adapter-os-isolation-macos-sandbox-exec-production-helper-profile-contract.test.mjs` exited 0.
+- Focused Task235 exited 0.
+- Adjacent Task234, Task232, Task222, Task212, Task184, Task196, and Task211 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task235 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 including phase0 smoke, Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task235 is lineage and anti-confusion metadata only. It binds macOS helper profile source, helper binary hash, macOS `sandbox-exec` facility family, disabled network policy, no-new-privileges, path-free `macos_sandbox_exec_cli`, and non-authority flags through existing provider-runner, host-validation, helper-execution, and collection manifests. It rejects the `sandbox-exec` facility tool itself as a provider-helper protocol executable. It does not run `sandbox-exec`, inspect sandbox profile/policy state, ship a production helper, prove OS enforcement, affect Lean/mathlib proof authority, produce real-Pi evidence, or certify GA.
+
 # Goal 3 Task 234 / Firejail Production-Helper Profile Contract
 
 Scope: add a Firejail production-helper profile contract to the existing provider-helper lineage path, without adding a Firejail runner, running Firejail, inspecting Firejail profile/policy state, treating helper metadata as OS-enforcement proof, changing Lean proof authority, creating real-Pi evidence, or certifying GA.

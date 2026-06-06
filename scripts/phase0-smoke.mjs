@@ -402,6 +402,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task232-agent-adapter-os-isolation-nix-production-helper-profile-contract.test.mjs",
   "goal3-task233-pi-operator-service-transport-check-debug.test.mjs",
   "goal3-task234-agent-adapter-os-isolation-firejail-production-helper-profile-contract.test.mjs",
+  "goal3-task235-agent-adapter-os-isolation-macos-sandbox-exec-production-helper-profile-contract.test.mjs",
   "goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs",
   "goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs",
   "goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs",

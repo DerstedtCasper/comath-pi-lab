@@ -556,9 +556,10 @@ type AgentAdapterOsIsolationProductionHelperProfileContractBase = {
   contract_source:
     | "service_owned_oci_container_production_helper_profile_contract"
     | "service_owned_nix_sandbox_production_helper_profile_contract"
-    | "service_owned_firejail_production_helper_profile_contract";
-  provider: "oci_container" | "nix_sandbox" | "firejail";
-  provider_family: "oci_container" | "nix_sandbox" | "firejail";
+    | "service_owned_firejail_production_helper_profile_contract"
+    | "service_owned_macos_sandbox_exec_production_helper_profile_contract";
+  provider: "oci_container" | "nix_sandbox" | "firejail" | "macos_sandbox_exec";
+  provider_family: "oci_container" | "nix_sandbox" | "firejail" | "macos_sandbox_exec";
   helper_profile_source: AgentAdapterOsIsolationProductionHelperProfileSource;
   production_helper_configured: boolean;
   bundled_protocol_asset: boolean;
@@ -570,8 +571,13 @@ type AgentAdapterOsIsolationProductionHelperProfileContractBase = {
   required_host_facility_tools:
     | readonly ["oci_docker_cli", "oci_podman_cli"]
     | readonly ["nix_cli", "nix_store_cli"]
-    | readonly ["firejail_cli"];
-  runtime_family: "docker_or_podman_oci" | "nix_develop_no_network" | "firejail_private_netnone_nonewprivs";
+    | readonly ["firejail_cli"]
+    | readonly ["macos_sandbox_exec_cli"];
+  runtime_family:
+    | "docker_or_podman_oci"
+    | "nix_develop_no_network"
+    | "firejail_private_netnone_nonewprivs"
+    | "macos_sandbox_exec_no_network_profile";
   runner_network_policy: "disabled";
   no_new_privileges_required: true;
   command_override_allowed: false;
@@ -636,10 +642,31 @@ export type AgentAdapterOsIsolationFirejailProductionHelperProfileContract =
     firejail_command_execution_required_for_profile_contract: false;
   };
 
+export type AgentAdapterOsIsolationMacosSandboxExecProductionHelperProfileContract =
+  Omit<
+    AgentAdapterOsIsolationProductionHelperProfileContractBase,
+    | "contract_source"
+    | "provider"
+    | "provider_family"
+    | "required_host_facility_tools"
+    | "runtime_family"
+    | "daemon_or_socket_inspection_allowed"
+    | "container_launch_required_for_profile_contract"
+  > & {
+    contract_source: "service_owned_macos_sandbox_exec_production_helper_profile_contract";
+    provider: "macos_sandbox_exec";
+    provider_family: "macos_sandbox_exec";
+    required_host_facility_tools: readonly ["macos_sandbox_exec_cli"];
+    runtime_family: "macos_sandbox_exec_no_network_profile";
+    macos_sandbox_profile_or_policy_inspection_allowed: false;
+    macos_sandbox_exec_command_execution_required_for_profile_contract: false;
+  };
+
 export type AgentAdapterOsIsolationProductionHelperProfileContract =
   | AgentAdapterOsIsolationOciProductionHelperProfileContract
   | AgentAdapterOsIsolationNixProductionHelperProfileContract
-  | AgentAdapterOsIsolationFirejailProductionHelperProfileContract;
+  | AgentAdapterOsIsolationFirejailProductionHelperProfileContract
+  | AgentAdapterOsIsolationMacosSandboxExecProductionHelperProfileContract;
 
 export type AgentAdapterOsIsolationProviderHostCapabilityKernelFeature = {
   name: string;
@@ -4632,14 +4659,20 @@ function productionHelperProfileContractSpec(provider: AgentAdapterOsIsolationPr
   contract_source:
     | "service_owned_oci_container_production_helper_profile_contract"
     | "service_owned_nix_sandbox_production_helper_profile_contract"
-    | "service_owned_firejail_production_helper_profile_contract";
-  provider: "oci_container" | "nix_sandbox" | "firejail";
-  provider_family: "oci_container" | "nix_sandbox" | "firejail";
+    | "service_owned_firejail_production_helper_profile_contract"
+    | "service_owned_macos_sandbox_exec_production_helper_profile_contract";
+  provider: "oci_container" | "nix_sandbox" | "firejail" | "macos_sandbox_exec";
+  provider_family: "oci_container" | "nix_sandbox" | "firejail" | "macos_sandbox_exec";
   required_host_facility_tools:
     | readonly ["oci_docker_cli", "oci_podman_cli"]
     | readonly ["nix_cli", "nix_store_cli"]
-    | readonly ["firejail_cli"];
-  runtime_family: "docker_or_podman_oci" | "nix_develop_no_network" | "firejail_private_netnone_nonewprivs";
+    | readonly ["firejail_cli"]
+    | readonly ["macos_sandbox_exec_cli"];
+  runtime_family:
+    | "docker_or_podman_oci"
+    | "nix_develop_no_network"
+    | "firejail_private_netnone_nonewprivs"
+    | "macos_sandbox_exec_no_network_profile";
   extra_contract_material:
     | {
         daemon_or_socket_inspection_allowed: false;
@@ -4652,6 +4685,10 @@ function productionHelperProfileContractSpec(provider: AgentAdapterOsIsolationPr
     | {
         firejail_profile_or_policy_inspection_allowed: false;
         firejail_command_execution_required_for_profile_contract: false;
+      }
+    | {
+        macos_sandbox_profile_or_policy_inspection_allowed: false;
+        macos_sandbox_exec_command_execution_required_for_profile_contract: false;
       };
 } | null {
   if (provider === "oci_container") {
@@ -4690,6 +4727,19 @@ function productionHelperProfileContractSpec(provider: AgentAdapterOsIsolationPr
       extra_contract_material: {
         firejail_profile_or_policy_inspection_allowed: false,
         firejail_command_execution_required_for_profile_contract: false
+      }
+    };
+  }
+  if (provider === "macos_sandbox_exec") {
+    return {
+      contract_source: "service_owned_macos_sandbox_exec_production_helper_profile_contract",
+      provider: "macos_sandbox_exec",
+      provider_family: "macos_sandbox_exec",
+      required_host_facility_tools: ["macos_sandbox_exec_cli"],
+      runtime_family: "macos_sandbox_exec_no_network_profile",
+      extra_contract_material: {
+        macos_sandbox_profile_or_policy_inspection_allowed: false,
+        macos_sandbox_exec_command_execution_required_for_profile_contract: false
       }
     };
   }
@@ -4842,6 +4892,14 @@ function defaultProviderRunnerResolver(
       resolution_source: "service_owned_provider_runner_resolver",
       runner_available: false,
       diagnostics: [`${providerEnvVar} does not point to an existing file.`]
+    };
+  }
+  const helperFacilityToolRejection = providerHelperFacilityToolRejection(input.provider, configuredProgram);
+  if (helperFacilityToolRejection) {
+    return {
+      resolution_source: "service_owned_provider_runner_resolver",
+      runner_available: false,
+      diagnostics: [helperFacilityToolRejection]
     };
   }
   const helperHash = sha256FileSync(configuredProgram);
@@ -5151,6 +5209,20 @@ function providerHelperProgramEnvVar(provider: AgentAdapterOsIsolationProvider):
   }
 }
 
+function providerHelperFacilityToolRejection(
+  provider: AgentAdapterOsIsolationProvider,
+  helperProgram: string
+): string | null {
+  if (provider !== "macos_sandbox_exec") {
+    return null;
+  }
+  const helperBasename = helperProgram.split(/[\\/]/).pop()?.toLowerCase() ?? "";
+  if (helperBasename !== "sandbox-exec" && helperBasename !== "sandbox-exec.exe") {
+    return null;
+  }
+  return "macOS sandbox-exec facility tool cannot be used as the CoMath provider-helper protocol executable; configure a service-owned helper wrapper or bundled protocol asset instead.";
+}
+
 function providerHelperArgsEnvVar(provider: AgentAdapterOsIsolationProvider): string {
   switch (provider) {
     case "oci_container":
@@ -5452,6 +5524,14 @@ function defaultProviderHelperConfigResolver(
       diagnostics: [`${providerEnvVar} does not point to an existing file.`]
     };
   }
+  const helperFacilityToolRejection = providerHelperFacilityToolRejection(input.provider, configuredProgram);
+  if (helperFacilityToolRejection) {
+    return {
+      config_source: "service_owned_provider_helper_config",
+      helper_available: false,
+      diagnostics: [helperFacilityToolRejection]
+    };
+  }
   const configuredArgs = configuredHelperArgsPrefix(input.provider);
   if (!configuredArgs.ok) {
     return {
@@ -5526,6 +5606,14 @@ function defaultProviderHelperHostValidator(
       validation_source: "service_owned_provider_helper_host_validator",
       helper_host_ready: false,
       diagnostics: [`${providerEnvVar} does not point to an existing file.`]
+    };
+  }
+  const helperFacilityToolRejection = providerHelperFacilityToolRejection(input.provider, configuredProgram);
+  if (helperFacilityToolRejection) {
+    return {
+      validation_source: "service_owned_provider_helper_host_validator",
+      helper_host_ready: false,
+      diagnostics: [helperFacilityToolRejection]
     };
   }
   const configuredArgs = configuredHelperArgsPrefix(input.provider);
@@ -8093,6 +8181,9 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
     statSync(validation.helper_program).isFile()
     ? validation.helper_program
     : null;
+  const helperFacilityToolRejection = helperProgram
+    ? providerHelperFacilityToolRejection(provider, helperProgram)
+    : null;
   const helperHash = helperProgram ? sha256FileSync(helperProgram) : null;
   const declaredHelperHash = isSha256(validation?.helper_binary_sha256)
     ? validation.helper_binary_sha256.toLowerCase()
@@ -8135,6 +8226,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   const binaryHashMatchesProviderRunner = Boolean(
     validationSourceAccepted &&
       helperHash &&
+      !helperFacilityToolRejection &&
       declaredHashMatchesProgram &&
       isSha256(runnerBinarySha256) &&
       helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase()
@@ -8144,6 +8236,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
     validationSourceAccepted &&
       validation?.helper_host_ready === true &&
       helperHash &&
+      !helperFacilityToolRejection &&
       osEnforcedProviders.has(provider)
   );
   const status = providerHelperHostValidationStatus({
@@ -8166,6 +8259,7 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
     input.host_environment?.notes ? sanitizeProbeText(input.host_environment.notes) : undefined,
     ...hostCapabilityDiagnostics,
     ...sanitizeDiagnostics(validation?.diagnostics),
+    helperFacilityToolRejection,
     validationSourceAccepted && !profileMatchesProviderRunner
       ? `${provider} provider-helper profile contract does not match the ready provider-runner manifest.`
       : undefined,
@@ -8424,6 +8518,9 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
     provider
   });
   const helperProgram = configAccepted ? config?.helper_program as string : null;
+  const helperFacilityToolRejection = helperProgram
+    ? providerHelperFacilityToolRejection(provider, helperProgram)
+    : null;
   const helperHash = helperProgram ? sha256FileSync(helperProgram) : null;
   const runnerBinarySha256 = readyRunnerBundle?.runner.provider_runner_resolution.runner_binary_sha256;
   const productionHelperProfileContract = createProductionHelperProfileContract({
@@ -8443,13 +8540,20 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
   });
   const helperHashMatches = Boolean(
     helperHash &&
+      !helperFacilityToolRejection &&
       isSha256(runnerBinarySha256) &&
       helperHash.sha256.toLowerCase() === runnerBinarySha256.toLowerCase() &&
       profileMatchesProviderRunnerAndHost
   );
   const helperArgsPrefix = configAccepted ? sanitizeHelperArgsPrefix(config?.helper_args_prefix) : [];
   const helperArgsPrefixSha256 = helperArgsPrefix.length > 0 ? sha256Text(canonicalJson(helperArgsPrefix)) : null;
-  const shouldSpawn = Boolean(hostValidationBindingAccepted && configAccepted && helperHashMatches && helperProgram);
+  const shouldSpawn = Boolean(
+    hostValidationBindingAccepted &&
+      configAccepted &&
+      helperHashMatches &&
+      helperProgram &&
+      !helperFacilityToolRejection
+  );
   const spawned = shouldSpawn
     ? spawnSync(helperProgram as string, [...helperArgsPrefix, ...fixedArgs], {
         cwd: projectRoot,
@@ -8520,6 +8624,7 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
     input.helper_environment?.notes ? sanitizeProbeText(input.helper_environment.notes) : undefined,
     ...hostValidationBindingDiagnostics,
     ...sanitizeDiagnostics(config?.diagnostics),
+    helperFacilityToolRejection,
     configAccepted && !profileMatchesProviderRunnerAndHost
       ? `${provider} provider-helper execution profile contract does not match the ready runner and validated host.`
       : undefined,

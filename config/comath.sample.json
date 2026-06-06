@@ -234,6 +234,15 @@
         "providerSpecificLiveProbeExecutionRequired": true,
         "providerSpecificLiveProbeCollectionBindingRequired": true,
         "providerControlPlaneExecutionWitnessRequired": true,
+        "productionHelperProfileContractRequired": true,
+        "productionHelperProfileContractKind": "macos_sandbox_exec_no_network_profile_contract",
+        "productionHelperProfileSources": [
+          "operator_configured_provider_helper",
+          "bundled_provider_helper_protocol_asset"
+        ],
+        "requiredHostFacilityTools": [
+          "macos_sandbox_exec_cli"
+        ],
         "executionAssetHashBound": true,
         "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",
