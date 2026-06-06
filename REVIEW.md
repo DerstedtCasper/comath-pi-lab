@@ -1,3 +1,34 @@
+# Goal 3 Task 241 / Unattended Real-Host Execution Readiness Blocker
+
+Scope: add a service-owned pre-execution readiness blocker after the Task239/240 handoff review path. This records why production unattended real-host execution is still blocked; it is not operator approval, unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task241-pi-unattended-real-host-execution-readiness-blocker.test.mjs`.
+- Added `recordPiCodexLifecycleUnattendedRealHostExecutionReadiness()` to consume a current Task239 handoff review artifact from its canonical path/hash and write append-only blocked readiness evidence.
+- Added `POST /release/pi-codex-lifecycle/unattended-real-host-execution-readiness`.
+- Added `comath.pi_codex_unattended_real_host_execution_readiness.v1` manifests and `release.pi_codex_unattended_real_host_execution_readiness_blocked` audit events.
+- Added the `pi_codex_unattended_real_host_execution_readiness_blocker` capability.
+- Registered the focused suite in phase0 smoke release-hardening discovery, GA release criteria, README, AGENTS, TODO, adapter contracts, threat model, REVIEW, and the Goal 3 tracker.
+- Read-only review found that poisoned prepared-checkpoint entries, poisoned service-route/transport primitive fields, `readiness_id=".."`, unsafe child lifecycle ids, and hash-only prepared checkpoint drift inside a hash-current Task239 review could still cross the Task241 handoff-review boundary. Follow-up RED coverage reproduced those gaps before the guard was hardened.
+
+Verification:
+- TDD RED was observed after `corepack pnpm --filter @comath/comathd build` when focused Task241 failed because `../../dist/index.js` did not export `recordPiCodexLifecycleUnattendedRealHostExecutionReadiness`.
+- Reviewer-driven RED coverage then failed on poisoned prepared checkpoint entries.
+- Final reviewer-driven RED coverage then failed on unsafe child lifecycle ids and hash-only prepared checkpoint drift embedded in the Task239 review.
+- `corepack pnpm --filter @comath/comathd build` exited 0 after implementation and hardening.
+- Focused Task241 exited 0.
+- Adjacent Task239, Task233, Task224, Task225, Task227, and Task229 lifecycle regressions exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task241 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 including phase0 smoke, Pi workspace tests through Task240, comathd package tests through Task241, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+- Worktree-only full package/root verification used an ignored local `.worktrees/MathProve-Skill` copy of the existing sibling MathProve scripts/skill material to satisfy Phase25/58 external-runner tests; no tracked runtime/build artifacts were added.
+
+Boundary notes: Task241 does not execute a production unattended real-host workflow, does not approve a handoff, does not create operator approval evidence, does not mutate Pi trusted state, does not open durable/live transport, does not run Lean, does not promote claims, and does not certify GA. It records blocker reasons for missing operator approval artifact, missing service-owned unattended executor, and missing durable transport while forcing approval, execution, proof, GA, durable/live transport, direct-Pi-write, and trusted-state authority flags false. Task241 now also validates every prepared checkpoint entry against the expected id/order/public alias/canonical path/hash/current/non-authority flags by re-reading canonical child artifacts, rejects poisoned service-route/transport primitive fields, and rejects unsafe readiness/review/child lifecycle ids before marking the Task239 review current.
+
 # Goal 3 Task 240 / Pi Unattended Real-Host Handoff Review Consumer
 
 Scope: expose the Task239 service-owned unattended handoff review through a host-confirmed Pi tool and `/cm:release` command. This is a thin client and planner checkpoint only; it is not operator approval, unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
