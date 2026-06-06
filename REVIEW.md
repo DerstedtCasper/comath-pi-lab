@@ -1,3 +1,33 @@
+# Goal 3 Task 225 / Operator-Service Maintained Transport Contract
+
+Scope: add service-owned append-only provenance for the maintained operator/service transport boundary, binding a Task224 terminal review to the current Task221 heartbeat hash, existing Node HTTP AgentRun log-session route, and Pi `fetch`/`getText` client primitive without creating durable transport, proof authority, Pi mutation authority, or GA certification.
+
+Changes:
+
+- Added `goal3-task225-pi-operator-service-transport-contract.test.mjs`.
+- Added `recordPiCodexLifecycleOperatorServiceTransportContract()` and `POST /release/pi-codex-lifecycle/operator-service-transport-contract`.
+- Added `comath.pi_codex_operator_service_transport_contract.v1` artifacts under `.comath/release/pi-codex-lifecycle/<transport-contract-id>/operator-service-transport-contract.json`.
+- Added `pi_codex_operator_service_transport_contract` to the service capability ledger.
+- The contract reads a Task224 terminal review, re-reads the current Task221 heartbeat artifact, rejects stale heartbeat hashes, re-runs bounded `formatAgentRunLogSseSession()`, and binds `node_http_agent_run_log_session_route` plus `pi_fetch_get_text`.
+- Missing terminal reviews, stale heartbeat material, secrets, proof-success wording, and long-lived transport overclaims fail closed or are sanitized before persistence.
+- Synchronized README, AGENTS, TODO, threat model, GA release criteria, phase0 smoke, REVIEW, and the Goal 3 tracker without claiming durable long-lived transport or automatic real-Pi execution.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task225 failed because `../../dist/index.js` did not export `recordPiCodexLifecycleOperatorServiceTransportContract`.
+- After implementation, focused Task225 exited 0.
+- Adjacent Task220, Task221, Task224, Task164, Task166, and Phase50 regressions exited 0.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task225 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task225 is maintained-primitive provenance only. It does not run Lean, promote proof claims, certify GA, open durable long-lived SSE/WebSocket transport, mutate Pi state, or replace a real operator-controlled Pi execution. Durable operator transport, fully automatic real-Pi execution, real installed-toolchain Mathlib smoke breadth, and GA certification remain open.
+
 # Goal 3 Task 224 / Guided Execution Terminal Chain Review
 
 Scope: add a service-owned terminal review gate for the guided real-Pi lifecycle chain, binding runtime probe, operator session, recovery, bounded lease, heartbeat/rebind, and guided execution artifacts without creating proof authority, durable transport, direct Pi writes, or GA certification.

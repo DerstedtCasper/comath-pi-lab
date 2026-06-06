@@ -60,6 +60,7 @@ import {
   probePiCodexDurableServiceLifecycle,
   probePiCodexRealPiInstallRuntimeRegistration,
   recordPiCodexLifecycleGuidedRealPiExecution,
+  recordPiCodexLifecycleOperatorServiceTransportContract,
   recoverPiCodexLifecycleOperatorTransport,
   reviewPiCodexLifecycleTerminalExecution,
   reviewPiCodexLifecycleReadiness
@@ -492,6 +493,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         const body = payload as Parameters<typeof reviewPiCodexLifecycleTerminalExecution>[1] & { project_root: string };
         return {
           review: reviewPiCodexLifecycleTerminalExecution(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/operator-service-transport-contract",
+      (payload) => {
+        const body = payload as Parameters<typeof recordPiCodexLifecycleOperatorServiceTransportContract>[1] & {
+          project_root: string;
+        };
+        return {
+          contract: recordPiCodexLifecycleOperatorServiceTransportContract(body.project_root, body)
         };
       }
     ],

@@ -867,6 +867,94 @@ export type PiCodexGuidedExecutionTerminalChainReview = {
   can_certify_ga: false;
 };
 
+export type PiCodexOperatorServiceTransportPrimitive = "node_http_agent_run_log_session_route";
+export type PiCodexOperatorClientTransportPrimitive = "pi_fetch_get_text";
+
+export type PiCodexOperatorServiceTransportContractInput = {
+  project_id: string;
+  transport_contract_id?: string;
+  actor: string;
+  terminal_review_id: string;
+  terminal_review_path?: string;
+  max_bytes?: number;
+  max_events?: number;
+  retry_ms?: number;
+  service_transport_primitive?: PiCodexOperatorServiceTransportPrimitive;
+  client_transport_primitive?: PiCodexOperatorClientTransportPrimitive;
+};
+
+export type PiCodexGuidedExecutionTerminalChainReviewArtifact = {
+  kind: "guided_execution_terminal_chain_review";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexOperatorServiceTransportContractArtifact = {
+  kind: "operator_service_transport_contract";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexOperatorServiceTransportContract = {
+  schema_version: "comath.pi_codex_operator_service_transport_contract.v1";
+  transport_contract_id: string;
+  project_id: string;
+  actor: string;
+  created_at: string;
+  contract_status: "maintained_bounded_transport_contract_recorded";
+  transport_contract_path: string;
+  transport_contract_artifact: PiCodexOperatorServiceTransportContractArtifact;
+  terminal_review_id: string;
+  terminal_review_path: string;
+  terminal_review_artifact: PiCodexGuidedExecutionTerminalChainReviewArtifact;
+  transport_heartbeat_id: string;
+  transport_heartbeat_path: string;
+  transport_heartbeat_artifact: PiCodexLifecycleOperatorTransportHeartbeatArtifact;
+  execution_id: string;
+  guided_execution_path: string;
+  guided_execution_artifact: PiCodexGuidedRealPiExecutionArtifact;
+  session_id: string;
+  transport_recovery_id: string;
+  transport_lease_id: string;
+  agent_run_id: string;
+  service_transport_primitive: PiCodexOperatorServiceTransportPrimitive;
+  client_transport_primitive: PiCodexOperatorClientTransportPrimitive;
+  http_method: "GET";
+  service_route: string;
+  content_type: "text/event-stream; charset=utf-8";
+  bounded_limits: {
+    max_bytes: number;
+    max_events: number;
+    retry_ms: number;
+  };
+  resume_cursor: AgentRunLogCursor;
+  log_session_next_cursor: AgentRunLogCursor;
+  log_session_event_count: number;
+  log_session_body_sha256: string;
+  maintained_transport_primitive_bound: true;
+  service_route_bound: true;
+  client_fetch_contract_bound: true;
+  terminal_review_bound: true;
+  heartbeat_bound: true;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexOperatorServiceTransportContractBody = Omit<
+  PiCodexOperatorServiceTransportContract,
+  "transport_contract_artifact"
+>;
+
 const terminalChainOrderedSteps: PiCodexGuidedExecutionTerminalChainStep[] = [
   "real_pi_runtime_probe",
   "operator_session_manifest",
@@ -1062,6 +1150,48 @@ function assertGuidedRealPiExecutionId(value: string | undefined): string {
     });
   }
   return executionId;
+}
+
+function assertOperatorServiceTransportContractId(value: string | undefined): string {
+  const contractId = value ?? `LIFE-TRANSPORT-CONTRACT-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (
+    !/^[A-Za-z0-9._-]+$/.test(contractId) ||
+    contractId === "." ||
+    contractId === ".." ||
+    contractId.split(".").some((segment) => segment.length === 0)
+  ) {
+    throw new ComathError("invalid Pi/Codex operator/service transport contract id", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_INVALID_ID"
+    });
+  }
+  return contractId;
+}
+
+function assertOperatorServiceTransportPrimitive(
+  value: PiCodexOperatorServiceTransportContractInput["service_transport_primitive"]
+): PiCodexOperatorServiceTransportPrimitive {
+  const primitive = value ?? "node_http_agent_run_log_session_route";
+  if (primitive !== "node_http_agent_run_log_session_route") {
+    throw new ComathError("invalid Pi/Codex operator/service transport service primitive", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_INVALID_SERVICE_PRIMITIVE"
+    });
+  }
+  return primitive;
+}
+
+function assertOperatorClientTransportPrimitive(
+  value: PiCodexOperatorServiceTransportContractInput["client_transport_primitive"]
+): PiCodexOperatorClientTransportPrimitive {
+  const primitive = value ?? "pi_fetch_get_text";
+  if (primitive !== "pi_fetch_get_text") {
+    throw new ComathError("invalid Pi/Codex operator/service transport client primitive", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_INVALID_CLIENT_PRIMITIVE"
+    });
+  }
+  return primitive;
 }
 
 function assertGuidedRealPiExecutionOutcome(
@@ -2534,6 +2664,109 @@ function readGuidedRealPiExecutionArtifact(
   };
 }
 
+function assertOperatorServiceTransportTerminalReviewBoundary(
+  review: PiCodexGuidedExecutionTerminalChainReview
+): void {
+  const logSessionBinding = review.agent_run_log_session_binding;
+  const parsedLogSessionRoute =
+    typeof logSessionBinding?.route === "string" ? parseAgentRunLogSessionRoute(logSessionBinding.route) : null;
+  if (
+    review.ok !== true ||
+    review.review_status !== "guided_real_pi_terminal_chain_ready_for_release_review" ||
+    review.terminal_chain_bound !== true ||
+    review.heartbeat_consumed_by_review !== true ||
+    review.guided_execution_consumed_by_review !== true ||
+    review.pi_direct_write_allowed !== false ||
+    review.direct_trusted_state_mutation !== false ||
+    review.durable_transport_provided !== false ||
+    review.live_transport_open !== false ||
+    review.indefinite_stream_open !== false ||
+    review.long_lived_websocket_provided !== false ||
+    review.long_lived_sse_provided !== false ||
+    review.proof_authority !== "none" ||
+    review.can_promote_claim !== false ||
+    review.can_certify_ga !== false ||
+    logSessionBinding?.binding_source !== "service_owned_agent_run_log_session" ||
+    logSessionBinding.project_id !== review.project_id ||
+    parsedLogSessionRoute === null ||
+    parsedLogSessionRoute.route !== logSessionBinding.route ||
+    parsedLogSessionRoute.runId !== logSessionBinding.run_id ||
+    logSessionBinding.content_type !== "text/event-stream; charset=utf-8" ||
+    !isAgentRunLogCursor(logSessionBinding.cursor) ||
+    !isAgentRunLogCursor(logSessionBinding.next_cursor) ||
+    !Number.isSafeInteger(logSessionBinding.event_count) ||
+    logSessionBinding.event_count < 0 ||
+    typeof logSessionBinding.complete !== "boolean" ||
+    !/^[a-f0-9]{64}$/u.test(logSessionBinding.body_sha256) ||
+    logSessionBinding.proof_authority !== "none" ||
+    logSessionBinding.durable_transport_provided !== false ||
+    logSessionBinding.long_lived_sse_provided !== false
+  ) {
+    throw new ComathError("Pi/Codex operator/service transport contract terminal review violates boundaries", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_TERMINAL_REVIEW_INVALID"
+    });
+  }
+}
+
+function readGuidedExecutionTerminalChainReviewArtifact(
+  projectRoot: string,
+  projectId: string,
+  reviewId: string,
+  reviewPath: string
+): {
+  review: PiCodexGuidedExecutionTerminalChainReview;
+  artifact: PiCodexGuidedExecutionTerminalChainReviewArtifact;
+} {
+  const absolutePath = assertPathAllowed(projectRoot, reviewPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath)) {
+    throw new ComathError("Pi/Codex operator/service transport contract requires a terminal review artifact", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_TERMINAL_REVIEW_MISSING"
+    });
+  }
+  if (!statSync(absolutePath).isFile()) {
+    throw new ComathError("Pi/Codex operator/service transport contract terminal review must be a file", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_TERMINAL_REVIEW_INVALID"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  let parsed: PiCodexGuidedExecutionTerminalChainReview;
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexGuidedExecutionTerminalChainReview;
+  } catch {
+    throw new ComathError("Pi/Codex operator/service transport contract terminal review JSON is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_TERMINAL_REVIEW_INVALID"
+    });
+  }
+  if (
+    parsed.schema_version !== "comath.pi_codex_guided_execution_terminal_chain_review.v1" ||
+    parsed.project_id !== projectId ||
+    parsed.review_id !== reviewId ||
+    parsed.review_path !== reviewPath
+  ) {
+    throw new ComathError("Pi/Codex operator/service transport contract terminal review does not bind the request", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_TERMINAL_REVIEW_INVALID"
+    });
+  }
+  assertOperatorServiceTransportTerminalReviewBoundary(parsed);
+  return {
+    review: parsed,
+    artifact: {
+      kind: "guided_execution_terminal_chain_review",
+      path: reviewPath,
+      sha256: sha256Bytes(content),
+      size_bytes: content.byteLength
+    }
+  };
+}
+
 function readGuidedRealPiRuntimeRegistrationSnapshot(
   projectRoot: string,
   projectId: string,
@@ -2623,6 +2856,12 @@ function guidedRealPiExecutionPath(executionId: string): string {
 function terminalExecutionReviewPath(reviewId: string): string {
   return normalizeRelativePath(
     join(".comath", "release", "pi-codex-lifecycle", reviewId, "terminal-execution-review.json")
+  );
+}
+
+function operatorServiceTransportContractPath(contractId: string): string {
+  return normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", contractId, "operator-service-transport-contract.json")
   );
 }
 
@@ -3581,6 +3820,205 @@ export function reviewPiCodexLifecycleTerminalExecution(
     }
   });
   return review;
+}
+
+function assertOperatorServiceTransportContractBinding(condition: boolean, message: string): void {
+  if (!condition) {
+    throw new ComathError(message, {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_CHAIN_MISMATCH"
+    });
+  }
+}
+
+export function recordPiCodexLifecycleOperatorServiceTransportContract(
+  projectRoot: string,
+  input: PiCodexOperatorServiceTransportContractInput
+): PiCodexOperatorServiceTransportContract {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const contractId = assertOperatorServiceTransportContractId(input.transport_contract_id);
+  const reviewId = assertReviewId(input.terminal_review_id);
+  const serviceTransportPrimitive = assertOperatorServiceTransportPrimitive(input.service_transport_primitive);
+  const clientTransportPrimitive = assertOperatorClientTransportPrimitive(input.client_transport_primitive);
+  const terminalReviewPath = input.terminal_review_path
+    ? projectRelativePath(
+        projectRoot,
+        assertPathAllowed(projectRoot, input.terminal_review_path, { purpose: "read", resolveRealpath: true })
+      )
+    : terminalExecutionReviewPath(reviewId);
+  const { review, artifact: terminalReviewArtifact } = readGuidedExecutionTerminalChainReviewArtifact(
+    projectRoot,
+    projectId,
+    reviewId,
+    terminalReviewPath
+  );
+  const { heartbeat, artifact: transportHeartbeatArtifact } = readOperatorTransportHeartbeatArtifact(
+    projectRoot,
+    projectId,
+    review.session_id,
+    review.transport_recovery_id,
+    review.transport_lease_id,
+    review.transport_heartbeat_id,
+    review.transport_heartbeat_path
+  );
+  if (transportHeartbeatArtifact.sha256 !== review.transport_heartbeat_artifact.sha256) {
+    throw new ComathError("Pi/Codex operator/service transport contract heartbeat artifact changed after review", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_HEARTBEAT_STALE"
+    });
+  }
+  const { execution, artifact: guidedExecutionArtifact } = readGuidedRealPiExecutionArtifact(
+    projectRoot,
+    projectId,
+    review.real_pi_runtime_probe_id,
+    review.session_id,
+    review.transport_recovery_id,
+    review.transport_lease_id,
+    review.execution_id,
+    review.guided_execution_path
+  );
+  assertOperatorServiceTransportContractBinding(
+    guidedExecutionArtifact.sha256 === review.guided_execution_artifact.sha256 &&
+      execution.guided_execution_path === review.guided_execution_path,
+    "Pi/Codex operator/service transport contract guided execution artifact changed after review"
+  );
+  assertOperatorServiceTransportContractBinding(
+    heartbeat.agent_run_log_session_binding.project_id === review.agent_run_log_session_binding.project_id &&
+      heartbeat.agent_run_log_session_binding.run_id === review.agent_run_log_session_binding.run_id &&
+      heartbeat.agent_run_log_session_binding.route === review.agent_run_log_session_binding.route &&
+      heartbeat.agent_run_log_session_binding.content_type === review.agent_run_log_session_binding.content_type &&
+      agentRunLogCursorEqual(heartbeat.agent_run_log_session_binding.cursor, review.agent_run_log_session_binding.cursor) &&
+      agentRunLogCursorEqual(
+        heartbeat.agent_run_log_session_binding.next_cursor,
+        review.agent_run_log_session_binding.next_cursor
+      ) &&
+      heartbeat.agent_run_log_session_binding.body_sha256 === review.agent_run_log_session_binding.body_sha256,
+    "Pi/Codex operator/service transport contract terminal review is not bound to the current heartbeat log-session"
+  );
+
+  const boundedLimits = {
+    max_bytes: input.max_bytes ?? 64 * 1024,
+    max_events: input.max_events ?? 5,
+    retry_ms: input.retry_ms ?? 1000
+  };
+  const logSession = formatAgentRunLogSseSession(projectRoot, {
+    project_id: projectId,
+    run_id: heartbeat.agent_run_log_session_binding.run_id,
+    cursor: heartbeat.agent_run_log_session_binding.next_cursor,
+    max_bytes: boundedLimits.max_bytes,
+    max_events: boundedLimits.max_events,
+    retry_ms: boundedLimits.retry_ms,
+    actor: sanitizeOperatorTransportText(input.actor)
+  });
+  assertOperatorServiceTransportContractBinding(
+    logSession.content_type === heartbeat.agent_run_log_session_binding.content_type &&
+      logSession.run_id === heartbeat.agent_run_log_session_binding.run_id &&
+      logSession.project_id === projectId,
+    "Pi/Codex operator/service transport contract log-session route is not service-owned"
+  );
+
+  const contractPath = operatorServiceTransportContractPath(contractId);
+  const absoluteContractPath = assertPathAllowed(projectRoot, contractPath, { purpose: "runtime-write" });
+  if (existsSync(absoluteContractPath)) {
+    throw new ComathError("Pi/Codex operator/service transport contract already exists", {
+      statusCode: 409,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTRACT_ALREADY_EXISTS"
+    });
+  }
+
+  const body: PiCodexOperatorServiceTransportContractBody = {
+    schema_version: "comath.pi_codex_operator_service_transport_contract.v1",
+    transport_contract_id: contractId,
+    project_id: projectId,
+    actor: sanitizeOperatorTransportText(input.actor),
+    created_at: new Date().toISOString(),
+    contract_status: "maintained_bounded_transport_contract_recorded",
+    transport_contract_path: contractPath,
+    terminal_review_id: review.review_id,
+    terminal_review_path: terminalReviewPath,
+    terminal_review_artifact: terminalReviewArtifact,
+    transport_heartbeat_id: review.transport_heartbeat_id,
+    transport_heartbeat_path: review.transport_heartbeat_path,
+    transport_heartbeat_artifact: transportHeartbeatArtifact,
+    execution_id: review.execution_id,
+    guided_execution_path: review.guided_execution_path,
+    guided_execution_artifact: guidedExecutionArtifact,
+    session_id: review.session_id,
+    transport_recovery_id: review.transport_recovery_id,
+    transport_lease_id: review.transport_lease_id,
+    agent_run_id: heartbeat.agent_run_log_session_binding.run_id,
+    service_transport_primitive: serviceTransportPrimitive,
+    client_transport_primitive: clientTransportPrimitive,
+    http_method: "GET",
+    service_route: heartbeat.agent_run_log_session_binding.route,
+    content_type: logSession.content_type,
+    bounded_limits: boundedLimits,
+    resume_cursor: heartbeat.agent_run_log_session_binding.next_cursor,
+    log_session_next_cursor: logSession.next_cursor,
+    log_session_event_count: logSession.events.length,
+    log_session_body_sha256: sha256Text(logSession.body),
+    maintained_transport_primitive_bound: true,
+    service_route_bound: true,
+    client_fetch_contract_bound: true,
+    terminal_review_bound: true,
+    heartbeat_bound: true,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const artifactText = canonicalJson(body);
+  mkdirSync(dirname(absoluteContractPath), { recursive: true });
+  writeFileSync(absoluteContractPath, artifactText, "utf8");
+  const result: PiCodexOperatorServiceTransportContract = {
+    ...body,
+    transport_contract_artifact: {
+      kind: "operator_service_transport_contract",
+      path: contractPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_operator_service_transport_contract_recorded",
+    actor: sanitizeOperatorTransportText(input.actor),
+    target_id: projectId,
+    payload: {
+      transport_contract_id: contractId,
+      contract_status: result.contract_status,
+      transport_contract_path: contractPath,
+      terminal_review_id: review.review_id,
+      terminal_review_artifact_sha256: terminalReviewArtifact.sha256,
+      transport_heartbeat_id: review.transport_heartbeat_id,
+      transport_heartbeat_artifact_sha256: transportHeartbeatArtifact.sha256,
+      execution_id: review.execution_id,
+      guided_execution_artifact_sha256: guidedExecutionArtifact.sha256,
+      service_transport_primitive: serviceTransportPrimitive,
+      client_transport_primitive: clientTransportPrimitive,
+      service_route: heartbeat.agent_run_log_session_binding.route,
+      agent_run_id: heartbeat.agent_run_log_session_binding.run_id,
+      log_session_body_sha256: result.log_session_body_sha256,
+      log_session_event_count: result.log_session_event_count,
+      durable_transport_provided: false,
+      live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
 }
 
 export function probePiCodexDurableServiceLifecycle(
