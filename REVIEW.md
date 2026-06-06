@@ -1,3 +1,25 @@
+# Goal 3 Task 243 / Service-Owned Operator Approval Contract
+
+Scope: add a service-owned manual operator-approval artifact after the Task239 handoff review chain and before Task241 readiness consumption. This is approval checkpoint evidence only; it is not unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task243-pi-unattended-real-host-operator-approval-contract.test.mjs`.
+- Added `recordPiCodexLifecycleUnattendedRealHostOperatorApproval()` plus `POST /release/pi-codex-lifecycle/unattended-real-host-operator-approval`.
+- Added append-only `comath.pi_codex_unattended_real_host_operator_approval.v1` manifests and `release.pi_codex_unattended_real_host_operator_approval_recorded` audit events.
+- Extended `recordPiCodexLifecycleUnattendedRealHostExecutionReadiness()` so a current approval artifact removes only `operator_approval_artifact_missing`; executor and durable-transport blockers remain.
+- Registered the capability, phase0 smoke release-hardening discovery, GA release criteria, README, AGENTS, adapter contracts, threat model, REVIEW, and the Goal 3 tracker.
+
+Verification:
+- TDD RED was observed before implementation when the focused Task243 suite failed because `recordPiCodexLifecycleUnattendedRealHostOperatorApproval` was not exported.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task243 exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task243 discovered by the default runner.
+- `corepack pnpm typecheck`, `corepack pnpm build`, and `corepack pnpm test` exited 0.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task243 re-reads the canonical Task239 handoff review artifact and caller-supplied hash, rejects duplicate approval ids, stale handoff-review hashes, poisoned approval artifacts consumed by readiness, and authority-shaped caller fields. The approval artifact keeps operator-approved/execution/proof/GA/durable/live/direct-Pi-write/trusted-state flags false and does not authorize production unattended execution.
+
 # Goal 3 Task 242 / Pi Unattended Real-Host Execution Readiness Consumer
 
 Scope: expose the Task241 service-owned readiness blocker through a host-confirmed Pi tool and `/cm:release` command. This is a thin client and planner checkpoint only; it is not operator approval, unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.

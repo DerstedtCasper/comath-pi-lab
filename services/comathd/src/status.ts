@@ -145,6 +145,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_codex_operator_service_transport_check_debug",
       "pi_codex_lifecycle_automatic_real_pi_execution_orchestration",
       "pi_codex_unattended_real_host_handoff_review",
+      "pi_codex_unattended_real_host_operator_approval_contract",
       "pi_codex_unattended_real_host_execution_readiness_blocker"
     ],
     residualRisks: [

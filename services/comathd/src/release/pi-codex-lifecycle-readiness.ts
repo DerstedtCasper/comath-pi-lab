@@ -1143,6 +1143,78 @@ type PiCodexUnattendedRealHostHandoffReviewBody = Omit<
   "handoff_review_artifact"
 >;
 
+export type PiCodexUnattendedRealHostOperatorApprovalInput = {
+  project_id: string;
+  approval_id?: string;
+  actor: string;
+  handoff_review_id: string;
+  handoff_review_path: string;
+  handoff_review_sha256: string;
+  operator_approval_mode?: "manual_operator_approval";
+  approval_note?: string;
+};
+
+export type PiCodexUnattendedRealHostOperatorApprovalArtifact = {
+  kind: "unattended_real_host_operator_approval";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexUnattendedRealHostOperatorApproval = {
+  schema_version: "comath.pi_codex_unattended_real_host_operator_approval.v1";
+  approval_id: string;
+  project_id: string;
+  actor: string;
+  approved_at: string;
+  approval_status: "operator_approval_artifact_recorded";
+  approval_path: string;
+  operator_approval_artifact: PiCodexUnattendedRealHostOperatorApprovalArtifact;
+  operator_approval_mode: "manual_operator_approval";
+  approval_note: string;
+  handoff_review_id: string;
+  handoff_review_path: string;
+  handoff_review_artifact: PiCodexUnattendedRealHostHandoffReviewArtifact;
+  handoff_review_current: true;
+  service_owned_checkpoint_chain_reviewed: true;
+  approval_manifest_persisted: true;
+  operator_approval_artifact_current: true;
+  real_pi_runtime_probe_id: string;
+  session_id: string;
+  transport_recovery_id: string;
+  transport_lease_id: string;
+  transport_heartbeat_id: string;
+  execution_id: string;
+  terminal_review_id: string;
+  transport_contract_id: string;
+  automatic_orchestration_id: string;
+  transport_continuity_id: string;
+  agent_run_id: string;
+  service_route: string;
+  service_transport_primitive: PiCodexOperatorServiceTransportPrimitive;
+  client_transport_primitive: PiCodexOperatorClientTransportPrimitive;
+  operator_approved: false;
+  handoff_can_execute: false;
+  unattended_execution_authorized: false;
+  unattended_real_host_execution_completed: false;
+  operator_confirmation_bypassed: false;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexUnattendedRealHostOperatorApprovalBody = Omit<
+  PiCodexUnattendedRealHostOperatorApproval,
+  "operator_approval_artifact"
+>;
+
 export type PiCodexUnattendedRealHostExecutionReadinessBlockerReason =
   | "operator_approval_artifact_missing"
   | "service_owned_unattended_executor_not_configured"
@@ -1155,6 +1227,9 @@ export type PiCodexUnattendedRealHostExecutionReadinessInput = {
   handoff_review_id: string;
   handoff_review_path: string;
   handoff_review_sha256: string;
+  operator_approval_id?: string;
+  operator_approval_path?: string;
+  operator_approval_sha256?: string;
   requested_execution_mode?: "production_unattended_real_host";
 };
 
@@ -1181,6 +1256,10 @@ export type PiCodexUnattendedRealHostExecutionReadiness = {
   handoff_review_artifact: PiCodexUnattendedRealHostHandoffReviewArtifact;
   handoff_review_current: true;
   service_owned_checkpoint_chain_reviewed: true;
+  operator_approval_id: string | null;
+  operator_approval_path: string | null;
+  operator_approval_artifact: PiCodexUnattendedRealHostOperatorApprovalArtifact | null;
+  operator_approval_artifact_current: boolean;
   readiness_manifest_persisted: true;
   real_pi_runtime_probe_id: string;
   session_id: string;
@@ -3346,6 +3425,12 @@ function operatorServiceTransportContinuityPath(continuityId: string): string {
 function unattendedRealHostHandoffReviewPath(reviewId: string): string {
   return normalizeRelativePath(
     join(".comath", "release", "pi-codex-lifecycle", reviewId, "unattended-real-host-handoff-review.json")
+  );
+}
+
+function unattendedRealHostOperatorApprovalPath(approvalId: string): string {
+  return normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", approvalId, "unattended-real-host-operator-approval.json")
   );
 }
 
@@ -5961,6 +6046,346 @@ function readUnattendedRealHostHandoffReviewArtifact(
   };
 }
 
+function assertUnattendedRealHostOperatorApprovalBoundary(
+  approval: PiCodexUnattendedRealHostOperatorApprovalBody
+): void {
+  const parsedLogSessionRoute =
+    typeof approval.service_route === "string" ? parseAgentRunLogSessionRoute(approval.service_route) : null;
+  if (
+    approval.schema_version !== "comath.pi_codex_unattended_real_host_operator_approval.v1" ||
+    approval.approval_status !== "operator_approval_artifact_recorded" ||
+    approval.operator_approval_mode !== "manual_operator_approval" ||
+    approval.handoff_review_current !== true ||
+    approval.service_owned_checkpoint_chain_reviewed !== true ||
+    approval.approval_manifest_persisted !== true ||
+    approval.operator_approval_artifact_current !== true ||
+    approval.service_transport_primitive !== "node_http_agent_run_log_session_route" ||
+    approval.client_transport_primitive !== "pi_fetch_get_text" ||
+    parsedLogSessionRoute === null ||
+    parsedLogSessionRoute.route !== approval.service_route ||
+    parsedLogSessionRoute.runId !== approval.agent_run_id ||
+    approval.operator_approved !== false ||
+    approval.handoff_can_execute !== false ||
+    approval.unattended_execution_authorized !== false ||
+    approval.unattended_real_host_execution_completed !== false ||
+    approval.operator_confirmation_bypassed !== false ||
+    approval.durable_transport_provided !== false ||
+    approval.live_transport_open !== false ||
+    approval.indefinite_stream_open !== false ||
+    approval.long_lived_websocket_provided !== false ||
+    approval.long_lived_sse_provided !== false ||
+    approval.pi_direct_write_allowed !== false ||
+    approval.direct_trusted_state_mutation !== false ||
+    approval.proof_authority !== "none" ||
+    approval.can_promote_claim !== false ||
+    approval.can_certify_ga !== false
+  ) {
+    throw new ComathError("Pi/Codex unattended real-host operator approval violates boundaries", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_OPERATOR_APPROVAL_INVALID"
+    });
+  }
+}
+
+function assertUnattendedRealHostOperatorApprovalMatchesReview(
+  approval: PiCodexUnattendedRealHostOperatorApprovalBody,
+  review: PiCodexUnattendedRealHostHandoffReviewBody,
+  handoffReviewArtifact: PiCodexUnattendedRealHostHandoffReviewArtifact
+): void {
+  if (
+    approval.handoff_review_id !== review.handoff_review_id ||
+    approval.handoff_review_path !== review.handoff_review_path ||
+    approval.handoff_review_artifact.path !== handoffReviewArtifact.path ||
+    approval.handoff_review_artifact.sha256 !== handoffReviewArtifact.sha256 ||
+    approval.handoff_review_artifact.size_bytes !== handoffReviewArtifact.size_bytes ||
+    approval.real_pi_runtime_probe_id !== review.real_pi_runtime_probe_id ||
+    approval.session_id !== review.session_id ||
+    approval.transport_recovery_id !== review.transport_recovery_id ||
+    approval.transport_lease_id !== review.transport_lease_id ||
+    approval.transport_heartbeat_id !== review.transport_heartbeat_id ||
+    approval.execution_id !== review.execution_id ||
+    approval.terminal_review_id !== review.terminal_review_id ||
+    approval.transport_contract_id !== review.transport_contract_id ||
+    approval.automatic_orchestration_id !== review.automatic_orchestration_id ||
+    approval.transport_continuity_id !== review.transport_continuity_id ||
+    approval.agent_run_id !== review.agent_run_id ||
+    approval.service_route !== review.service_route ||
+    approval.service_transport_primitive !== review.service_transport_primitive ||
+    approval.client_transport_primitive !== review.client_transport_primitive
+  ) {
+    throw new ComathError("Pi/Codex unattended real-host operator approval does not bind the handoff review", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_OPERATOR_APPROVAL_INVALID"
+    });
+  }
+}
+
+function readUnattendedRealHostOperatorApprovalArtifact(
+  projectRoot: string,
+  projectId: string,
+  approvalId: string,
+  approvalPath: string,
+  expectedSha256: string,
+  review: PiCodexUnattendedRealHostHandoffReviewBody,
+  handoffReviewArtifact: PiCodexUnattendedRealHostHandoffReviewArtifact
+): {
+  approval: PiCodexUnattendedRealHostOperatorApprovalBody;
+  artifact: PiCodexUnattendedRealHostOperatorApprovalArtifact;
+} {
+  const canonicalApprovalPath = unattendedRealHostOperatorApprovalPath(approvalId);
+  const normalizedApprovalPath = projectRelativePath(
+    projectRoot,
+    assertPathAllowed(projectRoot, approvalPath, { purpose: "read", resolveRealpath: true })
+  );
+  if (normalizedApprovalPath !== canonicalApprovalPath) {
+    throw new ComathError("Pi/Codex unattended real-host operator approval path is not canonical", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_OPERATOR_APPROVAL_INVALID"
+    });
+  }
+  const absolutePath = assertPathAllowed(projectRoot, canonicalApprovalPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    throw new ComathError("Pi/Codex unattended real-host execution readiness requires operator approval evidence", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_OPERATOR_APPROVAL_STALE"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  const actualSha256 = sha256Bytes(content);
+  if (assertPreparedCheckpointSha256(expectedSha256) !== actualSha256) {
+    throw new ComathError("Pi/Codex unattended real-host operator approval hash is stale", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_OPERATOR_APPROVAL_STALE"
+    });
+  }
+  let parsed: PiCodexUnattendedRealHostOperatorApprovalBody;
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexUnattendedRealHostOperatorApprovalBody;
+  } catch {
+    throw new ComathError("Pi/Codex unattended real-host operator approval JSON is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_OPERATOR_APPROVAL_INVALID"
+    });
+  }
+  if (parsed.project_id !== projectId || parsed.approval_id !== approvalId || parsed.approval_path !== canonicalApprovalPath) {
+    throw new ComathError("Pi/Codex unattended real-host operator approval does not bind the request", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_OPERATOR_APPROVAL_INVALID"
+    });
+  }
+  assertUnattendedRealHostOperatorApprovalBoundary(parsed);
+  assertUnattendedRealHostOperatorApprovalMatchesReview(parsed, review, handoffReviewArtifact);
+  return {
+    approval: parsed,
+    artifact: {
+      kind: "unattended_real_host_operator_approval",
+      path: canonicalApprovalPath,
+      sha256: actualSha256,
+      size_bytes: content.byteLength
+    }
+  };
+}
+
+function readOptionalUnattendedRealHostOperatorApprovalArtifact(
+  projectRoot: string,
+  projectId: string,
+  input: PiCodexUnattendedRealHostExecutionReadinessInput,
+  review: PiCodexUnattendedRealHostHandoffReviewBody,
+  handoffReviewArtifact: PiCodexUnattendedRealHostHandoffReviewArtifact
+):
+  | {
+      approval: PiCodexUnattendedRealHostOperatorApprovalBody;
+      artifact: PiCodexUnattendedRealHostOperatorApprovalArtifact;
+    }
+  | null {
+  const approvalFields = [input.operator_approval_id, input.operator_approval_path, input.operator_approval_sha256];
+  if (approvalFields.every((value) => value === undefined)) {
+    return null;
+  }
+  if (approvalFields.some((value) => value === undefined)) {
+    throw new ComathError("Pi/Codex unattended real-host execution readiness operator approval input is incomplete", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_OPERATOR_APPROVAL_INVALID"
+    });
+  }
+  return readUnattendedRealHostOperatorApprovalArtifact(
+    projectRoot,
+    projectId,
+    assertReviewId(input.operator_approval_id),
+    input.operator_approval_path as string,
+    input.operator_approval_sha256 as string,
+    review,
+    handoffReviewArtifact
+  );
+}
+
+export function recordPiCodexLifecycleUnattendedRealHostOperatorApproval(
+  projectRoot: string,
+  input: PiCodexUnattendedRealHostOperatorApprovalInput
+): PiCodexUnattendedRealHostOperatorApproval {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const approvalId = assertReviewId(input.approval_id);
+  const handoffReviewId = assertReviewId(input.handoff_review_id);
+  const operatorApprovalMode = input.operator_approval_mode ?? "manual_operator_approval";
+  if (operatorApprovalMode !== "manual_operator_approval") {
+    throw new ComathError("Pi/Codex unattended real-host operator approval mode is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_OPERATOR_APPROVAL_INVALID_MODE"
+    });
+  }
+  const approvalPath = unattendedRealHostOperatorApprovalPath(approvalId);
+  const absoluteApprovalPath = assertPathAllowed(projectRoot, approvalPath, { purpose: "runtime-write" });
+  if (existsSync(absoluteApprovalPath)) {
+    throw new ComathError("Pi/Codex unattended real-host operator approval already exists", {
+      statusCode: 409,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_OPERATOR_APPROVAL_ALREADY_EXISTS"
+    });
+  }
+
+  let handoffReviewBundle: ReturnType<typeof readUnattendedRealHostHandoffReviewArtifact>;
+  try {
+    handoffReviewBundle = readUnattendedRealHostHandoffReviewArtifact(
+      projectRoot,
+      projectId,
+      handoffReviewId,
+      input.handoff_review_path,
+      input.handoff_review_sha256
+    );
+  } catch (error) {
+    if (error instanceof ComathError) {
+      const stale = error.code === "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_HANDOFF_REVIEW_STALE";
+      throw new ComathError(
+        stale
+          ? "Pi/Codex unattended real-host operator approval handoff review hash is stale"
+          : "Pi/Codex unattended real-host operator approval handoff review is invalid",
+        {
+          statusCode: error.statusCode,
+          code: stale
+            ? "PI_CODEX_UNATTENDED_REAL_HOST_OPERATOR_APPROVAL_HANDOFF_REVIEW_STALE"
+            : "PI_CODEX_UNATTENDED_REAL_HOST_OPERATOR_APPROVAL_HANDOFF_REVIEW_INVALID"
+        }
+      );
+    }
+    throw error;
+  }
+  const { review, artifact: handoffReviewArtifact } = handoffReviewBundle;
+  const body: PiCodexUnattendedRealHostOperatorApprovalBody = {
+    schema_version: "comath.pi_codex_unattended_real_host_operator_approval.v1",
+    approval_id: approvalId,
+    project_id: projectId,
+    actor: sanitizeOperatorTransportText(input.actor),
+    approved_at: new Date().toISOString(),
+    approval_status: "operator_approval_artifact_recorded",
+    approval_path: approvalPath,
+    operator_approval_mode: "manual_operator_approval",
+    approval_note: sanitizeOperatorTransportText(
+      input.approval_note ??
+        "Manual operator review checkpoint recorded; execution remains blocked until executor and durable transport prerequisites exist."
+    ),
+    handoff_review_id: handoffReviewId,
+    handoff_review_path: review.handoff_review_path,
+    handoff_review_artifact: handoffReviewArtifact,
+    handoff_review_current: true,
+    service_owned_checkpoint_chain_reviewed: true,
+    approval_manifest_persisted: true,
+    operator_approval_artifact_current: true,
+    real_pi_runtime_probe_id: review.real_pi_runtime_probe_id,
+    session_id: review.session_id,
+    transport_recovery_id: review.transport_recovery_id,
+    transport_lease_id: review.transport_lease_id,
+    transport_heartbeat_id: review.transport_heartbeat_id,
+    execution_id: review.execution_id,
+    terminal_review_id: review.terminal_review_id,
+    transport_contract_id: review.transport_contract_id,
+    automatic_orchestration_id: review.automatic_orchestration_id,
+    transport_continuity_id: review.transport_continuity_id,
+    agent_run_id: review.agent_run_id,
+    service_route: review.service_route,
+    service_transport_primitive: review.service_transport_primitive,
+    client_transport_primitive: review.client_transport_primitive,
+    operator_approved: false,
+    handoff_can_execute: false,
+    unattended_execution_authorized: false,
+    unattended_real_host_execution_completed: false,
+    operator_confirmation_bypassed: false,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const artifactText = canonicalJson(body);
+  mkdirSync(dirname(absoluteApprovalPath), { recursive: true });
+  writeFileSync(absoluteApprovalPath, artifactText, "utf8");
+  const result: PiCodexUnattendedRealHostOperatorApproval = {
+    ...body,
+    operator_approval_artifact: {
+      kind: "unattended_real_host_operator_approval",
+      path: approvalPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_unattended_real_host_operator_approval_recorded",
+    actor: sanitizeOperatorTransportText(input.actor),
+    target_id: projectId,
+    payload: {
+      approval_id: approvalId,
+      approval_status: result.approval_status,
+      approval_path: approvalPath,
+      operator_approval_artifact_sha256: result.operator_approval_artifact.sha256,
+      operator_approval_artifact_size_bytes: result.operator_approval_artifact.size_bytes,
+      operator_approval_mode: result.operator_approval_mode,
+      handoff_review_id: handoffReviewId,
+      handoff_review_path: result.handoff_review_path,
+      handoff_review_artifact_sha256: handoffReviewArtifact.sha256,
+      handoff_review_artifact_size_bytes: handoffReviewArtifact.size_bytes,
+      handoff_review_current: true,
+      service_owned_checkpoint_chain_reviewed: true,
+      approval_manifest_persisted: true,
+      operator_approval_artifact_current: true,
+      real_pi_runtime_probe_id: result.real_pi_runtime_probe_id,
+      session_id: result.session_id,
+      transport_recovery_id: result.transport_recovery_id,
+      transport_lease_id: result.transport_lease_id,
+      transport_heartbeat_id: result.transport_heartbeat_id,
+      execution_id: result.execution_id,
+      terminal_review_id: result.terminal_review_id,
+      transport_contract_id: result.transport_contract_id,
+      automatic_orchestration_id: result.automatic_orchestration_id,
+      transport_continuity_id: result.transport_continuity_id,
+      agent_run_id: result.agent_run_id,
+      service_route: result.service_route,
+      operator_approved: false,
+      handoff_can_execute: false,
+      unattended_execution_authorized: false,
+      unattended_real_host_execution_completed: false,
+      operator_confirmation_bypassed: false,
+      durable_transport_provided: false,
+      live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
 export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
   projectRoot: string,
   input: PiCodexUnattendedRealHostExecutionReadinessInput
@@ -5991,8 +6416,17 @@ export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
     input.handoff_review_path,
     input.handoff_review_sha256
   );
+  const operatorApprovalBinding = readOptionalUnattendedRealHostOperatorApprovalArtifact(
+    projectRoot,
+    projectId,
+    input,
+    review,
+    handoffReviewArtifact
+  );
   const blockerReasons: PiCodexUnattendedRealHostExecutionReadinessBlockerReason[] = [
-    "operator_approval_artifact_missing",
+    ...(operatorApprovalBinding === null
+      ? (["operator_approval_artifact_missing"] as PiCodexUnattendedRealHostExecutionReadinessBlockerReason[])
+      : []),
     "service_owned_unattended_executor_not_configured",
     "durable_transport_not_provided"
   ];
@@ -6011,6 +6445,10 @@ export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
     handoff_review_artifact: handoffReviewArtifact,
     handoff_review_current: true,
     service_owned_checkpoint_chain_reviewed: true,
+    operator_approval_id: operatorApprovalBinding?.approval.approval_id ?? null,
+    operator_approval_path: operatorApprovalBinding?.approval.approval_path ?? null,
+    operator_approval_artifact: operatorApprovalBinding?.artifact ?? null,
+    operator_approval_artifact_current: operatorApprovalBinding !== null,
     readiness_manifest_persisted: true,
     real_pi_runtime_probe_id: review.real_pi_runtime_probe_id,
     session_id: review.session_id,
@@ -6073,6 +6511,11 @@ export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
       handoff_review_artifact_size_bytes: handoffReviewArtifact.size_bytes,
       handoff_review_current: true,
       service_owned_checkpoint_chain_reviewed: true,
+      operator_approval_id: result.operator_approval_id,
+      operator_approval_path: result.operator_approval_path,
+      operator_approval_artifact_sha256: result.operator_approval_artifact?.sha256 ?? null,
+      operator_approval_artifact_size_bytes: result.operator_approval_artifact?.size_bytes ?? null,
+      operator_approval_artifact_current: result.operator_approval_artifact_current,
       readiness_manifest_persisted: true,
       real_pi_runtime_probe_id: result.real_pi_runtime_probe_id,
       session_id: result.session_id,

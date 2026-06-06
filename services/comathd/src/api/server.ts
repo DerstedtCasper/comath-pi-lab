@@ -64,6 +64,7 @@ import {
   recordPiCodexLifecycleOperatorServiceTransportContinuity,
   recordPiCodexLifecycleOperatorServiceTransportContract,
   recordPiCodexLifecycleUnattendedRealHostExecutionReadiness,
+  recordPiCodexLifecycleUnattendedRealHostOperatorApproval,
   recoverPiCodexLifecycleOperatorTransport,
   reviewPiCodexLifecycleTerminalExecution,
   reviewPiCodexLifecycleUnattendedRealHostHandoff,
@@ -489,6 +490,17 @@ async function route(method: string, path: string, body: unknown, context: Route
       (payload) => {
         const body = payload as Parameters<typeof reviewGoal3PublicArchiveSurfaces>[1] & { project_root: string };
         return reviewGoal3PublicArchiveSurfaces(body.project_root, body);
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/unattended-real-host-operator-approval",
+      (payload) => {
+        const body = payload as Parameters<typeof recordPiCodexLifecycleUnattendedRealHostOperatorApproval>[1] & {
+          project_root: string;
+        };
+        return {
+          approval: recordPiCodexLifecycleUnattendedRealHostOperatorApproval(body.project_root, body)
+        };
       }
     ],
     [
