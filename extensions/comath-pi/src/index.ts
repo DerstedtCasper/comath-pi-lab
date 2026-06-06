@@ -421,6 +421,8 @@ const privilegedProofAuthorityPattern =
   /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|proven|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|verified_final_authority_evidence|proof_success|kernel_checked)\b/gi;
 const publicTransportOverclaimPattern =
   /\b(?:long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided)\b/gi;
+const publicUnattendedOverclaimPattern =
+  /\b(?:production unattended executor|operator[- ]free execution completed|unattended real[- ]host execution completed|unattended execution authorized|operator confirmation bypassed|service[- ]owned evidence created|handoff can execute)\b/gi;
 
 const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
 const posixHostPathEchoPattern =
@@ -438,13 +440,14 @@ const secretEchoPattern =
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
 const publicProofAuthorityKeyPattern = /^proof_authority$/i;
 const publicFalseAuthorityKeyPattern =
-  /^(?:can_promote_claim|can_certify_ga|durable_transport_provided|live_transport_open|indefinite_stream_open|long_lived_websocket_provided|long_lived_sse_provided|pi_direct_write_allowed|direct_trusted_state_mutation|os_enforced)$/i;
+  /^(?:can_promote_claim|can_certify_ga|durable_transport_provided|live_transport_open|indefinite_stream_open|long_lived_websocket_provided|long_lived_sse_provided|pi_direct_write_allowed|direct_trusted_state_mutation|os_enforced|unattended_execution_authorized|unattended_real_host_execution_completed|operator_confirmation_bypassed|service_owned_evidence_created|handoff_can_execute)$/i;
 
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
     return value
       .replace(privilegedProofAuthorityPattern, "unverified_formal_status")
       .replace(publicTransportOverclaimPattern, "bounded_transport_checkpoint_only")
+      .replace(publicUnattendedOverclaimPattern, "prepared_checkpoint_handoff_only")
       .replace(hostPathEchoPattern, "[redacted_host_path]")
       .replace(posixHostPathEchoPattern, "$1[redacted_host_path]")
       .replace(secretEchoPattern, "[redacted_secret]");
@@ -541,7 +544,7 @@ const PI_LIFECYCLE_SESSION_STEP_IDS = [
   "run-codex-api-probe",
   "review"
 ] as const;
-const PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS = ["plan", "status", "resume-plan"] as const;
+const PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS = ["plan", "status", "resume-plan", "unattended-handoff"] as const;
 const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "run-real-pi-runtime-probe",
   "lifecycle-operator-session",
@@ -678,6 +681,134 @@ function optionalPublicPlannerPath(input: Record<string, unknown>, field: string
   }
   const sanitized = publicOperatorText(raw);
   return hasUnsafePlannerFragment(sanitized) ? fallback : sanitized;
+}
+
+const serviceOwnedPreparedCheckpointPathPattern =
+  /^service-owned-pi-lifecycle\/[A-Za-z0-9_.:-]+\/[A-Za-z0-9_.:-]+\.json$/;
+const plannerSha256Pattern = /^[a-f0-9]{64}$/i;
+
+function optionalPublicPreparedCheckpointPath(input: Record<string, unknown>, field: string): string | undefined {
+  const raw = readString(input, field, { optional: true });
+  if (!raw) {
+    return undefined;
+  }
+  const sanitized = publicOperatorText(raw).trim();
+  if (sanitized !== raw.trim() || !serviceOwnedPreparedCheckpointPathPattern.test(sanitized)) {
+    return undefined;
+  }
+  return sanitized;
+}
+
+function optionalPublicPreparedCheckpointSha256(input: Record<string, unknown>, field: string): string | undefined {
+  const raw = readString(input, field, { optional: true });
+  if (!raw) {
+    return undefined;
+  }
+  const sanitized = publicPlannerToken(raw, "");
+  return plannerSha256Pattern.test(sanitized) ? sanitized.toLowerCase() : undefined;
+}
+
+const PI_LIFECYCLE_PREPARED_UNATTENDED_CHECKPOINTS = [
+  ["runtime_probe", "real-Pi runtime probe"],
+  ["operator_session", "operator session manifest"],
+  ["transport_recovery", "operator transport recovery checkpoint"],
+  ["transport_lease", "operator transport lease checkpoint"],
+  ["transport_heartbeat", "operator transport heartbeat checkpoint"],
+  ["guided_execution", "guided real-Pi execution artifact"],
+  ["terminal_review", "terminal execution review"],
+  ["transport_contract", "operator/service transport contract"],
+  ["automatic_orchestration", "automatic real-Pi orchestration manifest"],
+  ["transport_continuity", "operator/service transport continuity checkpoint"]
+] as const;
+
+function buildPreparedUnattendedRealPiHandoff(input: Record<string, unknown>): Record<string, unknown> {
+  const missing: string[] = [];
+  const preparedCheckpoints = PI_LIFECYCLE_PREPARED_UNATTENDED_CHECKPOINTS.map(([checkpointId, label], index) => {
+    const pathField = `${checkpointId}_path`;
+    const shaField = `${checkpointId}_sha256`;
+    const path = optionalPublicPreparedCheckpointPath(input, pathField);
+    const sha256 = optionalPublicPreparedCheckpointSha256(input, shaField);
+    if (!path) {
+      missing.push(pathField);
+    }
+    if (!sha256) {
+      missing.push(shaField);
+    }
+    return {
+      order: index + 1,
+      checkpoint_id: checkpointId,
+      label,
+      path: path ?? "missing_service_owned_checkpoint_path",
+      sha256: sha256 ?? "missing_service_owned_checkpoint_hash",
+      prepared: path !== undefined && sha256 !== undefined,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false,
+      service_owned_evidence_created: false,
+      handoff_can_execute: false
+    };
+  });
+  const handoffReady = missing.length === 0;
+  return {
+    schema_version: "comath.pi.lifecycle.prepared_unattended_real_pi_handoff.v1",
+    handoff_ready: handoffReady,
+    handoff_status: handoffReady ? "prepared_checkpoint_handoff_ready" : "prepared_checkpoint_refs_missing",
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_sse_provided: false,
+    long_lived_websocket_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    missing_prepared_checkpoint_refs: missing,
+    prepared_checkpoints: preparedCheckpoints,
+    cursors: {
+      operator_event_cursor: optionalPublicOperatorText(input, "operator_event_cursor", "not_provided"),
+      stdout_cursor: optionalPublicOperatorText(input, "stdout_cursor", "not_provided"),
+      stderr_cursor: optionalPublicOperatorText(input, "stderr_cursor", "not_provided")
+    },
+    last_result_summary: optionalPublicOperatorText(input, "last_result_summary", "not_provided"),
+    unattended_policy: {
+      pi_tool_readonly: true,
+      writes_comath_state: false,
+      calls_comathd: false,
+      executes_lifecycle_actions: false,
+      auto_executes: false,
+      service_owned_checkpoint_hashes_required: true,
+      host_confirmation_required_for_any_mutation: true,
+      unattended_execution_authorized: false,
+      unattended_real_host_execution_completed: false,
+      operator_confirmation_bypassed: false,
+      service_owned_evidence_created: false,
+      handoff_can_execute: false,
+      proof_authority: "none"
+    },
+    operator_handoff: {
+      status: handoffReady ? "ready_for_operator_review" : "blocked_missing_prepared_checkpoint_refs",
+      review_command:
+        "/cm:release lifecycle-interactive-real-pi resume-plan " +
+        "--completed-step run-real-pi-runtime-probe " +
+        "--completed-step lifecycle-operator-session " +
+        "--completed-step lifecycle-operator-transport-recovery " +
+        "--completed-step lifecycle-operator-transport-lease " +
+        "--completed-step lifecycle-operator-transport-heartbeat " +
+        "--completed-step lifecycle-guided-real-pi-execution " +
+        "--completed-step lifecycle-operator-service-transport-contract " +
+        "--completed-step lifecycle-automatic-real-pi-execution " +
+        "--completed-step lifecycle-operator-service-transport-continuity",
+      requires_host_confirmation_for_mutation: true,
+      auto_executes: false,
+      proof_authority: "none"
+    },
+    boundary_notes: [
+      "This handoff is a read-only Pi planner view over prepared service-owned checkpoint references.",
+      "It does not call comathd, write trusted runtime state, execute lifecycle actions, or open durable transport.",
+      "Any later mutation still requires the existing host-confirmed service command."
+    ]
+  };
 }
 
 function readLifecycleWalkthroughSessionKind(input: Record<string, unknown>): typeof PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS[number] {
@@ -828,7 +959,7 @@ function readInteractiveRealPiAction(input: Record<string, unknown>): typeof PI_
   if ((PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS as readonly string[]).includes(value)) {
     return value as typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS[number];
   }
-  throw new Error("action must be plan, status, or resume-plan");
+  throw new Error("action must be plan, status, resume-plan, or unattended-handoff");
 }
 
 function readInteractiveRealPiSteps(input: Record<string, unknown>): Array<typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS[number]> {
@@ -1013,6 +1144,7 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       executes_lifecycle_actions: false,
       mutating_steps_require_host_confirmation: true
     },
+    unattended_handoff: buildPreparedUnattendedRealPiHandoff(input),
     checkpoint_inputs: {
       probe_id: probeId,
       validation_id: validationId,
@@ -3280,22 +3412,37 @@ export function createComathTools(): ToolDescriptor[] {
           items: { type: "string", enum: [...PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS] }
         },
         probe_id: stringProp,
+        runtime_probe_path: stringProp,
+        runtime_probe_sha256: stringProp,
         validation_id: stringProp,
         review_id: stringProp,
+        operator_session_path: stringProp,
+        operator_session_sha256: stringProp,
         session_manifest_path: stringProp,
         transport_recovery_id: stringProp,
         transport_recovery_path: stringProp,
+        transport_recovery_sha256: stringProp,
         transport_lease_id: stringProp,
         transport_lease_path: stringProp,
+        transport_lease_sha256: stringProp,
         transport_heartbeat_id: stringProp,
+        transport_heartbeat_path: stringProp,
+        transport_heartbeat_sha256: stringProp,
         execution_id: stringProp,
+        guided_execution_path: stringProp,
+        guided_execution_sha256: stringProp,
         terminal_review_id: stringProp,
         terminal_review_path: stringProp,
+        terminal_review_sha256: stringProp,
         transport_contract_id: stringProp,
         transport_contract_path: stringProp,
         transport_contract_sha256: stringProp,
         orchestration_id: stringProp,
+        automatic_orchestration_path: stringProp,
+        automatic_orchestration_sha256: stringProp,
         continuity_id: stringProp,
+        transport_continuity_path: stringProp,
+        transport_continuity_sha256: stringProp,
         pi_install_transcript_path: stringProp,
         runtime_registration_snapshot_path: stringProp,
         operator_event_cursor: stringProp,
@@ -4846,18 +4993,37 @@ async function handleReleaseCommand(
         session_kind: optionValue(parsed.args, "--session-kind"),
         completed_steps: optionValues(parsed.args, "--completed-step"),
         probe_id: optionValue(parsed.args, "--probe-id"),
+        runtime_probe_path: optionValue(parsed.args, "--runtime-probe-path"),
+        runtime_probe_sha256: optionValue(parsed.args, "--runtime-probe-sha256"),
         validation_id: optionValue(parsed.args, "--validation-id"),
         review_id: optionValue(parsed.args, "--review-id"),
+        operator_session_path: optionValue(parsed.args, "--operator-session-path"),
+        operator_session_sha256: optionValue(parsed.args, "--operator-session-sha256"),
         session_manifest_path: optionValue(parsed.args, "--session-manifest-path"),
         transport_recovery_id: optionValue(parsed.args, "--transport-recovery-id"),
         transport_recovery_path: optionValue(parsed.args, "--transport-recovery-path"),
+        transport_recovery_sha256: optionValue(parsed.args, "--transport-recovery-sha256"),
         transport_lease_id: optionValue(parsed.args, "--transport-lease-id"),
         transport_lease_path: optionValue(parsed.args, "--transport-lease-path"),
+        transport_lease_sha256: optionValue(parsed.args, "--transport-lease-sha256"),
         transport_heartbeat_id: optionValue(parsed.args, "--transport-heartbeat-id"),
+        transport_heartbeat_path: optionValue(parsed.args, "--transport-heartbeat-path"),
+        transport_heartbeat_sha256: optionValue(parsed.args, "--transport-heartbeat-sha256"),
         execution_id: optionValue(parsed.args, "--execution-id"),
+        guided_execution_path: optionValue(parsed.args, "--guided-execution-path"),
+        guided_execution_sha256: optionValue(parsed.args, "--guided-execution-sha256"),
         terminal_review_id: optionValue(parsed.args, "--terminal-review-id"),
         terminal_review_path: optionValue(parsed.args, "--terminal-review-path"),
+        terminal_review_sha256: optionValue(parsed.args, "--terminal-review-sha256"),
         transport_contract_id: optionValue(parsed.args, "--transport-contract-id"),
+        transport_contract_path: optionValue(parsed.args, "--transport-contract-path"),
+        transport_contract_sha256: optionValue(parsed.args, "--transport-contract-sha256"),
+        orchestration_id: optionValue(parsed.args, "--orchestration-id"),
+        automatic_orchestration_path: optionValue(parsed.args, "--automatic-orchestration-path"),
+        automatic_orchestration_sha256: optionValue(parsed.args, "--automatic-orchestration-sha256"),
+        continuity_id: optionValue(parsed.args, "--continuity-id"),
+        transport_continuity_path: optionValue(parsed.args, "--transport-continuity-path"),
+        transport_continuity_sha256: optionValue(parsed.args, "--transport-continuity-sha256"),
         pi_install_transcript_path: optionValue(parsed.args, "--pi-install-transcript-path"),
         runtime_registration_snapshot_path: optionValue(parsed.args, "--runtime-registration-snapshot-path"),
         operator_event_cursor: optionValue(parsed.args, "--operator-event-cursor"),

@@ -33,7 +33,12 @@ const expectedCheckpointSteps = [
 const interactiveTool = toolDescriptor("comath.release.piCodexLifecycleInteractiveRealPi");
 assert.equal(interactiveTool.mutates, false, "interactive real-Pi checkpoint UX must remain read-only");
 assert.deepEqual(interactiveTool.input_schema.required, ["project_id", "actor", "pi_host_label", "session_id", "action"]);
-assert.deepEqual(interactiveTool.input_schema.properties.action.enum, ["plan", "status", "resume-plan"]);
+assert.deepEqual(interactiveTool.input_schema.properties.action.enum, [
+  "plan",
+  "status",
+  "resume-plan",
+  "unattended-handoff"
+]);
 assert.deepEqual(interactiveTool.input_schema.properties.completed_steps.items.enum, expectedCheckpointSteps);
 assert.equal(
   Object.hasOwn(interactiveTool.input_schema.properties, "confirmation_id"),

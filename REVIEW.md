@@ -1,3 +1,30 @@
+# Goal 3 Task 231 / Prepared Unattended Real-Pi Handoff UX
+
+Scope: extend the existing read-only interactive real-Pi planner with an `unattended-handoff` mode over already prepared service-owned checkpoint path/hash references, without adding a service route, mutating Pi tool, durable transport stack, direct trusted-state mutation, proof authority, or GA certification.
+
+Changes:
+
+- Added `goal3-task231-pi-prepared-unattended-real-pi-handoff-ux.test.mjs`.
+- Added `unattended-handoff` to `comath.release.piCodexLifecycleInteractiveRealPi` and `/cm:release lifecycle-interactive-real-pi`.
+- Added prepared checkpoint path/hash readiness checks for runtime probe, operator session, transport recovery, lease, heartbeat, guided execution, terminal review, transport contract, automatic orchestration, and transport continuity refs.
+- Hardened public sanitization for operator-free/unattended-executor overclaim phrases and new unattended authority booleans.
+- Added Pi package default test discovery, phase0 smoke discovery, GA release criteria, threat model, README, TODO, REVIEW, and tracker coverage.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task231 failed because the interactive planner action enum did not include `unattended-handoff`.
+- Focused Task231 exited 0 after implementation.
+- Adjacent Task223, Task230, Phase6, and Phase26 Pi regressions exited 0.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task231 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`, and `rg -n "\.comath" extensions/comath-pi/src/index.ts` returned no matches.
+
+Boundary notes: Task231 is a read-only handoff view. It does not call `comathd`, ask for mutation confirmation, accept `confirmation_id`, write `.comath`, execute lifecycle actions, create service-owned evidence, open durable transport, run Lean, promote claims, or certify GA. A handoff is ready only when every prepared service-owned checkpoint ref has a sanitized `service-owned-pi-lifecycle/.../*.json` path and 64-hex hash; missing or poisoned refs block the handoff view.
+
 # Goal 3 Task 230 / Pi Operator-Service Transport Continuity Consumer
 
 Scope: expose the Task229 service-owned operator/service transport continuity checkpoint through Pi as a host-confirmed thin consumer and interactive planner checkpoint, without creating durable long-lived transport, proof authority, direct Pi mutation, trusted state writes, or GA certification.
