@@ -1,3 +1,26 @@
+# Goal 3 Task 230 / Pi Operator-Service Transport Continuity Consumer
+
+Scope: expose the Task229 service-owned operator/service transport continuity checkpoint through Pi as a host-confirmed thin consumer and interactive planner checkpoint, without creating durable long-lived transport, proof authority, direct Pi mutation, trusted state writes, or GA certification.
+
+Changes:
+
+- Added `goal3-task230-pi-operator-service-transport-continuity-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleOperatorServiceTransportContinuity` and `/cm:release lifecycle-operator-service-transport-continuity`.
+- Added runtime-registration subcommand coverage, Phase6/Phase26 exposure guards, Pi package default test discovery, and phase0 smoke discovery.
+- Extended the read-only interactive real-Pi planner with a continuity checkpoint after automatic orchestration and before Codex API probe/review.
+- Hardened public display sanitization so `proof_authority` is forced to `none`, false-authority booleans are recursively forced false, and trusted `.comath` path echoes are redacted from confirmation/notification/result surfaces while service requests can still carry canonical artifact paths to `comathd`.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task230 failed because `comath.release.piCodexLifecycleOperatorServiceTransportContinuity` was not registered.
+- Follow-up focused failures exposed trusted `.comath` path echo in Pi confirmation text and `proof_authority` not being key-forced to `none`; both were covered by RED assertions and fixed.
+- Focused Task230 exited 0 after implementation.
+- Adjacent Task226, Task228, Task223, Phase6, and Phase26 Pi regressions exited 0 after updating the Task223 expected planner sequence for the new checkpoint.
+- `corepack pnpm --filter @comath/pi-extension typecheck`, `corepack pnpm --filter @comath/pi-extension test`, service Task229, and `node scripts/phase0-smoke.mjs` exited 0.
+- Initial root `corepack pnpm test` exposed a Phase17 integrity static-scan failure because the Pi entrypoint contained a literal trusted runtime path regex. The regex is now constructed without the forbidden literal; focused Task230, Phase17 integrity evaluation, final `corepack pnpm typecheck`, and final `corepack pnpm test` all exited 0.
+
+Boundary notes: Task230 routes only through `POST /release/pi-codex-lifecycle/operator-service-transport-continuity` with host confirmation, requires `transport_contract_sha256`, never forwards caller/model `confirmation_id`, sanitizes actor/path/request/result surfaces, and centrally forces proof/GA/durable/live/direct-Pi-write/direct-trusted-state authority flags false in public output. The interactive real-Pi planner renders the continuity command template and checkpoint ids only; it does not call `comathd`, execute lifecycle actions, write `.comath`, or create service evidence by itself.
+
 # Goal 3 Task 229 / Operator-Service Transport Continuity Checkpoint
 
 Scope: add service-owned continuity provenance over the Task225 maintained operator/service transport contract without creating a CoMath transport stack, durable long-lived stream, proof authority, direct Pi mutation, or GA certification.

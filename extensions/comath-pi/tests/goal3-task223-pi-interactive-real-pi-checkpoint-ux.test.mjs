@@ -25,6 +25,7 @@ const expectedCheckpointSteps = [
   "lifecycle-guided-real-pi-execution",
   "lifecycle-operator-service-transport-contract",
   "lifecycle-automatic-real-pi-execution",
+  "lifecycle-operator-service-transport-continuity",
   "run-codex-api-probe",
   "review"
 ];
@@ -130,6 +131,21 @@ const expectedNextActions = [
       "lifecycle-operator-service-transport-contract",
       "lifecycle-automatic-real-pi-execution"
     ],
+    action: "lifecycle-operator-service-transport-continuity",
+    command: /\/cm:release lifecycle-operator-service-transport-continuity/
+  },
+  {
+    completed: [
+      "run-real-pi-runtime-probe",
+      "lifecycle-operator-session",
+      "lifecycle-operator-transport-recovery",
+      "lifecycle-operator-transport-lease",
+      "lifecycle-operator-transport-heartbeat",
+      "lifecycle-guided-real-pi-execution",
+      "lifecycle-operator-service-transport-contract",
+      "lifecycle-automatic-real-pi-execution",
+      "lifecycle-operator-service-transport-continuity"
+    ],
     action: "run-codex-api-probe",
     command: /lifecycle-control run-codex-api-probe/
   },
@@ -143,6 +159,7 @@ const expectedNextActions = [
       "lifecycle-guided-real-pi-execution",
       "lifecycle-operator-service-transport-contract",
       "lifecycle-automatic-real-pi-execution",
+      "lifecycle-operator-service-transport-continuity",
       "run-codex-api-probe"
     ],
     action: "review",
@@ -168,6 +185,8 @@ for (const expected of expectedNextActions) {
     execution_id: "LIFE-GUIDED-EXEC-0223",
     terminal_review_id: "LIFE-TERMINAL-REVIEW-0223",
     transport_contract_id: "LIFE-TRANSPORT-CONTRACT-0223",
+    continuity_id: "LIFE-TRANSPORT-CONTINUITY-0223",
+    transport_contract_sha256: "0".repeat(64),
     session_manifest_path: ".comath/release/pi-codex-lifecycle/LIFE-SESSION-0223/operator-session-manifest.json",
     transport_recovery_path:
       ".comath/release/pi-codex-lifecycle/LIFE-TRANSPORT-0223/operator-transport-recovery.json",
@@ -179,6 +198,8 @@ for (const expected of expectedNextActions) {
       ".comath/release/pi-codex-lifecycle/LIFE-PI-RUNTIME-0223/runtime-registration-snapshot.json",
     terminal_review_path:
       ".comath/release/pi-codex-lifecycle/LIFE-TERMINAL-REVIEW-0223/terminal-execution-review.json",
+    transport_contract_path:
+      ".comath/release/pi-codex-lifecycle/LIFE-TRANSPORT-CONTRACT-0223/operator-service-transport-contract.json",
     operator_event_cursor: "event:42 Authorization: Bearer plain-token",
     stdout_cursor: "stdout:42",
     stderr_cursor: "stderr:0 clean_replay_passed from D:/research/project",

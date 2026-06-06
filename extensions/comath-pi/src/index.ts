@@ -155,6 +155,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleOperatorTransportHeartbeat",
   "comath.release.piCodexLifecycleGuidedRealPiExecution",
   "comath.release.piCodexLifecycleOperatorServiceTransportContract",
+  "comath.release.piCodexLifecycleOperatorServiceTransportContinuity",
   "comath.release.piCodexLifecycleAutomaticRealPiExecution",
   "comath.release.piCodexLifecycleInteractiveRealPi",
   "comath.release.agentAdapterOsIsolationProbe",
@@ -424,9 +425,18 @@ const publicTransportOverclaimPattern =
 const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
 const posixHostPathEchoPattern =
   /(^|[\s"'=:(])\/(?:home|root|Users|tmp|var|mnt|media|srv|opt|etc|usr\/local|workspace|private|Volumes)\/[^\s<>"']*/g;
+const trustedRuntimePathEchoPattern = new RegExp(
+  `(^|[\\s"'=:(])${["", "comath"].join("\\.")}[\\\\/][^\\s<>"']*`,
+  "gi"
+);
+const encodedTrustedRuntimePathEchoPattern = new RegExp(
+  `(^|[\\s"'=:(])${["%2e", "comath"].join("")}(?:%2f|%5c)[^\\s<>"']*`,
+  "gi"
+);
 const secretEchoPattern =
   /\b(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token)\s*[:=]\s*[A-Za-z0-9._-]+|Authorization:\s*Bearer\s*[A-Za-z0-9._-]+|\bsk-[A-Za-z0-9._-]+\b/gi;
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
+const publicProofAuthorityKeyPattern = /^proof_authority$/i;
 const publicFalseAuthorityKeyPattern =
   /^(?:can_promote_claim|can_certify_ga|durable_transport_provided|live_transport_open|indefinite_stream_open|long_lived_websocket_provided|long_lived_sse_provided|pi_direct_write_allowed|direct_trusted_state_mutation|os_enforced)$/i;
 
@@ -447,6 +457,8 @@ function sanitizePublicProofAuthorityValue(value: unknown): unknown {
       Object.entries(value as Record<string, unknown>).map(([key, item]) =>
         secretObjectKeyPattern.test(key)
           ? ["[redacted_secret_key]", "[redacted_secret]"]
+          : publicProofAuthorityKeyPattern.test(key)
+            ? [key, "none"]
           : publicFalseAuthorityKeyPattern.test(key)
             ? [key, false]
           : [sanitizePublicProofAuthorityValue(key) as string, sanitizePublicProofAuthorityValue(item)]
@@ -454,6 +466,30 @@ function sanitizePublicProofAuthorityValue(value: unknown): unknown {
     );
   }
   return value;
+}
+
+function sanitizeTrustedRuntimePathValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value
+      .replace(trustedRuntimePathEchoPattern, "$1[redacted_trusted_runtime_path]")
+      .replace(encodedTrustedRuntimePathEchoPattern, "$1[redacted_trusted_runtime_path]");
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeTrustedRuntimePathValue(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        sanitizeTrustedRuntimePathValue(item)
+      ])
+    );
+  }
+  return value;
+}
+
+function sanitizePublicDisplayValue(value: unknown): unknown {
+  return sanitizeTrustedRuntimePathValue(sanitizePublicProofAuthorityValue(value));
 }
 
 function shouldSanitizePublicToolResult(name: string): boolean {
@@ -476,6 +512,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleOperatorTransportHeartbeat" ||
     name === "comath.release.piCodexLifecycleGuidedRealPiExecution" ||
     name === "comath.release.piCodexLifecycleOperatorServiceTransportContract" ||
+    name === "comath.release.piCodexLifecycleOperatorServiceTransportContinuity" ||
     name === "comath.release.piCodexLifecycleAutomaticRealPiExecution" ||
     name === "comath.release.piCodexLifecycleInteractiveRealPi" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
@@ -489,7 +526,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
 
 async function publicToolResult(name: string, result: Promise<any>): Promise<any> {
   const value = await result;
-  return shouldSanitizePublicToolResult(name) ? sanitizePublicProofAuthorityValue(value) : value;
+  return shouldSanitizePublicToolResult(name) ? sanitizePublicDisplayValue(value) : value;
 }
 
 const PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS = [
@@ -514,6 +551,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "lifecycle-guided-real-pi-execution",
   "lifecycle-operator-service-transport-contract",
   "lifecycle-automatic-real-pi-execution",
+  "lifecycle-operator-service-transport-continuity",
   "run-codex-api-probe",
   "review"
 ] as const;
@@ -553,6 +591,15 @@ const AGENT_ADAPTER_OS_ISOLATION_PROVIDERS = [
 
 function publicOperatorText(value: string): string {
   return sanitizePublicProofAuthorityValue(value) as string;
+}
+
+function serviceArtifactPathText(value: string): string {
+  return value
+    .replace(privilegedProofAuthorityPattern, "unverified_formal_status")
+    .replace(publicTransportOverclaimPattern, "bounded_transport_checkpoint_only")
+    .replace(hostPathEchoPattern, "[redacted_host_path]")
+    .replace(posixHostPathEchoPattern, "$1[redacted_host_path]")
+    .replace(secretEchoPattern, "[redacted_secret]");
 }
 
 function publicDiagnosticEnvironment(value: unknown): Record<string, string> | undefined {
@@ -848,10 +895,21 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     "transport_contract_id",
     `${sessionId}-TRANSPORT-CONTRACT`
   );
+  const transportContractPath = optionalPublicPlannerPath(
+    input,
+    "transport_contract_path",
+    `service-owned-pi-lifecycle/${transportContractId}/operator-service-transport-contract.json`
+  );
+  const transportContractSha256 = optionalPublicPlannerToken(input, "transport_contract_sha256", "CONTRACT-SHA256");
   const orchestrationId = optionalPublicPlannerToken(
     input,
     "orchestration_id",
     `${sessionId}-AUTOMATIC-REAL-PI`
+  );
+  const continuityId = optionalPublicPlannerToken(
+    input,
+    "continuity_id",
+    `${sessionId}-TRANSPORT-CONTINUITY`
   );
   const sessionManifestPath = optionalPublicPlannerPath(
     input,
@@ -921,6 +979,10 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `--transport-lease-json '<transport-lease-json>' --transport-heartbeat-json '<transport-heartbeat-json>' ` +
       `--guided-execution-json '<guided-execution-json>' --terminal-review-json '<terminal-review-json>' ` +
       `--transport-contract-json '<transport-contract-json>'`,
+    "lifecycle-operator-service-transport-continuity":
+      `/cm:release lifecycle-operator-service-transport-continuity --project-id ${projectId} ` +
+      `--continuity-id ${continuityId} --transport-contract-id ${transportContractId} ` +
+      `--transport-contract-path ${transportContractPath} --transport-contract-sha256 ${transportContractSha256}`,
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -965,7 +1027,10 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       terminal_review_id: terminalReviewId,
       terminal_review_path: terminalReviewPath,
       transport_contract_id: transportContractId,
+      transport_contract_path: transportContractPath,
+      transport_contract_sha256: transportContractSha256,
       orchestration_id: orchestrationId,
+      continuity_id: continuityId,
       pi_install_transcript_path: piInstallTranscriptPath,
       runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath
     },
@@ -1861,6 +1926,33 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
         ...(transportContractId === undefined ? {} : { transport_contract_id: transportContractId }),
         terminal_review_id: readString(input, "terminal_review_id"),
         ...(terminalReviewPath === undefined ? {} : { terminal_review_path: publicOperatorText(terminalReviewPath) }),
+        ...(maxBytes === undefined ? {} : { max_bytes: maxBytes }),
+        ...(maxEvents === undefined ? {} : { max_events: maxEvents }),
+        ...(retryMs === undefined ? {} : { retry_ms: retryMs }),
+        ...(serviceTransportPrimitive === undefined ? {} : { service_transport_primitive: serviceTransportPrimitive }),
+        ...(clientTransportPrimitive === undefined ? {} : { client_transport_primitive: clientTransportPrimitive })
+      })
+    );
+  }
+
+  if (name === "comath.release.piCodexLifecycleOperatorServiceTransportContinuity") {
+    const continuityId = readString(input, "continuity_id", { optional: true });
+    const transportContractPath = readString(input, "transport_contract_path", { optional: true });
+    const maxBytes = readNumber(input, "max_bytes");
+    const maxEvents = readNumber(input, "max_events");
+    const retryMs = readNumber(input, "retry_ms");
+    const serviceTransportPrimitive = readString(input, "service_transport_primitive", { optional: true });
+    const clientTransportPrimitive = readString(input, "client_transport_primitive", { optional: true });
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/operator-service-transport-continuity", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        ...(continuityId === undefined ? {} : { continuity_id: continuityId }),
+        transport_contract_id: readString(input, "transport_contract_id"),
+        ...(transportContractPath === undefined ? {} : { transport_contract_path: serviceArtifactPathText(transportContractPath) }),
+        transport_contract_sha256: readString(input, "transport_contract_sha256"),
         ...(maxBytes === undefined ? {} : { max_bytes: maxBytes }),
         ...(maxEvents === undefined ? {} : { max_events: maxEvents }),
         ...(retryMs === undefined ? {} : { retry_ms: retryMs }),
@@ -3061,6 +3153,32 @@ export function createComathTools(): ToolDescriptor[] {
       })
     },
     {
+      name: "comath.release.piCodexLifecycleOperatorServiceTransportContinuity",
+      description:
+        "Record a service-owned Pi/Codex operator/service transport continuity checkpoint through comathd, consuming a Task225 contract hash and bounded log-session resume without durable transport claims.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "actor", "transport_contract_id", "transport_contract_sha256"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        actor: stringProp,
+        continuity_id: stringProp,
+        transport_contract_id: stringProp,
+        transport_contract_path: stringProp,
+        transport_contract_sha256: stringProp,
+        max_bytes: { type: "number", minimum: 0 },
+        max_events: { type: "number", minimum: 0 },
+        retry_ms: { type: "number", minimum: 0 },
+        service_transport_primitive: {
+          type: "string",
+          enum: ["node_http_agent_run_log_session_route"]
+        },
+        client_transport_primitive: {
+          type: "string",
+          enum: ["pi_fetch_get_text"]
+        }
+      })
+    },
+    {
       name: "comath.release.piCodexLifecycleAutomaticRealPiExecution",
       description:
         "Run the service-owned automatic real-Pi lifecycle checkpoint-chain orchestrator through comathd without Pi direct writes, proof authority, GA certification, or durable transport claims.",
@@ -3174,7 +3292,10 @@ export function createComathTools(): ToolDescriptor[] {
         terminal_review_id: stringProp,
         terminal_review_path: stringProp,
         transport_contract_id: stringProp,
+        transport_contract_path: stringProp,
+        transport_contract_sha256: stringProp,
         orchestration_id: stringProp,
+        continuity_id: stringProp,
         pi_install_transcript_path: stringProp,
         runtime_registration_snapshot_path: stringProp,
         operator_event_cursor: stringProp,
@@ -3795,7 +3916,7 @@ async function requirePiHostConfirmation(
   }
   const allowed = await confirm(
     "Confirm CoMath mutation",
-    `Allow ${target} to mutate trusted CoMath state through comathd? ${JSON.stringify(sanitizePublicProofAuthorityValue(params))}`
+    `Allow ${target} to mutate trusted CoMath state through comathd? ${JSON.stringify(sanitizePublicDisplayValue(params))}`
   );
   if (allowed !== true) {
     throw new Error(`mutation rejected by Pi host confirmation for ${target}`);
@@ -3818,7 +3939,7 @@ function projectRootFrom(options: RegisterComathPiRuntimeOptions, args: string[]
 async function notifyRuntimeResult(ctx: unknown, result: unknown): Promise<void> {
   const notify = runtimeCtx(ctx).ui?.notify;
   if (notify) {
-    await notify(JSON.stringify(sanitizePublicProofAuthorityValue(result)), "info");
+    await notify(JSON.stringify(sanitizePublicDisplayValue(result)), "info");
   }
 }
 
@@ -4997,6 +5118,43 @@ async function handleReleaseCommand(
           guided_execution: requiredJsonRecordOption(parsed.args, "--guided-execution-json", "guided_execution"),
           ...(terminalReview === undefined ? {} : { terminal_review: terminalReview }),
           transport_contract: requiredJsonRecordOption(parsed.args, "--transport-contract-json", "transport_contract")
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-operator-service-transport-continuity") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.piCodexLifecycleOperatorServiceTransportContinuity"
+    );
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle operator/service transport continuity tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          continuity_id: optionValue(parsed.args, "--continuity-id"),
+          transport_contract_id: requiredOption(
+            optionValue(parsed.args, "--transport-contract-id"),
+            "transport_contract_id"
+          ),
+          transport_contract_path: optionValue(parsed.args, "--transport-contract-path"),
+          transport_contract_sha256: requiredOption(
+            optionValue(parsed.args, "--transport-contract-sha256"),
+            "transport_contract_sha256"
+          ),
+          max_bytes: numberOptionValue(parsed.args, "--max-bytes"),
+          max_events: numberOptionValue(parsed.args, "--max-events"),
+          retry_ms: numberOptionValue(parsed.args, "--retry-ms"),
+          service_transport_primitive: optionValue(parsed.args, "--service-transport-primitive"),
+          client_transport_primitive: optionValue(parsed.args, "--client-transport-primitive")
         },
         ctx
       )

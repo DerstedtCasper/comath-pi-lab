@@ -397,6 +397,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task227-pi-automatic-real-pi-execution-orchestration.test.mjs",
   "goal3-task228-pi-automatic-real-pi-execution-consumer.test.mjs",
   "goal3-task229-pi-operator-service-transport-continuity.test.mjs",
+  "goal3-task230-pi-operator-service-transport-continuity-consumer.test.mjs",
   "goal3-task178-agent-adapter-os-isolation-provider-helper-host-validation.test.mjs",
   "goal3-task179-agent-adapter-os-isolation-provider-helper-execution-host-validation-binding.test.mjs",
   "goal3-task181-agent-adapter-os-isolation-configured-provider-helper-asset.test.mjs",
