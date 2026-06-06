@@ -883,6 +883,20 @@ export type PiCodexOperatorServiceTransportContractInput = {
   client_transport_primitive?: PiCodexOperatorClientTransportPrimitive;
 };
 
+export type PiCodexOperatorServiceTransportContinuityInput = {
+  project_id: string;
+  continuity_id?: string;
+  actor: string;
+  transport_contract_id: string;
+  transport_contract_path?: string;
+  transport_contract_sha256: string;
+  max_bytes?: number;
+  max_events?: number;
+  retry_ms?: number;
+  service_transport_primitive?: PiCodexOperatorServiceTransportPrimitive;
+  client_transport_primitive?: PiCodexOperatorClientTransportPrimitive;
+};
+
 export type PiCodexGuidedExecutionTerminalChainReviewArtifact = {
   kind: "guided_execution_terminal_chain_review";
   path: string;
@@ -953,6 +967,63 @@ export type PiCodexOperatorServiceTransportContract = {
 type PiCodexOperatorServiceTransportContractBody = Omit<
   PiCodexOperatorServiceTransportContract,
   "transport_contract_artifact"
+>;
+
+export type PiCodexOperatorServiceTransportContinuityArtifact = {
+  kind: "operator_service_transport_continuity";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexOperatorServiceTransportContinuity = {
+  schema_version: "comath.pi_codex_operator_service_transport_continuity.v1";
+  continuity_id: string;
+  project_id: string;
+  actor: string;
+  created_at: string;
+  continuity_status: "maintained_bounded_transport_continuity_recorded";
+  continuity_path: string;
+  continuity_artifact: PiCodexOperatorServiceTransportContinuityArtifact;
+  transport_contract_id: string;
+  transport_contract_path: string;
+  transport_contract_artifact: PiCodexOperatorServiceTransportContractArtifact;
+  agent_run_id: string;
+  service_transport_primitive: PiCodexOperatorServiceTransportPrimitive;
+  client_transport_primitive: PiCodexOperatorClientTransportPrimitive;
+  http_method: "GET";
+  service_route: string;
+  content_type: "text/event-stream; charset=utf-8";
+  bounded_limits: {
+    max_bytes: number;
+    max_events: number;
+    retry_ms: number;
+  };
+  previous_cursor: AgentRunLogCursor;
+  previous_log_session_body_sha256: string;
+  log_session_next_cursor: AgentRunLogCursor;
+  log_session_event_count: number;
+  log_session_body_sha256: string;
+  maintained_transport_primitive_bound: true;
+  service_route_bound: true;
+  client_fetch_contract_bound: true;
+  transport_contract_bound: true;
+  durable_resume_checkpoint_recorded: true;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexOperatorServiceTransportContinuityBody = Omit<
+  PiCodexOperatorServiceTransportContinuity,
+  "continuity_artifact"
 >;
 
 export type PiCodexLifecycleAutomaticRealPiExecutionCheckpointStep =
@@ -1317,6 +1388,23 @@ function assertOperatorServiceTransportContractId(value: string | undefined): st
   return contractId;
 }
 
+function assertOperatorServiceTransportContinuityId(value: string | undefined): string {
+  const continuityId =
+    value ?? `LIFE-TRANSPORT-CONTINUITY-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (
+    !/^[A-Za-z0-9._-]+$/.test(continuityId) ||
+    continuityId === "." ||
+    continuityId === ".." ||
+    continuityId.split(".").some((segment) => segment.length === 0)
+  ) {
+    throw new ComathError("invalid Pi/Codex operator/service transport continuity id", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_INVALID_ID"
+    });
+  }
+  return continuityId;
+}
+
 function assertAutomaticRealPiExecutionOrchestrationId(value: string | undefined): string {
   const orchestrationId = value ?? `LIFE-AUTO-REAL-PI-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
   if (
@@ -1334,7 +1422,7 @@ function assertAutomaticRealPiExecutionOrchestrationId(value: string | undefined
 }
 
 function assertOperatorServiceTransportPrimitive(
-  value: PiCodexOperatorServiceTransportContractInput["service_transport_primitive"]
+  value: PiCodexOperatorServiceTransportPrimitive | undefined
 ): PiCodexOperatorServiceTransportPrimitive {
   const primitive = value ?? "node_http_agent_run_log_session_route";
   if (primitive !== "node_http_agent_run_log_session_route") {
@@ -1347,7 +1435,7 @@ function assertOperatorServiceTransportPrimitive(
 }
 
 function assertOperatorClientTransportPrimitive(
-  value: PiCodexOperatorServiceTransportContractInput["client_transport_primitive"]
+  value: PiCodexOperatorClientTransportPrimitive | undefined
 ): PiCodexOperatorClientTransportPrimitive {
   const primitive = value ?? "pi_fetch_get_text";
   if (primitive !== "pi_fetch_get_text") {
@@ -3030,6 +3118,12 @@ function operatorServiceTransportContractPath(contractId: string): string {
   );
 }
 
+function operatorServiceTransportContinuityPath(continuityId: string): string {
+  return normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", continuityId, "operator-service-transport-continuity.json")
+  );
+}
+
 function automaticRealPiExecutionOrchestrationPath(orchestrationId: string): string {
   return normalizeRelativePath(
     join(".comath", "release", "pi-codex-lifecycle", orchestrationId, "automatic-real-pi-execution.json")
@@ -4002,6 +4096,112 @@ function assertOperatorServiceTransportContractBinding(condition: boolean, messa
   }
 }
 
+function assertOperatorServiceTransportContractBoundary(contract: PiCodexOperatorServiceTransportContractBody): void {
+  const parsedLogSessionRoute =
+    typeof contract.service_route === "string" ? parseAgentRunLogSessionRoute(contract.service_route) : null;
+  if (
+    contract.contract_status !== "maintained_bounded_transport_contract_recorded" ||
+    contract.maintained_transport_primitive_bound !== true ||
+    contract.service_route_bound !== true ||
+    contract.client_fetch_contract_bound !== true ||
+    contract.terminal_review_bound !== true ||
+    contract.heartbeat_bound !== true ||
+    contract.service_transport_primitive !== "node_http_agent_run_log_session_route" ||
+    contract.client_transport_primitive !== "pi_fetch_get_text" ||
+    contract.http_method !== "GET" ||
+    contract.content_type !== "text/event-stream; charset=utf-8" ||
+    parsedLogSessionRoute === null ||
+    parsedLogSessionRoute.route !== contract.service_route ||
+    parsedLogSessionRoute.runId !== contract.agent_run_id ||
+    !isAgentRunLogCursor(contract.resume_cursor) ||
+    !isAgentRunLogCursor(contract.log_session_next_cursor) ||
+    !Number.isSafeInteger(contract.log_session_event_count) ||
+    contract.log_session_event_count < 0 ||
+    !/^[a-f0-9]{64}$/u.test(contract.log_session_body_sha256) ||
+    contract.durable_transport_provided !== false ||
+    contract.live_transport_open !== false ||
+    contract.indefinite_stream_open !== false ||
+    contract.long_lived_websocket_provided !== false ||
+    contract.long_lived_sse_provided !== false ||
+    contract.pi_direct_write_allowed !== false ||
+    contract.direct_trusted_state_mutation !== false ||
+    contract.proof_authority !== "none" ||
+    contract.can_promote_claim !== false ||
+    contract.can_certify_ga !== false
+  ) {
+    throw new ComathError("Pi/Codex operator/service transport continuity contract violates boundaries", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_INVALID"
+    });
+  }
+}
+
+function readOperatorServiceTransportContractArtifact(
+  projectRoot: string,
+  projectId: string,
+  contractId: string,
+  contractPath: string,
+  expectedSha256: string
+): {
+  contract: PiCodexOperatorServiceTransportContractBody;
+  artifact: PiCodexOperatorServiceTransportContractArtifact;
+} {
+  const absolutePath = assertPathAllowed(projectRoot, contractPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath)) {
+    throw new ComathError("Pi/Codex operator/service transport continuity requires a transport contract artifact", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_MISSING"
+    });
+  }
+  if (!statSync(absolutePath).isFile()) {
+    throw new ComathError("Pi/Codex operator/service transport continuity contract must be a file", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_INVALID"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  const actualSha256 = sha256Bytes(content);
+  if (expectedSha256 !== actualSha256) {
+    throw new ComathError("Pi/Codex operator/service transport continuity contract artifact changed", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_STALE"
+    });
+  }
+  let parsed: PiCodexOperatorServiceTransportContractBody;
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexOperatorServiceTransportContractBody;
+  } catch {
+    throw new ComathError("Pi/Codex operator/service transport continuity contract JSON is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_INVALID"
+    });
+  }
+  if (
+    parsed.schema_version !== "comath.pi_codex_operator_service_transport_contract.v1" ||
+    parsed.project_id !== projectId ||
+    parsed.transport_contract_id !== contractId ||
+    parsed.transport_contract_path !== contractPath
+  ) {
+    throw new ComathError("Pi/Codex operator/service transport continuity contract does not bind the request", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_INVALID"
+    });
+  }
+  assertOperatorServiceTransportContractBoundary(parsed);
+  return {
+    contract: parsed,
+    artifact: {
+      kind: "operator_service_transport_contract",
+      path: contractPath,
+      sha256: actualSha256,
+      size_bytes: content.byteLength
+    }
+  };
+}
+
 export function recordPiCodexLifecycleOperatorServiceTransportContract(
   projectRoot: string,
   input: PiCodexOperatorServiceTransportContractInput
@@ -4177,6 +4377,171 @@ export function recordPiCodexLifecycleOperatorServiceTransportContract(
       agent_run_id: heartbeat.agent_run_log_session_binding.run_id,
       log_session_body_sha256: result.log_session_body_sha256,
       log_session_event_count: result.log_session_event_count,
+      durable_transport_provided: false,
+      live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
+export function recordPiCodexLifecycleOperatorServiceTransportContinuity(
+  projectRoot: string,
+  input: PiCodexOperatorServiceTransportContinuityInput
+): PiCodexOperatorServiceTransportContinuity {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const continuityId = assertOperatorServiceTransportContinuityId(input.continuity_id);
+  const contractId = assertOperatorServiceTransportContractId(input.transport_contract_id);
+  const serviceTransportPrimitive = assertOperatorServiceTransportPrimitive(input.service_transport_primitive);
+  const clientTransportPrimitive = assertOperatorClientTransportPrimitive(input.client_transport_primitive);
+  const canonicalContractPath = operatorServiceTransportContractPath(contractId);
+  const contractPath = input.transport_contract_path
+    ? projectRelativePath(
+        projectRoot,
+        assertPathAllowed(projectRoot, input.transport_contract_path, { purpose: "read", resolveRealpath: true })
+      )
+    : canonicalContractPath;
+  if (contractPath !== canonicalContractPath) {
+    throw new ComathError("Pi/Codex operator/service transport continuity contract path is not canonical", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_NON_CANONICAL"
+    });
+  }
+  if (input.transport_contract_sha256 === undefined) {
+    throw new ComathError("Pi/Codex operator/service transport continuity requires a transport contract hash", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_HASH_REQUIRED"
+    });
+  }
+  const { contract, artifact: contractArtifact } = readOperatorServiceTransportContractArtifact(
+    projectRoot,
+    projectId,
+    contractId,
+    contractPath,
+    input.transport_contract_sha256
+  );
+  if (
+    contract.service_transport_primitive !== serviceTransportPrimitive ||
+    contract.client_transport_primitive !== clientTransportPrimitive
+  ) {
+    throw new ComathError("Pi/Codex operator/service transport continuity primitive mismatch", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_PRIMITIVE_MISMATCH"
+    });
+  }
+
+  const boundedLimits = {
+    max_bytes: input.max_bytes ?? contract.bounded_limits.max_bytes,
+    max_events: input.max_events ?? contract.bounded_limits.max_events,
+    retry_ms: input.retry_ms ?? contract.bounded_limits.retry_ms
+  };
+  const logSession = formatAgentRunLogSseSession(projectRoot, {
+    project_id: projectId,
+    run_id: contract.agent_run_id,
+    cursor: contract.log_session_next_cursor,
+    max_bytes: boundedLimits.max_bytes,
+    max_events: boundedLimits.max_events,
+    retry_ms: boundedLimits.retry_ms,
+    actor: sanitizeOperatorTransportText(input.actor)
+  });
+  if (
+    logSession.project_id !== projectId ||
+    logSession.run_id !== contract.agent_run_id ||
+    logSession.content_type !== contract.content_type
+  ) {
+    throw new ComathError("Pi/Codex operator/service transport continuity log-session route is not service-owned", {
+      statusCode: 400,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_ROUTE_UNBOUND"
+    });
+  }
+
+  const continuityPath = operatorServiceTransportContinuityPath(continuityId);
+  const absoluteContinuityPath = assertPathAllowed(projectRoot, continuityPath, { purpose: "runtime-write" });
+  if (existsSync(absoluteContinuityPath)) {
+    throw new ComathError("Pi/Codex operator/service transport continuity already exists", {
+      statusCode: 409,
+      code: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_ALREADY_EXISTS"
+    });
+  }
+
+  const body: PiCodexOperatorServiceTransportContinuityBody = {
+    schema_version: "comath.pi_codex_operator_service_transport_continuity.v1",
+    continuity_id: continuityId,
+    project_id: projectId,
+    actor: sanitizeOperatorTransportText(input.actor),
+    created_at: new Date().toISOString(),
+    continuity_status: "maintained_bounded_transport_continuity_recorded",
+    continuity_path: continuityPath,
+    transport_contract_id: contract.transport_contract_id,
+    transport_contract_path: contractPath,
+    transport_contract_artifact: contractArtifact,
+    agent_run_id: contract.agent_run_id,
+    service_transport_primitive: serviceTransportPrimitive,
+    client_transport_primitive: clientTransportPrimitive,
+    http_method: "GET",
+    service_route: contract.service_route,
+    content_type: logSession.content_type,
+    bounded_limits: boundedLimits,
+    previous_cursor: contract.log_session_next_cursor,
+    previous_log_session_body_sha256: contract.log_session_body_sha256,
+    log_session_next_cursor: logSession.next_cursor,
+    log_session_event_count: logSession.events.length,
+    log_session_body_sha256: sha256Text(logSession.body),
+    maintained_transport_primitive_bound: true,
+    service_route_bound: true,
+    client_fetch_contract_bound: true,
+    transport_contract_bound: true,
+    durable_resume_checkpoint_recorded: true,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const artifactText = canonicalJson(body);
+  mkdirSync(dirname(absoluteContinuityPath), { recursive: true });
+  writeFileSync(absoluteContinuityPath, artifactText, "utf8");
+  const result: PiCodexOperatorServiceTransportContinuity = {
+    ...body,
+    continuity_artifact: {
+      kind: "operator_service_transport_continuity",
+      path: continuityPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_operator_service_transport_continuity_recorded",
+    actor: sanitizeOperatorTransportText(input.actor),
+    target_id: projectId,
+    payload: {
+      continuity_id: continuityId,
+      continuity_status: result.continuity_status,
+      continuity_path: continuityPath,
+      transport_contract_id: contract.transport_contract_id,
+      transport_contract_artifact_sha256: contractArtifact.sha256,
+      service_transport_primitive: serviceTransportPrimitive,
+      client_transport_primitive: clientTransportPrimitive,
+      service_route: contract.service_route,
+      agent_run_id: contract.agent_run_id,
+      previous_cursor: contract.log_session_next_cursor,
+      log_session_next_cursor: result.log_session_next_cursor,
+      log_session_body_sha256: result.log_session_body_sha256,
+      log_session_event_count: result.log_session_event_count,
+      durable_resume_checkpoint_recorded: true,
       durable_transport_provided: false,
       live_transport_open: false,
       indefinite_stream_open: false,

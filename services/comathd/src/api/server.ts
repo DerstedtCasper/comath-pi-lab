@@ -61,6 +61,7 @@ import {
   probePiCodexDurableServiceLifecycle,
   probePiCodexRealPiInstallRuntimeRegistration,
   recordPiCodexLifecycleGuidedRealPiExecution,
+  recordPiCodexLifecycleOperatorServiceTransportContinuity,
   recordPiCodexLifecycleOperatorServiceTransportContract,
   recoverPiCodexLifecycleOperatorTransport,
   reviewPiCodexLifecycleTerminalExecution,
@@ -516,6 +517,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           contract: recordPiCodexLifecycleOperatorServiceTransportContract(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/operator-service-transport-continuity",
+      (payload) => {
+        const body = payload as Parameters<typeof recordPiCodexLifecycleOperatorServiceTransportContinuity>[1] & {
+          project_root: string;
+        };
+        return {
+          continuity: recordPiCodexLifecycleOperatorServiceTransportContinuity(body.project_root, body)
         };
       }
     ],

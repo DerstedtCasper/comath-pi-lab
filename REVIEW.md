@@ -1,3 +1,24 @@
+# Goal 3 Task 229 / Operator-Service Transport Continuity Checkpoint
+
+Scope: add service-owned continuity provenance over the Task225 maintained operator/service transport contract without creating a CoMath transport stack, durable long-lived stream, proof authority, direct Pi mutation, or GA certification.
+
+Changes:
+
+- Added `goal3-task229-pi-operator-service-transport-continuity.test.mjs`.
+- Added `recordPiCodexLifecycleOperatorServiceTransportContinuity()` and `POST /release/pi-codex-lifecycle/operator-service-transport-continuity`.
+- Added `comath.pi_codex_operator_service_transport_continuity.v1` artifacts under `.comath/release/pi-codex-lifecycle/<continuity-id>/operator-service-transport-continuity.json`.
+- Added `pi_codex_operator_service_transport_continuity` to the service capability ledger.
+- Synchronized README, TODO, threat model, GA release criteria, phase0 smoke, REVIEW, and the Goal 3 tracker without claiming durable long-lived transport.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task229 failed because `../../dist/index.js` did not export `recordPiCodexLifecycleOperatorServiceTransportContinuity`.
+- Focused Task229 exited 0 after implementation.
+- Read-only review found a P1 gap where continuity could consume a caller-selected non-canonical forged contract artifact when no hash was supplied. Follow-up RED coverage now forges a project-local contract path without a hash, and the service rejects it with `PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_NON_CANONICAL` before reading the artifact. A second regression requires a caller-supplied contract hash even for canonical contract paths and rejects missing hashes with `PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CONTINUITY_CONTRACT_HASH_REQUIRED`.
+- Final verification reran focused Task229, adjacent Task220/221/225/227/Phase50 regressions, phase0 smoke, comathd build/typecheck/test, root typecheck/test, runtime-state absence, and diff whitespace checks.
+
+Boundary notes: Task229 consumes only the canonical persisted Task225 transport contract path for the requested contract id, requires and verifies its caller-supplied hash, resumes from `log_session_next_cursor`, and re-runs bounded `formatAgentRunLogSseSession()` over the existing Node HTTP AgentRun log-session route plus Pi `fetch`/`getText` primitive. It records `durable_resume_checkpoint_recorded=true`, but keeps `durable_transport_provided=false`, `live_transport_open=false`, `proof_authority=none`, `can_promote_claim=false`, and `can_certify_ga=false`. It does not provide long-lived SSE/WebSocket transport, run Lean, prove mathematics, promote claims, certify GA, or replace an operator-controlled real-Pi execution.
+
 # Goal 3 Task 228 / Pi Automatic Real-Pi Execution Consumer
 
 Scope: expose the Task227 automatic real-Pi checkpoint-chain orchestrator through Pi as a host-confirmed thin consumer and interactive planner checkpoint without creating durable transport, direct Pi writes, proof authority, trusted state mutation, or GA certification.
