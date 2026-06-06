@@ -1,3 +1,28 @@
+# Goal 3 Task 236 / macOS Out-of-Scope Documentation Guard
+
+Scope: remove macOS from current GA environment-adaptation documentation, sample configuration, and release-hardening smoke scope. Historical Task235 runtime regression coverage remains as internal/historical evidence, but public current-scope docs must not advertise macOS helper handles, `sandbox-exec` host-facility names, profile-contract kinds, or a focused release-hardening suite as active GA adaptation targets.
+
+Implementation notes:
+- Added `goal3-task236-macos-out-of-scope-docs.test.mjs` to enforce the out-of-scope sentence across README, AGENTS, TODO, config docs, adapter contracts, GA release criteria, and threat model.
+- Removed the macOS provider-helper entry and env handles from `config/comath.sample.json`, `config/README.md`, and `scripts/phase0-smoke.mjs`.
+- Replaced current public Task235 wording in README, AGENTS, TODO, adapter contracts, GA criteria, and threat model with Task236 removed-platform wording.
+- Updated Task184 sample-config expectations so legacy cross-provider tests no longer require macOS as a current sample-config provider while preserving runtime-level historical provider coverage.
+
+Verification:
+- TDD RED was observed before implementation when the new Task236 suite failed on README/current docs still advertising macOS scope.
+- Focused Task236 exited 0.
+- Focused Task235 exited 0, confirming the internal historical regression remains intact.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Initial `corepack pnpm --filter @comath/comathd test` exposed the stale Task184 sample-config assertion requiring `macos_sandbox_exec`; after synchronizing Task184 with Task236, focused Task184 exited 0.
+- Read-only reviewer found that the first Task184 sync would treat Firejail as compatible on Darwin even though that platform is now out of current scope. Task184 now skips the compatible-provider positive path on Darwin and keeps Linux/Windows positive coverage.
+- Final `node --check services/comathd/tests/unit/goal3-task184-agent-adapter-os-isolation-cross-provider-helper-assets.test.mjs`, focused Task184, and focused Task236 exited 0 after the reviewer fix.
+- Final `corepack pnpm --filter @comath/comathd test` exited 0 with Task236 discovered by the default runner.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task236 is documentation/config/smoke scope correction only. It does not delete the internal Task235 runtime code path, does not claim production OS isolation, does not affect Lean/mathlib proof authority, does not provide real-Pi evidence, and does not certify GA.
+
 # Goal 3 Task 235 / macOS Sandbox-Exec Production-Helper Profile Contract
 
 Scope: add a macOS `sandbox-exec` production-helper profile contract to the existing provider-helper lineage path, without adding a macOS runner, running `sandbox-exec`, inspecting sandbox profile/policy state, treating helper metadata as OS-enforcement proof, changing Lean proof authority, creating real-Pi evidence, or certifying GA.

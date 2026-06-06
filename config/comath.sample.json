@@ -205,48 +205,6 @@
         "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",
         "canCertifyGa": false
-      },
-      {
-        "provider": "macos_sandbox_exec",
-        "enabled": false,
-        "configuredByEnv": "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER",
-        "fallbackConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER",
-        "argsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_HELPER_ARGS_JSON",
-        "fallbackArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_ARGS_JSON",
-        "argsPrefixFormat": "json_string_array",
-        "collectionProbeConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_COLLECTION_PROBE",
-        "fallbackCollectionProbeConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_COLLECTION_PROBE",
-        "collectionProbeArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_COLLECTION_PROBE_ARGS_JSON",
-        "fallbackCollectionProbeArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_HELPER_COLLECTION_PROBE_ARGS_JSON",
-        "collectionProbeArgsPrefixFormat": "json_string_array",
-        "liveProbeConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_LIVE_PROBE",
-        "fallbackLiveProbeConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_SPECIFIC_LIVE_PROBE",
-        "liveProbeArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_MACOS_SANDBOX_EXEC_LIVE_PROBE_ARGS_JSON",
-        "fallbackLiveProbeArgsPrefixConfiguredByEnv": "COMATH_AGENT_ADAPTER_OSISO_PROVIDER_SPECIFIC_LIVE_PROBE_ARGS_JSON",
-        "liveProbeArgsPrefixFormat": "json_string_array",
-        "collectionProbeRuntimeBindingRequired": true,
-        "collectionProbeHostCapabilityBindingRequired": true,
-        "collectionProbeProviderToolWitnessRequired": true,
-        "providerSpecificToolBindingRequired": true,
-        "providerFamilyOsEnforcementWitnessRequired": true,
-        "providerFamilyExecutionProfileRequired": true,
-        "providerSpecificLiveProbeAttemptRequired": true,
-        "providerSpecificLiveProbeExecutionRequired": true,
-        "providerSpecificLiveProbeCollectionBindingRequired": true,
-        "providerControlPlaneExecutionWitnessRequired": true,
-        "productionHelperProfileContractRequired": true,
-        "productionHelperProfileContractKind": "macos_sandbox_exec_no_network_profile_contract",
-        "productionHelperProfileSources": [
-          "operator_configured_provider_helper",
-          "bundled_provider_helper_protocol_asset"
-        ],
-        "requiredHostFacilityTools": [
-          "macos_sandbox_exec_cli"
-        ],
-        "executionAssetHashBound": true,
-        "hostValidationSelfTestRequired": true,
-        "proofAuthority": "none",
-        "canCertifyGa": false
       }
     ]
   },

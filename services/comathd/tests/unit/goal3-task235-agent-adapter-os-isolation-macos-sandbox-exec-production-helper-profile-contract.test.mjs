@@ -119,30 +119,13 @@ try {
   );
 
   const focusedTestName = "goal3-task235-agent-adapter-os-isolation-macos-sandbox-exec-production-helper-profile-contract.test.mjs";
-  assert.equal(readRepoFile("scripts/phase0-smoke.mjs").includes(focusedTestName), true);
-  assert.equal(readRepoFile("docs/architecture/ga-release-criteria.md").includes(focusedTestName), true);
-  for (const [path, pattern] of [
-    ["README.md", /Task235.*macOS.*sandbox-exec.*production-helper profile contract/s],
-    ["AGENTS.md", /Task235.*macOS.*sandbox-exec.*production-helper profile contract/s],
-    ["TODO.md", /Task213-235 summary/s],
-    ["REVIEW.md", /Goal 3 Task 235/s],
-    ["config/README.md", /Task235.*macOS.*sandbox-exec.*production-helper profile contract/s],
-    ["docs/architecture/adapter-contracts.md", /Task235.*macOS.*sandbox-exec.*production-helper profile contract/s],
-    ["docs/architecture/threat-model.md", /Task235.*macOS.*sandbox-exec.*production-helper profile contract/s]
-  ]) {
-    assert.match(readRepoFile(path), pattern, `${path} must document Task235 without overclaiming`);
-  }
+  assert.equal(readRepoFile("scripts/phase0-smoke.mjs").includes(focusedTestName), false);
+  assert.equal(readRepoFile("docs/architecture/ga-release-criteria.md").includes(focusedTestName), false);
   const sampleConfig = JSON.parse(readRepoFile("config/comath.sample.json"));
   const providerConfig = sampleConfig?.agentAdapterOsIsolation?.providerHelpers?.find(
     (entry) => entry?.provider === "macos_sandbox_exec"
   );
-  assert.equal(providerConfig?.productionHelperProfileContractRequired, true);
-  assert.equal(providerConfig?.productionHelperProfileContractKind, "macos_sandbox_exec_no_network_profile_contract");
-  assert.deepEqual(providerConfig?.productionHelperProfileSources, [
-    "operator_configured_provider_helper",
-    "bundled_provider_helper_protocol_asset"
-  ]);
-  assert.deepEqual(providerConfig?.requiredHostFacilityTools, ["macos_sandbox_exec_cli"]);
+  assert.equal(providerConfig, undefined, "sample config must not advertise macOS as a current environment target");
 
   const helperScript = createMacosSandboxExecHelperScript(projectRoot);
   process.env[helperEnvVar] = process.execPath;

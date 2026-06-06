@@ -55,6 +55,19 @@ function providerHostCapabilityToolName(provider) {
   throw new Error(`unsupported provider ${provider}`);
 }
 
+function providerRunnerFixedArgvPrefix(provider) {
+  if (provider === "firejail") {
+    return ["firejail", "--private", "--net=none", "--nonewprivs"];
+  }
+  if (provider === "windows_appcontainer") {
+    return ["windows-appcontainer-runner", "--network=disabled", "--profile", "<service-owned-profile>"];
+  }
+  if (provider === "macos_sandbox_exec") {
+    return ["sandbox-exec", "-f", "<service-owned-profile>"];
+  }
+  throw new Error(`unsupported provider ${provider}`);
+}
+
 function providerToolExecutionWitness(probeInput) {
   const expectation = probeInput.provider_tool_execution_witness_expectation;
   assert.match(expectation.tool_sha256, /^[a-f0-9]{64}$/);
@@ -216,6 +229,8 @@ const providerHelpers = [
   }
 ];
 
+const currentSampleProviderHelpers = providerHelpers.filter((entry) => entry.provider !== "macos_sandbox_exec");
+
 assert.equal(
   getComathdStatus().capabilities.includes("agent_adapter_os_isolation_cross_provider_configured_helper_assets"),
   true,
@@ -225,7 +240,7 @@ assert.equal(
 const sampleHelpers = sampleConfig.agentAdapterOsIsolation?.providerHelpers;
 assert.equal(Array.isArray(sampleHelpers), true, "sample config must expose provider helper contracts as a list");
 
-for (const expected of providerHelpers) {
+for (const expected of currentSampleProviderHelpers) {
   const sampleEntry = sampleHelpers.find((entry) => entry.provider === expected.provider);
   assert.ok(sampleEntry, `sample config must include ${expected.provider} helper configuration handles`);
   assert.equal(sampleEntry.enabled, false);
@@ -239,7 +254,13 @@ for (const expected of providerHelpers) {
   assert.equal(sampleEntry.canCertifyGa, false);
 }
 
-const incompatibleProvider = process.platform === "linux" ? "macos_sandbox_exec" : "firejail";
+assert.equal(
+  sampleHelpers.some((entry) => entry.provider === "macos_sandbox_exec"),
+  false,
+  "sample config must not advertise the removed platform as a current provider helper target"
+);
+
+const incompatibleProvider = process.platform === "linux" ? "windows_appcontainer" : "firejail";
 const incompatibleHelper = providerHelpers.find((entry) => entry.provider === incompatibleProvider);
 assert.ok(incompatibleHelper, "test must select a known platform-incompatible provider helper");
 
@@ -361,17 +382,11 @@ try {
   assert.equal(readyRunner.provider_runner_ready, true);
   assert.equal(readyRunner.provider_runner_resolution.runner_binary_sha256, helperBinarySha256);
   assert.match(readyRunner.provider_runner_resolution.runner_version, new RegExp(incompatibleProvider));
-  if (incompatibleProvider === "firejail") {
-    assert.deepEqual(
-      readyRunner.provider_runner_contract.fixed_argv_template.slice(0, 4),
-      ["firejail", "--private", "--net=none", "--nonewprivs"]
-    );
-  } else {
-    assert.deepEqual(
-      readyRunner.provider_runner_contract.fixed_argv_template.slice(0, 3),
-      ["sandbox-exec", "-f", "<service-owned-profile>"]
-    );
-  }
+  const incompatibleFixedArgvPrefix = providerRunnerFixedArgvPrefix(incompatibleProvider);
+  assert.deepEqual(
+    readyRunner.provider_runner_contract.fixed_argv_template.slice(0, incompatibleFixedArgvPrefix.length),
+    incompatibleFixedArgvPrefix
+  );
   assert.equal(readyRunner.provider_runner_contract.shell, false);
   assert.equal(readyRunner.provider_runner_contract.network_policy, "disabled");
   assert.equal(readyRunner.provider_runner_contract.command_override_allowed, false);
@@ -610,7 +625,8 @@ try {
   let previousCompatibleProviderHelper;
   let previousCompatibleProviderHelperArgs;
   try {
-    const compatibleProvider = process.platform === "darwin" ? "macos_sandbox_exec" : process.platform === "win32" ? "windows_appcontainer" : "firejail";
+    const compatibleProvider = process.platform === "darwin" ? null : process.platform === "win32" ? "windows_appcontainer" : "firejail";
+    if (compatibleProvider !== null) {
     const compatibleHelper = providerHelpers.find((entry) => entry.provider === compatibleProvider);
     assert.ok(compatibleHelper, "test must select a known platform-compatible provider helper");
     compatibleHelperForRestore = compatibleHelper;
@@ -867,6 +883,7 @@ try {
     assert.equal(compatibleReadiness.ok, true, "only canonical collected evidence should pass the readiness gate");
     assert.equal(compatibleReadiness.checks.provider_tool_execution_witness.ok, true);
     assert.equal(compatibleReadiness.can_certify_ga, false);
+    }
 
   } finally {
     if (compatibleHelperForRestore) {
