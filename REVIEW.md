@@ -1,3 +1,31 @@
+# Goal 3 Task 238 / Campaign Live Mathlib No-Download Fixture Preflight
+
+Scope: add a bounded preflight before Task218/219 host/import diagnostics for campaign-native live Mathlib replay requests. It validates only that Task214 dependency-material checks and Task216 local Mathlib provisioning diagnostics are ready without downloads. It is not a downloader, Lean/Lake execution path, Lake import resolver, theorem search adapter, proof authority, final replay allocation, claim promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task238-campaign-live-mathlib-no-download-fixture-preflight.test.mjs`.
+- Added `evaluateCampaignLiveMathlibNoDownloadFixturePreflight()` to compose the existing dependency-material and provisioning checks.
+- Wired final replay request parsing to persist `.comath/campaign/<CAM>/mathlib_no_download_fixture_preflight.json` before provisioning, host replay, import-graph diagnostics, or final replay allocation.
+- Bound the preflight path/hash into later provisioning and host diagnostic artifacts.
+- Added `campaign_live_mathlib_no_download_fixture_preflight` to service capabilities, phase0 smoke release-hardening discovery, GA release criteria, README, AGENTS, TODO, adapter contracts, threat model, REVIEW, and the Goal 3 tracker.
+
+Verification:
+- Focused Task238 exited 0 after resuming the partial implementation already present in the live worktree.
+- Adjacent Task216, Task218, and Task219 regressions exited 0.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `node --check services/comathd/tests/unit/goal3-task238-campaign-live-mathlib-no-download-fixture-preflight.test.mjs` exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- Initial `corepack pnpm --filter @comath/comathd test` hit a 300s command timeout without assertion output; process inspection found no leftover test Node processes, and the longer rerun exited 0 with Task238 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 including phase0 smoke, Pi workspace tests, comathd package tests with Task238, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+- Read-only review found that the first Task216/Task238 symlink assertions could silently skip on Windows `EPERM`, and that adapter docs could read as if Mathlib fixture preflight bridges to OS-isolation evidence. Task216/Task238 tests now create a directory symlink or junction and fail the test if no fixture can be created; Task238 also covers root Mathlib package symlinks. Focused Task216 and Task238 reruns exited 0, and adapter docs now refer explicitly to the sandbox-launch preflight.
+- After those reviewer fixes, `corepack pnpm --filter @comath/comathd test` exited 0 and `corepack pnpm test` exited 0 again.
+
+Boundary notes: Task238 records only non-authoritative local hash provenance for already materialized Mathlib package files. It rejects missing material, local `Mathlib` shadowing, floating revisions, and package symlinks; it executes no Lean/Lake command, attempts no dependency download, allocates no `.comath/lean/final_replay`, keeps `proof_authority="none"`, keeps `can_promote_claim=false`, and does not certify GA.
+
 # Goal 3 Task 237 / Prepared Handoff Operator Review Checklist
 
 Scope: add a Pi-only read-only operator review checklist for Task231 prepared checkpoint handoff refs, without adding a `comathd` route, persisting a review manifest, verifying artifact freshness, approving or executing a handoff, creating service evidence, opening durable transport, changing Lean proof authority, or certifying GA.

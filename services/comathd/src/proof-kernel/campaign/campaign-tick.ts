@@ -1233,6 +1233,41 @@ export type CampaignLiveMathlibProvisioningDiagnosticResult = {
   can_promote_claim: false;
 };
 
+export type CampaignLiveMathlibNoDownloadFixturePreflightInput = CampaignLiveMathlibDependencyMaterialGateInput & {
+  leanRoot: string;
+};
+
+export type CampaignLiveMathlibNoDownloadFixturePreflightResult = {
+  schema_version: "comath.campaign_live_mathlib_no_download_fixture_preflight.v1";
+  profile: "campaign_live_mathlib_non_toy";
+  result: "pass" | "fail";
+  readiness_status: "local_mathlib_fixture_ready_for_host_diagnostics" | "blocked_before_host_diagnostics";
+  hard_vetoes: string[];
+  primary_dependency: string;
+  mathlib_revision?: string;
+  mathlib_source?: string;
+  mathlib_license?: string;
+  materialized_package_root?: ".lake/packages/mathlib";
+  materialized_package_hash?: string;
+  materialized_file_hashes: Record<string, string>;
+  no_download_policy: "strict_no_download";
+  network_policy: "disabled";
+  executes_lean_or_lake: false;
+  download_attempted: false;
+  ready_for_task218_219_diagnostics: boolean;
+  can_allocate_final_replay_workspace: false;
+  next_required_diagnostics: [
+    "campaign_live_mathlib_host_replay_diagnostic",
+    "campaign_live_mathlib_import_graph_diagnostic",
+    "final_clean_lean_replay"
+  ];
+  dependency_material_gate: CampaignLiveMathlibDependencyMaterialGateResult;
+  provisioning_diagnostic: CampaignLiveMathlibProvisioningDiagnosticResult;
+  proof_authority: "none";
+  can_promote_claim: false;
+  preflight_is_proof_authority: false;
+};
+
 export type CampaignLiveMathlibHostReplayDiagnosticInput = {
   packagingScope: "positive_matrix" | "campaign";
   primaryDependency: string;
@@ -1526,6 +1561,61 @@ export function evaluateCampaignLiveMathlibProvisioningDiagnostic(
     network_policy: "disabled",
     proof_authority: "none",
     can_promote_claim: false
+  };
+}
+
+export function evaluateCampaignLiveMathlibNoDownloadFixturePreflight(
+  input: CampaignLiveMathlibNoDownloadFixturePreflightInput
+): CampaignLiveMathlibNoDownloadFixturePreflightResult {
+  const dependencyMaterialGate = evaluateCampaignLiveMathlibDependencyMaterialGate(input);
+  const provisioningDiagnostic = evaluateCampaignLiveMathlibProvisioningDiagnostic({
+    packagingScope: input.packagingScope,
+    primaryDependency: input.primaryDependency,
+    leanRoot: input.leanRoot,
+    lakeManifest: input.lakeManifest
+  });
+  const hard_vetoes = Array.from(
+    new Set([...dependencyMaterialGate.hard_vetoes, ...provisioningDiagnostic.hard_vetoes])
+  );
+  const readyForDiagnostics = dependencyMaterialGate.result === "pass" && provisioningDiagnostic.result === "pass";
+
+  return {
+    schema_version: "comath.campaign_live_mathlib_no_download_fixture_preflight.v1",
+    profile: "campaign_live_mathlib_non_toy",
+    result: readyForDiagnostics ? "pass" : "fail",
+    readiness_status: readyForDiagnostics
+      ? "local_mathlib_fixture_ready_for_host_diagnostics"
+      : "blocked_before_host_diagnostics",
+    hard_vetoes,
+    primary_dependency: input.primaryDependency,
+    ...(dependencyMaterialGate.mathlib_revision ?? provisioningDiagnostic.mathlib_revision
+      ? { mathlib_revision: dependencyMaterialGate.mathlib_revision ?? provisioningDiagnostic.mathlib_revision }
+      : {}),
+    ...(dependencyMaterialGate.mathlib_source ? { mathlib_source: dependencyMaterialGate.mathlib_source } : {}),
+    ...(dependencyMaterialGate.mathlib_license ? { mathlib_license: dependencyMaterialGate.mathlib_license } : {}),
+    ...(provisioningDiagnostic.materialized_package_root
+      ? { materialized_package_root: provisioningDiagnostic.materialized_package_root }
+      : {}),
+    ...(provisioningDiagnostic.materialized_package_hash
+      ? { materialized_package_hash: provisioningDiagnostic.materialized_package_hash }
+      : {}),
+    materialized_file_hashes: provisioningDiagnostic.materialized_file_hashes,
+    no_download_policy: "strict_no_download",
+    network_policy: "disabled",
+    executes_lean_or_lake: false,
+    download_attempted: false,
+    ready_for_task218_219_diagnostics: readyForDiagnostics,
+    can_allocate_final_replay_workspace: false,
+    next_required_diagnostics: [
+      "campaign_live_mathlib_host_replay_diagnostic",
+      "campaign_live_mathlib_import_graph_diagnostic",
+      "final_clean_lean_replay"
+    ],
+    dependency_material_gate: dependencyMaterialGate,
+    provisioning_diagnostic: provisioningDiagnostic,
+    proof_authority: "none",
+    can_promote_claim: false,
+    preflight_is_proof_authority: false
   };
 }
 
@@ -1903,23 +1993,44 @@ function parseFinalGlobalReplayRequestPayload(input: {
     } catch {
       lakeManifestReadError = true;
     }
-    const dependencyMaterialGate = evaluateCampaignLiveMathlibDependencyMaterialGate({
-      packagingScope,
-      primaryDependency: leanProject.primaryDependency,
-      lakefileText: readFileSync(leanProject.lakefile, "utf8"),
-      lakeManifest,
-      lakeManifestReadError,
-      localLeanFileRels: listLeanProjectFiles(leanProject.leanRoot).map((file) => relative(leanProject.leanRoot, file).replace(/\\/g, "/"))
-    });
-    if (dependencyMaterialGate.result !== "pass") {
-      throw new Error(`campaign_live_mathlib_dependency_material_gate_failed:${dependencyMaterialGate.hard_vetoes.join(",")}`);
-    }
-    const provisioningDiagnostic = evaluateCampaignLiveMathlibProvisioningDiagnostic({
+    const lakefileText = readFileSync(leanProject.lakefile, "utf8");
+    const localLeanFileRels = listLeanProjectFiles(leanProject.leanRoot).map((file) =>
+      relative(leanProject.leanRoot, file).replace(/\\/g, "/")
+    );
+    const noDownloadFixturePreflight = evaluateCampaignLiveMathlibNoDownloadFixturePreflight({
       packagingScope,
       primaryDependency: leanProject.primaryDependency,
       leanRoot: leanProject.leanRoot,
-      lakeManifest
+      lakefileText,
+      lakeManifest,
+      lakeManifestReadError,
+      localLeanFileRels
     });
+    const noDownloadFixturePreflightPath = writeSimpleStageArtifact(
+      input.projectRoot,
+      input.campaign,
+      "mathlib_no_download_fixture_preflight.json",
+      {
+        ...noDownloadFixturePreflight,
+        campaign_id: input.campaign.campaign_id,
+        claim_id: input.campaign.root_claim_id,
+        theorem_name: leanProject.theoremName,
+        locked_statement_hash: leanProject.formalSpec.locked_statement_hash,
+        lean_root_rel: leanRootRel,
+        theorem_file_rel: theoremFileRel,
+        audit_file_rel: auditFileRel,
+        lakefile_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, lakefileRel))),
+        ...(lakeManifestReadError ? {} : { lake_manifest_hash: sha256RuntimeFile(input.projectRoot, lakeManifestRel) }),
+        theorem_file_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, theoremFileRel))),
+        preflight_is_proof_authority: false,
+        created_at: now()
+      }
+    );
+    const dependencyMaterialGate = noDownloadFixturePreflight.dependency_material_gate;
+    const provisioningDiagnostic = noDownloadFixturePreflight.provisioning_diagnostic;
+    if (dependencyMaterialGate.result !== "pass") {
+      throw new Error(`campaign_live_mathlib_dependency_material_gate_failed:${dependencyMaterialGate.hard_vetoes.join(",")}`);
+    }
     if (provisioningDiagnostic.result !== "pass") {
       throw new Error(`campaign_live_mathlib_provisioning_diagnostic_failed:${provisioningDiagnostic.hard_vetoes.join(",")}`);
     }
@@ -1929,6 +2040,8 @@ function parseFinalGlobalReplayRequestPayload(input: {
       claim_id: input.campaign.root_claim_id,
       theorem_name: leanProject.theoremName,
       locked_statement_hash: leanProject.formalSpec.locked_statement_hash,
+      no_download_fixture_preflight_path: noDownloadFixturePreflightPath,
+      no_download_fixture_preflight_hash: sha256RuntimeFile(input.projectRoot, noDownloadFixturePreflightPath),
       lakefile_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, lakefileRel))),
       lake_manifest_hash: sha256RuntimeFile(input.projectRoot, lakeManifestRel),
       theorem_file_hash: sha256RuntimeFile(input.projectRoot, normalizeRelPath(join(leanRootRel, theoremFileRel))),
@@ -1943,7 +2056,7 @@ function parseFinalGlobalReplayRequestPayload(input: {
       theoremFileRel,
       auditFileRel,
       buildTargets: leanProject.buildTargets,
-      lakefileText: readFileSync(leanProject.lakefile, "utf8")
+      lakefileText
     });
     const hostReplayDiagnosticPath = writeSimpleStageArtifact(input.projectRoot, input.campaign, "mathlib_host_replay_diagnostic.json", {
       ...hostReplayDiagnostic,
@@ -1956,6 +2069,8 @@ function parseFinalGlobalReplayRequestPayload(input: {
       audit_file_rel: auditFileRel,
       build_targets: leanProject.buildTargets,
       replay_command: leanProject.replayCommand,
+      no_download_fixture_preflight_path: noDownloadFixturePreflightPath,
+      no_download_fixture_preflight_hash: sha256RuntimeFile(input.projectRoot, noDownloadFixturePreflightPath),
       provisioning_diagnostic_path: diagnosticPath,
       provisioning_diagnostic_hash: sha256RuntimeFile(input.projectRoot, diagnosticPath),
       ...(provisioningDiagnostic.mathlib_revision ? { mathlib_revision: provisioningDiagnostic.mathlib_revision } : {}),

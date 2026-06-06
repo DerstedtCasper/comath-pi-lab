@@ -30,6 +30,19 @@ function writeJsonProjectFile(relativePath, value) {
   return writeProjectFile(relativePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function createDirectorySymlinkFixture(target, linkPath) {
+  const errors = [];
+  for (const type of ["dir", "junction"]) {
+    try {
+      symlinkSync(target, linkPath, type);
+      return;
+    } catch (error) {
+      errors.push(`${type}:${error?.code ?? error?.message ?? "unknown"}`);
+    }
+  }
+  assert.fail(`unable to create symlink/junction fixture for Mathlib symlink rejection: ${errors.join(", ")}`);
+}
+
 function mathlibLakefile() {
   return [
     "import Lake",
@@ -275,10 +288,10 @@ try {
 
   const symlinkLeanRootRel = ".comath/lean/task216-symlink-mathlib";
   writeProjectFile(`${symlinkLeanRootRel}/.lake/packages/mathlib/Mathlib.lean`, "import Mathlib.Algebra.Group.Basic\n");
-  writeProjectFile(`${symlinkLeanRootRel}/outside.txt`, "not package material\n");
-  symlinkSync(
-    join(projectRoot, symlinkLeanRootRel, "outside.txt"),
-    join(projectRoot, symlinkLeanRootRel, ".lake", "packages", "mathlib", "Escapes.lean")
+  writeProjectFile(`${symlinkLeanRootRel}/outside-mathlib-dir/Outside.lean`, "not package material\n");
+  createDirectorySymlinkFixture(
+    join(projectRoot, symlinkLeanRootRel, "outside-mathlib-dir"),
+    join(projectRoot, symlinkLeanRootRel, ".lake", "packages", "mathlib", "Escapes")
   );
   const symlinkDiagnostic = evaluateCampaignLiveMathlibProvisioningDiagnostic({
     packagingScope: "campaign",
@@ -288,16 +301,15 @@ try {
   });
   assert.equal(symlinkDiagnostic.result, "fail");
   assert.ok(
-    symlinkDiagnostic.hard_vetoes.includes("mathlib_package_symlink_forbidden:.lake/packages/mathlib/Escapes.lean"),
+    symlinkDiagnostic.hard_vetoes.includes("mathlib_package_symlink_forbidden:.lake/packages/mathlib/Escapes"),
     "materialized Mathlib package symlinks must fail closed before clean replay copy"
   );
   const rootSymlinkLeanRootRel = ".comath/lean/task216-root-symlink-mathlib";
   writeProjectFile(`${rootSymlinkLeanRootRel}/outside-mathlib/Mathlib.lean`, "import Mathlib.Algebra.Group.Basic\n");
   mkdirSync(join(projectRoot, rootSymlinkLeanRootRel, ".lake", "packages"), { recursive: true });
-  symlinkSync(
+  createDirectorySymlinkFixture(
     join(projectRoot, rootSymlinkLeanRootRel, "outside-mathlib"),
-    join(projectRoot, rootSymlinkLeanRootRel, ".lake", "packages", "mathlib"),
-    "dir"
+    join(projectRoot, rootSymlinkLeanRootRel, ".lake", "packages", "mathlib")
   );
   const rootSymlinkDiagnostic = evaluateCampaignLiveMathlibProvisioningDiagnostic({
     packagingScope: "campaign",
