@@ -155,6 +155,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleOperatorTransportHeartbeat",
   "comath.release.piCodexLifecycleGuidedRealPiExecution",
   "comath.release.piCodexLifecycleOperatorServiceTransportContract",
+  "comath.release.piCodexLifecycleAutomaticRealPiExecution",
   "comath.release.piCodexLifecycleInteractiveRealPi",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
@@ -475,6 +476,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleOperatorTransportHeartbeat" ||
     name === "comath.release.piCodexLifecycleGuidedRealPiExecution" ||
     name === "comath.release.piCodexLifecycleOperatorServiceTransportContract" ||
+    name === "comath.release.piCodexLifecycleAutomaticRealPiExecution" ||
     name === "comath.release.piCodexLifecycleInteractiveRealPi" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
@@ -511,6 +513,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "lifecycle-operator-transport-heartbeat",
   "lifecycle-guided-real-pi-execution",
   "lifecycle-operator-service-transport-contract",
+  "lifecycle-automatic-real-pi-execution",
   "run-codex-api-probe",
   "review"
 ] as const;
@@ -845,6 +848,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     "transport_contract_id",
     `${sessionId}-TRANSPORT-CONTRACT`
   );
+  const orchestrationId = optionalPublicPlannerToken(
+    input,
+    "orchestration_id",
+    `${sessionId}-AUTOMATIC-REAL-PI`
+  );
   const sessionManifestPath = optionalPublicPlannerPath(
     input,
     "session_manifest_path",
@@ -906,6 +914,13 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `/cm:release lifecycle-operator-service-transport-contract --project-id ${projectId} ` +
       `--transport-contract-id ${transportContractId} --terminal-review-id ${terminalReviewId} ` +
       `--terminal-review-path ${terminalReviewPath}`,
+    "lifecycle-automatic-real-pi-execution":
+      `/cm:release lifecycle-automatic-real-pi-execution --project-id ${projectId} ` +
+      `--orchestration-id ${orchestrationId} --runtime-probe-json '<runtime-probe-json>' ` +
+      `--operator-session-json '<operator-session-json>' --transport-recovery-json '<transport-recovery-json>' ` +
+      `--transport-lease-json '<transport-lease-json>' --transport-heartbeat-json '<transport-heartbeat-json>' ` +
+      `--guided-execution-json '<guided-execution-json>' --terminal-review-json '<terminal-review-json>' ` +
+      `--transport-contract-json '<transport-contract-json>'`,
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -950,6 +965,7 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       terminal_review_id: terminalReviewId,
       terminal_review_path: terminalReviewPath,
       transport_contract_id: transportContractId,
+      orchestration_id: orchestrationId,
       pi_install_transcript_path: piInstallTranscriptPath,
       runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath
     },
@@ -1854,6 +1870,28 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.piCodexLifecycleAutomaticRealPiExecution") {
+    const orchestrationId = readString(input, "orchestration_id", { optional: true });
+    const terminalReview = readOptionalRecord(input, "terminal_review");
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/automatic-real-pi-execution", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        ...(orchestrationId === undefined ? {} : { orchestration_id: publicOperatorText(orchestrationId) }),
+        actor: publicOperatorText(readString(input, "actor")),
+        runtime_probe: sanitizeAutomaticRealPiRuntimeProbeInput(readRecord(input, "runtime_probe")),
+        operator_session: sanitizeAutomaticRealPiOperatorSessionInput(readRecord(input, "operator_session")),
+        transport_recovery: sanitizeAutomaticRealPiTransportRecoveryInput(readRecord(input, "transport_recovery")),
+        transport_lease: sanitizeAutomaticRealPiTransportLeaseInput(readRecord(input, "transport_lease")),
+        transport_heartbeat: sanitizeAutomaticRealPiTransportHeartbeatInput(readRecord(input, "transport_heartbeat")),
+        guided_execution: sanitizeAutomaticRealPiGuidedExecutionInput(readRecord(input, "guided_execution")),
+        ...(terminalReview === undefined ? {} : { terminal_review: sanitizeAutomaticRealPiTerminalReviewInput(terminalReview) }),
+        transport_contract: sanitizeAutomaticRealPiTransportContractInput(readRecord(input, "transport_contract"))
+      })
+    );
+  }
+
   if (name === "comath.release.piCodexLifecycleGuidedRealPiExecution") {
     const sessionManifestPath = readString(input, "session_manifest_path", { optional: true });
     const transportRecoveryPath = readString(input, "transport_recovery_path", { optional: true });
@@ -2031,6 +2069,134 @@ export function createComathTools(): ToolDescriptor[] {
       args: stringArrayProp,
       expected_exit_code: numberProp,
       timeout_ms: numberProp
+    }
+  };
+  const automaticRealPiRuntimeProbeProp = {
+    type: "object",
+    required: ["pi_host_label", "session_kind", "commands"],
+    properties: {
+      probe_id: stringProp,
+      actor: stringProp,
+      pi_host_label: stringProp,
+      pi_host_kind: { type: "string", enum: ["real_pi_host"] },
+      session_kind: { type: "string", enum: [...PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS] },
+      timeout_ms: numberProp,
+      commands: {
+        type: "object",
+        required: ["install", "runtime_registration", "host_confirmation"],
+        properties: {
+          install: realPiRuntimeProbeCommandProp,
+          runtime_registration: realPiRuntimeProbeCommandProp,
+          host_confirmation: realPiRuntimeProbeCommandProp
+        }
+      }
+    }
+  };
+  const automaticRealPiCursorProp = {
+    type: "object",
+    properties: {
+      operator_event_cursor: stringProp,
+      stdout_cursor: stringProp,
+      stderr_cursor: stringProp
+    }
+  };
+  const automaticRealPiOperatorSessionProp = {
+    type: "object",
+    required: ["session_id", "session_status"],
+    properties: {
+      session_id: stringProp,
+      actor: stringProp,
+      session_status: { type: "string", enum: [...PI_LIFECYCLE_OPERATOR_SESSION_STATUSES] },
+      operator_cursor: stringProp,
+      completed_steps: {
+        type: "array",
+        items: { type: "string", enum: [...PI_LIFECYCLE_OPERATOR_SESSION_STEPS] }
+      },
+      last_result_summary: { type: "object" }
+    }
+  };
+  const automaticRealPiTransportRecoveryProp = {
+    type: "object",
+    required: ["transport_recovery_id"],
+    properties: {
+      transport_recovery_id: stringProp,
+      actor: stringProp,
+      transport_kind: { type: "string", enum: [...PI_LIFECYCLE_OPERATOR_TRANSPORT_KINDS] },
+      observed_route: stringProp,
+      requested_cursor: automaticRealPiCursorProp,
+      client_epoch: numberProp,
+      last_seen_event_id: stringProp,
+      reconnect_reason: stringProp
+    }
+  };
+  const automaticRealPiTransportLeaseProp = {
+    type: "object",
+    required: ["transport_lease_id"],
+    properties: {
+      transport_lease_id: stringProp,
+      actor: stringProp,
+      transport_kind: { type: "string", enum: [...PI_LIFECYCLE_OPERATOR_TRANSPORT_LEASE_KINDS] },
+      lease_route: stringProp,
+      requested_cursor: automaticRealPiCursorProp,
+      client_epoch: numberProp,
+      heartbeat_interval_ms: numberProp,
+      lease_ttl_ms: numberProp,
+      last_seen_event_id: stringProp,
+      open_reason: stringProp
+    }
+  };
+  const automaticRealPiTransportHeartbeatProp = {
+    type: "object",
+    required: ["transport_heartbeat_id"],
+    properties: {
+      transport_heartbeat_id: stringProp,
+      actor: stringProp,
+      requested_cursor: automaticRealPiCursorProp,
+      client_epoch: numberProp,
+      last_seen_event_id: stringProp,
+      heartbeat_reason: stringProp
+    }
+  };
+  const automaticRealPiGuidedExecutionProp = {
+    type: "object",
+    required: ["execution_id"],
+    properties: {
+      execution_id: stringProp,
+      actor: stringProp,
+      observed_routes: stringArrayProp,
+      operator_command_summary: stringProp,
+      final_operator_cursor: automaticRealPiCursorProp,
+      execution_outcome: {
+        type: "string",
+        enum: ["operator_guided_run_observed", "replayable_release_blocker_recorded"]
+      },
+      next_recommended_route: stringProp
+    }
+  };
+  const automaticRealPiTerminalReviewProp = {
+    type: "object",
+    properties: {
+      review_id: stringProp,
+      actor: stringProp
+    }
+  };
+  const automaticRealPiTransportContractProp = {
+    type: "object",
+    required: ["service_transport_primitive", "client_transport_primitive"],
+    properties: {
+      transport_contract_id: stringProp,
+      actor: stringProp,
+      max_bytes: numberProp,
+      max_events: numberProp,
+      retry_ms: numberProp,
+      service_transport_primitive: {
+        type: "string",
+        enum: ["node_http_agent_run_log_session_route"]
+      },
+      client_transport_primitive: {
+        type: "string",
+        enum: ["pi_fetch_get_text"]
+      }
     }
   };
   return [
@@ -2895,6 +3061,40 @@ export function createComathTools(): ToolDescriptor[] {
       })
     },
     {
+      name: "comath.release.piCodexLifecycleAutomaticRealPiExecution",
+      description:
+        "Run the service-owned automatic real-Pi lifecycle checkpoint-chain orchestrator through comathd without Pi direct writes, proof authority, GA certification, or durable transport claims.",
+      mutates: true,
+      input_schema: objectSchema(
+        [
+          "project_root",
+          "project_id",
+          "actor",
+          "runtime_probe",
+          "operator_session",
+          "transport_recovery",
+          "transport_lease",
+          "transport_heartbeat",
+          "guided_execution",
+          "transport_contract"
+        ],
+        {
+          project_root: stringProp,
+          project_id: stringProp,
+          actor: stringProp,
+          orchestration_id: stringProp,
+          runtime_probe: automaticRealPiRuntimeProbeProp,
+          operator_session: automaticRealPiOperatorSessionProp,
+          transport_recovery: automaticRealPiTransportRecoveryProp,
+          transport_lease: automaticRealPiTransportLeaseProp,
+          transport_heartbeat: automaticRealPiTransportHeartbeatProp,
+          guided_execution: automaticRealPiGuidedExecutionProp,
+          terminal_review: automaticRealPiTerminalReviewProp,
+          transport_contract: automaticRealPiTransportContractProp
+        }
+      )
+    },
+    {
       name: "comath.release.piCodexLifecycleGuidedRealPiExecution",
       description:
         "Record service-owned guided real-Pi execution evidence through comathd without Pi direct writes, proof authority, GA certification, or long-lived transport claims.",
@@ -2974,6 +3174,7 @@ export function createComathTools(): ToolDescriptor[] {
         terminal_review_id: stringProp,
         terminal_review_path: stringProp,
         transport_contract_id: stringProp,
+        orchestration_id: stringProp,
         pi_install_transcript_path: stringProp,
         runtime_registration_snapshot_path: stringProp,
         operator_event_cursor: stringProp,
@@ -3288,6 +3489,197 @@ function readRecord(payload: Record<string, unknown>, field: string): Record<str
     return value as Record<string, unknown>;
   }
   throw new Error(`${field} is required`);
+}
+
+function readOptionalRecord(payload: Record<string, unknown>, field: string): Record<string, unknown> | undefined {
+  const value = payload[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  throw new Error(`${field} must be an object`);
+}
+
+function compactRecord(record: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter((entry) => entry[1] !== undefined));
+}
+
+function optionalRecordString(record: Record<string, unknown>, field: string): string | undefined {
+  const value = readString(record, field, { optional: true });
+  return value === undefined ? undefined : publicOperatorText(value);
+}
+
+function optionalRecordNumber(record: Record<string, unknown>, field: string): number | undefined {
+  const value = record[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  throw new Error(`${field} must be a non-negative number`);
+}
+
+function optionalRecordStringArray(record: Record<string, unknown>, field: string): string[] | undefined {
+  const value = record[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => publicOperatorText(String(item)));
+  }
+  throw new Error(`${field} must be an array`);
+}
+
+function optionalRawStringArray(record: Record<string, unknown>, field: string): string[] | undefined {
+  const value = record[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+  throw new Error(`${field} must be an array`);
+}
+
+function optionalSanitizedRecord(record: Record<string, unknown>, field: string): Record<string, unknown> | undefined {
+  const value = readOptionalRecord(record, field);
+  return value === undefined ? undefined : sanitizePublicProofAuthorityValue(value) as Record<string, unknown>;
+}
+
+function parseJsonRecord(value: string, field: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${field} must be a JSON object: ${message}`);
+  }
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    return parsed as Record<string, unknown>;
+  }
+  throw new Error(`${field} must be a JSON object`);
+}
+
+function requiredJsonRecordOption(args: string[], optionName: string, field: string): Record<string, unknown> {
+  return parseJsonRecord(requiredOption(optionValue(args, optionName), field), field);
+}
+
+function optionalJsonRecordOption(args: string[], optionName: string, field: string): Record<string, unknown> | undefined {
+  const value = optionValue(args, optionName);
+  return value === undefined ? undefined : parseJsonRecord(value, field);
+}
+
+function sanitizeAutomaticRealPiRuntimeProbeCommand(record: Record<string, unknown>): Record<string, unknown> {
+  return compactRecord({
+    program: publicOperatorText(readString(record, "program")),
+    args: optionalRawStringArray(record, "args")?.map((arg) => publicOperatorText(arg)),
+    expected_exit_code: optionalRecordNumber(record, "expected_exit_code"),
+    timeout_ms: optionalRecordNumber(record, "timeout_ms")
+  });
+}
+
+function sanitizeAutomaticRealPiRuntimeProbeCommands(record: Record<string, unknown>): Record<string, unknown> {
+  return {
+    install: sanitizeAutomaticRealPiRuntimeProbeCommand(readRecord(record, "install")),
+    runtime_registration: sanitizeAutomaticRealPiRuntimeProbeCommand(readRecord(record, "runtime_registration")),
+    host_confirmation: sanitizeAutomaticRealPiRuntimeProbeCommand(readRecord(record, "host_confirmation"))
+  };
+}
+
+function sanitizeAutomaticRealPiRuntimeProbeInput(record: Record<string, unknown>): Record<string, unknown> {
+  return compactRecord({
+    probe_id: optionalRecordString(record, "probe_id"),
+    actor: optionalRecordString(record, "actor"),
+    pi_host_label: optionalRecordString(record, "pi_host_label"),
+    pi_host_kind: optionalRecordString(record, "pi_host_kind"),
+    session_kind: optionalRecordString(record, "session_kind"),
+    timeout_ms: optionalRecordNumber(record, "timeout_ms"),
+    commands: sanitizeAutomaticRealPiRuntimeProbeCommands(readRecord(record, "commands"))
+  });
+}
+
+function sanitizeAutomaticRealPiOperatorSessionInput(record: Record<string, unknown>): Record<string, unknown> {
+  return compactRecord({
+    session_id: optionalRecordString(record, "session_id"),
+    actor: optionalRecordString(record, "actor"),
+    session_status: optionalRecordString(record, "session_status"),
+    operator_cursor: optionalRecordString(record, "operator_cursor"),
+    completed_steps: optionalRecordStringArray(record, "completed_steps"),
+    last_result_summary: optionalSanitizedRecord(record, "last_result_summary")
+  });
+}
+
+function sanitizeAutomaticRealPiTransportRecoveryInput(record: Record<string, unknown>): Record<string, unknown> {
+  return compactRecord({
+    transport_recovery_id: optionalRecordString(record, "transport_recovery_id"),
+    actor: optionalRecordString(record, "actor"),
+    transport_kind: optionalRecordString(record, "transport_kind"),
+    observed_route: optionalRecordString(record, "observed_route"),
+    requested_cursor: optionalSanitizedRecord(record, "requested_cursor"),
+    client_epoch: optionalRecordNumber(record, "client_epoch"),
+    last_seen_event_id: optionalRecordString(record, "last_seen_event_id"),
+    reconnect_reason: optionalRecordString(record, "reconnect_reason")
+  });
+}
+
+function sanitizeAutomaticRealPiTransportLeaseInput(record: Record<string, unknown>): Record<string, unknown> {
+  return compactRecord({
+    transport_lease_id: optionalRecordString(record, "transport_lease_id"),
+    actor: optionalRecordString(record, "actor"),
+    transport_kind: optionalRecordString(record, "transport_kind"),
+    lease_route: optionalRecordString(record, "lease_route"),
+    requested_cursor: optionalSanitizedRecord(record, "requested_cursor"),
+    client_epoch: optionalRecordNumber(record, "client_epoch"),
+    heartbeat_interval_ms: optionalRecordNumber(record, "heartbeat_interval_ms"),
+    lease_ttl_ms: optionalRecordNumber(record, "lease_ttl_ms"),
+    last_seen_event_id: optionalRecordString(record, "last_seen_event_id"),
+    open_reason: optionalRecordString(record, "open_reason")
+  });
+}
+
+function sanitizeAutomaticRealPiTransportHeartbeatInput(record: Record<string, unknown>): Record<string, unknown> {
+  return compactRecord({
+    transport_heartbeat_id: optionalRecordString(record, "transport_heartbeat_id"),
+    actor: optionalRecordString(record, "actor"),
+    requested_cursor: optionalSanitizedRecord(record, "requested_cursor"),
+    client_epoch: optionalRecordNumber(record, "client_epoch"),
+    last_seen_event_id: optionalRecordString(record, "last_seen_event_id"),
+    heartbeat_reason: optionalRecordString(record, "heartbeat_reason")
+  });
+}
+
+function sanitizeAutomaticRealPiGuidedExecutionInput(record: Record<string, unknown>): Record<string, unknown> {
+  return compactRecord({
+    execution_id: optionalRecordString(record, "execution_id"),
+    actor: optionalRecordString(record, "actor"),
+    observed_routes: optionalRecordStringArray(record, "observed_routes"),
+    operator_command_summary: optionalRecordString(record, "operator_command_summary"),
+    final_operator_cursor: optionalSanitizedRecord(record, "final_operator_cursor"),
+    execution_outcome: optionalRecordString(record, "execution_outcome"),
+    next_recommended_route: optionalRecordString(record, "next_recommended_route")
+  });
+}
+
+function sanitizeAutomaticRealPiTerminalReviewInput(record: Record<string, unknown>): Record<string, unknown> {
+  return compactRecord({
+    review_id: optionalRecordString(record, "review_id"),
+    actor: optionalRecordString(record, "actor")
+  });
+}
+
+function sanitizeAutomaticRealPiTransportContractInput(record: Record<string, unknown>): Record<string, unknown> {
+  return compactRecord({
+    transport_contract_id: optionalRecordString(record, "transport_contract_id"),
+    actor: optionalRecordString(record, "actor"),
+    max_bytes: optionalRecordNumber(record, "max_bytes"),
+    max_events: optionalRecordNumber(record, "max_events"),
+    retry_ms: optionalRecordNumber(record, "retry_ms"),
+    service_transport_primitive: optionalRecordString(record, "service_transport_primitive"),
+    client_transport_primitive: optionalRecordString(record, "client_transport_primitive")
+  });
 }
 
 function parseSurfaceSpec(value: string): Record<string, unknown> {
@@ -4569,6 +4961,42 @@ async function handleReleaseCommand(
           retry_ms: numberOptionValue(parsed.args, "--retry-ms"),
           service_transport_primitive: optionValue(parsed.args, "--service-transport-primitive"),
           client_transport_primitive: optionValue(parsed.args, "--client-transport-primitive")
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-automatic-real-pi-execution") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.piCodexLifecycleAutomaticRealPiExecution"
+    );
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle automatic real-Pi execution tool is not registered");
+    }
+    const terminalReview = optionalJsonRecordOption(parsed.args, "--terminal-review-json", "terminal_review");
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          orchestration_id: optionValue(parsed.args, "--orchestration-id"),
+          runtime_probe: requiredJsonRecordOption(parsed.args, "--runtime-probe-json", "runtime_probe"),
+          operator_session: requiredJsonRecordOption(parsed.args, "--operator-session-json", "operator_session"),
+          transport_recovery: requiredJsonRecordOption(parsed.args, "--transport-recovery-json", "transport_recovery"),
+          transport_lease: requiredJsonRecordOption(parsed.args, "--transport-lease-json", "transport_lease"),
+          transport_heartbeat: requiredJsonRecordOption(
+            parsed.args,
+            "--transport-heartbeat-json",
+            "transport_heartbeat"
+          ),
+          guided_execution: requiredJsonRecordOption(parsed.args, "--guided-execution-json", "guided_execution"),
+          ...(terminalReview === undefined ? {} : { terminal_review: terminalReview }),
+          transport_contract: requiredJsonRecordOption(parsed.args, "--transport-contract-json", "transport_contract")
         },
         ctx
       )

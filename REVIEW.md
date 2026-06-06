@@ -1,3 +1,38 @@
+# Goal 3 Task 228 / Pi Automatic Real-Pi Execution Consumer
+
+Scope: expose the Task227 automatic real-Pi checkpoint-chain orchestrator through Pi as a host-confirmed thin consumer and interactive planner checkpoint without creating durable transport, direct Pi writes, proof authority, trusted state mutation, or GA certification.
+
+Changes:
+
+- Added `goal3-task228-pi-automatic-real-pi-execution-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleAutomaticRealPiExecution` and `/cm:release lifecycle-automatic-real-pi-execution`.
+- Added runtime-registration subcommand coverage, Phase26 executable-tool exposure guard coverage, Pi package test discovery, and phase0 smoke discovery.
+- Extended the read-only interactive real-Pi planner so the automatic orchestration checkpoint appears after the operator/service transport contract and before Codex API probe/review.
+- Sanitized nested automatic-orchestration checkpoint request/result surfaces while preserving the Task227 service-owned route as the only checkpoint-chain producer.
+- Synchronized README, TODO, threat model, GA release criteria, REVIEW, and the Goal 3 tracker without claiming durable long-lived transport, direct Pi mutation, proof authority, automatic theorem proving, or GA certification.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task228 failed because `comath.release.piCodexLifecycleAutomaticRealPiExecution` was not registered.
+- Focused Task228 exited 0 after implementation.
+- Read-only review found a P1 gap where `runtime_probe.commands` was still forwarded raw from the Task228 JSON handoff. Follow-up RED coverage now poisons command `program` / `args`, and the consumer reconstructs only `install`, `runtime_registration`, and `host_confirmation` command specs with sanitized `program` / `args` plus numeric exit/timeout fields before POST.
+- Adjacent Task223, Task226, Task221, and Task165 Pi lifecycle regressions exited 0.
+- A systematic-debugging pass resolved two test-environment issues: Phase6/Phase26 were first run from the wrong cwd, and the mechanical package test-script rewrite introduced a UTF-8 BOM plus a trailing blank line; both were fixed before final validation.
+- Phase6 and Phase26 Pi extension/runtime-registration regressions exited 0 from the Pi package cwd.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task228 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task227 service orchestration regression exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task228 is a host-confirmed Pi consumer and read-only planner integration only. It calls the service-owned Task227 route, strips model-supplied `confirmation_id`, sanitizes nested checkpoint surfaces including runtime-probe command specs, and false-forces public proof/GA/durable/live/direct-Pi-write/trusted-state overclaims. It does not write `.comath` from Pi, open or maintain live transport, run Lean, prove mathematics, promote claims, certify GA, or replace operator-controlled real-Pi execution.
+
 # Goal 3 Task 227 / Automatic Real-Pi Lifecycle Orchestration
 
 Scope: add a service-owned automatic real-Pi checkpoint-chain orchestrator over existing lifecycle producers without creating durable transport, direct Pi writes, proof authority, trusted state mutation, or GA certification.

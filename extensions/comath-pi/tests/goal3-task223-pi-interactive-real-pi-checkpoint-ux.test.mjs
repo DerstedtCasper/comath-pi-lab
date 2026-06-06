@@ -24,6 +24,7 @@ const expectedCheckpointSteps = [
   "lifecycle-operator-transport-heartbeat",
   "lifecycle-guided-real-pi-execution",
   "lifecycle-operator-service-transport-contract",
+  "lifecycle-automatic-real-pi-execution",
   "run-codex-api-probe",
   "review"
 ];
@@ -115,6 +116,20 @@ const expectedNextActions = [
       "lifecycle-guided-real-pi-execution",
       "lifecycle-operator-service-transport-contract"
     ],
+    action: "lifecycle-automatic-real-pi-execution",
+    command: /\/cm:release lifecycle-automatic-real-pi-execution/
+  },
+  {
+    completed: [
+      "run-real-pi-runtime-probe",
+      "lifecycle-operator-session",
+      "lifecycle-operator-transport-recovery",
+      "lifecycle-operator-transport-lease",
+      "lifecycle-operator-transport-heartbeat",
+      "lifecycle-guided-real-pi-execution",
+      "lifecycle-operator-service-transport-contract",
+      "lifecycle-automatic-real-pi-execution"
+    ],
     action: "run-codex-api-probe",
     command: /lifecycle-control run-codex-api-probe/
   },
@@ -127,6 +142,7 @@ const expectedNextActions = [
       "lifecycle-operator-transport-heartbeat",
       "lifecycle-guided-real-pi-execution",
       "lifecycle-operator-service-transport-contract",
+      "lifecycle-automatic-real-pi-execution",
       "run-codex-api-probe"
     ],
     action: "review",
