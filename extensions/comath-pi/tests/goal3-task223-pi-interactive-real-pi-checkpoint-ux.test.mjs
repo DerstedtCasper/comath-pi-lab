@@ -37,7 +37,8 @@ assert.deepEqual(interactiveTool.input_schema.properties.action.enum, [
   "plan",
   "status",
   "resume-plan",
-  "unattended-handoff"
+  "unattended-handoff",
+  "operator-review-checklist"
 ]);
 assert.deepEqual(interactiveTool.input_schema.properties.completed_steps.items.enum, expectedCheckpointSteps);
 assert.equal(

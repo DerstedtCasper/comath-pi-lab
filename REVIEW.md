@@ -1,3 +1,28 @@
+# Goal 3 Task 237 / Prepared Handoff Operator Review Checklist
+
+Scope: add a Pi-only read-only operator review checklist for Task231 prepared checkpoint handoff refs, without adding a `comathd` route, persisting a review manifest, verifying artifact freshness, approving or executing a handoff, creating service evidence, opening durable transport, changing Lean proof authority, or certifying GA.
+
+Implementation notes:
+- Added `goal3-task237-pi-prepared-handoff-operator-review-checklist.test.mjs`.
+- Extended `comath.release.piCodexLifecycleInteractiveRealPi` with `action="operator-review-checklist"` and the `/cm:release lifecycle-interactive-real-pi operator-review-checklist` runtime path.
+- Added `operator_review_checklist` output that reuses the Task231 prepared checkpoint refs, renders ordered manual-review items, blocks on missing/poisoned refs, and forces proof/GA/durable/live/direct-Pi-write/trusted-state/service-evidence/execution flags false.
+- Registered the focused suite in the Pi package test script, phase0 smoke release-hardening list, GA release criteria, README, AGENTS, TODO, adapter contracts, threat model, REVIEW, and this tracker.
+
+Verification:
+- TDD RED was observed before implementation when the focused Task237 suite failed because the interactive planner action enum did not expose `operator-review-checklist`.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- Focused Task237 exited 0.
+- Adjacent Task231 and Task223 exited 0 after synchronizing the Task223 action enum expectation.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task237 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task237 validates only public path/hash shape and missing fields for prepared refs. It does not prove the referenced artifacts are fresh or service-chain-valid, does not approve execution, does not call `comathd`, does not mutate trusted state, does not create service-owned evidence, does not open durable/live transport, does not run Lean, does not promote claims, and does not certify GA.
+
 # Goal 3 Task 236 / macOS Out-of-Scope Documentation Guard
 
 Scope: remove macOS from current GA environment-adaptation documentation, sample configuration, and release-hardening smoke scope. Historical Task235 runtime regression coverage remains as internal/historical evidence, but public current-scope docs must not advertise macOS helper handles, `sandbox-exec` host-facility names, profile-contract kinds, or a focused release-hardening suite as active GA adaptation targets.

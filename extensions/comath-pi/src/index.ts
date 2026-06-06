@@ -544,7 +544,13 @@ const PI_LIFECYCLE_SESSION_STEP_IDS = [
   "run-codex-api-probe",
   "review"
 ] as const;
-const PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS = ["plan", "status", "resume-plan", "unattended-handoff"] as const;
+const PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS = [
+  "plan",
+  "status",
+  "resume-plan",
+  "unattended-handoff",
+  "operator-review-checklist"
+] as const;
 const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "run-real-pi-runtime-probe",
   "lifecycle-operator-session",
@@ -811,6 +817,171 @@ function buildPreparedUnattendedRealPiHandoff(input: Record<string, unknown>): R
   };
 }
 
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function recordArrayValue(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.map(recordValue) : [];
+}
+
+function stringArrayValue(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+function buildPreparedHandoffOperatorReviewItem(
+  order: number,
+  reviewId: string,
+  label: string,
+  passed: boolean,
+  evidence: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    order,
+    review_id: reviewId,
+    label,
+    passed,
+    review_required: true,
+    vetoes_release_if_failed: true,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    ...evidence
+  };
+}
+
+function buildPreparedHandoffOperatorReviewChecklist(handoff: Record<string, unknown>): Record<string, unknown> {
+  const missingRefs = stringArrayValue(handoff.missing_prepared_checkpoint_refs);
+  const preparedCheckpoints = recordArrayValue(handoff.prepared_checkpoints);
+  const handoffReady = handoff.handoff_ready === true && missingRefs.length === 0;
+  const unattendedPolicy = recordValue(handoff.unattended_policy);
+  const operatorHandoff = recordValue(handoff.operator_handoff);
+  const preparedCheckpointRefsPresent =
+    handoffReady &&
+    preparedCheckpoints.length === PI_LIFECYCLE_PREPARED_UNATTENDED_CHECKPOINTS.length &&
+    preparedCheckpoints.every((checkpoint) => checkpoint.prepared === true);
+
+  const reviewItems = [
+    buildPreparedHandoffOperatorReviewItem(
+      1,
+      "prepared_checkpoint_refs_present",
+      "Prepared service-owned checkpoint refs are supplied",
+      preparedCheckpointRefsPresent,
+      {
+        prepared_checkpoint_count: preparedCheckpoints.filter((checkpoint) => checkpoint.prepared === true).length,
+        required_checkpoint_count: PI_LIFECYCLE_PREPARED_UNATTENDED_CHECKPOINTS.length,
+        missing_prepared_checkpoint_refs: missingRefs
+      }
+    ),
+    buildPreparedHandoffOperatorReviewItem(2, "pi_planner_readonly", "Pi checklist remains read-only", true, {
+      pi_tool_readonly: unattendedPolicy.pi_tool_readonly === true,
+      writes_comath_state: false,
+      calls_comathd: false
+    }),
+    buildPreparedHandoffOperatorReviewItem(
+      3,
+      "host_confirmation_required_for_mutation",
+      "Any later mutation still requires host confirmation",
+      unattendedPolicy.host_confirmation_required_for_any_mutation === true,
+      {
+        requires_host_confirmation_for_mutation: true
+      }
+    ),
+    buildPreparedHandoffOperatorReviewItem(
+      4,
+      "no_automatic_execution",
+      "Checklist does not execute lifecycle actions",
+      unattendedPolicy.executes_lifecycle_actions === false && unattendedPolicy.auto_executes === false,
+      {
+        executes_lifecycle_actions: false,
+        auto_executes: false,
+        operator_handoff_auto_executes: operatorHandoff.auto_executes === false
+      }
+    ),
+    buildPreparedHandoffOperatorReviewItem(
+      5,
+      "no_service_evidence_creation",
+      "Checklist creates no service evidence",
+      unattendedPolicy.service_owned_evidence_created === false,
+      {
+        service_owned_evidence_created: false
+      }
+    ),
+    buildPreparedHandoffOperatorReviewItem(6, "no_proof_or_ga_authority", "Checklist has no proof or GA authority", true, {
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }),
+    buildPreparedHandoffOperatorReviewItem(7, "no_durable_live_transport", "Checklist opens no durable live transport", true, {
+      durable_transport_provided: false,
+      live_transport_open: false,
+      long_lived_sse_provided: false,
+      long_lived_websocket_provided: false
+    }),
+    buildPreparedHandoffOperatorReviewItem(
+      8,
+      "operator_manual_review_required",
+      "Operator must manually review checkpoint refs before any host-confirmed command",
+      true,
+      {
+        operator_present_required: true,
+        operator_manual_review_required: true
+      }
+    )
+  ];
+  const blockingReviewItems = [
+    ...missingRefs.map((field) => `missing_prepared_checkpoint_ref:${field}`),
+    ...reviewItems
+      .filter((item) => item.passed !== true && item.review_id !== "prepared_checkpoint_refs_present")
+      .map((item) => String(item.review_id))
+  ];
+  const checklistReady = reviewItems.every((item) => item.passed === true);
+
+  return {
+    schema_version: "comath.pi.lifecycle.prepared_handoff_operator_review_checklist.v1",
+    checklist_ready: checklistReady,
+    review_status: checklistReady
+      ? "ready_for_operator_checkpoint_review"
+      : "blocked_missing_prepared_checkpoint_refs",
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    long_lived_sse_provided: false,
+    long_lived_websocket_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    service_owned_evidence_created: false,
+    handoff_can_execute: false,
+    auto_executes: false,
+    calls_comathd: false,
+    writes_comath_state: false,
+    requires_host_confirmation_for_mutation: true,
+    operator_present_required: true,
+    operator_manual_review_required: true,
+    operator_review_items: reviewItems,
+    blocking_review_items: blockingReviewItems,
+    operator_next_review_command: String(recordValue(handoff.operator_handoff).review_command ?? "not_available"),
+    production_unattended_real_host_ux: {
+      operator_present_required: true,
+      operator_manual_review_required: true,
+      host_confirmation_required_for_any_mutation: true,
+      unattended_execution_authorized: false,
+      unattended_real_host_execution_completed: false,
+      operator_confirmation_bypassed: false,
+      service_owned_evidence_created: false,
+      handoff_can_execute: false,
+      proof_authority: "none"
+    },
+    boundary_notes: [
+      "This checklist is a read-only Pi review view over prepared checkpoint refs.",
+      "It validates ref shape and missing fields only, not artifact freshness or service-chain truth.",
+      "Host-confirmed service commands remain required for any later mutation."
+    ]
+  };
+}
+
 function readLifecycleWalkthroughSessionKind(input: Record<string, unknown>): typeof PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS[number] {
   const value = readString(input, "session_kind", { optional: true }) ?? "real_pi_host_manual_install";
   if ((PI_LIFECYCLE_WALKTHROUGH_SESSION_KINDS as readonly string[]).includes(value)) {
@@ -959,7 +1130,7 @@ function readInteractiveRealPiAction(input: Record<string, unknown>): typeof PI_
   if ((PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS as readonly string[]).includes(value)) {
     return value as typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_ACTIONS[number];
   }
-  throw new Error("action must be plan, status, resume-plan, or unattended-handoff");
+  throw new Error("action must be plan, status, resume-plan, unattended-handoff, or operator-review-checklist");
 }
 
 function readInteractiveRealPiSteps(input: Record<string, unknown>): Array<typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS[number]> {
@@ -1005,6 +1176,7 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
   const sessionKind = readLifecycleWalkthroughSessionKind(input);
   const completedSteps = readInteractiveRealPiSteps(input);
   const completed = new Set<string>(completedSteps);
+  const unattendedHandoff = buildPreparedUnattendedRealPiHandoff(input);
   const probeId = optionalPublicPlannerToken(input, "probe_id", `${projectId}-REAL-PI-RUNTIME`);
   const validationId = optionalPublicPlannerToken(input, "validation_id", `${projectId}-CODEX-API`);
   const reviewId = optionalPublicPlannerToken(input, "review_id", `${projectId}-LIFECYCLE-REVIEW`);
@@ -1144,7 +1316,8 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       executes_lifecycle_actions: false,
       mutating_steps_require_host_confirmation: true
     },
-    unattended_handoff: buildPreparedUnattendedRealPiHandoff(input),
+    unattended_handoff: unattendedHandoff,
+    operator_review_checklist: buildPreparedHandoffOperatorReviewChecklist(unattendedHandoff),
     checkpoint_inputs: {
       probe_id: probeId,
       validation_id: validationId,
