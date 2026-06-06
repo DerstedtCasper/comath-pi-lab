@@ -548,13 +548,15 @@ export type AgentAdapterOsIsolationProviderHostCapabilityTool = {
   binary_sha256: string | null;
 };
 
-export type AgentAdapterOsIsolationProductionHelperProfileContract = {
+type AgentAdapterOsIsolationProductionHelperProfileSource =
+  | "operator_configured_provider_helper"
+  | "bundled_provider_helper_protocol_asset";
+
+type AgentAdapterOsIsolationProductionHelperProfileContractBase = {
   contract_source: "service_owned_oci_container_production_helper_profile_contract";
   provider: "oci_container";
   provider_family: "oci_container";
-  helper_profile_source:
-    | "operator_configured_provider_helper"
-    | "bundled_provider_helper_protocol_asset";
+  helper_profile_source: AgentAdapterOsIsolationProductionHelperProfileSource;
   production_helper_configured: boolean;
   bundled_protocol_asset: boolean;
   helper_binary_sha256: string;
@@ -576,6 +578,41 @@ export type AgentAdapterOsIsolationProductionHelperProfileContract = {
   can_certify_ga: false;
   profile_contract_sha256: string;
 };
+
+export type AgentAdapterOsIsolationOciProductionHelperProfileContract =
+  AgentAdapterOsIsolationProductionHelperProfileContractBase & {
+    contract_source: "service_owned_oci_container_production_helper_profile_contract";
+    provider: "oci_container";
+    provider_family: "oci_container";
+    required_host_facility_tools: readonly ["oci_docker_cli", "oci_podman_cli"];
+    runtime_family: "docker_or_podman_oci";
+    daemon_or_socket_inspection_allowed: false;
+    container_launch_required_for_profile_contract: false;
+  };
+
+export type AgentAdapterOsIsolationNixProductionHelperProfileContract =
+  Omit<
+    AgentAdapterOsIsolationProductionHelperProfileContractBase,
+    | "contract_source"
+    | "provider"
+    | "provider_family"
+    | "required_host_facility_tools"
+    | "runtime_family"
+    | "daemon_or_socket_inspection_allowed"
+    | "container_launch_required_for_profile_contract"
+  > & {
+    contract_source: "service_owned_nix_sandbox_production_helper_profile_contract";
+    provider: "nix_sandbox";
+    provider_family: "nix_sandbox";
+    required_host_facility_tools: readonly ["nix_cli", "nix_store_cli"];
+    runtime_family: "nix_develop_no_network";
+    store_or_profile_inspection_allowed: false;
+    nix_command_execution_required_for_profile_contract: false;
+  };
+
+export type AgentAdapterOsIsolationProductionHelperProfileContract =
+  | AgentAdapterOsIsolationOciProductionHelperProfileContract
+  | AgentAdapterOsIsolationNixProductionHelperProfileContract;
 
 export type AgentAdapterOsIsolationProviderHostCapabilityKernelFeature = {
   name: string;
@@ -4564,14 +4601,62 @@ function isServiceOwnedProviderRunnerResolution(
   );
 }
 
-function ociProductionHelperProfileContract(input: {
+function productionHelperProfileContractSpec(provider: AgentAdapterOsIsolationProvider): {
+  contract_source:
+    | "service_owned_oci_container_production_helper_profile_contract"
+    | "service_owned_nix_sandbox_production_helper_profile_contract";
+  provider: "oci_container" | "nix_sandbox";
+  provider_family: "oci_container" | "nix_sandbox";
+  required_host_facility_tools: readonly ["oci_docker_cli", "oci_podman_cli"] | readonly ["nix_cli", "nix_store_cli"];
+  runtime_family: "docker_or_podman_oci" | "nix_develop_no_network";
+  extra_contract_material:
+    | {
+        daemon_or_socket_inspection_allowed: false;
+        container_launch_required_for_profile_contract: false;
+      }
+    | {
+        store_or_profile_inspection_allowed: false;
+        nix_command_execution_required_for_profile_contract: false;
+      };
+} | null {
+  if (provider === "oci_container") {
+    return {
+      contract_source: "service_owned_oci_container_production_helper_profile_contract",
+      provider: "oci_container",
+      provider_family: "oci_container",
+      required_host_facility_tools: ["oci_docker_cli", "oci_podman_cli"],
+      runtime_family: "docker_or_podman_oci",
+      extra_contract_material: {
+        daemon_or_socket_inspection_allowed: false,
+        container_launch_required_for_profile_contract: false
+      }
+    };
+  }
+  if (provider === "nix_sandbox") {
+    return {
+      contract_source: "service_owned_nix_sandbox_production_helper_profile_contract",
+      provider: "nix_sandbox",
+      provider_family: "nix_sandbox",
+      required_host_facility_tools: ["nix_cli", "nix_store_cli"],
+      runtime_family: "nix_develop_no_network",
+      extra_contract_material: {
+        store_or_profile_inspection_allowed: false,
+        nix_command_execution_required_for_profile_contract: false
+      }
+    };
+  }
+  return null;
+}
+
+function createProductionHelperProfileContract(input: {
   provider: AgentAdapterOsIsolationProvider;
   helperProfileSource: "operator_configured_provider_helper" | "bundled_provider_helper_protocol_asset" | "missing";
   productionHelperConfigured: boolean;
   bundledProtocolAsset: boolean;
   helperBinarySha256: string | null | undefined;
 }): AgentAdapterOsIsolationProductionHelperProfileContract | null {
-  if (input.provider !== "oci_container" || !isSha256(input.helperBinarySha256)) {
+  const spec = productionHelperProfileContractSpec(input.provider);
+  if (!spec || !isSha256(input.helperBinarySha256)) {
     return null;
   }
   if (
@@ -4593,9 +4678,9 @@ function ociProductionHelperProfileContract(input: {
     return null;
   }
   const material = {
-    contract_source: "service_owned_oci_container_production_helper_profile_contract" as const,
-    provider: "oci_container" as const,
-    provider_family: "oci_container" as const,
+    contract_source: spec.contract_source,
+    provider: spec.provider,
+    provider_family: spec.provider_family,
     helper_profile_source: input.helperProfileSource,
     production_helper_configured: input.helperProfileSource === "operator_configured_provider_helper",
     bundled_protocol_asset: input.helperProfileSource === "bundled_provider_helper_protocol_asset",
@@ -4604,14 +4689,13 @@ function ociProductionHelperProfileContract(input: {
       "operator_configured_provider_helper",
       "bundled_provider_helper_protocol_asset"
     ] as const,
-    required_host_facility_tools: ["oci_docker_cli", "oci_podman_cli"] as const,
-    runtime_family: "docker_or_podman_oci" as const,
+    required_host_facility_tools: spec.required_host_facility_tools,
+    runtime_family: spec.runtime_family,
     runner_network_policy: "disabled" as const,
     no_new_privileges_required: true as const,
     command_override_allowed: false as const,
     environment_override_allowed: false as const,
-    daemon_or_socket_inspection_allowed: false as const,
-    container_launch_required_for_profile_contract: false as const,
+    ...spec.extra_contract_material,
     caller_supplied_success_allowed: false as const,
     proof_authority: "none" as const,
     can_promote_claim: false as const,
@@ -4620,16 +4704,16 @@ function ociProductionHelperProfileContract(input: {
   return {
     ...material,
     profile_contract_sha256: sha256Text(canonicalJson(material))
-  };
+  } as AgentAdapterOsIsolationProductionHelperProfileContract;
 }
 
-function ociProductionHelperProfileContractSha256(
+function productionHelperProfileContractSha256(
   contract: AgentAdapterOsIsolationProductionHelperProfileContract | null | undefined
 ): string | null {
   if (!contract) {
     return null;
   }
-  const expected = ociProductionHelperProfileContract({
+  const expected = createProductionHelperProfileContract({
     provider: contract.provider,
     helperProfileSource: contract.helper_profile_source,
     productionHelperConfigured: contract.production_helper_configured,
@@ -4646,20 +4730,20 @@ function ociProductionHelperProfileContractSha256(
     : null;
 }
 
-function ociProductionHelperProfileContractsMatch(input: {
+function productionHelperProfileContractsMatch(input: {
   provider: AgentAdapterOsIsolationProvider;
   candidate: AgentAdapterOsIsolationProductionHelperProfileContract | null | undefined;
   expected: Array<AgentAdapterOsIsolationProductionHelperProfileContract | null | undefined>;
 }): boolean {
-  if (input.provider !== "oci_container") {
+  if (!productionHelperProfileContractSpec(input.provider)) {
     return true;
   }
-  const candidateSha256 = ociProductionHelperProfileContractSha256(input.candidate);
+  const candidateSha256 = productionHelperProfileContractSha256(input.candidate);
   return Boolean(
     candidateSha256 &&
       input.expected.length > 0 &&
       input.expected.every((contract) => {
-        const expectedSha256 = ociProductionHelperProfileContractSha256(contract);
+        const expectedSha256 = productionHelperProfileContractSha256(contract);
         return Boolean(expectedSha256 && expectedSha256 === candidateSha256);
       })
   );
@@ -6052,8 +6136,8 @@ function providerHelperHostValidationIsExecutable(
       hostValidation.provider_helper_host_ready === true &&
       hostValidation.provider_helper_host_validation.validation_source === "service_owned_provider_helper_host_validator" &&
       hostValidation.provider_helper_host_validation.hashes_match_provider_runner === true &&
-      (hostValidation.provider !== "oci_container" ||
-        ociProductionHelperProfileContractSha256(
+      (!productionHelperProfileContractSpec(hostValidation.provider) ||
+        productionHelperProfileContractSha256(
           hostValidation.provider_helper_host_validation.production_helper_profile_contract
         ) !== null) &&
       hostValidation.provider_helper_host_validation.platform_supported === true &&
@@ -6118,7 +6202,7 @@ function providerHelperHostValidationMatchesExecutionInput(input: {
         runnerBinarySha256.toLowerCase() &&
       hostValidation.provider_helper_host_validation.helper_binary_sha256.toLowerCase() ===
         runnerBinarySha256.toLowerCase() &&
-      ociProductionHelperProfileContractsMatch({
+      productionHelperProfileContractsMatch({
         provider: input.provider,
         candidate: hostValidation.provider_helper_host_validation.production_helper_profile_contract,
         expected: [runner.provider_runner_resolution.production_helper_profile_contract]
@@ -6159,8 +6243,8 @@ function providerHelperExecutionIsCollectable(
       isSha256(helperExecution.provider_helper_host_validation_binding.helper_binary_sha256) &&
       isSha256(helperExecution.provider_helper_host_validation_binding.runner_binary_sha256) &&
       helperExecution.provider_helper_execution.helper_source === "service_owned_provider_helper_config" &&
-      (helperExecution.provider !== "oci_container" ||
-        ociProductionHelperProfileContractSha256(
+      (!productionHelperProfileContractSpec(helperExecution.provider) ||
+        productionHelperProfileContractSha256(
           helperExecution.provider_helper_execution.production_helper_profile_contract
         ) !== null) &&
       helperExecution.provider_helper_execution.helper_exit_code === 0 &&
@@ -7743,7 +7827,7 @@ export function prepareAgentAdapterOsIsolationProviderRunner(
   const bundledProtocolAsset =
     helperProfileSource === "bundled_provider_helper_protocol_asset" &&
     resolution?.bundled_protocol_asset === true;
-  const productionHelperProfileContract = ociProductionHelperProfileContract({
+  const productionHelperProfileContract = createProductionHelperProfileContract({
     provider,
     helperProfileSource,
     productionHelperConfigured,
@@ -7988,14 +8072,14 @@ export function validateAgentAdapterOsIsolationProviderHelperHost(
   const bundledProtocolAsset =
     helperProfileSource === "bundled_provider_helper_protocol_asset" &&
     validation?.bundled_protocol_asset === true;
-  const productionHelperProfileContract = ociProductionHelperProfileContract({
+  const productionHelperProfileContract = createProductionHelperProfileContract({
     provider,
     helperProfileSource,
     productionHelperConfigured,
     bundledProtocolAsset,
     helperBinarySha256
   });
-  const profileMatchesProviderRunner = ociProductionHelperProfileContractsMatch({
+  const profileMatchesProviderRunner = productionHelperProfileContractsMatch({
     provider,
     candidate: productionHelperProfileContract,
     expected: [readyRunnerBundle?.runner.provider_runner_resolution.production_helper_profile_contract]
@@ -8294,14 +8378,14 @@ export function runAgentAdapterOsIsolationProviderHelperExecution(
   const helperProgram = configAccepted ? config?.helper_program as string : null;
   const helperHash = helperProgram ? sha256FileSync(helperProgram) : null;
   const runnerBinarySha256 = readyRunnerBundle?.runner.provider_runner_resolution.runner_binary_sha256;
-  const productionHelperProfileContract = ociProductionHelperProfileContract({
+  const productionHelperProfileContract = createProductionHelperProfileContract({
     provider,
     helperProfileSource,
     productionHelperConfigured,
     bundledProtocolAsset,
     helperBinarySha256: helperHash?.sha256 ?? null
   });
-  const profileMatchesProviderRunnerAndHost = ociProductionHelperProfileContractsMatch({
+  const profileMatchesProviderRunnerAndHost = productionHelperProfileContractsMatch({
     provider,
     candidate: productionHelperProfileContract,
     expected: [

@@ -1,3 +1,26 @@
+# Goal 3 Task 232 / Nix Production-Helper Profile Contract
+
+Scope: add a Nix sandbox production-helper profile contract so release audits can distinguish operator-configured Nix helpers from bundled provider-helper protocol assets without treating either path as a Nix runner, Nix store/profile probe, proof authority, OS-enforcement proof, readiness evidence by itself, real-Pi evidence, broad provider support, or GA certification.
+
+Implementation notes:
+- Added `goal3-task232-agent-adapter-os-isolation-nix-production-helper-profile-contract.test.mjs` and generalized the service-derived `production_helper_profile_contract` material/hash path from OCI-only to OCI plus Nix.
+- Task232 records Nix helper profile source, helper binary hash, path-free `nix_cli` / `nix_store_cli` host-facility tool names, disabled network policy, no-new-privileges, no command/env override, no store/profile inspection, no Nix command execution requirement for the profile contract, and non-authority flags.
+- Local diff review found and fixed a generic-gate gap: host-validation executable checks and helper-execution collectability checks now require a valid profile contract for any provider with a profile spec, not only `oci_container`.
+- On Windows, the focused suite asserts the Nix host-capability path fails closed with a compatible-host replayable blocker while still binding the runner-level Nix profile contract. On Linux/macOS, the same suite exercises the full host-validation, helper-execution, drift rejection, and collection profile-contract path.
+- Read-only subagent review confirmed the real Mathlib smoke fixture is not prepared; a second reviewer recommended a transport check-debug loop, which remains a valid next frontier, but Task232 chose the explicit provider-family helper contract frontier from the live tracker.
+
+Verification:
+- TDD RED was observed before implementation: focused Task232 failed because `getComathdStatus().capabilities` did not advertise `agent_adapter_os_isolation_nix_sandbox_production_helper_profile_contract`.
+- After implementation, a test root-cause fix for Windows Nix platform compatibility, and the generic-gate fix above, focused Task232 exited 0.
+- Adjacent Task212, Task222, Task184, Task196, Task211, Task202, Task203, and Task206 regressions exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task232 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task232 does not ship a production Nix helper implementation, run Nix, inspect Nix store/profile state, expose helper or Nix paths, prove OS enforcement from profile lineage metadata, expose direct Pi collection/witness-chain payloads, affect Lean/mathlib proof authority, provide real-Pi evidence, provide broad provider support, or certify GA.
+
 # Goal 3 Task 231 / Prepared Unattended Real-Pi Handoff UX
 
 Scope: extend the existing read-only interactive real-Pi planner with an `unattended-handoff` mode over already prepared service-owned checkpoint path/hash references, without adding a service route, mutating Pi tool, durable transport stack, direct trusted-state mutation, proof authority, or GA certification.

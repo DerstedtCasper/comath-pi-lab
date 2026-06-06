@@ -114,6 +114,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_adapter_os_isolation_provider_helper_witness_chain_check_debug",
       "agent_adapter_os_isolation_windows_appcontainer_production_helper_profile_contract",
       "agent_adapter_os_isolation_oci_container_production_helper_profile_contract",
+      "agent_adapter_os_isolation_nix_sandbox_production_helper_profile_contract",
       "agent_adapter_os_isolation_provider_helper_execution",
       "agent_adapter_os_isolation_provider_helper_host_validation",
       "agent_adapter_os_isolation_provider_runner_contract",
