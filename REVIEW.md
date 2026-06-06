@@ -1,3 +1,35 @@
+# Goal 3 Task 242 / Pi Unattended Real-Host Execution Readiness Consumer
+
+Scope: expose the Task241 service-owned readiness blocker through a host-confirmed Pi tool and `/cm:release` command. This is a thin client and planner checkpoint only; it is not operator approval, unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task242-pi-unattended-real-host-execution-readiness-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness` plus `/cm:release lifecycle-unattended-real-host-execution-readiness`.
+- Wired the tool to call only `POST /release/pi-codex-lifecycle/unattended-real-host-execution-readiness` through host confirmation, strip caller/model `confirmation_id`, translate public lifecycle artifact aliases to service-canonical paths only inside the request, and sanitize public request/result surfaces.
+- Added `lifecycle-unattended-real-host-execution-readiness` to the read-only interactive real-Pi planner after the Task240 handoff-review checkpoint.
+- Registered the focused suite in Pi package test discovery, phase0 smoke release-hardening discovery, GA release criteria, README, AGENTS, TODO, adapter contracts, threat model, REVIEW, and the Goal 3 tracker.
+
+Verification:
+- TDD RED was observed before implementation when the focused Task242 suite failed because `comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness` was not registered.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- Focused Task242 exited 0.
+- Adjacent Task223 and Task240 regressions exited 0.
+- Phase6 and Phase26 Pi registration regressions exited 0 from the package cwd.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task242 discovered by the default Pi runner.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Adjacent Task224, Task225, Task227, Task229, Task233, Task239, and Task241 service regressions exited 0 after correcting one stale manual Task224 filename in the command.
+- `corepack pnpm --filter @comath/comathd test` exited 0.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm build` exited 0 across workspaces.
+- Initial `corepack pnpm test` exposed a Phase17 integrity guard failure because the Pi entrypoint carried a literal `.comath` canonical-path prefix; the fix now constructs that trusted runtime prefix at runtime while preserving the service request value.
+- After the Phase17 fix, focused Task242, Pi build, direct Phase17 integrity evaluation, and final `corepack pnpm test` all exited 0.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task242 does not change the Task241 service verifier, does not make public aliases source-of-truth paths, does not approve or execute a handoff, does not authorize unattended host actions, does not create operator approval evidence, does not mutate Pi trusted state directly, does not open durable/live transport, does not run Lean, does not promote claims, and does not certify GA. Public Pi output forces proof, GA, durable/live transport, direct-Pi-write, direct-trusted-state, operator approval, and unattended-execution flags false. The Pi entrypoint does not carry literal trusted runtime paths in source; canonical `.comath/...` material is produced only as request data for the Task241 service route.
+
 # Goal 3 Task 241 / Unattended Real-Host Execution Readiness Blocker
 
 Scope: add a service-owned pre-execution readiness blocker after the Task239/240 handoff review path. This records why production unattended real-host execution is still blocked; it is not operator approval, unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
