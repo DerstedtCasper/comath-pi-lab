@@ -55,6 +55,7 @@ import {
   collectPiCodexLifecycleEvidence,
   heartbeatPiCodexLifecycleOperatorTransportLease,
   openPiCodexLifecycleOperatorTransportLease,
+  orchestratePiCodexLifecycleAutomaticRealPiExecution,
   persistPiCodexLifecycleOperatorSession,
   probePiCodexProductionCodexAccountNetwork,
   probePiCodexDurableServiceLifecycle,
@@ -485,6 +486,17 @@ async function route(method: string, path: string, body: unknown, context: Route
       (payload) => {
         const body = payload as Parameters<typeof reviewGoal3PublicArchiveSurfaces>[1] & { project_root: string };
         return reviewGoal3PublicArchiveSurfaces(body.project_root, body);
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/automatic-real-pi-execution",
+      (payload) => {
+        const body = payload as Parameters<typeof orchestratePiCodexLifecycleAutomaticRealPiExecution>[1] & {
+          project_root: string;
+        };
+        return {
+          orchestration: orchestratePiCodexLifecycleAutomaticRealPiExecution(body.project_root, body)
+        };
       }
     ],
     [

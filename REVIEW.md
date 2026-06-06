@@ -1,3 +1,34 @@
+# Goal 3 Task 227 / Automatic Real-Pi Lifecycle Orchestration
+
+Scope: add a service-owned automatic real-Pi checkpoint-chain orchestrator over existing lifecycle producers without creating durable transport, direct Pi writes, proof authority, trusted state mutation, or GA certification.
+
+Changes:
+
+- Added `goal3-task227-pi-automatic-real-pi-execution-orchestration.test.mjs`.
+- Added `orchestratePiCodexLifecycleAutomaticRealPiExecution()` and `POST /release/pi-codex-lifecycle/automatic-real-pi-execution`.
+- Added `comath.pi_codex_lifecycle_automatic_real_pi_execution.v1` artifacts under `.comath/release/pi-codex-lifecycle/<orchestration-id>/automatic-real-pi-execution.json`.
+- Added `pi_codex_lifecycle_automatic_real_pi_execution_orchestration` to the service capability ledger.
+- The orchestrator composes existing runtime probe, operator-session manifest, transport recovery, bounded lease, heartbeat/rebind, guided execution, terminal review, and operator/service transport contract producers, then binds every checkpoint id/path/hash into one append-only manifest.
+- The heartbeat cursor is advanced from the bounded service-owned AgentRun log-session lease; non-service-owned operator routes fail closed before the Task227 orchestration artifact is written.
+- Synchronized README, AGENTS, TODO, threat model, GA release criteria, phase0 smoke, REVIEW, and the Goal 3 tracker without claiming durable long-lived transport, direct Pi mutation, proof authority, or GA certification.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task227 failed because `../../dist/index.js` did not export `orchestratePiCodexLifecycleAutomaticRealPiExecution`.
+- Focused Task227 exited 0 after implementation.
+- A systematic-debugging pass aligned the negative route test with the existing service-level fail-closed error code and fixed a test fixture `campaign_id` schema issue.
+- Adjacent Task225, Task224, Task221, Task220, Task164, and Task166 service regressions exited 0.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task227 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task227 is checkpoint-chain provenance only. It does not open or maintain durable transport, provide long-lived SSE/WebSocket sessions, mutate Pi trusted state directly, write `.comath` from Pi, run Lean, prove mathematics, promote claims, or certify GA.
+
 # Goal 3 Task 226 / Pi Operator-Service Transport Contract Consumer
 
 Scope: expose the Task225 operator/service maintained transport contract through Pi as a host-confirmed thin consumer and interactive real-Pi checkpoint without creating durable transport, direct Pi writes, proof authority, trusted state mutation, or GA certification.

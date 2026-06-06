@@ -955,6 +955,155 @@ type PiCodexOperatorServiceTransportContractBody = Omit<
   "transport_contract_artifact"
 >;
 
+export type PiCodexLifecycleAutomaticRealPiExecutionCheckpointStep =
+  | "real_pi_runtime_probe"
+  | "operator_session_manifest"
+  | "operator_transport_recovery_checkpoint"
+  | "bounded_operator_transport_lease"
+  | "operator_transport_heartbeat_rebind"
+  | "guided_real_pi_execution"
+  | "terminal_execution_review"
+  | "operator_service_transport_contract";
+
+export type PiCodexLifecycleAutomaticRealPiExecutionInput = {
+  project_id: string;
+  orchestration_id?: string;
+  actor: string;
+  runtime_probe: Omit<PiCodexRealPiRuntimeProbeInput, "project_id" | "actor"> & { actor?: string };
+  operator_session: Omit<
+    PiCodexLifecycleOperatorSessionInput,
+    "project_id" | "actor" | "pi_host_label" | "session_kind" | "artifact_paths"
+  > & { actor?: string };
+  transport_recovery: Omit<
+    PiCodexLifecycleOperatorTransportRecoveryInput,
+    "project_id" | "session_id" | "actor" | "session_manifest_path"
+  > & { actor?: string };
+  transport_lease: Omit<
+    PiCodexLifecycleOperatorTransportLeaseInput,
+    "project_id" | "session_id" | "actor" | "transport_recovery_id" | "session_manifest_path" | "transport_recovery_path"
+  > & { actor?: string };
+  transport_heartbeat: Omit<
+    PiCodexLifecycleOperatorTransportHeartbeatInput,
+    | "project_id"
+    | "session_id"
+    | "actor"
+    | "transport_recovery_id"
+    | "transport_lease_id"
+    | "session_manifest_path"
+    | "transport_recovery_path"
+    | "transport_lease_path"
+  > & { actor?: string };
+  guided_execution: Omit<
+    PiCodexGuidedRealPiExecutionInput,
+    | "project_id"
+    | "actor"
+    | "real_pi_runtime_probe_id"
+    | "pi_install_transcript_path"
+    | "runtime_registration_snapshot_path"
+    | "session_id"
+    | "session_manifest_path"
+    | "transport_recovery_id"
+    | "transport_recovery_path"
+    | "transport_lease_id"
+    | "transport_lease_path"
+    | "pi_host_label"
+  > & { actor?: string };
+  terminal_review?: {
+    review_id?: string;
+    actor?: string;
+  };
+  transport_contract: Omit<
+    PiCodexOperatorServiceTransportContractInput,
+    "project_id" | "actor" | "terminal_review_id" | "terminal_review_path"
+  > & { actor?: string };
+};
+
+export type PiCodexLifecycleAutomaticRealPiExecutionArtifact = {
+  kind: "automatic_real_pi_execution_orchestration";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexLifecycleAutomaticRealPiExecution = {
+  schema_version: "comath.pi_codex_lifecycle_automatic_real_pi_execution.v1";
+  orchestration_id: string;
+  project_id: string;
+  actor: string;
+  created_at: string;
+  orchestration_status: "automatic_real_pi_checkpoint_chain_recorded";
+  orchestration_path: string;
+  orchestration_artifact: PiCodexLifecycleAutomaticRealPiExecutionArtifact;
+  checkpoint_order: PiCodexLifecycleAutomaticRealPiExecutionCheckpointStep[];
+  real_pi_runtime_probe_id: string;
+  pi_host_label: string;
+  pi_install_transcript_path: string;
+  pi_install_artifact: PiCodexRealPiRuntimeProbeInstallArtifact;
+  runtime_registration_snapshot_path: string;
+  runtime_registration_artifact: PiCodexRealPiRuntimeProbeRegistrationArtifact;
+  session_id: string;
+  session_manifest_path: string;
+  session_manifest_artifact: PiCodexLifecycleOperatorSessionManifestArtifact;
+  transport_recovery_id: string;
+  transport_recovery_path: string;
+  transport_recovery_artifact: PiCodexLifecycleOperatorTransportRecoveryArtifact;
+  transport_lease_id: string;
+  transport_lease_path: string;
+  transport_lease_artifact: PiCodexLifecycleOperatorTransportLeaseArtifact;
+  transport_heartbeat_id: string;
+  transport_heartbeat_path: string;
+  transport_heartbeat_artifact: PiCodexLifecycleOperatorTransportHeartbeatArtifact;
+  execution_id: string;
+  guided_execution_path: string;
+  guided_execution_artifact: PiCodexGuidedRealPiExecutionArtifact;
+  terminal_review_id: string;
+  terminal_review_path: string;
+  terminal_review_artifact: PiCodexGuidedExecutionTerminalChainReviewArtifact;
+  transport_contract_id: string;
+  transport_contract_path: string;
+  transport_contract_artifact: PiCodexOperatorServiceTransportContractArtifact;
+  agent_run_id: string;
+  service_route: string;
+  service_transport_primitive: PiCodexOperatorServiceTransportPrimitive;
+  client_transport_primitive: PiCodexOperatorClientTransportPrimitive;
+  runtime_probe_bound: true;
+  operator_session_bound: true;
+  transport_recovery_bound: true;
+  transport_lease_bound: true;
+  transport_heartbeat_bound: true;
+  guided_execution_bound: true;
+  terminal_review_bound: true;
+  transport_contract_bound: true;
+  service_owned_checkpoint_chain_completed: true;
+  automatic_real_pi_orchestration_completed: true;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexLifecycleAutomaticRealPiExecutionBody = Omit<
+  PiCodexLifecycleAutomaticRealPiExecution,
+  "orchestration_artifact"
+>;
+
+const automaticRealPiExecutionCheckpointOrder: PiCodexLifecycleAutomaticRealPiExecutionCheckpointStep[] = [
+  "real_pi_runtime_probe",
+  "operator_session_manifest",
+  "operator_transport_recovery_checkpoint",
+  "bounded_operator_transport_lease",
+  "operator_transport_heartbeat_rebind",
+  "guided_real_pi_execution",
+  "terminal_execution_review",
+  "operator_service_transport_contract"
+];
+
 const terminalChainOrderedSteps: PiCodexGuidedExecutionTerminalChainStep[] = [
   "real_pi_runtime_probe",
   "operator_session_manifest",
@@ -1166,6 +1315,22 @@ function assertOperatorServiceTransportContractId(value: string | undefined): st
     });
   }
   return contractId;
+}
+
+function assertAutomaticRealPiExecutionOrchestrationId(value: string | undefined): string {
+  const orchestrationId = value ?? `LIFE-AUTO-REAL-PI-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  if (
+    !/^[A-Za-z0-9._-]+$/.test(orchestrationId) ||
+    orchestrationId === "." ||
+    orchestrationId === ".." ||
+    orchestrationId.split(".").some((segment) => segment.length === 0)
+  ) {
+    throw new ComathError("invalid Pi/Codex automatic real-Pi orchestration id", {
+      statusCode: 400,
+      code: "PI_CODEX_AUTOMATIC_REAL_PI_EXECUTION_INVALID_ID"
+    });
+  }
+  return orchestrationId;
 }
 
 function assertOperatorServiceTransportPrimitive(
@@ -2865,6 +3030,12 @@ function operatorServiceTransportContractPath(contractId: string): string {
   );
 }
 
+function automaticRealPiExecutionOrchestrationPath(orchestrationId: string): string {
+  return normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", orchestrationId, "automatic-real-pi-execution.json")
+  );
+}
+
 function sanitizedObservedRoutes(values: string[] | undefined): string[] {
   const routes = values ?? [];
   return routes.slice(0, 20).map((route) => sanitizeOperatorTransportText(route));
@@ -4006,6 +4177,259 @@ export function recordPiCodexLifecycleOperatorServiceTransportContract(
       agent_run_id: heartbeat.agent_run_log_session_binding.run_id,
       log_session_body_sha256: result.log_session_body_sha256,
       log_session_event_count: result.log_session_event_count,
+      durable_transport_provided: false,
+      live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
+function automaticRealPiStepActor(actor: string, step: string, override: string | undefined): string {
+  return sanitizeOperatorTransportText(override ?? `${actor} ${step}`);
+}
+
+export function orchestratePiCodexLifecycleAutomaticRealPiExecution(
+  projectRoot: string,
+  input: PiCodexLifecycleAutomaticRealPiExecutionInput
+): PiCodexLifecycleAutomaticRealPiExecution {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const orchestrationId = assertAutomaticRealPiExecutionOrchestrationId(input.orchestration_id);
+  const actor = sanitizeOperatorTransportText(input.actor);
+  const orchestrationPath = automaticRealPiExecutionOrchestrationPath(orchestrationId);
+  const absoluteOrchestrationPath = assertPathAllowed(projectRoot, orchestrationPath, { purpose: "runtime-write" });
+  if (existsSync(absoluteOrchestrationPath)) {
+    throw new ComathError("Pi/Codex automatic real-Pi orchestration already exists", {
+      statusCode: 409,
+      code: "PI_CODEX_AUTOMATIC_REAL_PI_EXECUTION_ALREADY_EXISTS"
+    });
+  }
+
+  const runtimeProbe = probePiCodexRealPiInstallRuntimeRegistration(projectRoot, {
+    ...input.runtime_probe,
+    project_id: projectId,
+    actor: automaticRealPiStepActor(actor, "real_pi_runtime_probe", input.runtime_probe.actor),
+    pi_host_kind: input.runtime_probe.pi_host_kind ?? "real_pi_host"
+  });
+  if (!runtimeProbe.ok) {
+    throw new ComathError("Pi/Codex automatic real-Pi orchestration runtime probe failed", {
+      statusCode: 400,
+      code: "PI_CODEX_AUTOMATIC_REAL_PI_EXECUTION_RUNTIME_PROBE_FAILED"
+    });
+  }
+
+  const session = persistPiCodexLifecycleOperatorSession(projectRoot, {
+    ...input.operator_session,
+    project_id: projectId,
+    actor: automaticRealPiStepActor(actor, "operator_session_manifest", input.operator_session.actor),
+    pi_host_label: runtimeProbe.pi_host_label,
+    session_kind: runtimeProbe.readiness_fragment.session_kind,
+    completed_steps: input.operator_session.completed_steps ?? ["real_pi_install_runtime_probe"],
+    artifact_paths: [
+      { kind: "pi_install_transcript", path: runtimeProbe.pi_install_transcript_path },
+      { kind: "runtime_registration_snapshot", path: runtimeProbe.runtime_registration_snapshot_path }
+    ]
+  });
+
+  const recovery = recoverPiCodexLifecycleOperatorTransport(projectRoot, {
+    ...input.transport_recovery,
+    project_id: projectId,
+    session_id: session.session_id,
+    actor: automaticRealPiStepActor(
+      actor,
+      "operator_transport_recovery_checkpoint",
+      input.transport_recovery.actor
+    ),
+    session_manifest_path: session.session_manifest_path
+  });
+
+  const lease = openPiCodexLifecycleOperatorTransportLease(projectRoot, {
+    ...input.transport_lease,
+    project_id: projectId,
+    session_id: session.session_id,
+    transport_recovery_id: recovery.transport_recovery_id,
+    actor: automaticRealPiStepActor(actor, "bounded_operator_transport_lease", input.transport_lease.actor),
+    session_manifest_path: session.session_manifest_path,
+    transport_recovery_path: recovery.transport_recovery_path
+  });
+
+  const heartbeatCursor = {
+    operator_event_cursor:
+      input.transport_heartbeat.requested_cursor?.operator_event_cursor ??
+      `event:${Math.max((input.transport_heartbeat.client_epoch ?? lease.client_epoch) + 1, lease.client_epoch + 1)}`,
+    stdout_cursor: `stdout:${lease.agent_run_log_session_binding.next_cursor.stdout}`,
+    stderr_cursor: `stderr:${lease.agent_run_log_session_binding.next_cursor.stderr}`
+  };
+  const heartbeat = heartbeatPiCodexLifecycleOperatorTransportLease(projectRoot, {
+    ...input.transport_heartbeat,
+    project_id: projectId,
+    session_id: session.session_id,
+    transport_recovery_id: recovery.transport_recovery_id,
+    transport_lease_id: lease.transport_lease_id,
+    actor: automaticRealPiStepActor(
+      actor,
+      "operator_transport_heartbeat_rebind",
+      input.transport_heartbeat.actor
+    ),
+    session_manifest_path: session.session_manifest_path,
+    transport_recovery_path: recovery.transport_recovery_path,
+    transport_lease_path: lease.transport_lease_path,
+    requested_cursor: heartbeatCursor,
+    client_epoch: Math.max(input.transport_heartbeat.client_epoch ?? lease.client_epoch + 1, lease.client_epoch)
+  });
+
+  const execution = recordPiCodexLifecycleGuidedRealPiExecution(projectRoot, {
+    ...input.guided_execution,
+    project_id: projectId,
+    actor: automaticRealPiStepActor(actor, "guided_real_pi_execution", input.guided_execution.actor),
+    real_pi_runtime_probe_id: runtimeProbe.probe_id,
+    pi_install_transcript_path: runtimeProbe.pi_install_transcript_path,
+    runtime_registration_snapshot_path: runtimeProbe.runtime_registration_snapshot_path,
+    session_id: session.session_id,
+    session_manifest_path: session.session_manifest_path,
+    transport_recovery_id: recovery.transport_recovery_id,
+    transport_recovery_path: recovery.transport_recovery_path,
+    transport_lease_id: lease.transport_lease_id,
+    transport_lease_path: lease.transport_lease_path,
+    pi_host_label: runtimeProbe.pi_host_label
+  });
+
+  const review = reviewPiCodexLifecycleTerminalExecution(projectRoot, {
+    project_id: projectId,
+    review_id: input.terminal_review?.review_id,
+    actor: automaticRealPiStepActor(actor, "terminal_execution_review", input.terminal_review?.actor),
+    real_pi_runtime_probe_id: runtimeProbe.probe_id,
+    pi_install_transcript_path: runtimeProbe.pi_install_transcript_path,
+    runtime_registration_snapshot_path: runtimeProbe.runtime_registration_snapshot_path,
+    session_id: session.session_id,
+    session_manifest_path: session.session_manifest_path,
+    transport_recovery_id: recovery.transport_recovery_id,
+    transport_recovery_path: recovery.transport_recovery_path,
+    transport_lease_id: lease.transport_lease_id,
+    transport_lease_path: lease.transport_lease_path,
+    transport_heartbeat_id: heartbeat.transport_heartbeat_id,
+    transport_heartbeat_path: heartbeat.transport_heartbeat_path,
+    execution_id: execution.execution_id,
+    guided_execution_path: execution.guided_execution_path
+  });
+
+  const contract = recordPiCodexLifecycleOperatorServiceTransportContract(projectRoot, {
+    ...input.transport_contract,
+    project_id: projectId,
+    actor: automaticRealPiStepActor(
+      actor,
+      "operator_service_transport_contract",
+      input.transport_contract.actor
+    ),
+    terminal_review_id: review.review_id,
+    terminal_review_path: review.review_path
+  });
+
+  const body: PiCodexLifecycleAutomaticRealPiExecutionBody = {
+    schema_version: "comath.pi_codex_lifecycle_automatic_real_pi_execution.v1",
+    orchestration_id: orchestrationId,
+    project_id: projectId,
+    actor,
+    created_at: new Date().toISOString(),
+    orchestration_status: "automatic_real_pi_checkpoint_chain_recorded",
+    orchestration_path: orchestrationPath,
+    checkpoint_order: [...automaticRealPiExecutionCheckpointOrder],
+    real_pi_runtime_probe_id: runtimeProbe.probe_id,
+    pi_host_label: runtimeProbe.pi_host_label,
+    pi_install_transcript_path: runtimeProbe.pi_install_transcript_path,
+    pi_install_artifact: runtimeProbe.pi_install_artifact,
+    runtime_registration_snapshot_path: runtimeProbe.runtime_registration_snapshot_path,
+    runtime_registration_artifact: runtimeProbe.runtime_registration_artifact,
+    session_id: session.session_id,
+    session_manifest_path: session.session_manifest_path,
+    session_manifest_artifact: session.session_manifest_artifact,
+    transport_recovery_id: recovery.transport_recovery_id,
+    transport_recovery_path: recovery.transport_recovery_path,
+    transport_recovery_artifact: recovery.transport_recovery_artifact,
+    transport_lease_id: lease.transport_lease_id,
+    transport_lease_path: lease.transport_lease_path,
+    transport_lease_artifact: lease.transport_lease_artifact,
+    transport_heartbeat_id: heartbeat.transport_heartbeat_id,
+    transport_heartbeat_path: heartbeat.transport_heartbeat_path,
+    transport_heartbeat_artifact: heartbeat.transport_heartbeat_artifact,
+    execution_id: execution.execution_id,
+    guided_execution_path: execution.guided_execution_path,
+    guided_execution_artifact: execution.guided_execution_artifact,
+    terminal_review_id: review.review_id,
+    terminal_review_path: review.review_path,
+    terminal_review_artifact: contract.terminal_review_artifact,
+    transport_contract_id: contract.transport_contract_id,
+    transport_contract_path: contract.transport_contract_path,
+    transport_contract_artifact: contract.transport_contract_artifact,
+    agent_run_id: contract.agent_run_id,
+    service_route: contract.service_route,
+    service_transport_primitive: contract.service_transport_primitive,
+    client_transport_primitive: contract.client_transport_primitive,
+    runtime_probe_bound: true,
+    operator_session_bound: true,
+    transport_recovery_bound: true,
+    transport_lease_bound: true,
+    transport_heartbeat_bound: true,
+    guided_execution_bound: true,
+    terminal_review_bound: true,
+    transport_contract_bound: true,
+    service_owned_checkpoint_chain_completed: true,
+    automatic_real_pi_orchestration_completed: true,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const artifactText = canonicalJson(body);
+  mkdirSync(dirname(absoluteOrchestrationPath), { recursive: true });
+  writeFileSync(absoluteOrchestrationPath, artifactText, "utf8");
+  const result: PiCodexLifecycleAutomaticRealPiExecution = {
+    ...body,
+    orchestration_artifact: {
+      kind: "automatic_real_pi_execution_orchestration",
+      path: orchestrationPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_lifecycle_automatic_real_pi_execution_recorded",
+    actor,
+    target_id: projectId,
+    payload: {
+      orchestration_id: orchestrationId,
+      orchestration_status: result.orchestration_status,
+      orchestration_path: orchestrationPath,
+      real_pi_runtime_probe_id: runtimeProbe.probe_id,
+      session_id: session.session_id,
+      transport_recovery_id: recovery.transport_recovery_id,
+      transport_lease_id: lease.transport_lease_id,
+      transport_heartbeat_id: heartbeat.transport_heartbeat_id,
+      execution_id: execution.execution_id,
+      terminal_review_id: review.review_id,
+      transport_contract_id: contract.transport_contract_id,
+      agent_run_id: contract.agent_run_id,
+      service_route: contract.service_route,
+      service_transport_primitive: contract.service_transport_primitive,
+      client_transport_primitive: contract.client_transport_primitive,
+      terminal_review_artifact_sha256: contract.terminal_review_artifact.sha256,
+      transport_contract_artifact_sha256: contract.transport_contract_artifact.sha256,
+      service_owned_checkpoint_chain_completed: true,
+      automatic_real_pi_orchestration_completed: true,
       durable_transport_provided: false,
       live_transport_open: false,
       indefinite_stream_open: false,

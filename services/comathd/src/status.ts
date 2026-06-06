@@ -136,7 +136,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_codex_operator_transport_lease_heartbeat_rebind",
       "pi_codex_lifecycle_guided_real_pi_execution",
       "pi_codex_guided_execution_terminal_chain_review",
-      "pi_codex_operator_service_transport_contract"
+      "pi_codex_operator_service_transport_contract",
+      "pi_codex_lifecycle_automatic_real_pi_execution_orchestration"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",
