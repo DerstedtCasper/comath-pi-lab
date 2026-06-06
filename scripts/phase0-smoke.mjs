@@ -402,6 +402,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task231-pi-prepared-unattended-real-pi-handoff-ux.test.mjs",
   "goal3-task237-pi-prepared-handoff-operator-review-checklist.test.mjs",
   "goal3-task239-service-owned-unattended-real-host-handoff-review.test.mjs",
+  "goal3-task240-pi-unattended-real-host-handoff-review-consumer.test.mjs",
   "goal3-task232-agent-adapter-os-isolation-nix-production-helper-profile-contract.test.mjs",
   "goal3-task233-pi-operator-service-transport-check-debug.test.mjs",
   "goal3-task234-agent-adapter-os-isolation-firejail-production-helper-profile-contract.test.mjs",

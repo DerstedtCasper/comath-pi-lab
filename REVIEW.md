@@ -1,3 +1,30 @@
+# Goal 3 Task 240 / Pi Unattended Real-Host Handoff Review Consumer
+
+Scope: expose the Task239 service-owned unattended handoff review through a host-confirmed Pi tool and `/cm:release` command. This is a thin client and planner checkpoint only; it is not operator approval, unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task240-pi-unattended-real-host-handoff-review-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleUnattendedRealHostHandoffReview` plus `/cm:release lifecycle-unattended-real-host-handoff-review`.
+- Wired the tool to call only `POST /release/pi-codex-lifecycle/unattended-real-host-handoff-review` through host confirmation, strip caller/model `confirmation_id`, pass prepared automatic-orchestration and transport-continuity public path/hash expected values, and sanitize public request/result surfaces.
+- Added `lifecycle-unattended-real-host-handoff-review` to the read-only interactive real-Pi planner after the Task230 continuity checkpoint.
+- Registered the focused suite in Pi package test discovery, phase0 smoke release-hardening discovery, GA release criteria, README, AGENTS, TODO, adapter contracts, threat model, REVIEW, and the Goal 3 tracker.
+- Read-only review found that public sanitizer coverage did not yet neutralize natural-language operator-approval/GA/live-transport overclaims or camelCase approval/authority flags. Follow-up RED coverage reproduced the leak before `sanitizePublicProofAuthorityValue()` was hardened.
+
+Verification:
+- TDD RED was observed before implementation when focused Task240 failed because `comath.release.piCodexLifecycleUnattendedRealHostHandoffReview` was not registered.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- Focused Task240 exited 0.
+- Adjacent Task223, Task231, and Task237 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task240 discovered by the default Pi runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 including phase0 smoke, Pi workspace tests with Task240, comathd package tests through Task239, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task240 does not change the Task239 service verifier, does not make public aliases source-of-truth paths, does not approve or execute a handoff, does not run unattended host actions, does not create operator approval evidence, does not mutate Pi trusted state directly, does not open durable/live transport, does not run Lean, does not promote claims, and does not certify GA. Public Pi output forces proof, GA, durable/live transport, direct-Pi-write, direct-trusted-state, operator approval, and unattended-execution flags false.
+
 # Goal 3 Task 239 / Service-Owned Unattended Real-Host Handoff Review
 
 Scope: add a service-owned append-only review over the prepared Pi/Codex lifecycle handoff chain. The review verifies freshness and chain binding for existing service-owned checkpoint artifacts; it is not operator approval, unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.

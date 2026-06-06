@@ -26,6 +26,7 @@ const expectedCheckpointSteps = [
   "lifecycle-operator-service-transport-contract",
   "lifecycle-automatic-real-pi-execution",
   "lifecycle-operator-service-transport-continuity",
+  "lifecycle-unattended-real-host-handoff-review",
   "run-codex-api-probe",
   "review"
 ];
@@ -152,6 +153,22 @@ const expectedNextActions = [
       "lifecycle-automatic-real-pi-execution",
       "lifecycle-operator-service-transport-continuity"
     ],
+    action: "lifecycle-unattended-real-host-handoff-review",
+    command: /\/cm:release lifecycle-unattended-real-host-handoff-review/
+  },
+  {
+    completed: [
+      "run-real-pi-runtime-probe",
+      "lifecycle-operator-session",
+      "lifecycle-operator-transport-recovery",
+      "lifecycle-operator-transport-lease",
+      "lifecycle-operator-transport-heartbeat",
+      "lifecycle-guided-real-pi-execution",
+      "lifecycle-operator-service-transport-contract",
+      "lifecycle-automatic-real-pi-execution",
+      "lifecycle-operator-service-transport-continuity",
+      "lifecycle-unattended-real-host-handoff-review"
+    ],
     action: "run-codex-api-probe",
     command: /lifecycle-control run-codex-api-probe/
   },
@@ -166,6 +183,7 @@ const expectedNextActions = [
       "lifecycle-operator-service-transport-contract",
       "lifecycle-automatic-real-pi-execution",
       "lifecycle-operator-service-transport-continuity",
+      "lifecycle-unattended-real-host-handoff-review",
       "run-codex-api-probe"
     ],
     action: "review",
@@ -191,7 +209,11 @@ for (const expected of expectedNextActions) {
     execution_id: "LIFE-GUIDED-EXEC-0223",
     terminal_review_id: "LIFE-TERMINAL-REVIEW-0223",
     transport_contract_id: "LIFE-TRANSPORT-CONTRACT-0223",
+    handoff_review_id: "LIFE-HANDOFF-REVIEW-0223",
+    orchestration_id: "LIFE-AUTOMATIC-REAL-PI-0223",
     continuity_id: "LIFE-TRANSPORT-CONTINUITY-0223",
+    automatic_orchestration_sha256: "1".repeat(64),
+    transport_continuity_sha256: "2".repeat(64),
     transport_contract_sha256: "0".repeat(64),
     session_manifest_path: ".comath/release/pi-codex-lifecycle/LIFE-SESSION-0223/operator-session-manifest.json",
     transport_recovery_path:
