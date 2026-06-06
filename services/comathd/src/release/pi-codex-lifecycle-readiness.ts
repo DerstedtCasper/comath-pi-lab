@@ -786,6 +786,96 @@ export type PiCodexGuidedRealPiExecution = {
 
 type PiCodexGuidedRealPiExecutionBody = Omit<PiCodexGuidedRealPiExecution, "guided_execution_artifact">;
 
+export type PiCodexGuidedExecutionTerminalChainStep =
+  | "real_pi_runtime_probe"
+  | "operator_session_manifest"
+  | "operator_transport_recovery_checkpoint"
+  | "bounded_operator_transport_lease"
+  | "operator_transport_heartbeat_rebind"
+  | "guided_real_pi_execution";
+
+export type PiCodexGuidedExecutionTerminalChainReviewInput = {
+  project_id: string;
+  review_id?: string;
+  actor: string;
+  real_pi_runtime_probe_id: string;
+  pi_install_transcript_path: string;
+  runtime_registration_snapshot_path: string;
+  session_id: string;
+  session_manifest_path?: string;
+  transport_recovery_id: string;
+  transport_recovery_path?: string;
+  transport_lease_id: string;
+  transport_lease_path?: string;
+  transport_heartbeat_id: string;
+  transport_heartbeat_path?: string;
+  execution_id: string;
+  guided_execution_path?: string;
+};
+
+export type PiCodexGuidedExecutionTerminalChainReviewVeto = {
+  code: string;
+  message: string;
+};
+
+export type PiCodexGuidedExecutionTerminalChainReview = {
+  schema_version: "comath.pi_codex_guided_execution_terminal_chain_review.v1";
+  review_id: string;
+  project_id: string;
+  created_at: string;
+  ok: boolean;
+  review_status:
+    | "guided_real_pi_terminal_chain_ready_for_release_review"
+    | "blocked_missing_guided_real_pi_terminal_chain";
+  review_path: string;
+  ordered_steps: PiCodexGuidedExecutionTerminalChainStep[];
+  required_preconditions: PiCodexGuidedExecutionTerminalChainStep[];
+  real_pi_runtime_probe_id: string;
+  session_id: string;
+  transport_recovery_id: string;
+  transport_lease_id: string;
+  transport_heartbeat_id: string;
+  execution_id: string;
+  pi_install_transcript_path: string;
+  pi_install_artifact: PiCodexRealPiRuntimeProbeInstallArtifact;
+  runtime_registration_snapshot_path: string;
+  runtime_registration_artifact: PiCodexRealPiRuntimeProbeRegistrationArtifact;
+  session_manifest_path: string;
+  session_manifest_artifact: PiCodexLifecycleOperatorSessionManifestArtifact;
+  transport_recovery_path: string;
+  transport_recovery_artifact: PiCodexLifecycleOperatorTransportRecoveryArtifact;
+  transport_lease_path: string;
+  transport_lease_artifact: PiCodexLifecycleOperatorTransportLeaseArtifact;
+  transport_heartbeat_path: string;
+  transport_heartbeat_artifact: PiCodexLifecycleOperatorTransportHeartbeatArtifact;
+  guided_execution_path: string;
+  guided_execution_artifact: PiCodexGuidedRealPiExecutionArtifact;
+  agent_run_log_session_binding: PiCodexLifecycleOperatorTransportLogSessionBinding;
+  terminal_chain_bound: boolean;
+  heartbeat_consumed_by_review: boolean;
+  guided_execution_consumed_by_review: boolean;
+  vetoes: PiCodexGuidedExecutionTerminalChainReviewVeto[];
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+const terminalChainOrderedSteps: PiCodexGuidedExecutionTerminalChainStep[] = [
+  "real_pi_runtime_probe",
+  "operator_session_manifest",
+  "operator_transport_recovery_checkpoint",
+  "bounded_operator_transport_lease",
+  "operator_transport_heartbeat_rebind",
+  "guided_real_pi_execution"
+];
+
 const defaultInstallSessionEvidence: PiCodexLifecycleInstallSessionEvidence = {
   session_kind: "unknown",
   pi_host_kind: "unknown",
@@ -1364,7 +1454,7 @@ const operatorSessionEnvSecretPattern =
 const operatorSessionBearerSecretPattern = /\bAuthorization\s*:\s*Bearer\s+[^\s,;}"']+/gi;
 const operatorSessionSecretPattern = /\b(?:sk-[A-Za-z0-9._-]+)\b/gi;
 const operatorSessionProofSuccessPattern =
-  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|proven|verified_final_authority_evidence)\b/gi;
+  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|kernel_checked|proof_success|proven|verified_final_authority_evidence)\b/gi;
 
 function sanitizeOperatorSessionText(value: string): string {
   return Buffer.from(
@@ -1830,6 +1920,52 @@ function resolveOperatorTransportRecoveryPath(
   });
 }
 
+function resolveOperatorTransportHeartbeatPath(
+  projectRoot: string,
+  heartbeatId: string,
+  heartbeatPath: string | undefined
+): string {
+  const expectedPath = operatorTransportHeartbeatPath(heartbeatId);
+  if (heartbeatPath === undefined) {
+    return expectedPath;
+  }
+  const absolutePath = assertPathAllowed(projectRoot, heartbeatPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  const relativePath = projectRelativePath(projectRoot, absolutePath);
+  if (relativePath === expectedPath) {
+    return relativePath;
+  }
+  throw new ComathError("Pi/Codex guided execution terminal chain heartbeat path does not match heartbeat id", {
+    statusCode: 400,
+    code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_HEARTBEAT_INVALID"
+  });
+}
+
+function resolveGuidedRealPiExecutionPath(
+  projectRoot: string,
+  executionId: string,
+  executionPath: string | undefined
+): string {
+  const expectedPath = guidedRealPiExecutionPath(executionId);
+  if (executionPath === undefined) {
+    return expectedPath;
+  }
+  const absolutePath = assertPathAllowed(projectRoot, executionPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  const relativePath = projectRelativePath(projectRoot, absolutePath);
+  if (relativePath === expectedPath) {
+    return relativePath;
+  }
+  throw new ComathError("Pi/Codex guided execution terminal chain execution path does not match execution id", {
+    statusCode: 400,
+    code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_EXECUTION_INVALID"
+  });
+}
+
 function assertOperatorTransportSessionManifestBoundary(manifest: PiCodexLifecycleOperatorSessionManifestBody): void {
   let completedSteps: PiCodexLifecycleOperatorSessionStep[];
   try {
@@ -2188,6 +2324,216 @@ function readOperatorTransportLeaseArtifact(
   };
 }
 
+function assertOperatorTransportHeartbeatBoundary(
+  heartbeat: PiCodexLifecycleOperatorTransportHeartbeatBody
+): void {
+  const logSessionBinding = heartbeat.agent_run_log_session_binding;
+  const parsedLogSessionRoute =
+    typeof logSessionBinding?.route === "string" ? parseAgentRunLogSessionRoute(logSessionBinding.route) : null;
+  if (
+    heartbeat.heartbeat_status !== "operator_transport_heartbeat_rebound" ||
+    heartbeat.heartbeat_required !== true ||
+    heartbeat.operator_transport_lease_bound !== true ||
+    heartbeat.operator_transport_log_session_rebound !== true ||
+    heartbeat.lease_still_valid !== true ||
+    heartbeat.durable_recovery_checkpoint_required !== true ||
+    heartbeat.bounded_live_transport_lease_bound !== true ||
+    heartbeat.bounded_heartbeat_checkpoint_provided !== true ||
+    heartbeat.durable_transport_provided !== false ||
+    heartbeat.live_transport_open !== false ||
+    heartbeat.indefinite_stream_open !== false ||
+    heartbeat.long_lived_websocket_provided !== false ||
+    heartbeat.long_lived_sse_provided !== false ||
+    heartbeat.pi_direct_write_allowed !== false ||
+    heartbeat.direct_trusted_state_mutation !== false ||
+    heartbeat.proof_authority !== "none" ||
+    heartbeat.can_promote_claim !== false ||
+    heartbeat.can_certify_ga !== false ||
+    logSessionBinding?.binding_source !== "service_owned_agent_run_log_session" ||
+    logSessionBinding.project_id !== heartbeat.project_id ||
+    logSessionBinding.route !== heartbeat.lease_route ||
+    parsedLogSessionRoute === null ||
+    parsedLogSessionRoute.route !== logSessionBinding.route ||
+    parsedLogSessionRoute.runId !== logSessionBinding.run_id ||
+    logSessionBinding.content_type !== "text/event-stream; charset=utf-8" ||
+    !isAgentRunLogCursor(logSessionBinding.cursor) ||
+    !isAgentRunLogCursor(logSessionBinding.next_cursor) ||
+    !Number.isSafeInteger(logSessionBinding.event_count) ||
+    logSessionBinding.event_count < 0 ||
+    typeof logSessionBinding.complete !== "boolean" ||
+    !/^[a-f0-9]{64}$/u.test(logSessionBinding.body_sha256) ||
+    logSessionBinding.proof_authority !== "none" ||
+    logSessionBinding.durable_transport_provided !== false ||
+    logSessionBinding.long_lived_sse_provided !== false
+  ) {
+    throw new ComathError("Pi/Codex guided execution terminal chain heartbeat violates non-authority boundaries", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_HEARTBEAT_INVALID"
+    });
+  }
+}
+
+function readOperatorTransportHeartbeatArtifact(
+  projectRoot: string,
+  projectId: string,
+  sessionId: string,
+  recoveryId: string,
+  leaseId: string,
+  heartbeatId: string,
+  heartbeatPath: string
+): {
+  heartbeat: PiCodexLifecycleOperatorTransportHeartbeatBody;
+  artifact: PiCodexLifecycleOperatorTransportHeartbeatArtifact;
+} {
+  const absolutePath = assertPathAllowed(projectRoot, heartbeatPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath)) {
+    throw new ComathError("Pi/Codex guided execution terminal chain requires a heartbeat artifact", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_HEARTBEAT_MISSING"
+    });
+  }
+  if (!statSync(absolutePath).isFile()) {
+    throw new ComathError("Pi/Codex guided execution terminal chain heartbeat artifact must be a file", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_HEARTBEAT_INVALID"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  let parsed: PiCodexLifecycleOperatorTransportHeartbeatBody;
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexLifecycleOperatorTransportHeartbeatBody;
+  } catch {
+    throw new ComathError("Pi/Codex guided execution terminal chain heartbeat JSON is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_HEARTBEAT_INVALID"
+    });
+  }
+  if (
+    parsed.schema_version !== "comath.pi_codex_lifecycle_operator_transport_heartbeat.v1" ||
+    parsed.project_id !== projectId ||
+    parsed.session_id !== sessionId ||
+    parsed.transport_recovery_id !== recoveryId ||
+    parsed.transport_lease_id !== leaseId ||
+    parsed.transport_heartbeat_id !== heartbeatId ||
+    parsed.transport_heartbeat_path !== heartbeatPath
+  ) {
+    throw new ComathError("Pi/Codex guided execution terminal chain heartbeat does not bind the requested review", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_HEARTBEAT_INVALID"
+    });
+  }
+  assertOperatorTransportHeartbeatBoundary(parsed);
+  return {
+    heartbeat: parsed,
+    artifact: {
+      kind: "operator_transport_heartbeat",
+      path: heartbeatPath,
+      sha256: sha256Bytes(content),
+      size_bytes: content.byteLength
+    }
+  };
+}
+
+function assertGuidedRealPiExecutionBoundary(execution: PiCodexGuidedRealPiExecutionBody): void {
+  if (
+    execution.execution_status !== "guided_real_pi_execution_recorded" ||
+    execution.guided_real_pi_execution_observed !== true ||
+    execution.real_pi_runtime_probe_bound !== true ||
+    execution.operator_session_manifest_bound !== true ||
+    execution.operator_transport_recovery_bound !== true ||
+    execution.operator_transport_lease_bound !== true ||
+    execution.pi_direct_write_allowed !== false ||
+    execution.direct_trusted_state_mutation !== false ||
+    execution.durable_transport_provided !== false ||
+    execution.indefinite_stream_open !== false ||
+    execution.long_lived_websocket_provided !== false ||
+    execution.long_lived_sse_provided !== false ||
+    execution.proof_authority !== "none" ||
+    execution.can_promote_claim !== false ||
+    execution.can_certify_ga !== false ||
+    !Array.isArray(execution.required_preconditions) ||
+    execution.required_preconditions.length !== 4 ||
+    execution.required_preconditions[0] !== "real_pi_runtime_probe_observed" ||
+    execution.required_preconditions[1] !== "operator_session_manifest_bound" ||
+    execution.required_preconditions[2] !== "operator_transport_recovery_checkpoint_bound" ||
+    execution.required_preconditions[3] !== "bounded_operator_transport_lease_bound"
+  ) {
+    throw new ComathError("Pi/Codex guided execution terminal chain guided execution violates non-authority boundaries", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_EXECUTION_INVALID"
+    });
+  }
+}
+
+function readGuidedRealPiExecutionArtifact(
+  projectRoot: string,
+  projectId: string,
+  probeId: string,
+  sessionId: string,
+  recoveryId: string,
+  leaseId: string,
+  executionId: string,
+  executionPath: string
+): {
+  execution: PiCodexGuidedRealPiExecutionBody;
+  artifact: PiCodexGuidedRealPiExecutionArtifact;
+} {
+  const absolutePath = assertPathAllowed(projectRoot, executionPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath)) {
+    throw new ComathError("Pi/Codex guided execution terminal chain requires a guided execution artifact", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_EXECUTION_MISSING"
+    });
+  }
+  if (!statSync(absolutePath).isFile()) {
+    throw new ComathError("Pi/Codex guided execution terminal chain guided execution artifact must be a file", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_EXECUTION_INVALID"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  let parsed: PiCodexGuidedRealPiExecutionBody;
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexGuidedRealPiExecutionBody;
+  } catch {
+    throw new ComathError("Pi/Codex guided execution terminal chain guided execution JSON is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_EXECUTION_INVALID"
+    });
+  }
+  if (
+    parsed.schema_version !== "comath.pi_codex_guided_real_pi_execution.v1" ||
+    parsed.project_id !== projectId ||
+    parsed.real_pi_runtime_probe_id !== probeId ||
+    parsed.session_id !== sessionId ||
+    parsed.transport_recovery_id !== recoveryId ||
+    parsed.transport_lease_id !== leaseId ||
+    parsed.execution_id !== executionId ||
+    parsed.guided_execution_path !== executionPath
+  ) {
+    throw new ComathError("Pi/Codex guided execution terminal chain guided execution does not bind the requested review", {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_EXECUTION_INVALID"
+    });
+  }
+  assertGuidedRealPiExecutionBoundary(parsed);
+  return {
+    execution: parsed,
+    artifact: {
+      kind: "guided_real_pi_execution",
+      path: executionPath,
+      sha256: sha256Bytes(content),
+      size_bytes: content.byteLength
+    }
+  };
+}
+
 function readGuidedRealPiRuntimeRegistrationSnapshot(
   projectRoot: string,
   projectId: string,
@@ -2271,6 +2617,12 @@ function readGuidedRealPiInstallTranscript(
 function guidedRealPiExecutionPath(executionId: string): string {
   return normalizeRelativePath(
     join(".comath", "release", "pi-codex-lifecycle", executionId, "guided-real-pi-execution.json")
+  );
+}
+
+function terminalExecutionReviewPath(reviewId: string): string {
+  return normalizeRelativePath(
+    join(".comath", "release", "pi-codex-lifecycle", reviewId, "terminal-execution-review.json")
   );
 }
 
@@ -2991,6 +3343,244 @@ export function recordPiCodexLifecycleGuidedRealPiExecution(
     }
   });
   return result;
+}
+
+function assertTerminalChainBinding(condition: boolean, message: string): void {
+  if (!condition) {
+    throw new ComathError(message, {
+      statusCode: 400,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_MISMATCH"
+    });
+  }
+}
+
+export function reviewPiCodexLifecycleTerminalExecution(
+  projectRoot: string,
+  input: PiCodexGuidedExecutionTerminalChainReviewInput
+): PiCodexGuidedExecutionTerminalChainReview {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const reviewId = assertReviewId(input.review_id);
+  const realPiRuntimeProbeId = assertRealPiRuntimeProbeId(input.real_pi_runtime_probe_id);
+  const sessionId = assertOperatorSessionId(input.session_id);
+  const recoveryId = assertOperatorTransportRecoveryId(input.transport_recovery_id);
+  const leaseId = assertOperatorTransportLeaseId(input.transport_lease_id);
+  const heartbeatId = assertOperatorTransportHeartbeatId(input.transport_heartbeat_id);
+  const executionId = assertGuidedRealPiExecutionId(input.execution_id);
+
+  const { artifact: runtimeRegistrationArtifact, piHostLabel: runtimeRegistrationPiHostLabel } =
+    readGuidedRealPiRuntimeRegistrationSnapshot(
+      projectRoot,
+      projectId,
+      realPiRuntimeProbeId,
+      input.runtime_registration_snapshot_path
+    );
+  const piInstallArtifact = readGuidedRealPiInstallTranscript(projectRoot, input.pi_install_transcript_path);
+
+  const sessionManifestPath = resolveOperatorTransportSessionManifestPath(
+    projectRoot,
+    sessionId,
+    input.session_manifest_path
+  );
+  const { manifest, artifact: sessionManifestArtifact } = readOperatorTransportSessionManifest(
+    projectRoot,
+    projectId,
+    sessionId,
+    sessionManifestPath
+  );
+  const recoveryPath = resolveOperatorTransportRecoveryPath(projectRoot, recoveryId, input.transport_recovery_path);
+  const { recovery, artifact: transportRecoveryArtifact } = readOperatorTransportRecoveryCheckpoint(
+    projectRoot,
+    projectId,
+    sessionId,
+    recoveryId,
+    recoveryPath
+  );
+  const leasePath = input.transport_lease_path
+    ? projectRelativePath(
+        projectRoot,
+        assertPathAllowed(projectRoot, input.transport_lease_path, { purpose: "read", resolveRealpath: true })
+      )
+    : operatorTransportLeasePath(leaseId);
+  const { lease, artifact: transportLeaseArtifact } = readOperatorTransportLeaseArtifact(
+    projectRoot,
+    projectId,
+    sessionId,
+    recoveryId,
+    leaseId,
+    leasePath,
+    { allowLiveLogGrowth: true }
+  );
+  const heartbeatPath = resolveOperatorTransportHeartbeatPath(
+    projectRoot,
+    heartbeatId,
+    input.transport_heartbeat_path
+  );
+  const { heartbeat, artifact: transportHeartbeatArtifact } = readOperatorTransportHeartbeatArtifact(
+    projectRoot,
+    projectId,
+    sessionId,
+    recoveryId,
+    leaseId,
+    heartbeatId,
+    heartbeatPath
+  );
+  const guidedExecutionPath = resolveGuidedRealPiExecutionPath(projectRoot, executionId, input.guided_execution_path);
+  const { execution, artifact: guidedExecutionArtifact } = readGuidedRealPiExecutionArtifact(
+    projectRoot,
+    projectId,
+    realPiRuntimeProbeId,
+    sessionId,
+    recoveryId,
+    leaseId,
+    executionId,
+    guidedExecutionPath
+  );
+
+  assertTerminalChainBinding(
+    manifest.pi_host_label === runtimeRegistrationPiHostLabel,
+    "Pi/Codex guided execution terminal chain session host binding does not match runtime probe"
+  );
+  assertTerminalChainBinding(
+    recovery.session_manifest_path === sessionManifestPath &&
+      recovery.session_manifest_artifact.sha256 === sessionManifestArtifact.sha256,
+    "Pi/Codex guided execution terminal chain recovery is not bound to the current session manifest"
+  );
+  assertTerminalChainBinding(
+    lease.session_manifest_path === sessionManifestPath &&
+      lease.session_manifest_artifact.sha256 === sessionManifestArtifact.sha256 &&
+      lease.transport_recovery_path === recoveryPath &&
+      lease.transport_recovery_artifact.sha256 === transportRecoveryArtifact.sha256,
+    "Pi/Codex guided execution terminal chain lease is not bound to the current recovery/session chain"
+  );
+  assertTerminalChainBinding(
+    heartbeat.session_manifest_path === sessionManifestPath &&
+      heartbeat.session_manifest_artifact.sha256 === sessionManifestArtifact.sha256 &&
+      heartbeat.transport_recovery_path === recoveryPath &&
+      heartbeat.transport_recovery_artifact.sha256 === transportRecoveryArtifact.sha256 &&
+      heartbeat.transport_lease_path === leasePath &&
+      heartbeat.lease_artifact.sha256 === transportLeaseArtifact.sha256,
+    "Pi/Codex guided execution terminal chain heartbeat is not bound to the current lease/recovery/session chain"
+  );
+  assertTerminalChainBinding(
+    heartbeat.agent_run_log_session_binding.project_id === lease.agent_run_log_session_binding.project_id &&
+      heartbeat.agent_run_log_session_binding.run_id === lease.agent_run_log_session_binding.run_id &&
+      heartbeat.agent_run_log_session_binding.route === lease.agent_run_log_session_binding.route &&
+      agentRunLogCursorAtLeast(heartbeat.agent_run_log_session_binding.cursor, lease.agent_run_log_session_binding.next_cursor),
+    "Pi/Codex guided execution terminal chain heartbeat did not consume the bounded lease log-session"
+  );
+  assertTerminalChainBinding(
+    execution.pi_install_transcript_path === piInstallArtifact.path &&
+      execution.pi_install_artifact.sha256 === piInstallArtifact.sha256 &&
+      execution.runtime_registration_snapshot_path === runtimeRegistrationArtifact.path &&
+      execution.runtime_registration_artifact.sha256 === runtimeRegistrationArtifact.sha256 &&
+      execution.session_manifest_path === sessionManifestPath &&
+      execution.session_manifest_artifact.sha256 === sessionManifestArtifact.sha256 &&
+      execution.transport_recovery_path === recoveryPath &&
+      execution.transport_recovery_artifact.sha256 === transportRecoveryArtifact.sha256 &&
+      execution.transport_lease_path === leasePath &&
+      execution.transport_lease_artifact.sha256 === transportLeaseArtifact.sha256,
+    "Pi/Codex guided execution terminal chain guided execution is not bound to the current lifecycle artifacts"
+  );
+  assertTerminalChainBinding(
+    execution.pi_host_label === undefined || execution.pi_host_label === runtimeRegistrationPiHostLabel,
+    "Pi/Codex guided execution terminal chain guided execution host binding does not match runtime probe"
+  );
+
+  const reviewPath = terminalExecutionReviewPath(reviewId);
+  const absoluteReviewPath = assertPathAllowed(projectRoot, reviewPath, { purpose: "runtime-write" });
+  if (existsSync(absoluteReviewPath)) {
+    throw new ComathError("Pi/Codex guided execution terminal chain review already exists", {
+      statusCode: 409,
+      code: "PI_CODEX_GUIDED_EXECUTION_TERMINAL_CHAIN_REVIEW_ALREADY_EXISTS"
+    });
+  }
+
+  const review: PiCodexGuidedExecutionTerminalChainReview = {
+    schema_version: "comath.pi_codex_guided_execution_terminal_chain_review.v1",
+    review_id: reviewId,
+    project_id: projectId,
+    created_at: new Date().toISOString(),
+    ok: true,
+    review_status: "guided_real_pi_terminal_chain_ready_for_release_review",
+    review_path: reviewPath,
+    ordered_steps: [...terminalChainOrderedSteps],
+    required_preconditions: [...terminalChainOrderedSteps],
+    real_pi_runtime_probe_id: realPiRuntimeProbeId,
+    session_id: sessionId,
+    transport_recovery_id: recoveryId,
+    transport_lease_id: leaseId,
+    transport_heartbeat_id: heartbeatId,
+    execution_id: executionId,
+    pi_install_transcript_path: piInstallArtifact.path,
+    pi_install_artifact: piInstallArtifact,
+    runtime_registration_snapshot_path: runtimeRegistrationArtifact.path,
+    runtime_registration_artifact: runtimeRegistrationArtifact,
+    session_manifest_path: sessionManifestPath,
+    session_manifest_artifact: sessionManifestArtifact,
+    transport_recovery_path: recoveryPath,
+    transport_recovery_artifact: transportRecoveryArtifact,
+    transport_lease_path: leasePath,
+    transport_lease_artifact: transportLeaseArtifact,
+    transport_heartbeat_path: heartbeatPath,
+    transport_heartbeat_artifact: transportHeartbeatArtifact,
+    guided_execution_path: guidedExecutionPath,
+    guided_execution_artifact: guidedExecutionArtifact,
+    agent_run_log_session_binding: heartbeat.agent_run_log_session_binding,
+    terminal_chain_bound: true,
+    heartbeat_consumed_by_review: true,
+    guided_execution_consumed_by_review: true,
+    vetoes: [],
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+
+  mkdirSync(dirname(absoluteReviewPath), { recursive: true });
+  writeFileSync(absoluteReviewPath, canonicalJson(review), "utf8");
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_guided_execution_terminal_chain_reviewed",
+    actor: sanitizeOperatorTransportText(input.actor),
+    target_id: projectId,
+    payload: {
+      review_id: reviewId,
+      ok: true,
+      review_status: review.review_status,
+      review_path: reviewPath,
+      real_pi_runtime_probe_id: realPiRuntimeProbeId,
+      session_id: sessionId,
+      transport_recovery_id: recoveryId,
+      transport_lease_id: leaseId,
+      transport_heartbeat_id: heartbeatId,
+      execution_id: executionId,
+      transport_heartbeat_artifact_sha256: transportHeartbeatArtifact.sha256,
+      guided_execution_artifact_sha256: guidedExecutionArtifact.sha256,
+      terminal_chain_bound: true,
+      heartbeat_consumed_by_review: true,
+      guided_execution_consumed_by_review: true,
+      agent_run_id: heartbeat.agent_run_log_session_binding.run_id,
+      agent_run_log_session_route: heartbeat.agent_run_log_session_binding.route,
+      agent_run_log_session_body_sha256: heartbeat.agent_run_log_session_binding.body_sha256,
+      durable_transport_provided: false,
+      live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return review;
 }
 
 export function probePiCodexDurableServiceLifecycle(

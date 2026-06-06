@@ -1,3 +1,30 @@
+# Goal 3 Task 224 / Guided Execution Terminal Chain Review
+
+Scope: add a service-owned terminal review gate for the guided real-Pi lifecycle chain, binding runtime probe, operator session, recovery, bounded lease, heartbeat/rebind, and guided execution artifacts without creating proof authority, durable transport, direct Pi writes, or GA certification.
+
+Changes:
+
+- Added `goal3-task224-pi-guided-execution-terminal-chain-review.test.mjs`.
+- Added `reviewPiCodexLifecycleTerminalExecution()` and `POST /release/pi-codex-lifecycle/terminal-execution-review`.
+- Added `comath.pi_codex_guided_execution_terminal_chain_review.v1` artifacts under `.comath/release/pi-codex-lifecycle/<review-id>/terminal-execution-review.json`.
+- Added `pi_codex_guided_execution_terminal_chain_review` to the service capability ledger.
+- The review reads and hash-binds Task152 runtime probe evidence, Task157 operator-session manifest, Task159 recovery checkpoint, Task220 bounded lease, Task221 heartbeat/rebind checkpoint, and Task164 guided execution before writing.
+- Missing heartbeat, poisoned heartbeat boundary fields, stale artifact hashes, path/id mismatch, and caller proof-success or durable-transport wording fail closed or are sanitized before persistence.
+- Synchronized README, AGENTS, TODO, threat model, GA release criteria, phase0 smoke, REVIEW, and the Goal 3 tracker without claiming fully automatic Pi execution or durable long-lived transport.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task224 failed because `../../dist/index.js` did not export `reviewPiCodexLifecycleTerminalExecution`.
+- After implementation, focused Task224 exited 0.
+- Adjacent Task164, Task166, Task220, and Task221 regressions exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task224 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task224 is service-owned release evidence only. It does not run Lean, promote proof claims, certify GA, open durable long-lived SSE/WebSocket transport, mutate Pi state, or replace a real operator-controlled Pi execution. It closes the terminal chain review gap for existing bounded lifecycle artifacts; durable operator/service transport, fully automatic real-Pi execution, real installed-toolchain Mathlib smoke breadth, and GA certification remain open.
+
 # Goal 3 Task 223 / Interactive Real-Pi Checkpoint UX
 
 Scope: add a read-only Pi-side interactive real-Pi checkpoint planner over the existing host-confirmed lifecycle command chain without creating service-owned evidence, durable transport, proof authority, or GA certification.
