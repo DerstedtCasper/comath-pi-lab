@@ -553,9 +553,12 @@ type AgentAdapterOsIsolationProductionHelperProfileSource =
   | "bundled_provider_helper_protocol_asset";
 
 type AgentAdapterOsIsolationProductionHelperProfileContractBase = {
-  contract_source: "service_owned_oci_container_production_helper_profile_contract";
-  provider: "oci_container";
-  provider_family: "oci_container";
+  contract_source:
+    | "service_owned_oci_container_production_helper_profile_contract"
+    | "service_owned_nix_sandbox_production_helper_profile_contract"
+    | "service_owned_firejail_production_helper_profile_contract";
+  provider: "oci_container" | "nix_sandbox" | "firejail";
+  provider_family: "oci_container" | "nix_sandbox" | "firejail";
   helper_profile_source: AgentAdapterOsIsolationProductionHelperProfileSource;
   production_helper_configured: boolean;
   bundled_protocol_asset: boolean;
@@ -564,8 +567,11 @@ type AgentAdapterOsIsolationProductionHelperProfileContractBase = {
     "operator_configured_provider_helper",
     "bundled_provider_helper_protocol_asset"
   ];
-  required_host_facility_tools: readonly ["oci_docker_cli", "oci_podman_cli"];
-  runtime_family: "docker_or_podman_oci";
+  required_host_facility_tools:
+    | readonly ["oci_docker_cli", "oci_podman_cli"]
+    | readonly ["nix_cli", "nix_store_cli"]
+    | readonly ["firejail_cli"];
+  runtime_family: "docker_or_podman_oci" | "nix_develop_no_network" | "firejail_private_netnone_nonewprivs";
   runner_network_policy: "disabled";
   no_new_privileges_required: true;
   command_override_allowed: false;
@@ -610,9 +616,30 @@ export type AgentAdapterOsIsolationNixProductionHelperProfileContract =
     nix_command_execution_required_for_profile_contract: false;
   };
 
+export type AgentAdapterOsIsolationFirejailProductionHelperProfileContract =
+  Omit<
+    AgentAdapterOsIsolationProductionHelperProfileContractBase,
+    | "contract_source"
+    | "provider"
+    | "provider_family"
+    | "required_host_facility_tools"
+    | "runtime_family"
+    | "daemon_or_socket_inspection_allowed"
+    | "container_launch_required_for_profile_contract"
+  > & {
+    contract_source: "service_owned_firejail_production_helper_profile_contract";
+    provider: "firejail";
+    provider_family: "firejail";
+    required_host_facility_tools: readonly ["firejail_cli"];
+    runtime_family: "firejail_private_netnone_nonewprivs";
+    firejail_profile_or_policy_inspection_allowed: false;
+    firejail_command_execution_required_for_profile_contract: false;
+  };
+
 export type AgentAdapterOsIsolationProductionHelperProfileContract =
   | AgentAdapterOsIsolationOciProductionHelperProfileContract
-  | AgentAdapterOsIsolationNixProductionHelperProfileContract;
+  | AgentAdapterOsIsolationNixProductionHelperProfileContract
+  | AgentAdapterOsIsolationFirejailProductionHelperProfileContract;
 
 export type AgentAdapterOsIsolationProviderHostCapabilityKernelFeature = {
   name: string;
@@ -4604,11 +4631,15 @@ function isServiceOwnedProviderRunnerResolution(
 function productionHelperProfileContractSpec(provider: AgentAdapterOsIsolationProvider): {
   contract_source:
     | "service_owned_oci_container_production_helper_profile_contract"
-    | "service_owned_nix_sandbox_production_helper_profile_contract";
-  provider: "oci_container" | "nix_sandbox";
-  provider_family: "oci_container" | "nix_sandbox";
-  required_host_facility_tools: readonly ["oci_docker_cli", "oci_podman_cli"] | readonly ["nix_cli", "nix_store_cli"];
-  runtime_family: "docker_or_podman_oci" | "nix_develop_no_network";
+    | "service_owned_nix_sandbox_production_helper_profile_contract"
+    | "service_owned_firejail_production_helper_profile_contract";
+  provider: "oci_container" | "nix_sandbox" | "firejail";
+  provider_family: "oci_container" | "nix_sandbox" | "firejail";
+  required_host_facility_tools:
+    | readonly ["oci_docker_cli", "oci_podman_cli"]
+    | readonly ["nix_cli", "nix_store_cli"]
+    | readonly ["firejail_cli"];
+  runtime_family: "docker_or_podman_oci" | "nix_develop_no_network" | "firejail_private_netnone_nonewprivs";
   extra_contract_material:
     | {
         daemon_or_socket_inspection_allowed: false;
@@ -4617,6 +4648,10 @@ function productionHelperProfileContractSpec(provider: AgentAdapterOsIsolationPr
     | {
         store_or_profile_inspection_allowed: false;
         nix_command_execution_required_for_profile_contract: false;
+      }
+    | {
+        firejail_profile_or_policy_inspection_allowed: false;
+        firejail_command_execution_required_for_profile_contract: false;
       };
 } | null {
   if (provider === "oci_container") {
@@ -4642,6 +4677,19 @@ function productionHelperProfileContractSpec(provider: AgentAdapterOsIsolationPr
       extra_contract_material: {
         store_or_profile_inspection_allowed: false,
         nix_command_execution_required_for_profile_contract: false
+      }
+    };
+  }
+  if (provider === "firejail") {
+    return {
+      contract_source: "service_owned_firejail_production_helper_profile_contract",
+      provider: "firejail",
+      provider_family: "firejail",
+      required_host_facility_tools: ["firejail_cli"],
+      runtime_family: "firejail_private_netnone_nonewprivs",
+      extra_contract_material: {
+        firejail_profile_or_policy_inspection_allowed: false,
+        firejail_command_execution_required_for_profile_contract: false
       }
     };
   }

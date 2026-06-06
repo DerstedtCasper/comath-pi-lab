@@ -154,6 +154,15 @@
         "providerSpecificLiveProbeExecutionRequired": true,
         "providerSpecificLiveProbeCollectionBindingRequired": true,
         "providerControlPlaneExecutionWitnessRequired": true,
+        "productionHelperProfileContractRequired": true,
+        "productionHelperProfileContractKind": "firejail_private_netnone_nonewprivs_profile_contract",
+        "productionHelperProfileSources": [
+          "operator_configured_provider_helper",
+          "bundled_provider_helper_protocol_asset"
+        ],
+        "requiredHostFacilityTools": [
+          "firejail_cli"
+        ],
         "executionAssetHashBound": true,
         "hostValidationSelfTestRequired": true,
         "proofAuthority": "none",

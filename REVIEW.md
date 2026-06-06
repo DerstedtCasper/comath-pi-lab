@@ -1,3 +1,27 @@
+# Goal 3 Task 234 / Firejail Production-Helper Profile Contract
+
+Scope: add a Firejail production-helper profile contract to the existing provider-helper lineage path, without adding a Firejail runner, running Firejail, inspecting Firejail profile/policy state, treating helper metadata as OS-enforcement proof, changing Lean proof authority, creating real-Pi evidence, or certifying GA.
+
+Implementation notes:
+- Added `goal3-task234-agent-adapter-os-isolation-firejail-production-helper-profile-contract.test.mjs`.
+- Extended the service-derived `production_helper_profile_contract` generator from OCI/Nix to Firejail.
+- Added `agent_adapter_os_isolation_firejail_production_helper_profile_contract` to the service capability ledger.
+- Registered Firejail profile-contract metadata in sample config, phase0 smoke, GA release criteria, adapter contracts, threat model, README, AGENTS, TODO, REVIEW, and the Goal 3 tracker.
+
+Verification:
+- TDD RED was observed before implementation: focused Task234 failed because `getComathdStatus().capabilities` did not advertise `agent_adapter_os_isolation_firejail_production_helper_profile_contract`.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task234 exited 0.
+- Adjacent Task232, Task222, Task212, Task184, Task196, and Task211 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task234 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 including phase0 smoke, Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task234 is lineage and anti-confusion metadata only. It binds Firejail helper profile source, helper binary hash, Firejail facility family, disabled network policy, no-new-privileges, path-free `firejail_cli`, and non-authority flags through existing provider-runner, host-validation, helper-execution, and collection manifests. It does not run Firejail, inspect Firejail profile/policy state, ship a production helper, prove OS enforcement, affect Lean/mathlib proof authority, produce real-Pi evidence, or certify GA.
+
 # Goal 3 Task 233 / Operator-Service Transport Check-Debug
 
 Scope: revalidate the Task220-231 operator/service transport and prepared handoff chain through focused release-hardening coverage, without adding a new transport route, Pi mutating tool, background stream owner, direct trusted-state mutation, Lean execution, proof authority, claim promotion, or GA certification.
