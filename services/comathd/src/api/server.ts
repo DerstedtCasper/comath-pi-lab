@@ -65,6 +65,7 @@ import {
   recordPiCodexLifecycleOperatorServiceTransportContract,
   recoverPiCodexLifecycleOperatorTransport,
   reviewPiCodexLifecycleTerminalExecution,
+  reviewPiCodexLifecycleUnattendedRealHostHandoff,
   reviewPiCodexLifecycleReadiness
 } from "../release/pi-codex-lifecycle-readiness.js";
 import {
@@ -487,6 +488,17 @@ async function route(method: string, path: string, body: unknown, context: Route
       (payload) => {
         const body = payload as Parameters<typeof reviewGoal3PublicArchiveSurfaces>[1] & { project_root: string };
         return reviewGoal3PublicArchiveSurfaces(body.project_root, body);
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/unattended-real-host-handoff-review",
+      (payload) => {
+        const body = payload as Parameters<typeof reviewPiCodexLifecycleUnattendedRealHostHandoff>[1] & {
+          project_root: string;
+        };
+        return {
+          handoff_review: reviewPiCodexLifecycleUnattendedRealHostHandoff(body.project_root, body)
+        };
       }
     ],
     [

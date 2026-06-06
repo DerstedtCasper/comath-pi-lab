@@ -1,3 +1,28 @@
+# Goal 3 Task 239 / Service-Owned Unattended Real-Host Handoff Review
+
+Scope: add a service-owned append-only review over the prepared Pi/Codex lifecycle handoff chain. The review verifies freshness and chain binding for existing service-owned checkpoint artifacts; it is not operator approval, unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task239-service-owned-unattended-real-host-handoff-review.test.mjs`.
+- Added `reviewPiCodexLifecycleUnattendedRealHostHandoff()` to derive canonical `.comath/release/pi-codex-lifecycle/...` artifact paths from ids, re-read runtime registration, operator session, recovery, lease, heartbeat, guided execution, terminal review, maintained transport contract, automatic orchestration, and continuity artifacts, and compare public prepared-checkpoint aliases/hashes only as expected values.
+- Added append-only `.comath/release/pi-codex-lifecycle/<handoff_review_id>/unattended-real-host-handoff-review.json` persistence plus `release.pi_codex_unattended_real_host_handoff_reviewed` audit events.
+- Added `POST /release/pi-codex-lifecycle/unattended-real-host-handoff-review`, the `pi_codex_unattended_real_host_handoff_review` capability, phase0 smoke release-hardening discovery, GA release criteria, README, AGENTS, TODO, adapter contracts, threat model, REVIEW, and the Goal 3 tracker.
+- Read-only review found two chain-review hardening gaps: continuity resume checkpoints needed to be re-bound to the Task225 transport contract cursor/body hash, and audit events needed to hash-bind the exact review artifact and checkpoint order/hash summary. Focused RED coverage reproduced both before the verifier/audit payload was hardened.
+
+Verification:
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task239 exited 0.
+- Adjacent Task224, Task225, Task227, and Task229 lifecycle regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task239 discovered by the default runner.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+- After reviewer hardening, focused Task239, adjacent Task224/225/227/229, `corepack pnpm --filter @comath/comathd build`, `node scripts/phase0-smoke.mjs`, `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, and `corepack pnpm test` all exited 0 again.
+
+Boundary notes: Task239 records freshness and chain-review evidence only. Public `service-owned-pi-lifecycle/...` aliases are never source-of-truth paths; the service derives canonical paths from ids and recomputes hashes from artifacts. Duplicate review ids, stale hashes, invalid aliases, chain tampering, stale continuity resume hashes, secrets, proof-success wording, long-lived transport wording, and unattended-execution or approval-shaped overclaims fail closed or are sanitized. Audit events bind the exact review artifact hash/size plus prepared checkpoint order/hash summaries. All approval, execution, unattended authorization/completion, durable/live transport, direct trusted mutation, proof authority, promotion, and GA certification flags remain false.
+
 # Goal 3 Task 238 / Campaign Live Mathlib No-Download Fixture Preflight
 
 Scope: add a bounded preflight before Task218/219 host/import diagnostics for campaign-native live Mathlib replay requests. It validates only that Task214 dependency-material checks and Task216 local Mathlib provisioning diagnostics are ready without downloads. It is not a downloader, Lean/Lake execution path, Lake import resolver, theorem search adapter, proof authority, final replay allocation, claim promotion, or GA certification.
