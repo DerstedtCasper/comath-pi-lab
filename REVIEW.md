@@ -1,3 +1,37 @@
+# Goal 3 Task 226 / Pi Operator-Service Transport Contract Consumer
+
+Scope: expose the Task225 operator/service maintained transport contract through Pi as a host-confirmed thin consumer and interactive real-Pi checkpoint without creating durable transport, direct Pi writes, proof authority, trusted state mutation, or GA certification.
+
+Changes:
+
+- Added `goal3-task226-pi-operator-service-transport-contract-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleOperatorServiceTransportContract` and `/cm:release lifecycle-operator-service-transport-contract`.
+- Added the new runtime-registration subcommand, Phase6/Phase26 exposure guards, and Pi package test discovery.
+- Extended the read-only interactive real-Pi planner so the Task225 contract checkpoint appears after guided execution and before Codex API probe/review.
+- Hardened public sanitization so `live_transport_open`, `pi_direct_write_allowed`, and `direct_trusted_state_mutation` are forced false alongside proof/GA/durable/long-lived transport fields.
+- Synchronized README, AGENTS, TODO, threat model, GA release criteria, phase0 smoke, REVIEW, and the Goal 3 tracker without claiming durable long-lived transport or automatic real-Pi execution.
+
+Verification:
+
+- TDD RED was observed before implementation: focused Task226 failed because `comath.release.piCodexLifecycleOperatorServiceTransportContract` was not registered.
+- Follow-up RED coverage exposed that public Pi output could still surface `live_transport_open`, `pi_direct_write_allowed`, and `direct_trusted_state_mutation` overclaims; the centralized sanitizer now forces those fields false.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- Focused Task226 exited 0.
+- Adjacent Task223, Task221, Task165, Phase6, and Phase26 Pi lifecycle/registration regressions exited 0 from the package cwd.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task226 discovered by the default runner.
+- Adjacent service regressions for Task225, Task224, Task221, Task220, Task164, Task166, and Phase50 exited 0.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 on a longer rerun after an initial 185s command budget timeout produced no assertion failure.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0, including Pi workspace tests, comathd package tests, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task226 is a host-confirmed Pi consumer only. It calls the service-owned Task225 route, strips model-supplied `confirmation_id`, sanitizes actor/path/result surfaces, and exposes only fixed maintained primitive enums. It does not write `.comath` from Pi, open live transport, maintain a durable transport stack, mutate trusted state directly, run Lean, prove mathematics, promote claims, or certify GA.
+
 # Goal 3 Task 225 / Operator-Service Maintained Transport Contract
 
 Scope: add service-owned append-only provenance for the maintained operator/service transport boundary, binding a Task224 terminal review to the current Task221 heartbeat hash, existing Node HTTP AgentRun log-session route, and Pi `fetch`/`getText` client primitive without creating durable transport, proof authority, Pi mutation authority, or GA certification.

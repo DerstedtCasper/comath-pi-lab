@@ -23,6 +23,7 @@ const expectedCheckpointSteps = [
   "lifecycle-operator-transport-lease",
   "lifecycle-operator-transport-heartbeat",
   "lifecycle-guided-real-pi-execution",
+  "lifecycle-operator-service-transport-contract",
   "run-codex-api-probe",
   "review"
 ];
@@ -101,6 +102,19 @@ const expectedNextActions = [
       "lifecycle-operator-transport-heartbeat",
       "lifecycle-guided-real-pi-execution"
     ],
+    action: "lifecycle-operator-service-transport-contract",
+    command: /\/cm:release lifecycle-operator-service-transport-contract/
+  },
+  {
+    completed: [
+      "run-real-pi-runtime-probe",
+      "lifecycle-operator-session",
+      "lifecycle-operator-transport-recovery",
+      "lifecycle-operator-transport-lease",
+      "lifecycle-operator-transport-heartbeat",
+      "lifecycle-guided-real-pi-execution",
+      "lifecycle-operator-service-transport-contract"
+    ],
     action: "run-codex-api-probe",
     command: /lifecycle-control run-codex-api-probe/
   },
@@ -112,6 +126,7 @@ const expectedNextActions = [
       "lifecycle-operator-transport-lease",
       "lifecycle-operator-transport-heartbeat",
       "lifecycle-guided-real-pi-execution",
+      "lifecycle-operator-service-transport-contract",
       "run-codex-api-probe"
     ],
     action: "review",
@@ -135,6 +150,8 @@ for (const expected of expectedNextActions) {
     transport_lease_id: "LIFE-TRANSPORT-LEASE-0223",
     transport_heartbeat_id: "LIFE-TRANSPORT-HEARTBEAT-0223",
     execution_id: "LIFE-GUIDED-EXEC-0223",
+    terminal_review_id: "LIFE-TERMINAL-REVIEW-0223",
+    transport_contract_id: "LIFE-TRANSPORT-CONTRACT-0223",
     session_manifest_path: ".comath/release/pi-codex-lifecycle/LIFE-SESSION-0223/operator-session-manifest.json",
     transport_recovery_path:
       ".comath/release/pi-codex-lifecycle/LIFE-TRANSPORT-0223/operator-transport-recovery.json",
@@ -144,6 +161,8 @@ for (const expected of expectedNextActions) {
       ".comath/release/pi-codex-lifecycle/LIFE-PI-RUNTIME-0223/pi-install-transcript.md",
     runtime_registration_snapshot_path:
       ".comath/release/pi-codex-lifecycle/LIFE-PI-RUNTIME-0223/runtime-registration-snapshot.json",
+    terminal_review_path:
+      ".comath/release/pi-codex-lifecycle/LIFE-TERMINAL-REVIEW-0223/terminal-execution-review.json",
     operator_event_cursor: "event:42 Authorization: Bearer plain-token",
     stdout_cursor: "stdout:42",
     stderr_cursor: "stderr:0 clean_replay_passed from D:/research/project",

@@ -103,6 +103,7 @@ assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycle
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleOperatorTransportLease"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleOperatorTransportHeartbeat"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleGuidedRealPiExecution"), true);
+assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleOperatorServiceTransportContract"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.piCodexLifecycleInteractiveRealPi"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.agentAdapterOsIsolationProbe"), true);
 assert.equal(tools.some((tool) => tool.name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe"), true);

@@ -154,6 +154,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleOperatorTransportLease",
   "comath.release.piCodexLifecycleOperatorTransportHeartbeat",
   "comath.release.piCodexLifecycleGuidedRealPiExecution",
+  "comath.release.piCodexLifecycleOperatorServiceTransportContract",
   "comath.release.piCodexLifecycleInteractiveRealPi",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
@@ -426,7 +427,7 @@ const secretEchoPattern =
   /\b(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token)\s*[:=]\s*[A-Za-z0-9._-]+|Authorization:\s*Bearer\s*[A-Za-z0-9._-]+|\bsk-[A-Za-z0-9._-]+\b/gi;
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
 const publicFalseAuthorityKeyPattern =
-  /^(?:can_promote_claim|can_certify_ga|durable_transport_provided|indefinite_stream_open|long_lived_websocket_provided|long_lived_sse_provided|os_enforced)$/i;
+  /^(?:can_promote_claim|can_certify_ga|durable_transport_provided|live_transport_open|indefinite_stream_open|long_lived_websocket_provided|long_lived_sse_provided|pi_direct_write_allowed|direct_trusted_state_mutation|os_enforced)$/i;
 
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
@@ -473,6 +474,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleOperatorTransportLease" ||
     name === "comath.release.piCodexLifecycleOperatorTransportHeartbeat" ||
     name === "comath.release.piCodexLifecycleGuidedRealPiExecution" ||
+    name === "comath.release.piCodexLifecycleOperatorServiceTransportContract" ||
     name === "comath.release.piCodexLifecycleInteractiveRealPi" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
@@ -508,6 +510,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "lifecycle-operator-transport-lease",
   "lifecycle-operator-transport-heartbeat",
   "lifecycle-guided-real-pi-execution",
+  "lifecycle-operator-service-transport-contract",
   "run-codex-api-probe",
   "review"
 ] as const;
@@ -836,6 +839,12 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     `${sessionId}-TRANSPORT-HEARTBEAT`
   );
   const executionId = optionalPublicPlannerToken(input, "execution_id", `${sessionId}-GUIDED-EXECUTION`);
+  const terminalReviewId = optionalPublicPlannerToken(input, "terminal_review_id", `${sessionId}-TERMINAL-REVIEW`);
+  const transportContractId = optionalPublicPlannerToken(
+    input,
+    "transport_contract_id",
+    `${sessionId}-TRANSPORT-CONTRACT`
+  );
   const sessionManifestPath = optionalPublicPlannerPath(
     input,
     "session_manifest_path",
@@ -860,6 +869,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     input,
     "runtime_registration_snapshot_path",
     `service-owned-pi-lifecycle/${probeId}/runtime-registration-snapshot.json`
+  );
+  const terminalReviewPath = optionalPublicPlannerPath(
+    input,
+    "terminal_review_path",
+    `service-owned-pi-lifecycle/${terminalReviewId}/terminal-execution-review.json`
   );
 
   const commandByStep: Record<typeof PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS[number], string> = {
@@ -888,6 +902,10 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `--session-manifest-path ${sessionManifestPath} --transport-recovery-id ${transportRecoveryId} ` +
       `--transport-recovery-path ${transportRecoveryPath} --transport-lease-id ${transportLeaseId} ` +
       `--transport-lease-path ${transportLeasePath} --pi-host-label ${piHostLabel}`,
+    "lifecycle-operator-service-transport-contract":
+      `/cm:release lifecycle-operator-service-transport-contract --project-id ${projectId} ` +
+      `--transport-contract-id ${transportContractId} --terminal-review-id ${terminalReviewId} ` +
+      `--terminal-review-path ${terminalReviewPath}`,
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -929,6 +947,9 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       transport_lease_path: transportLeasePath,
       transport_heartbeat_id: transportHeartbeatId,
       execution_id: executionId,
+      terminal_review_id: terminalReviewId,
+      terminal_review_path: terminalReviewPath,
+      transport_contract_id: transportContractId,
       pi_install_transcript_path: piInstallTranscriptPath,
       runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath
     },
@@ -1803,6 +1824,32 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
         ...(clientEpoch === undefined ? {} : { client_epoch: clientEpoch }),
         ...(lastSeenEventId === undefined ? {} : { last_seen_event_id: publicOperatorText(lastSeenEventId) }),
         ...(heartbeatReason === undefined ? {} : { heartbeat_reason: publicOperatorText(heartbeatReason) })
+      })
+    );
+  }
+
+  if (name === "comath.release.piCodexLifecycleOperatorServiceTransportContract") {
+    const transportContractId = readString(input, "transport_contract_id", { optional: true });
+    const terminalReviewPath = readString(input, "terminal_review_path", { optional: true });
+    const maxBytes = readNumber(input, "max_bytes");
+    const maxEvents = readNumber(input, "max_events");
+    const retryMs = readNumber(input, "retry_ms");
+    const serviceTransportPrimitive = readString(input, "service_transport_primitive", { optional: true });
+    const clientTransportPrimitive = readString(input, "client_transport_primitive", { optional: true });
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/operator-service-transport-contract", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        ...(transportContractId === undefined ? {} : { transport_contract_id: transportContractId }),
+        terminal_review_id: readString(input, "terminal_review_id"),
+        ...(terminalReviewPath === undefined ? {} : { terminal_review_path: publicOperatorText(terminalReviewPath) }),
+        ...(maxBytes === undefined ? {} : { max_bytes: maxBytes }),
+        ...(maxEvents === undefined ? {} : { max_events: maxEvents }),
+        ...(retryMs === undefined ? {} : { retry_ms: retryMs }),
+        ...(serviceTransportPrimitive === undefined ? {} : { service_transport_primitive: serviceTransportPrimitive }),
+        ...(clientTransportPrimitive === undefined ? {} : { client_transport_primitive: clientTransportPrimitive })
       })
     );
   }
@@ -2823,6 +2870,31 @@ export function createComathTools(): ToolDescriptor[] {
       )
     },
     {
+      name: "comath.release.piCodexLifecycleOperatorServiceTransportContract",
+      description:
+        "Record a service-owned Pi/Codex operator/service maintained transport contract through comathd, binding an existing terminal review to maintained Node HTTP and Pi fetch primitives without durable transport claims.",
+      mutates: true,
+      input_schema: objectSchema(["project_root", "project_id", "actor", "terminal_review_id"], {
+        project_root: stringProp,
+        project_id: stringProp,
+        actor: stringProp,
+        transport_contract_id: stringProp,
+        terminal_review_id: stringProp,
+        terminal_review_path: stringProp,
+        max_bytes: { type: "number", minimum: 0 },
+        max_events: { type: "number", minimum: 0 },
+        retry_ms: { type: "number", minimum: 0 },
+        service_transport_primitive: {
+          type: "string",
+          enum: ["node_http_agent_run_log_session_route"]
+        },
+        client_transport_primitive: {
+          type: "string",
+          enum: ["pi_fetch_get_text"]
+        }
+      })
+    },
+    {
       name: "comath.release.piCodexLifecycleGuidedRealPiExecution",
       description:
         "Record service-owned guided real-Pi execution evidence through comathd without Pi direct writes, proof authority, GA certification, or long-lived transport claims.",
@@ -2899,6 +2971,9 @@ export function createComathTools(): ToolDescriptor[] {
         transport_lease_path: stringProp,
         transport_heartbeat_id: stringProp,
         execution_id: stringProp,
+        terminal_review_id: stringProp,
+        terminal_review_path: stringProp,
+        transport_contract_id: stringProp,
         pi_install_transcript_path: stringProp,
         runtime_registration_snapshot_path: stringProp,
         operator_event_cursor: stringProp,
@@ -4267,6 +4342,9 @@ async function handleReleaseCommand(
         transport_lease_path: optionValue(parsed.args, "--transport-lease-path"),
         transport_heartbeat_id: optionValue(parsed.args, "--transport-heartbeat-id"),
         execution_id: optionValue(parsed.args, "--execution-id"),
+        terminal_review_id: optionValue(parsed.args, "--terminal-review-id"),
+        terminal_review_path: optionValue(parsed.args, "--terminal-review-path"),
+        transport_contract_id: optionValue(parsed.args, "--transport-contract-id"),
         pi_install_transcript_path: optionValue(parsed.args, "--pi-install-transcript-path"),
         runtime_registration_snapshot_path: optionValue(parsed.args, "--runtime-registration-snapshot-path"),
         operator_event_cursor: optionValue(parsed.args, "--operator-event-cursor"),
@@ -4461,6 +4539,36 @@ async function handleReleaseCommand(
           final_operator_cursor: parseLifecycleOperatorTransportCursor(parsed.args),
           execution_outcome: optionValue(parsed.args, "--execution-outcome"),
           next_recommended_route: optionValue(parsed.args, "--next-recommended-route")
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-operator-service-transport-contract") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.piCodexLifecycleOperatorServiceTransportContract"
+    );
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle operator/service transport contract tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          transport_contract_id: optionValue(parsed.args, "--transport-contract-id"),
+          terminal_review_id: requiredOption(optionValue(parsed.args, "--terminal-review-id"), "terminal_review_id"),
+          terminal_review_path: optionValue(parsed.args, "--terminal-review-path"),
+          max_bytes: numberOptionValue(parsed.args, "--max-bytes"),
+          max_events: numberOptionValue(parsed.args, "--max-events"),
+          retry_ms: numberOptionValue(parsed.args, "--retry-ms"),
+          service_transport_primitive: optionValue(parsed.args, "--service-transport-primitive"),
+          client_transport_primitive: optionValue(parsed.args, "--client-transport-primitive")
         },
         ctx
       )
