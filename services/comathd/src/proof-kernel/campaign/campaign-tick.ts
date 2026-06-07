@@ -17,6 +17,7 @@ import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-for
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
 import { summarizeCandidateProofGradeEvidence } from "../ensemble/candidate-proof-grade-summary.js";
 import { runGaAgentStageCandidates, type GaAgentStagePlanningContext } from "../ensemble/ga-agent-stage-runner.js";
+import { createLeanCandidateAttemptCheckReport } from "../ensemble/lean-candidate-attempt-check.js";
 import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-candidate-lean-check.js";
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
 import { defaultVariants } from "../ensemble/variant-registry.js";
@@ -5293,6 +5294,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
 
   if (campaign.current_stage === "candidate_verification") {
     const candidates = readStoredCandidates(input.project_root, campaign, obligation.obligation_id);
+    const candidatesRel = ensembleCandidatesRel(campaign, obligation.obligation_id);
     const variantIds = new Set(candidates.map((candidate) => candidate.variant_id));
     let manifestBindingsValid = true;
     try {
@@ -5328,6 +5330,24 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       campaign,
       candidates
     });
+    const attemptCheckReport = createLeanCandidateAttemptCheckReport({
+      projectRoot: input.project_root,
+      campaign,
+      obligation,
+      candidates,
+      sourceCandidateIndexPath: candidatesRel
+    });
+    const attemptCheckReportRel = writeSimpleStageArtifact(
+      input.project_root,
+      campaign,
+      "lean_candidate_attempt_check_report.json",
+      attemptCheckReport
+    );
+    const attemptBindingsValid =
+      attemptCheckReport.all_attempt_plans_bound &&
+      attemptCheckReport.all_source_skeleton_hashes_match &&
+      attemptCheckReport.all_blueprint_hashes_match &&
+      attemptCheckReport.candidates_blocked === 0;
     const verificationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_verification.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
@@ -5339,6 +5359,16 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       failed_candidates: candidates.filter((candidate) => candidate.state === "candidate_failed").length,
       all_statement_hashes_match: allStatementHashesMatch,
       all_manifest_bindings_match_obligation: manifestBindingsValid,
+      lean_candidate_attempt_checks_performed: true,
+      lean_candidate_attempt_check_report_path: attemptCheckReportRel,
+      lean_candidate_attempt_checks_total: attemptCheckReport.checked_candidate_count,
+      lean_candidate_attempts_ready_for_lean_runner: attemptCheckReport.candidates_ready_for_lean_runner,
+      lean_candidate_attempts_requiring_repair: attemptCheckReport.candidates_requiring_repair,
+      lean_candidate_attempts_blocked: attemptCheckReport.candidates_blocked,
+      lean_candidate_attempt_all_plan_bindings_valid: attemptCheckReport.all_attempt_plans_bound,
+      lean_candidate_attempt_all_source_skeleton_hashes_match: attemptCheckReport.all_source_skeleton_hashes_match,
+      lean_candidate_attempt_all_blueprint_hashes_match: attemptCheckReport.all_blueprint_hashes_match,
+      lean_candidate_attempt_lean_run_manifest_paths: attemptCheckReport.lean_run_manifest_paths,
       proof_authority: "none",
       can_promote_claim: false,
       created_at: now()
@@ -5349,7 +5379,8 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       !allRequiredVariantsPresent ||
       !allManifestPathsPresent ||
       !allStatementHashesMatch ||
-      !manifestBindingsValid
+      !manifestBindingsValid ||
+      !attemptBindingsValid
     ) {
       return blockCampaignAtFinalReplay({
         projectRoot: input.project_root,
@@ -5365,7 +5396,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "candidate_arbitration",
-        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "candidate_verification", [verificationRel])],
+        stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "candidate_verification", [verificationRel, attemptCheckReportRel])],
         next_actions: ["select candidate by evidence-weighted arbitration"]
       }),
       actor

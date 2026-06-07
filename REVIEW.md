@@ -1,3 +1,31 @@
+# Goal 3 Task 263 / Pi Goal-Mode Lean Attempt Check Report
+
+Scope: turn Task262's draft Lean candidate workspaces into service-owned preflight and repair-routing evidence during `candidate_verification`. This is not Lean replay, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task263-pi-goal-mode-lean-attempt-check-report.test.mjs`.
+- Added `createLeanCandidateAttemptCheckReport()` in `proof-kernel/ensemble/lean-candidate-attempt-check.ts`.
+- `candidate_verification` now writes `.comath/campaign/<campaign_id>/lean_candidate_attempt_check_report.json`.
+- The report binds each candidate manifest, `lean_candidate_attempt_plan.json`, `LeanCandidate.lean`, source `proof/Skeleton.lean` hash, skeleton blueprint hash, and locked statement boundary.
+- `sorry`-bearing drafts are routed to `repair_required` with `lean_runner_invocations=0`, empty LeanRunManifest paths, and `proof_authority=none`.
+- Tampered/missing attempt bindings fail closed before ordinary candidate arbitration.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task263 service test: `node services/comathd/tests/unit/goal3-task263-pi-goal-mode-lean-attempt-check-report.test.mjs` failed because `candidate_verification.json` did not include `lean_candidate_attempt_checks_performed=true`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task263 exited 0.
+- Adjacent Task262, Task261, Task109, and Task110 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task263 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task263, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task263 performs service-owned static preflight only. It does not invoke LeanRunner on `sorry` drafts, does not write LeanRunManifest evidence, does not mark candidates as proof-grade, and cannot promote claims or certify GA. The report can drive repair planning and later no-sorry LeanRunner checks.
+
+Residual risk: Goal 3 remains incomplete. Task263 does not perform automatic proof repair, run LeanRunner on repaired no-sorry attempts, integrate live theorem-search/literature hints into proof scripts, implement maintained PDF parsing or external Lean repo inspection, complete per-candidate clean replay promotion, provide terminal proof/refutation/blocker completion, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 262 / Pi Goal-Mode Blueprint Lean Candidate Attempts
 
 Scope: materialize Task261's blueprint-bound candidate orchestration into per-candidate Lean attempt workspaces. These are service-owned draft attempt artifacts only; they are not LeanRunManifest evidence, proof authority, promotion, or GA certification.
