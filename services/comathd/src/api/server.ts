@@ -70,6 +70,7 @@ import {
   recordPiCodexLifecycleUnattendedRealHostOperatorApproval,
   recoverPiCodexLifecycleOperatorTransport,
   reviewPiCodexLifecycleTerminalExecution,
+  reviewPiCodexLifecycleUnattendedRealHostExecutionAttempt,
   reviewPiCodexLifecycleUnattendedRealHostHandoff,
   reviewPiCodexLifecycleReadiness
 } from "../release/pi-codex-lifecycle-readiness.js";
@@ -550,6 +551,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           execution_attempt: recordPiCodexLifecycleUnattendedRealHostExecutionAttempt(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/unattended-real-host-execution-attempt-review",
+      (payload) => {
+        const body = payload as Parameters<typeof reviewPiCodexLifecycleUnattendedRealHostExecutionAttempt>[1] & {
+          project_root: string;
+        };
+        return {
+          execution_attempt_review: reviewPiCodexLifecycleUnattendedRealHostExecutionAttempt(body.project_root, body)
         };
       }
     ],

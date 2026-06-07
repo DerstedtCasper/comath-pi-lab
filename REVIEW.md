@@ -1,3 +1,28 @@
+# Goal 3 Task 251 / Service-Owned Unattended Real-Host Execution Attempt Review
+
+Scope: add a service-owned terminal review over Task249 attempt/blocker evidence. This is append-only operational blocker evidence only; it is not a Pi consumer, public executor configuration, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task251-service-owned-unattended-real-host-execution-attempt-review.test.mjs`.
+- Added `reviewPiCodexLifecycleUnattendedRealHostExecutionAttempt()` and `POST /release/pi-codex-lifecycle/unattended-real-host-execution-attempt-review`.
+- Added append-only `comath.pi_codex_unattended_real_host_execution_attempt_review.v1` manifests and `release.pi_codex_unattended_real_host_execution_attempt_reviewed` audit events.
+- Registered the service capability and phase0 release-hardening discovery.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task251 service test: after `corepack pnpm --filter @comath/comathd build`, `node services/comathd/tests/unit/goal3-task251-service-owned-unattended-real-host-execution-attempt-review.test.mjs` failed because `reviewPiCodexLifecycleUnattendedRealHostExecutionAttempt` was not exported.
+- After implementation, focused Task251 exited 0.
+- Adjacent Task249, Task247, Task245, and Task241 service regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task251 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task250, comathd package tests through Task251, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task251 derives the canonical attempt path from `attempt_id`, treats caller path/hash only as expected values, re-reads the Task249 attempt, replays the readiness/handoff/approval/executor/durable chain, and verifies any attempt result artifact before writing review evidence. Executor-unavailable and failed attempts remain blockers; an exit-code-0 bounded attempt is classified `blocked_terminal_unattended_completion_review_required` with `terminal_unattended_completion_certified=false`. Public/audit output keeps proof, GA, durable/live transport, direct-Pi-write, direct-trusted-state, terminal-completion, and unattended-execution authority flags false.
+
+Residual risk: Goal 3 remains incomplete. Task251 does not add a Pi-facing attempt-review consumer/planner step, provide durable long-lived operator transport, expose public executor configuration, complete production unattended real-host execution, mutate Pi trusted state, run Lean, change Lean/mathlib proof replay authority, promote claims, complete real installed-toolchain Mathlib smoke coverage, complete broad final release-candidate proof breadth, ship production OS-isolation helper binaries, or certify GA.
+
 # Goal 3 Task 250 / Pi Unattended Real-Host Execution Attempt Consumer
 
 Scope: expose the Task249 service-owned execution attempt/blocker gate through the Pi extension as a host-confirmed thin client and read-only planner checkpoint. This is Pi consumer wiring only; it is not public executor configuration, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
