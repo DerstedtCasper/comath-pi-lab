@@ -211,7 +211,8 @@ function knowledgePackArtifacts(campaign: ResearchCampaign): string[] {
     ".comath/memory/library_search.jsonl",
     ".comath/memory/premise_candidates.jsonl",
     campaignRel(campaign, "goal_mode_research_plan.json"),
-    campaignRel(campaign, "goal_mode_adapter_execution_manifest.json")
+    campaignRel(campaign, "goal_mode_adapter_execution_manifest.json"),
+    campaignRel(campaign, "goal_mode_local_ingestion_evidence.json")
   ];
 }
 
@@ -252,7 +253,8 @@ function rewindTargetForMissingArtifact(rel: string): ResearchCampaign["current_
     rel.includes("/references.bib") ||
     rel.includes("/library_search.jsonl") ||
     rel.includes("/goal_mode_research_plan.json") ||
-    rel.includes("/goal_mode_adapter_execution_manifest.json")
+    rel.includes("/goal_mode_adapter_execution_manifest.json") ||
+    rel.includes("/goal_mode_local_ingestion_evidence.json")
   ) {
     return "knowledge_pack";
   }
@@ -1455,6 +1457,391 @@ function writeGoalModeAdapterExecutionManifest(input: {
       extracted_claims_require_later_prompt_injection_scan: true,
       theorem_search_hits_are_hints_only: true,
       final_authority: "Lean4/mathlib kernel clean replay"
+    },
+    proof_authority: "none",
+    external_evidence_authority: false,
+    can_promote_claim: false,
+    can_certify_ga: false,
+    created_at: now()
+  });
+}
+
+function goalModeAdapterExecutionRuns(manifest: Record<string, unknown>): Record<string, unknown>[] {
+  const runs = manifest.adapter_runs;
+  return Array.isArray(runs) ? runs.filter((run): run is Record<string, unknown> => !!run && typeof run === "object" && !Array.isArray(run)) : [];
+}
+
+function goalModeTextPromptInjectionScan(text: string): Record<string, unknown> {
+  const patterns: Array<{ code: string; pattern: RegExp }> = [
+    { code: "ignore_previous_instructions", pattern: /\bignore\s+(all\s+)?(previous|system|developer)\s+instructions?\b/i },
+    { code: "skip_lean_authority", pattern: /\b(skip|bypass|avoid).{0,40}\bLean\b/i },
+    { code: "mark_proven_without_lean", pattern: /\b(mark|declare|label).{0,40}\b(proven|proved).{0,60}\bwithout\s+Lean\b/i },
+    { code: "credential_exfiltration", pattern: /\b(secret|credential|token|api[_ -]?key|password)\b/i },
+    { code: "tool_misuse_instruction", pattern: /\b(run|execute|call)\s+(shell|powershell|cmd|tool)\b/i }
+  ];
+  const lines = text.split(/\r?\n/);
+  const findings: Record<string, unknown>[] = [];
+  lines.forEach((line, index) => {
+    for (const entry of patterns) {
+      if (entry.pattern.test(line)) {
+        findings.push({
+          code: entry.code,
+          line_range: `${index + 1}-${index + 1}`
+        });
+      }
+    }
+  });
+  return {
+    status: findings.length > 0 ? "fail" : "pass",
+    findings
+  };
+}
+
+function cleanGoalModeClaimText(text: string): string {
+  return text
+    .replace(/\\label\{[^}]+\}/g, "")
+    .replace(/\\(begin|end)\{[^}]+\}/g, "")
+    .replace(/[`*_#>]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function goalModeClaimKindFromLabel(label: string): string {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("definition")) {
+    return "paper_definition";
+  }
+  if (normalized.includes("lemma")) {
+    return "paper_lemma";
+  }
+  if (normalized.includes("proof")) {
+    return "paper_proof_step";
+  }
+  return "paper_theorem";
+}
+
+function goalModeLineAnchorId(recordIndex: number, anchorIndex: number): string {
+  return `GMLIE-${String(recordIndex).padStart(4, "0")}-A${String(anchorIndex).padStart(4, "0")}`;
+}
+
+function goalModeExtractAnchoredClaims(input: {
+  text: string;
+  normalizedPath: string;
+  adapterProvider: string;
+  recordIndex: number;
+}): { anchors: Record<string, unknown>[]; extracted_claims: Record<string, unknown>[] } {
+  const lines = input.text.split(/\r?\n/);
+  const anchors: Record<string, unknown>[] = [];
+  const claims: Record<string, unknown>[] = [];
+  const addClaim = (label: string, statement: string, startLine: number, endLine: number) => {
+    const cleaned = cleanGoalModeClaimText(statement);
+    if (!cleaned) {
+      return;
+    }
+    const anchorId = goalModeLineAnchorId(input.recordIndex, anchors.length + 1);
+    const anchor = {
+      anchor_id: anchorId,
+      source_ref: input.normalizedPath,
+      line_range: `${startLine}-${endLine}`,
+      excerpt: cleaned.slice(0, 240),
+      proof_authority: "none",
+      can_promote_claim: false
+    };
+    anchors.push(anchor);
+    claims.push({
+      claim_id: `${anchorId}-C0001`,
+      kind: goalModeClaimKindFromLabel(label),
+      statement: cleaned,
+      statement_sha256: sha256Text(cleaned),
+      evidence_anchor_id: anchorId,
+      source_ref: input.normalizedPath,
+      source_adapter_provider: input.adapterProvider,
+      proof_authority: "none",
+      external_evidence_authority: false,
+      can_promote_claim: false,
+      can_certify_ga: false,
+      result_can_be_used_as_proof: false
+    });
+  };
+
+  lines.forEach((line, index) => {
+    const markdownMatch = line.match(/^\s*(Theorem|Lemma|Definition|Proof step)\.?\s*(?:[:.-]\s*)?(.*)$/i);
+    if (markdownMatch?.[2]?.trim()) {
+      addClaim(markdownMatch[1], markdownMatch[2], index + 1, index + 1);
+    }
+  });
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const begin = lines[index].match(/\\begin\{(theorem|lemma|definition|proof)\}/i);
+    if (!begin) {
+      continue;
+    }
+    const label = begin[1];
+    const body: string[] = [];
+    let endLine = index + 1;
+    for (let inner = index + 1; inner < lines.length; inner += 1) {
+      endLine = inner + 1;
+      if (new RegExp(`\\\\end\\{${label}\\}`, "i").test(lines[inner])) {
+        break;
+      }
+      body.push(lines[inner]);
+    }
+    addClaim(label, body.join(" "), index + 1, endLine);
+  }
+
+  return { anchors, extracted_claims: claims };
+}
+
+function goalModeLocalIngestionBlocker(
+  code: string,
+  run: Record<string, unknown>,
+  extra: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    code,
+    adapter_run_id: run.adapter_run_id ?? null,
+    planned_task_id: run.planned_task_id ?? null,
+    adapter_provider: run.adapter_provider ?? null,
+    normalized_path: run.normalized_path ?? null,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    ...extra
+  };
+}
+
+function goalModeLocalIngestionBlockedRecord(input: {
+  run: Record<string, unknown>;
+  recordIndex: number;
+  executionState: string;
+  blockerCode: string;
+  contentSha256?: string | null;
+}): Record<string, unknown> {
+  return {
+    ingestion_record_id: `GMLIE-${String(input.recordIndex).padStart(4, "0")}`,
+    adapter_run_id: input.run.adapter_run_id ?? null,
+    planned_task_id: input.run.planned_task_id ?? null,
+    adapter_id: input.run.adapter_id ?? null,
+    adapter_kind: input.run.adapter_kind ?? null,
+    adapter_provider: input.run.adapter_provider ?? null,
+    normalized_path: input.run.normalized_path ?? null,
+    input_sha256: input.run.input_sha256 ?? null,
+    content_sha256: input.contentSha256 ?? input.run.current_input_sha256 ?? input.run.input_sha256 ?? null,
+    execution_state: input.executionState,
+    prompt_injection_scan: {
+      status: "not_applicable",
+      findings: []
+    },
+    anchors: [],
+    extracted_claims: [],
+    response_summary: {
+      anchor_count: 0,
+      extracted_claim_count: 0
+    },
+    blocker: goalModeLocalIngestionBlocker(input.blockerCode, input.run),
+    proof_authority: "none",
+    external_evidence_authority: false,
+    can_promote_claim: false,
+    can_certify_ga: false,
+    result_can_be_used_as_proof: false
+  };
+}
+
+function goalModeLocalTextIngestionRecord(input: {
+  projectRoot: string;
+  run: Record<string, unknown>;
+  recordIndex: number;
+}): Record<string, unknown> {
+  const normalizedPath = optionalStringField(input.run, "normalized_path");
+  if (!normalizedPath || !safeGoalModeNormalizedPath(normalizedPath)) {
+    return goalModeLocalIngestionBlockedRecord({
+      run: input.run,
+      recordIndex: input.recordIndex,
+      executionState: "blocked_input_path_unsafe",
+      blockerCode: "goal_mode_input_path_unsafe"
+    });
+  }
+  if (input.run.execution_state !== "local_manifest_recorded" || input.run.input_integrity_status !== "matched") {
+    return goalModeLocalIngestionBlockedRecord({
+      run: input.run,
+      recordIndex: input.recordIndex,
+      executionState: "blocked_input_integrity_unverified",
+      blockerCode: "goal_mode_input_integrity_unverified"
+    });
+  }
+
+  const absolutePath = assertPathAllowed(input.projectRoot, normalizedPath, { purpose: "read", resolveRealpath: true });
+  const text = readFileSync(absolutePath, "utf8");
+  const contentSha256 = sha256Text(text);
+  if (contentSha256 !== input.run.current_input_sha256 && contentSha256 !== input.run.input_sha256) {
+    return goalModeLocalIngestionBlockedRecord({
+      run: input.run,
+      recordIndex: input.recordIndex,
+      executionState: "blocked_input_hash_mismatch",
+      blockerCode: "goal_mode_input_hash_mismatch",
+      contentSha256
+    });
+  }
+
+  const promptInjectionScan = goalModeTextPromptInjectionScan(text);
+  if (promptInjectionScan.status === "fail") {
+    return {
+      ingestion_record_id: `GMLIE-${String(input.recordIndex).padStart(4, "0")}`,
+      adapter_run_id: input.run.adapter_run_id ?? null,
+      planned_task_id: input.run.planned_task_id ?? null,
+      adapter_id: input.run.adapter_id ?? null,
+      adapter_kind: input.run.adapter_kind ?? null,
+      adapter_provider: input.run.adapter_provider ?? null,
+      normalized_path: normalizedPath,
+      input_sha256: input.run.input_sha256 ?? null,
+      content_sha256: contentSha256,
+      execution_state: "blocked_prompt_injection_detected",
+      prompt_injection_scan: promptInjectionScan,
+      anchors: [],
+      extracted_claims: [],
+      response_summary: {
+        anchor_count: 0,
+        extracted_claim_count: 0
+      },
+      blocker: goalModeLocalIngestionBlocker("goal_mode_prompt_injection_detected", input.run),
+      proof_authority: "none",
+      external_evidence_authority: false,
+      can_promote_claim: false,
+      can_certify_ga: false,
+      result_can_be_used_as_proof: false
+    };
+  }
+
+  const extracted = goalModeExtractAnchoredClaims({
+    text,
+    normalizedPath,
+    adapterProvider: optionalStringField(input.run, "adapter_provider") ?? "unknown",
+    recordIndex: input.recordIndex
+  });
+  return {
+    ingestion_record_id: `GMLIE-${String(input.recordIndex).padStart(4, "0")}`,
+    adapter_run_id: input.run.adapter_run_id ?? null,
+    planned_task_id: input.run.planned_task_id ?? null,
+    adapter_id: input.run.adapter_id ?? null,
+    adapter_kind: input.run.adapter_kind ?? null,
+    adapter_provider: input.run.adapter_provider ?? null,
+    normalized_path: normalizedPath,
+    input_sha256: input.run.input_sha256 ?? null,
+    content_sha256: contentSha256,
+    execution_state: "local_text_extracted",
+    prompt_injection_scan: promptInjectionScan,
+    anchors: extracted.anchors,
+    extracted_claims: extracted.extracted_claims,
+    response_summary: {
+      anchor_count: extracted.anchors.length,
+      extracted_claim_count: extracted.extracted_claims.length
+    },
+    blocker: null,
+    proof_authority: "none",
+    external_evidence_authority: false,
+    can_promote_claim: false,
+    can_certify_ga: false,
+    result_can_be_used_as_proof: false
+  };
+}
+
+function goalModeLocalIngestionEvidenceRecord(input: {
+  projectRoot: string;
+  run: Record<string, unknown>;
+  recordIndex: number;
+}): Record<string, unknown> {
+  const provider = optionalStringField(input.run, "adapter_provider");
+  if (provider === "local_markdown" || provider === "local_tex") {
+    return goalModeLocalTextIngestionRecord(input);
+  }
+  if (provider === "local_pdf") {
+    return goalModeLocalIngestionBlockedRecord({
+      run: input.run,
+      recordIndex: input.recordIndex,
+      executionState: "blocked_pdf_parser_required",
+      blockerCode: "goal_mode_pdf_ingestion_adapter_required"
+    });
+  }
+  if (provider === "local_lean_repo") {
+    return goalModeLocalIngestionBlockedRecord({
+      run: input.run,
+      recordIndex: input.recordIndex,
+      executionState: "blocked_external_lean_repo_inspection_required",
+      blockerCode: "goal_mode_external_lean_repo_inspection_required",
+      contentSha256: null
+    });
+  }
+  return goalModeLocalIngestionBlockedRecord({
+    run: input.run,
+    recordIndex: input.recordIndex,
+    executionState: "blocked_local_ingestion_adapter_unsupported",
+    blockerCode: "goal_mode_local_ingestion_adapter_unsupported"
+  });
+}
+
+function writeGoalModeLocalIngestionEvidence(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  researchPlanRel: string;
+  adapterExecutionRel: string;
+}): string {
+  const researchPlan = objectRecord(readJsonArtifact(input.projectRoot, input.researchPlanRel), "goal_mode_research_plan");
+  const executionManifest = objectRecord(
+    readJsonArtifact(input.projectRoot, input.adapterExecutionRel),
+    "goal_mode_adapter_execution_manifest"
+  );
+  const localRuns = goalModeAdapterExecutionRuns(executionManifest).filter((run) => run.purpose === "local_ingestion");
+  const ingestionRecords = localRuns.map((run, index) =>
+    goalModeLocalIngestionEvidenceRecord({ projectRoot: input.projectRoot, run, recordIndex: index + 1 })
+  );
+  const promptInjectionBlockerCount = ingestionRecords.filter(
+    (record) => objectRecord(record.prompt_injection_scan, "prompt_injection_scan").status === "fail"
+  ).length;
+  const blockedRecordCount = ingestionRecords.filter((record) => typeof record.blocker === "object" && record.blocker !== null).length;
+  const extractedClaimCount = ingestionRecords.reduce((count, record) => {
+    const claims = record.extracted_claims;
+    return count + (Array.isArray(claims) ? claims.length : 0);
+  }, 0);
+
+  return writeSimpleStageArtifact(input.projectRoot, input.campaign, "goal_mode_local_ingestion_evidence.json", {
+    schema_version: "comath.pi_goal_mode_local_ingestion_evidence.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.campaign.project_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    locked_statement_hash: input.obligation.statement_hash,
+    consumes_goal_mode_research_plan: {
+      path: input.researchPlanRel,
+      sha256: sha256RuntimeFile(input.projectRoot, input.researchPlanRel),
+      schema_version: researchPlan.schema_version ?? null,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    },
+    consumes_goal_mode_adapter_execution_manifest: {
+      path: input.adapterExecutionRel,
+      sha256: sha256RuntimeFile(input.projectRoot, input.adapterExecutionRel),
+      schema_version: executionManifest.schema_version ?? null,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    },
+    consumes_goal_mode_intake_manifest: goalModeResearchPlanIntakeBinding(researchPlan),
+    service_owned_local_ingestion: true,
+    network_execution_performed: false,
+    live_provider_execution_performed: false,
+    ingestion_records: ingestionRecords,
+    summary: {
+      local_record_count: ingestionRecords.length,
+      extracted_claim_count: extractedClaimCount,
+      prompt_injection_blocker_count: promptInjectionBlockerCount,
+      blocked_record_count: blockedRecordCount
+    },
+    authority_boundary: {
+      document_text_is_data_not_instruction: true,
+      extracted_claims_are_formalization_candidates_only: true,
+      proof_authority: "Lean4/mathlib kernel clean replay only"
     },
     proof_authority: "none",
     external_evidence_authority: false,
@@ -3943,6 +4330,20 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       can_promote_claim: false,
       can_certify_ga: false
     };
+    const localIngestionEvidenceRel = writeGoalModeLocalIngestionEvidence({
+      projectRoot: input.project_root,
+      campaign,
+      obligation,
+      researchPlanRel,
+      adapterExecutionRel
+    });
+    const localIngestionEvidenceBinding = {
+      path: localIngestionEvidenceRel,
+      sha256: sha256RuntimeFile(input.project_root, localIngestionEvidenceRel),
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    };
     const contextRel = writeSimpleStageArtifact(input.project_root, campaign, "knowledge_pack.json", {
       campaign_id: campaign.campaign_id,
       root_claim_id: campaign.root_claim_id,
@@ -3964,6 +4365,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       ],
       goal_mode_research_plan: researchPlanBinding,
       goal_mode_adapter_execution_manifest: adapterExecutionBinding,
+      goal_mode_local_ingestion_evidence: localIngestionEvidenceBinding,
       retrieval_mode: "service-owned-local-context-pack",
       stage_gate: "knowledge_pack",
       created_at: now()
@@ -3980,6 +4382,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         next_actions: [
           "run goal-mode ingestion, retrieval, theorem-search, and lemma-planning adapters before any proof claim promotion",
           "extract anchored evidence from service-owned adapter execution manifests before candidate generation",
+          "review prompt-injection-scanned local evidence before formalization",
           "resolve notation and Lean definitions for the locked problem"
         ]
       }),

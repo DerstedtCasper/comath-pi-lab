@@ -1,3 +1,34 @@
+# Goal 3 Task 258 / Pi Goal-Mode Service-Owned Local Ingestion Evidence
+
+Scope: connect Task257 goal-mode adapter execution manifests to service-owned local ingestion evidence. This is prompt-injection-scanned local draft evidence and blocker provenance only; it is not PDF parsing authority, external Lean repo inspection, live retrieval, theorem-search evidence, Lean replay, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task258-pi-goal-mode-local-ingestion-evidence.test.mjs`.
+- Added `goal_mode_local_ingestion_evidence.json` creation during `knowledge_pack`.
+- Bound the Task256 research-plan path/hash and Task257 adapter-execution manifest path/hash into the local evidence manifest and `knowledge_pack.json`, while preserving the Task255 intake-manifest binding.
+- Extracted line-anchored Markdown and TeX theorem/lemma drafts only after prompt-injection scan.
+- Blocked prompt-injected local text as `goal_mode_prompt_injection_detected` without copying injected theorem text into extracted claims.
+- Blocked PDF refs as `goal_mode_pdf_ingestion_adapter_required` and external Lean repository refs as `goal_mode_external_lean_repo_inspection_required`.
+- Made the local ingestion evidence manifest a required knowledge-pack artifact whose deletion rewinds later stages to `knowledge_pack`.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task258 service test: after `corepack pnpm --filter @comath/comathd build`, `node services/comathd/tests/unit/goal3-task258-pi-goal-mode-local-ingestion-evidence.test.mjs` failed because `knowledge_pack` did not attach service-owned local ingestion evidence.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task258 exited 0.
+- Adjacent Task257, Task256, Task255, Task16 service route, Task100 terminal read-model authority gate, Phase63 stage-artifact coverage, Phase65 proof-memory retrieval, and Phase71 repair/resume regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task258 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task258, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task258 writes only service-owned `.comath/campaign/<campaign_id>/goal_mode_local_ingestion_evidence.json` artifacts through `comathd`. Local Markdown/TeX extracted claims remain formalization candidates with `proof_authority="none"`, `can_promote_claim=false`, `can_certify_ga=false`, and `result_can_be_used_as_proof=false`. PDF and external Lean repo material remains blocked until maintained adapters exist. The manifest cannot satisfy literature evidence, theorem-search evidence, LeanRunManifest evidence, proof authority, claim promotion input, or GA certification.
+
+Residual risk: Goal 3 remains incomplete. Task258 does not implement maintained PDF parsing, external Lean repo inspection, live literature retrieval, live theorem-search providers, richer citation-condition matching, Lean skeleton repair, terminal proof/refutation/blocker completion, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 257 / Pi Goal-Mode Service-Owned Adapter Execution Manifest
 
 Scope: connect Task256 goal-mode research plans to service-owned adapter execution manifests. This is run-envelope provenance and input-integrity gating only; it is not live retrieval, document extraction evidence, theorem-search evidence, Lean replay, proof authority, promotion, or GA certification.
