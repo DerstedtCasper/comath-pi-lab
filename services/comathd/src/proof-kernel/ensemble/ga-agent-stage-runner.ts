@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { z } from "zod";
 import { ComathError } from "../../errors.js";
@@ -360,6 +361,114 @@ function writeJson(projectRoot: string, relativePath: string, value: unknown): s
   return path;
 }
 
+function sha256File(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function readProjectText(projectRoot: string, relativePath: string): string {
+  return readFileSync(assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true }), "utf8");
+}
+
+function campaignProofRel(campaign: ResearchCampaign, rel: string): string {
+  return normalizedRel(join(".comath", "campaign", campaign.campaign_id, "proof", rel));
+}
+
+function writeText(projectRoot: string, relativePath: string, value: string): string {
+  const path = assertPathAllowed(projectRoot, relativePath, { purpose: "runtime-write" });
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, value, "utf8");
+  return path;
+}
+
+function writeLeanCandidateAttemptArtifacts(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  candidateId: string;
+  taskCard: GaAgentTaskCard;
+  planningContext: GaAgentStagePlanningContext | undefined;
+}):
+  | {
+      planPath: string;
+      leanPath: string;
+      planSha256: string;
+      leanSha256: string;
+    }
+  | undefined {
+  if (!input.planningContext) {
+    return undefined;
+  }
+  const sourceSkeletonRel = campaignProofRel(input.campaign, "Skeleton.lean");
+  const sourceSkeletonAbs = assertPathAllowed(input.projectRoot, sourceSkeletonRel, { purpose: "read", resolveRealpath: true });
+  const sourceSkeleton = readProjectText(input.projectRoot, sourceSkeletonRel);
+  const planRel = normalizedRel(join(input.taskCard.workspace_path, "lean_candidate_attempt_plan.json"));
+  const leanRel = normalizedRel(join(input.taskCard.workspace_path, "LeanCandidate.lean"));
+  const blueprintStepList = input.planningContext.blueprint_step_ids.length > 0
+    ? input.planningContext.blueprint_step_ids.join(", ")
+    : "none";
+  const leanDraft = [
+    "-- CoMath candidate Lean attempt draft; not proof authority.",
+    `-- candidate_id: ${input.candidateId}`,
+    `-- variant_id: ${input.taskCard.variant_id}`,
+    `-- source_skeleton: ${sourceSkeletonRel}`,
+    `-- source_skeleton_sha256: ${sha256File(sourceSkeletonAbs)}`,
+    `-- blueprint: ${String(input.planningContext.goal_mode_skeleton_blueprint.path ?? "")}`,
+    `-- blueprint_steps: ${blueprintStepList}`,
+    "-- This file is candidate-workspace material only; promotion requires service-owned Lean replay gates.",
+    "",
+    sourceSkeleton
+  ].join("\n");
+  const planAbs = writeJson(input.projectRoot, planRel, {
+    schema_version: "comath.pi_goal_mode_lean_candidate_attempt_plan.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.campaign.project_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    candidate_id: input.candidateId,
+    task_id: input.taskCard.task_id,
+    agent_id: input.taskCard.agent_id,
+    variant_id: input.taskCard.variant_id,
+    stage: input.taskCard.stage,
+    locked_statement_hash: input.obligation.statement_hash,
+    source_skeleton: {
+      path: sourceSkeletonRel,
+      sha256: sha256File(sourceSkeletonAbs),
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    },
+    goal_mode_skeleton_blueprint: input.planningContext.goal_mode_skeleton_blueprint,
+    consumes_goal_mode_formalization_hints: input.planningContext.consumes_goal_mode_formalization_hints,
+    blueprint_step_ids: [...input.planningContext.blueprint_step_ids],
+    blueprint_step_count: input.planningContext.blueprint_step_count,
+    candidate_lean_file: {
+      path: leanRel,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    },
+    statement_boundary: input.planningContext.statement_boundary,
+    planned_actions: [
+      "preserve the locked statement hash",
+      "use blueprint steps as non-authoritative repair hints",
+      "run service-owned LeanRunner before any proof-grade classification",
+      "route failures to repair or replayable blocker evidence"
+    ],
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    result_can_be_used_as_proof: false,
+    created_at: new Date().toISOString()
+  });
+  const leanAbs = writeText(input.projectRoot, leanRel, leanDraft.endsWith("\n") ? leanDraft : `${leanDraft}\n`);
+  return {
+    planPath: planRel,
+    leanPath: leanRel,
+    planSha256: sha256File(planAbs),
+    leanSha256: sha256File(leanAbs)
+  };
+}
+
 export function parseGaAgentOutputJson(raw: string): GaAgentOutput {
   try {
     return gaAgentOutputSchema.parse(JSON.parse(raw));
@@ -473,6 +582,14 @@ export function runGaAgentStageCandidates(input: {
     const workspacePath = assertPathAllowed(input.projectRoot, taskCard.workspace_path, { purpose: "runtime-write" });
     mkdirSync(workspacePath, { recursive: true });
     writeJson(input.projectRoot, join(taskCard.workspace_path, "task_card.json"), taskCard);
+    const attemptArtifacts = writeLeanCandidateAttemptArtifacts({
+      projectRoot: input.projectRoot,
+      campaign: input.campaign,
+      obligation: input.obligation,
+      candidateId,
+      taskCard,
+      planningContext: input.planning_context
+    });
 
     const candidateStatementHash = adapterResult.candidate_statement_hash || input.locked_statement_hash;
     const descriptor = createCandidateReplayProjectDescriptor({
@@ -512,9 +629,26 @@ export function runGaAgentStageCandidates(input: {
         { path: "task_card.json", kind: "agent_task_card", required_for: ["agent_stage"] },
         { path: "agent_output.json", kind: "agent_output", required_for: ["agent_stage"] },
         { path: "agent_stage_log.jsonl", kind: "agent_stage_log", required_for: ["agent_stage", "failure_memory"] },
+        ...(attemptArtifacts
+          ? [
+              {
+                path: "lean_candidate_attempt_plan.json",
+                kind: "lean_candidate_attempt_plan",
+                required_for: ["candidate_attempt", "agent_stage"]
+              },
+              {
+                path: "LeanCandidate.lean",
+                kind: "lean_candidate_attempt_draft",
+                required_for: ["candidate_attempt"]
+              }
+            ]
+          : []),
         ...(descriptorArtifact ? [descriptorArtifact] : [])
       ],
-      lean_files: adapterResult.lean_files,
+      lean_files: [
+        ...adapterResult.lean_files,
+        ...(attemptArtifacts ? [attemptArtifacts.leanPath] : [])
+      ],
       logs: adapterResult.logs,
       evidence: adapterResult.evidence,
       hard_vetoes: adapterResult.hard_vetoes,
@@ -537,6 +671,20 @@ export function runGaAgentStageCandidates(input: {
       summary: adapterResult.summary,
       artifacts: [
         { path: normalizedRel(relative(input.projectRoot, manifestPath)), kind: "candidate_manifest" },
+        ...(attemptArtifacts
+          ? [
+              {
+                path: attemptArtifacts.planPath,
+                kind: "lean_candidate_attempt_plan",
+                sha256: attemptArtifacts.planSha256
+              },
+              {
+                path: attemptArtifacts.leanPath,
+                kind: "lean_candidate_attempt_draft",
+                sha256: attemptArtifacts.leanSha256
+              }
+            ]
+          : []),
         ...(descriptor
           ? [
               {

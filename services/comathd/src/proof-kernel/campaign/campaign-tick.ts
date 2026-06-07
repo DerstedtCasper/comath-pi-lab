@@ -5261,6 +5261,13 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         .map((candidate) => candidate.manifest_path)
         .filter((path): path is string => typeof path === "string" && path.length > 0),
       task_card_paths: batch.task_cards.map((taskCard) => normalizeRelPath(join(taskCard.workspace_path, "task_card.json"))),
+      lean_candidate_attempts_materialized: true,
+      lean_candidate_attempt_plan_paths: batch.task_cards.map((taskCard) =>
+        normalizeRelPath(join(taskCard.workspace_path, "lean_candidate_attempt_plan.json"))
+      ),
+      lean_candidate_attempt_file_paths: batch.task_cards.map((taskCard) =>
+        normalizeRelPath(join(taskCard.workspace_path, "LeanCandidate.lean"))
+      ),
       agent_output_paths: batch.task_cards.map((taskCard) => normalizeRelPath(join(taskCard.workspace_path, "agent_output.json"))),
       proof_authority: "none",
       can_promote_claim: false,

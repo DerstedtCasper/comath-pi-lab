@@ -1,3 +1,33 @@
+# Goal 3 Task 262 / Pi Goal-Mode Blueprint Lean Candidate Attempts
+
+Scope: materialize Task261's blueprint-bound candidate orchestration into per-candidate Lean attempt workspaces. These are service-owned draft attempt artifacts only; they are not LeanRunManifest evidence, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task262-pi-goal-mode-blueprint-lean-candidate-attempts.test.mjs`.
+- Added per-candidate `lean_candidate_attempt_plan.json` generation.
+- Added per-candidate `LeanCandidate.lean` draft generation from `proof/Skeleton.lean`.
+- Bound source skeleton path/hash, skeleton blueprint path/hash, blueprint step ids, and statement-boundary guards into each attempt plan.
+- Exposed attempt plan and draft Lean files through candidate manifests, agent outputs, and `candidate_generation.json`.
+- Kept generated Lean drafts as `sorry`-bearing candidate material with `proof_authority=none`.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task262 service test: `node services/comathd/tests/unit/goal3-task262-pi-goal-mode-blueprint-lean-candidate-attempts.test.mjs` failed because `candidate_generation.json` did not include `lean_candidate_attempts_materialized=true`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task262 exited 0.
+- Adjacent Task261, Task260, Task109, Task113, and Task114 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task262 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task262, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task262 writes only candidate-workspace draft artifacts through `comathd`. The generated `LeanCandidate.lean` files may contain `sorry` and are never marked as proof evidence. They can feed later service-owned LeanRunner and repair-loop stages, but cannot promote claims or certify GA without Lean Authority replay gates.
+
+Residual risk: Goal 3 remains incomplete. Task262 does not run Lean over these attempts, perform automatic repair, ingest live theorem-search/literature hints into proof scripts, implement maintained PDF parsing or external Lean repo inspection, complete per-candidate clean replay promotion, provide terminal proof/refutation/blocker completion, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 261 / Pi Goal-Mode Blueprint-Bound Candidate Generation
 
 Scope: carry Task260's service-owned skeleton blueprint into `line_map_gate` and `candidate_generation` so eight-variant candidate orchestration is bound to current blueprint material. This is non-authoritative planning context only; it is not Lean replay evidence, proof authority, promotion, or GA certification.
