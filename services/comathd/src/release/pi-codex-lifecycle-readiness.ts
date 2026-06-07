@@ -1744,6 +1744,122 @@ type PiCodexUnattendedRealHostExecutionAttemptReviewBody = Omit<
   "attempt_review_artifact"
 >;
 
+export type PiCodexUnattendedRealHostCompletionCertificationPrerequisiteBlockerReason =
+  | PiCodexUnattendedRealHostExecutionAttemptReviewBlockerReason
+  | "terminal_unattended_completion_certificate_missing";
+
+export type PiCodexUnattendedRealHostCompletionCertificationPrerequisiteInput = {
+  project_id: string;
+  completion_certification_prerequisite_id?: string;
+  actor: string;
+  attempt_review_id: string;
+  attempt_review_path: string;
+  attempt_review_sha256: string;
+  requested_completion_mode?: "production_unattended_real_host_completion";
+};
+
+export type PiCodexUnattendedRealHostCompletionCertificationPrerequisiteArtifact = {
+  kind: "unattended_real_host_completion_certification_prerequisite";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexUnattendedRealHostCompletionCertificationPrerequisite = {
+  schema_version: "comath.pi_codex_unattended_real_host_completion_certification_prerequisite.v1";
+  completion_certification_prerequisite_id: string;
+  project_id: string;
+  actor: string;
+  created_at: string;
+  completion_certification_prerequisite_status: "blocked_terminal_unattended_completion_certification_required";
+  terminal_goal_state: "blocked_with_replayable_certificate";
+  completion_certification_prerequisite_path: string;
+  completion_certification_prerequisite_artifact: PiCodexUnattendedRealHostCompletionCertificationPrerequisiteArtifact;
+  requested_completion_mode: "production_unattended_real_host_completion";
+  blocker_reasons: PiCodexUnattendedRealHostCompletionCertificationPrerequisiteBlockerReason[];
+  completion_certificate_available: false;
+  attempt_review_id: string;
+  attempt_review_status: PiCodexUnattendedRealHostExecutionAttemptReview["attempt_review_status"];
+  attempt_review_path: string;
+  attempt_review_artifact: PiCodexUnattendedRealHostExecutionAttemptReviewArtifact;
+  attempt_review_current: true;
+  attempt_id: string;
+  attempt_status: PiCodexUnattendedRealHostExecutionAttempt["attempt_status"];
+  attempt_path: string;
+  attempt_artifact: PiCodexUnattendedRealHostExecutionAttemptArtifact;
+  attempt_current: true;
+  readiness_id: string;
+  readiness_status: "unattended_real_host_execution_prerequisites_recorded";
+  readiness_path: string;
+  readiness_artifact: PiCodexUnattendedRealHostExecutionReadinessArtifact;
+  readiness_current: true;
+  handoff_review_id: string;
+  handoff_review_path: string;
+  handoff_review_artifact: PiCodexUnattendedRealHostHandoffReviewArtifact;
+  handoff_review_current: true;
+  operator_approval_id: string;
+  operator_approval_path: string;
+  operator_approval_artifact: PiCodexUnattendedRealHostOperatorApprovalArtifact;
+  operator_approval_artifact_current: true;
+  unattended_executor_contract_id: string;
+  unattended_executor_contract_path: string;
+  unattended_executor_contract_artifact: PiCodexUnattendedRealHostExecutorContractArtifact;
+  unattended_executor_contract_current: true;
+  durable_transport_contract_id: string;
+  durable_transport_contract_path: string;
+  durable_transport_contract_artifact: PiCodexUnattendedRealHostDurableTransportContractArtifact;
+  durable_transport_contract_current: true;
+  service_owned_checkpoint_chain_reviewed: true;
+  service_owned_attempt_review_completed: true;
+  terminal_unattended_completion_certified: false;
+  service_owned_unattended_executor_configured: boolean;
+  service_owned_durable_transport_prerequisite_configured: true;
+  execution_attempt_manifest_persisted: true;
+  execution_attempt_command: PiCodexUnattendedRealHostExecutionAttemptCommandRecord | null;
+  execution_attempt_result: PiCodexUnattendedRealHostExecutionAttemptRunnerResult | null;
+  execution_attempt_result_path: string | null;
+  execution_attempt_result_artifact: PiCodexUnattendedRealHostExecutionAttemptResultArtifact | null;
+  execution_attempt_result_artifact_current: boolean;
+  executor_invoked: boolean;
+  execution_attempted: boolean;
+  execution_attempt_succeeded: boolean;
+  execution_attempt_exit_code: number | null;
+  real_pi_runtime_probe_id: string | null;
+  session_id: string | null;
+  transport_recovery_id: string | null;
+  transport_lease_id: string | null;
+  transport_heartbeat_id: string | null;
+  execution_id: string | null;
+  terminal_review_id: string | null;
+  transport_contract_id: string | null;
+  automatic_orchestration_id: string | null;
+  transport_continuity_id: string | null;
+  agent_run_id: string | null;
+  service_route: string | null;
+  service_transport_primitive: PiCodexOperatorServiceTransportPrimitive;
+  client_transport_primitive: PiCodexOperatorClientTransportPrimitive;
+  operator_approved: false;
+  handoff_can_execute: false;
+  unattended_execution_authorized: false;
+  unattended_real_host_execution_completed: false;
+  operator_confirmation_bypassed: false;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexUnattendedRealHostCompletionCertificationPrerequisiteBody = Omit<
+  PiCodexUnattendedRealHostCompletionCertificationPrerequisite,
+  "completion_certification_prerequisite_artifact"
+>;
+
 export type PiCodexLifecycleAutomaticRealPiExecutionCheckpointStep =
   | "real_pi_runtime_probe"
   | "operator_session_manifest"
@@ -2619,7 +2735,7 @@ function sanitizeOperatorSessionValue(value: unknown, depth = 0): unknown {
 const operatorTransportOverclaimPattern =
   /\b(?:long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided|live transport open)\b/gi;
 const operatorUnattendedOverclaimPattern =
-  /\b(?:production unattended executor|operator-free execution completed|unattended real-host execution completed|operator confirmation bypassed|service-owned evidence created|handoff can execute|unattended execution authorized|operator approval recorded)\b/gi;
+  /\b(?:production unattended executor|operator-free execution completed|unattended real-host execution completed|operator confirmation bypassed|terminal unattended completion certified|service-owned evidence created|handoff can execute|unattended execution authorized|operator approval recorded)\b/gi;
 
 function defaultLifecycleProbeRunner(
   command: PiCodexLifecycleServiceProbeRunnerCommand
@@ -3937,6 +4053,20 @@ function unattendedRealHostExecutionAttemptReviewPath(attemptReviewId: string): 
       "pi-codex-lifecycle",
       attemptReviewId,
       "unattended-real-host-execution-attempt-review.json"
+    )
+  );
+}
+
+function unattendedRealHostCompletionCertificationPrerequisitePath(
+  completionCertificationPrerequisiteId: string
+): string {
+  return normalizeRelativePath(
+    join(
+      ".comath",
+      "release",
+      "pi-codex-lifecycle",
+      completionCertificationPrerequisiteId,
+      "unattended-real-host-completion-certification-prerequisite.json"
     )
   );
 }
@@ -9117,6 +9247,372 @@ export function reviewPiCodexLifecycleUnattendedRealHostExecutionAttempt(
       execution_attempt_exit_code: result.execution_attempt_exit_code,
       execution_attempt_result_artifact_sha256: result.execution_attempt_result_artifact?.sha256 ?? null,
       execution_attempt_result_artifact_current: result.execution_attempt_result_artifact_current,
+      operator_approved: false,
+      handoff_can_execute: false,
+      unattended_execution_authorized: false,
+      unattended_real_host_execution_completed: false,
+      operator_confirmation_bypassed: false,
+      durable_transport_provided: false,
+      live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
+function throwCompletionCertificationPrerequisiteReviewInvalid(message: string): never {
+  throw new ComathError(message, {
+    statusCode: 400,
+    code: "PI_CODEX_UNATTENDED_REAL_HOST_COMPLETION_CERTIFICATION_PREREQUISITE_REVIEW_INVALID"
+  });
+}
+
+function assertCompletionCertificationPrerequisiteReviewSha256(value: string): string {
+  const sha256 = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!/^[a-f0-9]{64}$/u.test(sha256)) {
+    throw new ComathError("Pi/Codex unattended real-host completion certification prerequisite review hash is stale", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_COMPLETION_CERTIFICATION_PREREQUISITE_REVIEW_STALE"
+    });
+  }
+  return sha256;
+}
+
+function assertCompletionCertificationPrerequisiteReviewBoundary(
+  review: PiCodexUnattendedRealHostExecutionAttemptReviewBody
+): void {
+  const allowedReviewStatuses = new Set<PiCodexUnattendedRealHostExecutionAttemptReview["attempt_review_status"]>([
+    "blocked_unattended_real_host_executor_unavailable",
+    "blocked_unattended_real_host_execution_attempt_failed",
+    "blocked_terminal_unattended_completion_review_required"
+  ]);
+  const allowedAttemptStatuses = new Set<PiCodexUnattendedRealHostExecutionAttempt["attempt_status"]>([
+    "blocked_unattended_real_host_executor_unavailable",
+    "blocked_unattended_real_host_execution_attempt_failed",
+    "unattended_real_host_execution_attempt_recorded"
+  ]);
+  const allowedBlockers = new Set<PiCodexUnattendedRealHostExecutionAttemptReviewBlockerReason>([
+    "service_owned_unattended_executor_unavailable",
+    "service_owned_unattended_executor_failed",
+    "terminal_unattended_completion_evidence_missing"
+  ]);
+  if (
+    review.schema_version !== "comath.pi_codex_unattended_real_host_execution_attempt_review.v1" ||
+    !allowedReviewStatuses.has(review.attempt_review_status) ||
+    review.terminal_goal_state !== "blocked_with_replayable_certificate" ||
+    review.requested_review_mode !== "terminal_unattended_real_host_execution" ||
+    !Array.isArray(review.blocker_reasons) ||
+    review.blocker_reasons.length === 0 ||
+    review.blocker_reasons.some((reason) => !allowedBlockers.has(reason)) ||
+    !allowedAttemptStatuses.has(review.attempt_status) ||
+    !hasLifecycleArtifactReference(review.attempt_artifact, "unattended_real_host_execution_attempt") ||
+    review.attempt_current !== true ||
+    review.readiness_status !== "unattended_real_host_execution_prerequisites_recorded" ||
+    !hasLifecycleArtifactReference(review.readiness_artifact, "unattended_real_host_execution_readiness") ||
+    review.readiness_current !== true ||
+    !hasLifecycleArtifactReference(review.handoff_review_artifact, "unattended_real_host_handoff_review") ||
+    review.handoff_review_current !== true ||
+    !hasLifecycleArtifactReference(review.operator_approval_artifact, "unattended_real_host_operator_approval") ||
+    review.operator_approval_artifact_current !== true ||
+    !hasLifecycleArtifactReference(
+      review.unattended_executor_contract_artifact,
+      "unattended_real_host_executor_contract"
+    ) ||
+    review.unattended_executor_contract_current !== true ||
+    !hasLifecycleArtifactReference(
+      review.durable_transport_contract_artifact,
+      "unattended_real_host_durable_transport_contract"
+    ) ||
+    review.durable_transport_contract_current !== true ||
+    review.service_owned_checkpoint_chain_reviewed !== true ||
+    review.service_owned_attempt_review_completed !== true ||
+    review.terminal_unattended_completion_certified !== false ||
+    review.service_owned_durable_transport_prerequisite_configured !== true ||
+    review.execution_attempt_manifest_persisted !== true ||
+    typeof review.executor_invoked !== "boolean" ||
+    typeof review.execution_attempted !== "boolean" ||
+    typeof review.execution_attempt_succeeded !== "boolean" ||
+    (review.execution_attempt_exit_code !== null &&
+      (typeof review.execution_attempt_exit_code !== "number" ||
+        !Number.isSafeInteger(review.execution_attempt_exit_code))) ||
+    review.service_transport_primitive !== "node_http_agent_run_log_session_route" ||
+    review.client_transport_primitive !== "pi_fetch_get_text" ||
+    review.operator_approved !== false ||
+    review.handoff_can_execute !== false ||
+    review.unattended_execution_authorized !== false ||
+    review.unattended_real_host_execution_completed !== false ||
+    review.operator_confirmation_bypassed !== false ||
+    review.durable_transport_provided !== false ||
+    review.live_transport_open !== false ||
+    review.indefinite_stream_open !== false ||
+    review.long_lived_websocket_provided !== false ||
+    review.long_lived_sse_provided !== false ||
+    review.pi_direct_write_allowed !== false ||
+    review.direct_trusted_state_mutation !== false ||
+    review.proof_authority !== "none" ||
+    review.can_promote_claim !== false ||
+    review.can_certify_ga !== false
+  ) {
+    throwCompletionCertificationPrerequisiteReviewInvalid(
+      "Pi/Codex unattended real-host completion certification prerequisite review violates boundaries"
+    );
+  }
+}
+
+function readUnattendedRealHostExecutionAttemptReviewArtifact(
+  projectRoot: string,
+  projectId: string,
+  attemptReviewId: string,
+  attemptReviewPath: string,
+  expectedSha256: string
+): {
+  review: PiCodexUnattendedRealHostExecutionAttemptReviewBody;
+  artifact: PiCodexUnattendedRealHostExecutionAttemptReviewArtifact;
+} {
+  const canonicalReviewPath = unattendedRealHostExecutionAttemptReviewPath(attemptReviewId);
+  const normalizedReviewPath = projectRelativePath(
+    projectRoot,
+    assertPathAllowed(projectRoot, attemptReviewPath, { purpose: "read", resolveRealpath: true })
+  );
+  if (normalizedReviewPath !== canonicalReviewPath) {
+    throwCompletionCertificationPrerequisiteReviewInvalid(
+      "Pi/Codex unattended real-host completion certification prerequisite review path is not canonical"
+    );
+  }
+  const absolutePath = assertPathAllowed(projectRoot, canonicalReviewPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    throw new ComathError(
+      "Pi/Codex unattended real-host completion certification prerequisite requires review evidence",
+      {
+        statusCode: 400,
+        code: "PI_CODEX_UNATTENDED_REAL_HOST_COMPLETION_CERTIFICATION_PREREQUISITE_REVIEW_STALE"
+      }
+    );
+  }
+  const content = readFileSync(absolutePath);
+  const actualSha256 = sha256Bytes(content);
+  if (assertCompletionCertificationPrerequisiteReviewSha256(expectedSha256) !== actualSha256) {
+    throw new ComathError(
+      "Pi/Codex unattended real-host completion certification prerequisite review hash is stale",
+      {
+        statusCode: 400,
+        code: "PI_CODEX_UNATTENDED_REAL_HOST_COMPLETION_CERTIFICATION_PREREQUISITE_REVIEW_STALE"
+      }
+    );
+  }
+  let parsed: PiCodexUnattendedRealHostExecutionAttemptReviewBody;
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexUnattendedRealHostExecutionAttemptReviewBody;
+  } catch {
+    throwCompletionCertificationPrerequisiteReviewInvalid(
+      "Pi/Codex unattended real-host completion certification prerequisite review JSON is invalid"
+    );
+  }
+  if (
+    parsed.project_id !== projectId ||
+    parsed.attempt_review_id !== attemptReviewId ||
+    parsed.attempt_review_path !== canonicalReviewPath
+  ) {
+    throwCompletionCertificationPrerequisiteReviewInvalid(
+      "Pi/Codex unattended real-host completion certification prerequisite review does not bind the request"
+    );
+  }
+  assertCompletionCertificationPrerequisiteReviewBoundary(parsed);
+  return {
+    review: parsed,
+    artifact: {
+      kind: "unattended_real_host_execution_attempt_review",
+      path: canonicalReviewPath,
+      sha256: actualSha256,
+      size_bytes: content.byteLength
+    }
+  };
+}
+
+export function recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite(
+  projectRoot: string,
+  input: PiCodexUnattendedRealHostCompletionCertificationPrerequisiteInput
+): PiCodexUnattendedRealHostCompletionCertificationPrerequisite {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const completionCertificationPrerequisiteId = assertReviewId(input.completion_certification_prerequisite_id);
+  const attemptReviewId = assertReviewId(input.attempt_review_id);
+  const requestedCompletionMode = input.requested_completion_mode ?? "production_unattended_real_host_completion";
+  if (requestedCompletionMode !== "production_unattended_real_host_completion") {
+    throw new ComathError("Pi/Codex unattended real-host completion certification prerequisite mode is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_COMPLETION_CERTIFICATION_PREREQUISITE_INVALID_MODE"
+    });
+  }
+  const completionCertificationPrerequisitePath = unattendedRealHostCompletionCertificationPrerequisitePath(
+    completionCertificationPrerequisiteId
+  );
+  const absoluteCompletionCertificationPrerequisitePath = assertPathAllowed(
+    projectRoot,
+    completionCertificationPrerequisitePath,
+    { purpose: "runtime-write" }
+  );
+  if (existsSync(absoluteCompletionCertificationPrerequisitePath)) {
+    throw new ComathError("Pi/Codex unattended real-host completion certification prerequisite already exists", {
+      statusCode: 409,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_COMPLETION_CERTIFICATION_PREREQUISITE_ALREADY_EXISTS"
+    });
+  }
+  const { review, artifact: attemptReviewArtifact } = readUnattendedRealHostExecutionAttemptReviewArtifact(
+    projectRoot,
+    projectId,
+    attemptReviewId,
+    input.attempt_review_path,
+    input.attempt_review_sha256
+  );
+  const blockerReasons = Array.from(
+    new Set<PiCodexUnattendedRealHostCompletionCertificationPrerequisiteBlockerReason>([
+      ...review.blocker_reasons,
+      "terminal_unattended_completion_certificate_missing"
+    ])
+  );
+  const body: PiCodexUnattendedRealHostCompletionCertificationPrerequisiteBody = {
+    schema_version: "comath.pi_codex_unattended_real_host_completion_certification_prerequisite.v1",
+    completion_certification_prerequisite_id: completionCertificationPrerequisiteId,
+    project_id: projectId,
+    actor: sanitizeOperatorTransportText(input.actor),
+    created_at: new Date().toISOString(),
+    completion_certification_prerequisite_status: "blocked_terminal_unattended_completion_certification_required",
+    terminal_goal_state: "blocked_with_replayable_certificate",
+    completion_certification_prerequisite_path: completionCertificationPrerequisitePath,
+    requested_completion_mode: "production_unattended_real_host_completion",
+    blocker_reasons: blockerReasons,
+    completion_certificate_available: false,
+    attempt_review_id: review.attempt_review_id,
+    attempt_review_status: review.attempt_review_status,
+    attempt_review_path: review.attempt_review_path,
+    attempt_review_artifact: attemptReviewArtifact,
+    attempt_review_current: true,
+    attempt_id: review.attempt_id,
+    attempt_status: review.attempt_status,
+    attempt_path: review.attempt_path,
+    attempt_artifact: review.attempt_artifact,
+    attempt_current: true,
+    readiness_id: review.readiness_id,
+    readiness_status: "unattended_real_host_execution_prerequisites_recorded",
+    readiness_path: review.readiness_path,
+    readiness_artifact: review.readiness_artifact,
+    readiness_current: true,
+    handoff_review_id: review.handoff_review_id,
+    handoff_review_path: review.handoff_review_path,
+    handoff_review_artifact: review.handoff_review_artifact,
+    handoff_review_current: true,
+    operator_approval_id: review.operator_approval_id,
+    operator_approval_path: review.operator_approval_path,
+    operator_approval_artifact: review.operator_approval_artifact,
+    operator_approval_artifact_current: true,
+    unattended_executor_contract_id: review.unattended_executor_contract_id,
+    unattended_executor_contract_path: review.unattended_executor_contract_path,
+    unattended_executor_contract_artifact: review.unattended_executor_contract_artifact,
+    unattended_executor_contract_current: true,
+    durable_transport_contract_id: review.durable_transport_contract_id,
+    durable_transport_contract_path: review.durable_transport_contract_path,
+    durable_transport_contract_artifact: review.durable_transport_contract_artifact,
+    durable_transport_contract_current: true,
+    service_owned_checkpoint_chain_reviewed: true,
+    service_owned_attempt_review_completed: true,
+    terminal_unattended_completion_certified: false,
+    service_owned_unattended_executor_configured: review.service_owned_unattended_executor_configured,
+    service_owned_durable_transport_prerequisite_configured: true,
+    execution_attempt_manifest_persisted: true,
+    execution_attempt_command: review.execution_attempt_command ?? null,
+    execution_attempt_result: review.execution_attempt_result ?? null,
+    execution_attempt_result_path: review.execution_attempt_result_path ?? null,
+    execution_attempt_result_artifact: review.execution_attempt_result_artifact ?? null,
+    execution_attempt_result_artifact_current: review.execution_attempt_result_artifact_current === true,
+    executor_invoked: review.executor_invoked,
+    execution_attempted: review.execution_attempted,
+    execution_attempt_succeeded: review.execution_attempt_succeeded,
+    execution_attempt_exit_code: review.execution_attempt_exit_code ?? null,
+    real_pi_runtime_probe_id: review.real_pi_runtime_probe_id ?? null,
+    session_id: review.session_id ?? null,
+    transport_recovery_id: review.transport_recovery_id ?? null,
+    transport_lease_id: review.transport_lease_id ?? null,
+    transport_heartbeat_id: review.transport_heartbeat_id ?? null,
+    execution_id: review.execution_id ?? null,
+    terminal_review_id: review.terminal_review_id ?? null,
+    transport_contract_id: review.transport_contract_id ?? null,
+    automatic_orchestration_id: review.automatic_orchestration_id ?? null,
+    transport_continuity_id: review.transport_continuity_id ?? null,
+    agent_run_id: review.agent_run_id ?? null,
+    service_route: review.service_route ?? null,
+    service_transport_primitive: "node_http_agent_run_log_session_route",
+    client_transport_primitive: "pi_fetch_get_text",
+    operator_approved: false,
+    handoff_can_execute: false,
+    unattended_execution_authorized: false,
+    unattended_real_host_execution_completed: false,
+    operator_confirmation_bypassed: false,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const artifactText = canonicalJson(body);
+  mkdirSync(dirname(absoluteCompletionCertificationPrerequisitePath), { recursive: true });
+  writeFileSync(absoluteCompletionCertificationPrerequisitePath, artifactText, "utf8");
+  const result: PiCodexUnattendedRealHostCompletionCertificationPrerequisite = {
+    ...body,
+    completion_certification_prerequisite_artifact: {
+      kind: "unattended_real_host_completion_certification_prerequisite",
+      path: completionCertificationPrerequisitePath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_unattended_real_host_completion_certification_prerequisite_recorded",
+    actor: sanitizeOperatorTransportText(input.actor),
+    target_id: projectId,
+    payload: {
+      completion_certification_prerequisite_id: completionCertificationPrerequisiteId,
+      completion_certification_prerequisite_status: result.completion_certification_prerequisite_status,
+      terminal_goal_state: result.terminal_goal_state,
+      completion_certification_prerequisite_path: completionCertificationPrerequisitePath,
+      completion_certification_prerequisite_artifact_sha256:
+        result.completion_certification_prerequisite_artifact.sha256,
+      completion_certification_prerequisite_artifact_size_bytes:
+        result.completion_certification_prerequisite_artifact.size_bytes,
+      requested_completion_mode: result.requested_completion_mode,
+      blocker_reasons: result.blocker_reasons,
+      completion_certificate_available: false,
+      attempt_review_id: result.attempt_review_id,
+      attempt_review_status: result.attempt_review_status,
+      attempt_review_path: result.attempt_review_path,
+      attempt_review_artifact_sha256: result.attempt_review_artifact.sha256,
+      attempt_review_artifact_size_bytes: result.attempt_review_artifact.size_bytes,
+      attempt_id: result.attempt_id,
+      attempt_status: result.attempt_status,
+      attempt_path: result.attempt_path,
+      attempt_artifact_sha256: result.attempt_artifact.sha256,
+      attempt_artifact_size_bytes: result.attempt_artifact.size_bytes,
+      executor_invoked: result.executor_invoked,
+      execution_attempted: result.execution_attempted,
+      execution_attempt_succeeded: result.execution_attempt_succeeded,
+      execution_attempt_exit_code: result.execution_attempt_exit_code,
+      service_owned_attempt_review_completed: true,
+      terminal_unattended_completion_certified: false,
       operator_approved: false,
       handoff_can_execute: false,
       unattended_execution_authorized: false,

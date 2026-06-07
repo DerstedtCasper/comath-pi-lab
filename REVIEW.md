@@ -1,3 +1,31 @@
+# Goal 3 Task 253 / Service-Owned Unattended Real-Host Completion Certification Prerequisite
+
+Scope: add a service-owned prerequisite gate after Task251 attempt-review evidence. This is append-only operational blocker evidence only; it is not a Pi consumer, public executor configuration, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task253-service-owned-unattended-real-host-completion-certification-prerequisite.test.mjs`.
+- Added `recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite()` and `POST /release/pi-codex-lifecycle/unattended-real-host-completion-certification-prerequisite`.
+- Added append-only `comath.pi_codex_unattended_real_host_completion_certification_prerequisite.v1` manifests and `release.pi_codex_unattended_real_host_completion_certification_prerequisite_recorded` audit events.
+- Added the `pi_codex_unattended_real_host_completion_certification_prerequisite_gate` status capability.
+- Registered phase0 release-hardening discovery and updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task253 service test: after `corepack pnpm --filter @comath/comathd build`, `node services/comathd/tests/unit/goal3-task253-service-owned-unattended-real-host-completion-certification-prerequisite.test.mjs` failed because `recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite` was not exported.
+- Follow-up RED was observed when focused Task253 failed because completion overclaim text `terminal unattended completion certified` was not yet covered by the shared sanitizer.
+- After implementation, focused Task253 exited 0.
+- Adjacent Task251 and Task249 service regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task253 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task252, comathd package tests through Task253, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task253 derives the canonical Task251 review path from `attempt_review_id`, treats caller path/hash only as expected values, re-reads the review artifact bytes, rejects stale hashes, duplicate prerequisite ids, non-canonical paths, malformed JSON, and promotional review artifacts even when hash-current. The prerequisite manifest and audit event keep `completion_certificate_available=false`, `terminal_unattended_completion_certified=false`, `unattended_real_host_execution_completed=false`, `durable_transport_provided=false`, `live_transport_open=false`, `pi_direct_write_allowed=false`, `direct_trusted_state_mutation=false`, `proof_authority="none"`, and `can_certify_ga=false`.
+
+Residual risk: Goal 3 remains incomplete. Task253 does not add a Pi-facing prerequisite consumer/planner step, durable long-lived operator transport, public executor configuration, production unattended real-host completion certification, Pi trusted-state mutation, Lean/mathlib proof replay authority, claim promotion, real installed-toolchain Mathlib smoke completion, broad final release-candidate proof breadth, production OS-isolation helper binaries, or GA certification.
+
 # Goal 3 Task 252 / Pi Unattended Real-Host Execution Attempt Review Consumer
 
 Scope: expose the Task251 service-owned attempt-review gate through the Pi extension as a host-confirmed thin client and read-only planner checkpoint. This is Pi consumer wiring only; it is not public executor configuration, caller attempt-result authority, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.

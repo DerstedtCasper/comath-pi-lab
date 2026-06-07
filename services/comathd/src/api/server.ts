@@ -64,6 +64,7 @@ import {
   recordPiCodexLifecycleOperatorServiceTransportContinuity,
   recordPiCodexLifecycleOperatorServiceTransportContract,
   recordPiCodexLifecycleUnattendedRealHostDurableTransportContract,
+  recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite,
   recordPiCodexLifecycleUnattendedRealHostExecutionAttempt,
   recordPiCodexLifecycleUnattendedRealHostExecutionReadiness,
   recordPiCodexLifecycleUnattendedRealHostExecutorContract,
@@ -562,6 +563,20 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           execution_attempt_review: reviewPiCodexLifecycleUnattendedRealHostExecutionAttempt(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/unattended-real-host-completion-certification-prerequisite",
+      (payload) => {
+        const body = payload as Parameters<
+          typeof recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite
+        >[1] & {
+          project_root: string;
+        };
+        return {
+          completion_certification_prerequisite:
+            recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite(body.project_root, body)
         };
       }
     ],
