@@ -44,6 +44,12 @@ export type GaAgentTaskCard = {
   output_schema: "comath.ga_agent_output.v1";
   proof_authority: "none";
   may_mutate_trusted_state: false;
+  goal_mode_skeleton_blueprint?: Record<string, unknown>;
+  consumes_goal_mode_formalization_hints?: Record<string, unknown>;
+  blueprint_step_ids?: string[];
+  blueprint_step_count?: number;
+  blueprint_bound_candidate_generation?: true;
+  statement_boundary?: Record<string, unknown>;
 };
 
 export type GaAgentOutput = z.infer<typeof gaAgentOutputSchema>;
@@ -106,6 +112,15 @@ export type ReviewerVote = {
   candidate_id: string;
   vote: "approve" | "reject" | "abstain";
   rationale: string;
+};
+
+export type GaAgentStagePlanningContext = {
+  goal_mode_skeleton_blueprint: Record<string, unknown>;
+  consumes_goal_mode_formalization_hints?: Record<string, unknown>;
+  blueprint_step_ids: string[];
+  blueprint_step_count: number;
+  blueprint_bound_candidate_generation: true;
+  statement_boundary: Record<string, unknown>;
 };
 
 export type GaAgentStageDecision = ReturnType<typeof decideCandidate> & {
@@ -361,6 +376,7 @@ export function createGaAgentStageTaskCards(input: {
   obligation: ProofObligation;
   stage: ProofKernelStage;
   locked_statement_hash: string;
+  planning_context?: GaAgentStagePlanningContext;
 }): GaAgentTaskCard[] {
   return defaultVariants.map((variant) => ({
     task_id: `ATASK-${input.campaign.campaign_id.replace(/^[A-Z]+-/, "")}${variantOrdinal(variant.variant_id)}`,
@@ -376,11 +392,28 @@ export function createGaAgentStageTaskCards(input: {
       "Return strict JSON only.",
       "Preserve the locked statement hash exactly.",
       "Do not claim proof authority; request service-owned LeanRunner checks for Lean evidence.",
-      "Label every introduced assumption, dependency, or statement change."
+      "Label every introduced assumption, dependency, or statement change.",
+      ...(input.planning_context
+        ? [
+            `Use the goal-mode skeleton blueprint ${String(
+              input.planning_context.goal_mode_skeleton_blueprint.path ?? ""
+            )} only as non-authoritative planning context.`
+          ]
+        : [])
     ],
     output_schema: "comath.ga_agent_output.v1",
     proof_authority: "none",
-    may_mutate_trusted_state: false
+    may_mutate_trusted_state: false,
+    ...(input.planning_context
+      ? {
+          goal_mode_skeleton_blueprint: input.planning_context.goal_mode_skeleton_blueprint,
+          consumes_goal_mode_formalization_hints: input.planning_context.consumes_goal_mode_formalization_hints,
+          blueprint_step_ids: [...input.planning_context.blueprint_step_ids],
+          blueprint_step_count: input.planning_context.blueprint_step_count,
+          blueprint_bound_candidate_generation: input.planning_context.blueprint_bound_candidate_generation,
+          statement_boundary: input.planning_context.statement_boundary
+        }
+      : {})
   }));
 }
 
@@ -411,6 +444,7 @@ export function runGaAgentStageCandidates(input: {
   obligation: ProofObligation;
   stage: ProofKernelStage;
   locked_statement_hash: string;
+  planning_context?: GaAgentStagePlanningContext;
   adapter?: (input: {
     taskCard: GaAgentTaskCard;
     candidateId: string;

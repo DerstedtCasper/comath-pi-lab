@@ -16,7 +16,7 @@ import { assertPathAllowed } from "../../security/path-policy.js";
 import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-forest.js";
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
 import { summarizeCandidateProofGradeEvidence } from "../ensemble/candidate-proof-grade-summary.js";
-import { runGaAgentStageCandidates } from "../ensemble/ga-agent-stage-runner.js";
+import { runGaAgentStageCandidates, type GaAgentStagePlanningContext } from "../ensemble/ga-agent-stage-runner.js";
 import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-candidate-lean-check.js";
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
 import { defaultVariants } from "../ensemble/variant-registry.js";
@@ -2631,20 +2631,166 @@ function blockForBroadSynthesisPlanning(input: {
   };
 }
 
+type NativeCandidateGenerationBlueprintContext = GaAgentStagePlanningContext & {
+  consumes_goal_mode_skeleton_blueprint: Record<string, unknown>;
+};
+
+type NativeCandidateGenerationRequestContext = NativeCandidateGenerationBlueprintContext & {
+  path: string;
+  sha256: string;
+};
+
+function goalModeBlueprintStepIds(blueprint: Record<string, unknown>): string[] {
+  return goalModeRecordArray(blueprint.blueprint_steps)
+    .map((step) => optionalStringField(step, "step_id"))
+    .filter((stepId): stepId is string => typeof stepId === "string");
+}
+
+function nonAuthorityBindingMatches(input: {
+  binding: Record<string, unknown> | undefined;
+  path: string;
+  sha256: string | null;
+  schemaVersion: string | null;
+}): boolean {
+  return (
+    !!input.binding &&
+    input.binding.path === input.path &&
+    input.binding.sha256 === input.sha256 &&
+    input.binding.schema_version === input.schemaVersion &&
+    input.binding.proof_authority === "none" &&
+    input.binding.can_promote_claim === false &&
+    input.binding.can_certify_ga === false
+  );
+}
+
+function arrayMatchesExactly(value: unknown, expected: string[]): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === expected.length &&
+    expected.every((item, index) => value[index] === item)
+  );
+}
+
+function readGoalModeBlueprintCandidateGenerationContext(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+}): NativeCandidateGenerationBlueprintContext {
+  const blueprintPath = campaignProofRel(input.campaign, "blueprint.json");
+  const hintsPath = campaignProofRel(input.campaign, "formalization_hints.json");
+  const blueprintSha256 = sha256RuntimeFile(input.projectRoot, blueprintPath);
+  const hintsSha256 = sha256RuntimeFile(input.projectRoot, hintsPath);
+  const blueprint = objectRecord(readJsonArtifact(input.projectRoot, blueprintPath), "goal_mode_skeleton_blueprint");
+  const blueprintStepIds = goalModeBlueprintStepIds(blueprint);
+  const formalizationHintsBinding = goalModeOptionalRecord(blueprint.consumes_goal_mode_formalization_hints);
+  const statementDriftGuard = goalModeOptionalRecord(blueprint.statement_drift_guard);
+  const authorityBoundary = goalModeOptionalRecord(blueprint.authority_boundary);
+  const summary = goalModeOptionalRecord(blueprint.summary);
+  const blueprintStepCount =
+    typeof summary?.blueprint_step_count === "number" ? summary.blueprint_step_count : blueprintStepIds.length;
+  const invalidReasons: string[] = [];
+  if (blueprint.schema_version !== "comath.pi_goal_mode_skeleton_blueprint.v1") {
+    invalidReasons.push("goal_mode_skeleton_blueprint_schema_mismatch");
+  }
+  if (blueprint.campaign_id !== input.campaign.campaign_id) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_campaign_id_mismatch");
+  }
+  if (blueprint.project_id !== input.campaign.project_id) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_project_id_mismatch");
+  }
+  if (blueprint.claim_id !== input.campaign.root_claim_id) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_claim_id_mismatch");
+  }
+  if (blueprint.obligation_id !== input.obligation.obligation_id) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_obligation_id_mismatch");
+  }
+  if (blueprint.locked_statement_hash !== input.obligation.statement_hash) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_locked_statement_hash_mismatch");
+  }
+  if (blueprint.service_owned_skeleton_blueprint !== true) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_not_service_owned");
+  }
+  if (blueprintStepCount !== blueprintStepIds.length) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_step_count_mismatch");
+  }
+  if (
+    !nonAuthorityBindingMatches({
+      binding: formalizationHintsBinding,
+      path: hintsPath,
+      sha256: hintsSha256,
+      schemaVersion: "comath.pi_goal_mode_formalization_hints.v1"
+    })
+  ) {
+    invalidReasons.push("goal_mode_formalization_hints_binding_mismatch");
+  }
+  if (
+    statementDriftGuard?.locked_statement_hash !== input.obligation.statement_hash ||
+    statementDriftGuard?.blueprint_may_change_locked_statement !== false ||
+    statementDriftGuard?.statement_diff_gate_required !== true ||
+    statementDriftGuard?.lean_replay_required_for_promotion !== true
+  ) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_statement_drift_guard_mismatch");
+  }
+  if (
+    authorityBoundary?.blueprint_steps_are_planning_hints_only !== true ||
+    authorityBoundary?.cannot_satisfy_lean_replay !== true
+  ) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_authority_boundary_mismatch");
+  }
+  if (
+    blueprint.proof_authority !== "none" ||
+    blueprint.can_promote_claim !== false ||
+    blueprint.can_certify_ga !== false ||
+    blueprint.result_can_be_used_as_proof !== false
+  ) {
+    invalidReasons.push("goal_mode_skeleton_blueprint_authority_overclaim");
+  }
+  if (invalidReasons.length > 0) {
+    throw new Error(`goal_mode_skeleton_blueprint_invalid:${invalidReasons.join(",")}`);
+  }
+
+  const skeletonBinding = goalModeNonAuthorityBinding(
+    blueprintPath,
+    blueprintSha256,
+    "comath.pi_goal_mode_skeleton_blueprint.v1"
+  );
+  const hintsBinding = goalModeNonAuthorityBinding(hintsPath, hintsSha256, "comath.pi_goal_mode_formalization_hints.v1");
+  const statementBoundary = {
+    statement_hash: input.obligation.statement_hash,
+    candidate_statement_must_match_locked_hash: true,
+    hidden_assumptions_allowed: false,
+    blueprint_may_change_locked_statement: false,
+    statement_diff_gate_required: true
+  };
+  return {
+    goal_mode_skeleton_blueprint: skeletonBinding,
+    consumes_goal_mode_skeleton_blueprint: skeletonBinding,
+    consumes_goal_mode_formalization_hints: hintsBinding,
+    blueprint_step_ids: blueprintStepIds,
+    blueprint_step_count: blueprintStepIds.length,
+    blueprint_bound_candidate_generation: true,
+    statement_boundary: statementBoundary
+  };
+}
+
 function readNativeAgentCandidateGenerationRequest(
   projectRoot: string,
   campaign: ResearchCampaign,
   obligation: ProofObligation
-): { path: string } | undefined {
+): NativeCandidateGenerationRequestContext | undefined {
   const requestRel = campaignRel(campaign, "candidate_generation_request.json");
   if (!artifactExists(projectRoot, requestRel)) {
     return undefined;
   }
   const request = objectRecord(readJsonArtifact(projectRoot, requestRel), "native_agent_candidate_generation_request");
+  const blueprintContext = readGoalModeBlueprintCandidateGenerationContext({ projectRoot, campaign, obligation });
   const requiredVariants = Array.isArray(request.required_variants) ? request.required_variants : [];
   const expectedVariants = defaultVariants.map((variant) => variant.variant_id);
   const lineMapPath = campaignProofRel(campaign, "line_map.json");
   const obligationPath = campaignProofRel(campaign, join("obligations", `${obligation.obligation_id}.yaml`));
+  const statementBoundary = goalModeOptionalRecord(request.statement_boundary);
+  const requestedSkeletonBinding = goalModeOptionalRecord(request.consumes_goal_mode_skeleton_blueprint);
+  const requestedHintsBinding = goalModeOptionalRecord(request.consumes_goal_mode_formalization_hints);
   const producedByLineMapGate = campaign.stage_runs.some(
     (run) => run.stage === "line_map_gate" && run.status === "completed" && run.artifact_paths.includes(requestRel)
   );
@@ -2666,18 +2812,33 @@ function readNativeAgentCandidateGenerationRequest(
     expectedVariants.some((variantId, index) => requiredVariants[index] !== variantId) ||
     request.requested_runner !== "comathd.runGaAgentStageCandidates" ||
     !producedByLineMapGate ||
-    !request.statement_boundary ||
-    typeof request.statement_boundary !== "object" ||
-    Array.isArray(request.statement_boundary) ||
-    (request.statement_boundary as Record<string, unknown>).statement_hash !== obligation.statement_hash ||
-    (request.statement_boundary as Record<string, unknown>).candidate_statement_must_match_locked_hash !== true ||
-    (request.statement_boundary as Record<string, unknown>).hidden_assumptions_allowed !== false ||
+    request.blueprint_bound_candidate_generation !== true ||
+    !nonAuthorityBindingMatches({
+      binding: requestedSkeletonBinding,
+      path: String(blueprintContext.goal_mode_skeleton_blueprint.path),
+      sha256: String(blueprintContext.goal_mode_skeleton_blueprint.sha256),
+      schemaVersion: "comath.pi_goal_mode_skeleton_blueprint.v1"
+    }) ||
+    !nonAuthorityBindingMatches({
+      binding: requestedHintsBinding,
+      path: String(blueprintContext.consumes_goal_mode_formalization_hints?.path ?? ""),
+      sha256: String(blueprintContext.consumes_goal_mode_formalization_hints?.sha256 ?? ""),
+      schemaVersion: "comath.pi_goal_mode_formalization_hints.v1"
+    }) ||
+    !arrayMatchesExactly(request.blueprint_step_ids, blueprintContext.blueprint_step_ids) ||
+    request.blueprint_step_count !== blueprintContext.blueprint_step_count ||
+    !statementBoundary ||
+    statementBoundary.statement_hash !== obligation.statement_hash ||
+    statementBoundary.candidate_statement_must_match_locked_hash !== true ||
+    statementBoundary.hidden_assumptions_allowed !== false ||
+    statementBoundary.blueprint_may_change_locked_statement !== false ||
+    statementBoundary.statement_diff_gate_required !== true ||
     request.proof_authority !== "none" ||
     request.can_promote_claim !== false
   ) {
     throw new Error("native_agent_candidate_generation_request_invalid");
   }
-  return { path: requestRel };
+  return { path: requestRel, sha256: sha256RuntimeFile(projectRoot, requestRel), ...blueprintContext };
 }
 
 function writeNativeAgentCandidateGenerationRequest(input: {
@@ -2685,6 +2846,7 @@ function writeNativeAgentCandidateGenerationRequest(input: {
   campaign: ResearchCampaign;
   obligation: ProofObligation;
 }): string {
+  const blueprintContext = readGoalModeBlueprintCandidateGenerationContext(input);
   const lineMapPath = campaignProofRel(input.campaign, "line_map.json");
   const obligationPath = campaignProofRel(input.campaign, join("obligations", `${input.obligation.obligation_id}.yaml`));
   return writeSimpleStageArtifact(input.projectRoot, input.campaign, "candidate_generation_request.json", {
@@ -2703,11 +2865,12 @@ function writeNativeAgentCandidateGenerationRequest(input: {
     requested_runner: "comathd.runGaAgentStageCandidates",
     required_variants: defaultVariants.map((variant) => variant.variant_id),
     required_variants_count: defaultVariants.length,
-    statement_boundary: {
-      statement_hash: input.obligation.statement_hash,
-      candidate_statement_must_match_locked_hash: true,
-      hidden_assumptions_allowed: false
-    },
+    blueprint_bound_candidate_generation: true,
+    consumes_goal_mode_skeleton_blueprint: blueprintContext.consumes_goal_mode_skeleton_blueprint,
+    consumes_goal_mode_formalization_hints: blueprintContext.consumes_goal_mode_formalization_hints,
+    blueprint_step_ids: blueprintContext.blueprint_step_ids,
+    blueprint_step_count: blueprintContext.blueprint_step_count,
+    statement_boundary: blueprintContext.statement_boundary,
     proof_authority: "none",
     can_promote_claim: false,
     created_at: now()
@@ -5027,7 +5190,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "candidate_generation") {
-    let nativeGenerationRequest: { path: string } | undefined;
+    let nativeGenerationRequest: NativeCandidateGenerationRequestContext | undefined;
     try {
       nativeGenerationRequest = readNativeAgentCandidateGenerationRequest(input.project_root, campaign, obligation);
     } catch (error) {
@@ -5054,6 +5217,14 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       obligation,
       stage: "lemma_sprint",
       locked_statement_hash: obligation.statement_hash,
+      planning_context: {
+        goal_mode_skeleton_blueprint: nativeGenerationRequest.goal_mode_skeleton_blueprint,
+        consumes_goal_mode_formalization_hints: nativeGenerationRequest.consumes_goal_mode_formalization_hints,
+        blueprint_step_ids: nativeGenerationRequest.blueprint_step_ids,
+        blueprint_step_count: nativeGenerationRequest.blueprint_step_count,
+        blueprint_bound_candidate_generation: nativeGenerationRequest.blueprint_bound_candidate_generation,
+        statement_boundary: nativeGenerationRequest.statement_boundary
+      },
       adapter: createServiceOwnedNativeCandidateLeanAdapter({
         projectRoot: input.project_root,
         campaign,
@@ -5078,6 +5249,13 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       blocked_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_blocked").length,
       plausible_candidates: batch.candidates.filter((candidate) => candidate.state === "candidate_plausible_only").length,
       source_request_path: nativeGenerationRequest.path,
+      source_request_sha256: nativeGenerationRequest.sha256,
+      blueprint_bound_candidate_generation: true,
+      goal_mode_skeleton_blueprint: nativeGenerationRequest.goal_mode_skeleton_blueprint,
+      consumes_goal_mode_formalization_hints: nativeGenerationRequest.consumes_goal_mode_formalization_hints,
+      blueprint_step_ids: nativeGenerationRequest.blueprint_step_ids,
+      blueprint_step_count: nativeGenerationRequest.blueprint_step_count,
+      statement_boundary: nativeGenerationRequest.statement_boundary,
       candidate_index_path: candidatesRel,
       candidate_manifest_paths: batch.candidates
         .map((candidate) => candidate.manifest_path)

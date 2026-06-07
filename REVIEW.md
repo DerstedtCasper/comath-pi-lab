@@ -1,3 +1,33 @@
+# Goal 3 Task 261 / Pi Goal-Mode Blueprint-Bound Candidate Generation
+
+Scope: carry Task260's service-owned skeleton blueprint into `line_map_gate` and `candidate_generation` so eight-variant candidate orchestration is bound to current blueprint material. This is non-authoritative planning context only; it is not Lean replay evidence, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task261-pi-goal-mode-blueprint-bound-candidate-generation.test.mjs`.
+- Added blueprint/formalization-hints path-hash binding to `candidate_generation_request.json`.
+- Re-check current blueprint and hint bindings before candidate generation writes artifacts.
+- Propagated blueprint path/hash, step ids, statement-boundary guards, and `proof_authority=none` into `candidate_generation.json`.
+- Propagated the same planning context into all eight `lemma_sprint` task cards.
+- Added fail-closed behavior for tampered/stale blueprint material before candidate artifacts are trusted.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task261 service test: `node services/comathd/tests/unit/goal3-task261-pi-goal-mode-blueprint-bound-candidate-generation.test.mjs` failed because `candidate_generation_request.json` did not include `blueprint_bound_candidate_generation=true`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task261 exited 0.
+- Adjacent Task260, Task259, Task110, Task109, and Phase63 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task261 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task261, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task261 writes and consumes only service-owned `.comath/campaign/<campaign_id>/candidate_generation_request.json`, `candidate_generation.json`, and agent task-card artifacts through `comathd`. The blueprint is planning context for candidate orchestration; every exposed binding remains `proof_authority="none"`, `can_promote_claim=false`, and `can_certify_ga=false`. Tampered blueprint material blocks `candidate_generation`, but successful generation still creates candidates only, not proven claims.
+
+Residual risk: Goal 3 remains incomplete. Task261 does not implement real Lean skeleton repair from blueprint steps, live theorem-search result injection, maintained PDF parsing, external Lean repo inspection, per-candidate Lean proof attempts, Lean Authority v3 promotion, terminal proof/refutation/blocker completion, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 260 / Pi Goal-Mode Skeleton Blueprint From Hints
 
 Scope: connect Task259 formalization hints to the `skeleton_gate` blueprint output required by the GA design. This is service-owned skeleton planning metadata only; it is not literature evidence, theorem-search evidence, Lean replay evidence, proof authority, promotion, or GA certification.
