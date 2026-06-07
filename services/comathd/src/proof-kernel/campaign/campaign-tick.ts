@@ -210,7 +210,8 @@ function knowledgePackArtifacts(campaign: ResearchCampaign): string[] {
     ".comath/literature/references.bib",
     ".comath/memory/library_search.jsonl",
     ".comath/memory/premise_candidates.jsonl",
-    campaignRel(campaign, "goal_mode_research_plan.json")
+    campaignRel(campaign, "goal_mode_research_plan.json"),
+    campaignRel(campaign, "goal_mode_adapter_execution_manifest.json")
   ];
 }
 
@@ -250,7 +251,8 @@ function rewindTargetForMissingArtifact(rel: string): ResearchCampaign["current_
     rel.includes("/knowledge-") ||
     rel.includes("/references.bib") ||
     rel.includes("/library_search.jsonl") ||
-    rel.includes("/goal_mode_research_plan.json")
+    rel.includes("/goal_mode_research_plan.json") ||
+    rel.includes("/goal_mode_adapter_execution_manifest.json")
   ) {
     return "knowledge_pack";
   }
@@ -999,6 +1001,460 @@ function writeGoalModeResearchPlan(input: {
       literature_retrieval: "planned through external wheel adapters",
       local_ingestion: "planned through maintained adapter contracts",
       proof_authority: "Lean4/mathlib clean replay only"
+    },
+    proof_authority: "none",
+    external_evidence_authority: false,
+    can_promote_claim: false,
+    can_certify_ga: false,
+    created_at: now()
+  });
+}
+
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => canonicalJsonValue(item));
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return Object.keys(record)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = canonicalJsonValue(record[key]);
+        return acc;
+      }, {});
+  }
+  return value;
+}
+
+function sha256Json(value: unknown): string {
+  return sha256Text(`${JSON.stringify(canonicalJsonValue(value))}\n`);
+}
+
+function optionalStringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function optionalNumberField(record: Record<string, unknown>, key: string): number | undefined {
+  const value = record[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+function isGoalModePlannedAdapterTask(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const task = value as Record<string, unknown>;
+  return (
+    typeof task.task_id === "string" &&
+    typeof task.adapter_id === "string" &&
+    typeof task.adapter_kind === "string" &&
+    typeof task.adapter_provider === "string" &&
+    typeof task.purpose === "string"
+  );
+}
+
+function goalModeResearchPlanTasks(plan: Record<string, unknown>): Record<string, unknown>[] {
+  return ["ingestion_tasks", "retrieval_tasks", "theorem_search_tasks"].flatMap((key) => {
+    const value = plan[key];
+    return Array.isArray(value) ? value.filter(isGoalModePlannedAdapterTask) : [];
+  });
+}
+
+function validateGoalModeResearchPlanBinding(input: {
+  plan: Record<string, unknown>;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+}): string[] {
+  const reasons: string[] = [];
+  if (input.plan.schema_version !== "comath.pi_goal_mode_research_plan.v1") {
+    reasons.push("schema_version_mismatch");
+  }
+  if (input.plan.campaign_id !== input.campaign.campaign_id) {
+    reasons.push("campaign_id_mismatch");
+  }
+  if (input.plan.project_id !== input.campaign.project_id) {
+    reasons.push("project_id_mismatch");
+  }
+  if (input.plan.claim_id !== input.campaign.root_claim_id) {
+    reasons.push("claim_id_mismatch");
+  }
+  if (input.plan.obligation_id !== input.obligation.obligation_id) {
+    reasons.push("obligation_id_mismatch");
+  }
+  if (input.plan.locked_statement_hash !== input.obligation.statement_hash) {
+    reasons.push("locked_statement_hash_mismatch");
+  }
+  for (const key of ["ingestion_tasks", "retrieval_tasks", "theorem_search_tasks"] as const) {
+    if (!Array.isArray(input.plan[key])) {
+      reasons.push(`${key}_not_array`);
+    }
+  }
+  const tasks = goalModeResearchPlanTasks(input.plan);
+  if (tasks.length === 0) {
+    reasons.push("adapter_tasks_empty");
+  }
+  tasks.forEach((task, index) => {
+    if (task.proof_authority !== "none") {
+      reasons.push(`adapter_task_${index}_proof_authority_not_none`);
+    }
+    if (task.can_promote_claim !== false) {
+      reasons.push(`adapter_task_${index}_can_promote_claim_not_false`);
+    }
+    if (task.can_certify_ga !== false) {
+      reasons.push(`adapter_task_${index}_can_certify_ga_not_false`);
+    }
+  });
+  return reasons;
+}
+
+function goalModeResearchPlanIntakeBinding(plan: Record<string, unknown>): Record<string, unknown> | null {
+  const binding = plan.consumes_goal_mode_intake_manifest;
+  if (!binding || typeof binding !== "object" || Array.isArray(binding)) {
+    return null;
+  }
+  const record = binding as Record<string, unknown>;
+  return {
+    path: typeof record.path === "string" ? record.path : null,
+    sha256: typeof record.sha256 === "string" ? record.sha256 : null,
+    schema_version: typeof record.schema_version === "string" ? record.schema_version : null,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+}
+
+type GoalModeInputIntegrity = {
+  input_integrity_status: string;
+  current_input_sha256: string | null;
+  current_input_size_bytes: number | null;
+  blocker?: Record<string, unknown>;
+};
+
+function goalModeInputBlocker(
+  code: string,
+  task: Record<string, unknown>,
+  extra: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    code,
+    planned_task_id: task.task_id,
+    input_ref_id: task.input_ref_id ?? null,
+    normalized_path: task.normalized_path ?? null,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    ...extra
+  };
+}
+
+function currentGoalModeInputIntegrity(projectRoot: string, task: Record<string, unknown>): GoalModeInputIntegrity {
+  const entryType = optionalStringField(task, "input_entry_type");
+  const normalizedPath = optionalStringField(task, "normalized_path");
+  const expectedSha256 = optionalStringField(task, "input_sha256");
+
+  if (!normalizedPath || !safeGoalModeNormalizedPath(normalizedPath)) {
+    return {
+      input_integrity_status: "unsafe_normalized_path",
+      current_input_sha256: null,
+      current_input_size_bytes: null,
+      blocker: goalModeInputBlocker("goal_mode_input_path_unsafe", task)
+    };
+  }
+
+  const projectPath = assertPathAllowed(projectRoot, normalizedPath, { purpose: "read" });
+  if (!existsSync(projectPath)) {
+    return {
+      input_integrity_status: "missing",
+      current_input_sha256: null,
+      current_input_size_bytes: null,
+      blocker: goalModeInputBlocker("goal_mode_input_missing", task)
+    };
+  }
+
+  const realProjectPath = assertPathAllowed(projectRoot, normalizedPath, { purpose: "read", resolveRealpath: true });
+  const stat = lstatSync(realProjectPath);
+  if (entryType === "directory") {
+    if (!stat.isDirectory()) {
+      return {
+        input_integrity_status: "entry_type_changed",
+        current_input_sha256: null,
+        current_input_size_bytes: null,
+        blocker: goalModeInputBlocker("goal_mode_input_entry_type_changed", task, {
+          expected_entry_type: "directory",
+          current_entry_type: stat.isFile() ? "file" : "other"
+        })
+      };
+    }
+    return {
+      input_integrity_status: "directory_reference_recorded",
+      current_input_sha256: null,
+      current_input_size_bytes: null
+    };
+  }
+
+  if (entryType !== "file") {
+    return {
+      input_integrity_status: "unsupported_entry_type",
+      current_input_sha256: null,
+      current_input_size_bytes: null,
+      blocker: goalModeInputBlocker("goal_mode_input_entry_type_unsupported", task, {
+        expected_entry_type: entryType ?? null
+      })
+    };
+  }
+
+  if (!stat.isFile()) {
+    return {
+      input_integrity_status: "entry_type_changed",
+      current_input_sha256: null,
+      current_input_size_bytes: null,
+      blocker: goalModeInputBlocker("goal_mode_input_entry_type_changed", task, {
+        expected_entry_type: "file",
+        current_entry_type: stat.isDirectory() ? "directory" : "other"
+      })
+    };
+  }
+
+  const currentHash = sha256FileSync(realProjectPath);
+  if (!expectedSha256) {
+    return {
+      input_integrity_status: "expected_hash_missing",
+      current_input_sha256: currentHash.sha256,
+      current_input_size_bytes: currentHash.size_bytes,
+      blocker: goalModeInputBlocker("goal_mode_input_expected_hash_missing", task)
+    };
+  }
+  if (currentHash.sha256 !== expectedSha256) {
+    return {
+      input_integrity_status: "mismatched",
+      current_input_sha256: currentHash.sha256,
+      current_input_size_bytes: currentHash.size_bytes,
+      blocker: goalModeInputBlocker("goal_mode_input_hash_mismatch", task)
+    };
+  }
+  return {
+    input_integrity_status: "matched",
+    current_input_sha256: currentHash.sha256,
+    current_input_size_bytes: currentHash.size_bytes
+  };
+}
+
+function localGoalModeExecutionState(integrity: GoalModeInputIntegrity): string {
+  if (integrity.input_integrity_status === "matched" || integrity.input_integrity_status === "directory_reference_recorded") {
+    return "local_manifest_recorded";
+  }
+  if (integrity.input_integrity_status === "mismatched") {
+    return "blocked_input_hash_mismatch";
+  }
+  if (integrity.input_integrity_status === "missing") {
+    return "blocked_input_missing";
+  }
+  if (integrity.input_integrity_status === "unsafe_normalized_path") {
+    return "blocked_input_path_unsafe";
+  }
+  if (integrity.input_integrity_status === "entry_type_changed") {
+    return "blocked_input_entry_type_changed";
+  }
+  return "blocked_input_integrity_unverified";
+}
+
+function goalModeAdapterRun(input: {
+  projectRoot: string;
+  task: Record<string, unknown>;
+  index: number;
+}): Record<string, unknown> {
+  const adapterRunId = `GMAR-${String(input.index).padStart(4, "0")}`;
+  const plannedTaskId = optionalStringField(input.task, "task_id") ?? `planned-task-${input.index}`;
+  const adapterKind = optionalStringField(input.task, "adapter_kind") ?? "unknown";
+  const adapterProvider = optionalStringField(input.task, "adapter_provider") ?? "unknown";
+  const purpose = optionalStringField(input.task, "purpose") ?? "unknown";
+  const requestEnvelope = {
+    adapter_run_id: adapterRunId,
+    planned_task_id: plannedTaskId,
+    adapter_id: input.task.adapter_id ?? null,
+    adapter_kind: adapterKind,
+    adapter_provider: adapterProvider,
+    purpose,
+    input_ref_id: input.task.input_ref_id ?? null,
+    input_kind: input.task.input_kind ?? null,
+    normalized_path: input.task.normalized_path ?? null,
+    input_entry_type: input.task.input_entry_type ?? null,
+    input_sha256: input.task.input_sha256 ?? null,
+    input_size_bytes: optionalNumberField(input.task, "input_size_bytes") ?? null,
+    query_hash: input.task.query_hash ?? null,
+    service_owned_execution: true,
+    live_execution_performed: false,
+    proof_authority: "none"
+  };
+
+  if (purpose === "local_ingestion") {
+    const integrity = currentGoalModeInputIntegrity(input.projectRoot, input.task);
+    const executionState = localGoalModeExecutionState(integrity);
+    const responseEnvelope = {
+      execution_state: executionState,
+      input_integrity_status: integrity.input_integrity_status,
+      result_count: 0,
+      extracted_claims: [],
+      blocker: integrity.blocker ?? null
+    };
+    return {
+      adapter_run_id: adapterRunId,
+      planned_task_id: plannedTaskId,
+      adapter_id: input.task.adapter_id,
+      adapter_kind: adapterKind,
+      adapter_provider: adapterProvider,
+      purpose,
+      service_owned_execution: true,
+      live_execution_performed: false,
+      execution_state: executionState,
+      planned_task_sha256: sha256Json(input.task),
+      request_sha256: sha256Json(requestEnvelope),
+      response_sha256: sha256Json(responseEnvelope),
+      input_ref_id: input.task.input_ref_id ?? null,
+      input_kind: input.task.input_kind ?? null,
+      normalized_path: input.task.normalized_path ?? null,
+      input_entry_type: input.task.input_entry_type ?? null,
+      input_sha256: input.task.input_sha256 ?? null,
+      current_input_sha256: integrity.current_input_sha256,
+      input_size_bytes: optionalNumberField(input.task, "input_size_bytes") ?? null,
+      current_input_size_bytes: integrity.current_input_size_bytes,
+      input_integrity_status: integrity.input_integrity_status,
+      prompt_injection_scan: {
+        status: "required_before_extraction",
+        findings: []
+      },
+      response_summary: {
+        result_count: 0,
+        extraction_count: 0,
+        trusted_claim_count: 0
+      },
+      extracted_claims: [],
+      blocker: integrity.blocker ?? null,
+      proof_authority: "none",
+      external_evidence_authority: false,
+      can_promote_claim: false,
+      can_certify_ga: false,
+      result_can_be_used_as_proof: false
+    };
+  }
+
+  const blocker = {
+    code: "goal_mode_live_adapter_execution_required",
+    planned_task_id: plannedTaskId,
+    adapter_kind: adapterKind,
+    adapter_provider: adapterProvider,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  const responseSummary = {
+    result_count: 0,
+    evidence_anchor_count: 0,
+    theorem_hint_count: 0,
+    proof_authority: "none"
+  };
+  const responseEnvelope = {
+    execution_state: "blocked_network_execution_not_performed",
+    blocker,
+    response_summary: responseSummary
+  };
+  return {
+    adapter_run_id: adapterRunId,
+    planned_task_id: plannedTaskId,
+    adapter_id: input.task.adapter_id,
+    adapter_kind: adapterKind,
+    adapter_provider: adapterProvider,
+    purpose,
+    service_owned_execution: true,
+    live_execution_performed: false,
+    execution_state: "blocked_network_execution_not_performed",
+    planned_task_sha256: sha256Json(input.task),
+    request_sha256: sha256Json(requestEnvelope),
+    response_sha256: sha256Json(responseEnvelope),
+    input_ref_id: input.task.input_ref_id ?? null,
+    input_kind: input.task.input_kind ?? null,
+    normalized_path: input.task.normalized_path ?? null,
+    input_entry_type: input.task.input_entry_type ?? null,
+    input_sha256: input.task.input_sha256 ?? null,
+    current_input_sha256: null,
+    input_integrity_status: "not_applicable",
+    prompt_injection_scan: {
+      status: adapterKind === "retrieval" ? "required_after_live_retrieval" : "not_applicable",
+      findings: []
+    },
+    response_summary: responseSummary,
+    extracted_claims: [],
+    blocker,
+    proof_authority: "none",
+    external_evidence_authority: false,
+    can_promote_claim: false,
+    can_certify_ga: false,
+    result_can_be_used_as_proof: false
+  };
+}
+
+function writeGoalModeAdapterExecutionManifest(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  researchPlanRel: string;
+}): string {
+  const researchPlan = objectRecord(
+    readJsonArtifact(input.projectRoot, input.researchPlanRel),
+    "goal_mode_research_plan"
+  );
+  const invalidReasons = validateGoalModeResearchPlanBinding({
+    plan: researchPlan,
+    campaign: input.campaign,
+    obligation: input.obligation
+  });
+  const tasks = invalidReasons.length === 0 ? goalModeResearchPlanTasks(researchPlan) : [];
+  const adapterRuns = tasks.map((task, index) => goalModeAdapterRun({ projectRoot: input.projectRoot, task, index: index + 1 }));
+  const blockedLiveProvider = adapterRuns.some((run) => run.execution_state === "blocked_network_execution_not_performed");
+  const blockedInputIntegrity = adapterRuns.some((run) => typeof run.blocker === "object" && run.blocker !== null);
+  const executionStatus =
+    invalidReasons.length > 0
+      ? "blocked_goal_mode_research_plan_invalid"
+      : blockedLiveProvider
+        ? "blocked_live_provider_execution_required"
+        : blockedInputIntegrity
+          ? "blocked_input_integrity_required"
+          : "ready_for_live_adapter_execution";
+
+  return writeSimpleStageArtifact(input.projectRoot, input.campaign, "goal_mode_adapter_execution_manifest.json", {
+    schema_version: "comath.pi_goal_mode_adapter_execution_manifest.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.campaign.project_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    locked_statement_hash: input.obligation.statement_hash,
+    consumes_goal_mode_research_plan: {
+      path: input.researchPlanRel,
+      sha256: sha256RuntimeFile(input.projectRoot, input.researchPlanRel),
+      schema_version: researchPlan.schema_version ?? null,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    },
+    consumes_goal_mode_intake_manifest: goalModeResearchPlanIntakeBinding(researchPlan),
+    service_owned_execution_manifest: true,
+    execution_status: executionStatus,
+    network_execution_performed: false,
+    live_execution_performed: false,
+    adapter_runs: adapterRuns,
+    adapter_runs_sha256: sha256Json(adapterRuns),
+    invalid_reasons: invalidReasons,
+    no_reinvent_policy: {
+      adapter_execution: "service-owned run envelopes only until maintained adapters execute",
+      external_sources: "hints, evidence, or refutation sources only",
+      proof_authority: "Lean4/mathlib clean replay only"
+    },
+    authority_boundary: {
+      adapter_runs_are_not_proofs: true,
+      extracted_claims_require_later_prompt_injection_scan: true,
+      theorem_search_hits_are_hints_only: true,
+      final_authority: "Lean4/mathlib kernel clean replay"
     },
     proof_authority: "none",
     external_evidence_authority: false,
@@ -3474,6 +3930,19 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       can_promote_claim: false,
       can_certify_ga: false
     };
+    const adapterExecutionRel = writeGoalModeAdapterExecutionManifest({
+      projectRoot: input.project_root,
+      campaign,
+      obligation,
+      researchPlanRel
+    });
+    const adapterExecutionBinding = {
+      path: adapterExecutionRel,
+      sha256: sha256RuntimeFile(input.project_root, adapterExecutionRel),
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    };
     const contextRel = writeSimpleStageArtifact(input.project_root, campaign, "knowledge_pack.json", {
       campaign_id: campaign.campaign_id,
       root_claim_id: campaign.root_claim_id,
@@ -3494,6 +3963,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         ".comath/goals.yaml"
       ],
       goal_mode_research_plan: researchPlanBinding,
+      goal_mode_adapter_execution_manifest: adapterExecutionBinding,
       retrieval_mode: "service-owned-local-context-pack",
       stage_gate: "knowledge_pack",
       created_at: now()
@@ -3509,6 +3979,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         ],
         next_actions: [
           "run goal-mode ingestion, retrieval, theorem-search, and lemma-planning adapters before any proof claim promotion",
+          "extract anchored evidence from service-owned adapter execution manifests before candidate generation",
           "resolve notation and Lean definitions for the locked problem"
         ]
       }),

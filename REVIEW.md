@@ -1,3 +1,34 @@
+# Goal 3 Task 257 / Pi Goal-Mode Service-Owned Adapter Execution Manifest
+
+Scope: connect Task256 goal-mode research plans to service-owned adapter execution manifests. This is run-envelope provenance and input-integrity gating only; it is not live retrieval, document extraction evidence, theorem-search evidence, Lean replay, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs`.
+- Added `goal_mode_adapter_execution_manifest.json` creation during `knowledge_pack`.
+- Bound the Task256 research-plan path/hash into the execution manifest and `knowledge_pack.json`, and preserved the Task255 intake-manifest path/hash binding.
+- Emitted one service-owned adapter run envelope per planned ingestion, retrieval, and theorem-search task.
+- Re-checked local file input hashes, recorded local directory refs without recursive proof claims, and blocked tampered local inputs with `goal_mode_input_hash_mismatch`.
+- Kept network/theorem-search providers blocked as `goal_mode_live_adapter_execution_required` with `network_execution_performed=false`.
+- Made the execution manifest a required knowledge-pack artifact whose deletion rewinds later stages to `knowledge_pack`.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task257 service test: after `corepack pnpm --filter @comath/comathd build`, `node services/comathd/tests/unit/goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs` failed because `knowledge_pack` did not attach a service-owned adapter execution manifest.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task257 exited 0.
+- Adjacent Task256, Task255, Task16 service route, Task16 Pi extension, Task100 terminal read-model authority, Phase63 stage-artifact coverage, Phase65 proof-memory retrieval, and Phase71 repair/resume regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task257 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task257, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task257 writes only service-owned `.comath/campaign/<campaign_id>/goal_mode_adapter_execution_manifest.json` artifacts through `comathd`. Run envelopes remain non-authoritative scheduling/input-integrity records with `proof_authority="none"`, `can_promote_claim=false`, and `can_certify_ga=false`. They do not execute retrieval, extract trusted paper or attachment claims, return theorem-search hits, run Lean, create promotion-grade evidence, promote claims, or certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task257 does not execute PDF/TeX/Markdown ingestion adapters, retrieve literature, call theorem-search providers, extract citation anchors, generate richer automatic lemma decompositions, repair Lean skeletons, complete durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 256 / Pi Goal-Mode Service-Owned Research Plan
 
 Scope: connect Task255 goal-mode intake provenance to the `knowledge_pack` product loop by writing a service-owned research plan artifact. This is adapter planning and lemma-planning bridge metadata only; it is not adapter execution, document extraction evidence, theorem-search evidence, Lean replay, proof authority, promotion, or GA certification.
