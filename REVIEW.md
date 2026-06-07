@@ -1,3 +1,21 @@
+# Goal 3 Task 247 / Service-Owned Unattended Real-Host Durable Transport Contract
+
+Scope: add a service-owned durable-transport prerequisite contract after the Task239 handoff review, Task243 operator approval, Task245 executor contract, and Task229 maintained transport continuity. This is prerequisite evidence only; it is not a CoMath transport stack, durable/live channel, unattended execution authorization, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task247-pi-unattended-real-host-durable-transport-contract.test.mjs`.
+- Added `recordPiCodexLifecycleUnattendedRealHostDurableTransportContract()` and `POST /release/pi-codex-lifecycle/unattended-real-host-durable-transport-contract`.
+- Added append-only `comath.pi_codex_unattended_real_host_durable_transport_contract.v1` manifests and `release.pi_codex_unattended_real_host_durable_transport_contract_recorded` audit events.
+- Extended `recordPiCodexLifecycleUnattendedRealHostExecutionReadiness()` so a current durable-transport prerequisite contract removes only `durable_transport_not_provided` and records `unattended_real_host_execution_prerequisites_recorded` while all approval/execution/durable-live/proof/GA flags remain false.
+- Synchronized phase0 smoke discovery, README, AGENTS, TODO, adapter contracts, GA release criteria, threat model, REVIEW, and the Goal 3 tracker without adding a Pi consumer, opening transport, invoking an executor, or claiming GA readiness.
+
+Verification:
+- TDD RED was observed before implementation when focused Task247 failed because `recordPiCodexLifecycleUnattendedRealHostDurableTransportContract` was not exported.
+- Review-driven RED coverage then reproduced malformed durable-contract handling and boundary drift before hardening: missing `transport_continuity_artifact` produced a raw `TypeError`, nested artifact metadata drift was not fully rejected, non-canonical continuity paths could be supplied, a continuity artifact from a different handoff chain could cross the boundary, and durable-contract audit events lacked explicit false authority/transport flags.
+- After implementation and hardening, `corepack pnpm --filter @comath/comathd build`, focused Task247, adjacent Task229/233/239/241/243/245 regressions, `corepack pnpm --filter @comath/comathd typecheck`, `node scripts/phase0-smoke.mjs`, `corepack pnpm --filter @comath/comathd test`, `corepack pnpm typecheck`, and `corepack pnpm test` all exited 0; phase0 reported 33 required entries and 33 invariants, Task247 was discovered by package/root runners, `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task247 binds current service-owned checkpoint artifacts by id/path/hash and rejects CoMath-owned transport-stack kinds, incomplete readiness bindings, stale durable-contract hashes, duplicate ids, and poisoned live/promotional durable contracts. It records that the durable-transport prerequisite is represented, not that a durable/live transport exists. Readiness may clear the final missing-prerequisite blocker only when the contract is current; it still does not approve or execute a handoff, authorize unattended execution, mutate Pi trusted state, open transport, run Lean, promote claims, or certify GA.
+
 # Goal 3 Task 246 / Pi Unattended Real-Host Executor Contract Consumer
 
 Scope: expose the Task245 service-owned unattended real-host executor contract checkpoint through the Pi extension as a host-confirmed thin client and read-only planner step. This is executor-prerequisite consumer wiring only; it is not an executor invocation, unattended execution authorization, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.

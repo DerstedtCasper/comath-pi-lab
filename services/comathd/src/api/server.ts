@@ -63,6 +63,7 @@ import {
   recordPiCodexLifecycleGuidedRealPiExecution,
   recordPiCodexLifecycleOperatorServiceTransportContinuity,
   recordPiCodexLifecycleOperatorServiceTransportContract,
+  recordPiCodexLifecycleUnattendedRealHostDurableTransportContract,
   recordPiCodexLifecycleUnattendedRealHostExecutionReadiness,
   recordPiCodexLifecycleUnattendedRealHostExecutorContract,
   recordPiCodexLifecycleUnattendedRealHostOperatorApproval,
@@ -512,6 +513,20 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           executor_contract: recordPiCodexLifecycleUnattendedRealHostExecutorContract(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/unattended-real-host-durable-transport-contract",
+      (payload) => {
+        const body = payload as Parameters<typeof recordPiCodexLifecycleUnattendedRealHostDurableTransportContract>[1] & {
+          project_root: string;
+        };
+        return {
+          durable_transport_contract: recordPiCodexLifecycleUnattendedRealHostDurableTransportContract(
+            body.project_root,
+            body
+          )
         };
       }
     ],

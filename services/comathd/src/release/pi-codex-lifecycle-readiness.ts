@@ -1291,6 +1291,99 @@ type PiCodexUnattendedRealHostExecutorContractBody = Omit<
   "executor_contract_artifact"
 >;
 
+export type PiCodexUnattendedRealHostDurableTransportContractInput = {
+  project_id: string;
+  durable_transport_contract_id?: string;
+  actor: string;
+  handoff_review_id: string;
+  handoff_review_path: string;
+  handoff_review_sha256: string;
+  operator_approval_id: string;
+  operator_approval_path: string;
+  operator_approval_sha256: string;
+  unattended_executor_contract_id: string;
+  unattended_executor_contract_path: string;
+  unattended_executor_contract_sha256: string;
+  transport_continuity_id: string;
+  transport_continuity_path: string;
+  transport_continuity_sha256: string;
+  durability_contract_kind?: "service_owned_external_durable_transport_prerequisite_contract";
+  transport_prerequisite_state?: "contract_recorded_transport_not_opened";
+};
+
+export type PiCodexUnattendedRealHostDurableTransportContractArtifact = {
+  kind: "unattended_real_host_durable_transport_contract";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexUnattendedRealHostDurableTransportContract = {
+  schema_version: "comath.pi_codex_unattended_real_host_durable_transport_contract.v1";
+  durable_transport_contract_id: string;
+  project_id: string;
+  actor: string;
+  created_at: string;
+  durable_transport_contract_status: "durable_transport_prerequisite_contract_recorded";
+  durable_transport_contract_path: string;
+  durable_transport_contract_artifact: PiCodexUnattendedRealHostDurableTransportContractArtifact;
+  durability_contract_kind: "service_owned_external_durable_transport_prerequisite_contract";
+  transport_prerequisite_state: "contract_recorded_transport_not_opened";
+  handoff_review_id: string;
+  handoff_review_path: string;
+  handoff_review_artifact: PiCodexUnattendedRealHostHandoffReviewArtifact;
+  operator_approval_id: string;
+  operator_approval_path: string;
+  operator_approval_artifact: PiCodexUnattendedRealHostOperatorApprovalArtifact;
+  unattended_executor_contract_id: string;
+  unattended_executor_contract_path: string;
+  unattended_executor_contract_artifact: PiCodexUnattendedRealHostExecutorContractArtifact;
+  transport_continuity_id: string;
+  transport_continuity_path: string;
+  transport_continuity_artifact: PiCodexOperatorServiceTransportContinuityArtifact;
+  handoff_review_current: true;
+  operator_approval_artifact_current: true;
+  unattended_executor_contract_current: true;
+  transport_continuity_current: true;
+  service_owned_checkpoint_chain_reviewed: true;
+  durable_transport_contract_manifest_persisted: true;
+  durable_transport_contract_current: true;
+  service_owned_durable_transport_prerequisite_configured: true;
+  real_pi_runtime_probe_id: string;
+  session_id: string;
+  transport_recovery_id: string;
+  transport_lease_id: string;
+  transport_heartbeat_id: string;
+  execution_id: string;
+  terminal_review_id: string;
+  transport_contract_id: string;
+  automatic_orchestration_id: string;
+  agent_run_id: string;
+  service_route: string;
+  service_transport_primitive: PiCodexOperatorServiceTransportPrimitive;
+  client_transport_primitive: PiCodexOperatorClientTransportPrimitive;
+  operator_approved: false;
+  handoff_can_execute: false;
+  unattended_execution_authorized: false;
+  unattended_real_host_execution_completed: false;
+  operator_confirmation_bypassed: false;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+type PiCodexUnattendedRealHostDurableTransportContractBody = Omit<
+  PiCodexUnattendedRealHostDurableTransportContract,
+  "durable_transport_contract_artifact"
+>;
+
 export type PiCodexUnattendedRealHostExecutionReadinessBlockerReason =
   | "operator_approval_artifact_missing"
   | "service_owned_unattended_executor_not_configured"
@@ -1309,6 +1402,9 @@ export type PiCodexUnattendedRealHostExecutionReadinessInput = {
   unattended_executor_contract_id?: string;
   unattended_executor_contract_path?: string;
   unattended_executor_contract_sha256?: string;
+  durable_transport_contract_id?: string;
+  durable_transport_contract_path?: string;
+  durable_transport_contract_sha256?: string;
   requested_execution_mode?: "production_unattended_real_host";
 };
 
@@ -1325,7 +1421,9 @@ export type PiCodexUnattendedRealHostExecutionReadiness = {
   project_id: string;
   actor: string;
   created_at: string;
-  readiness_status: "blocked_unattended_real_host_execution_not_authorized";
+  readiness_status:
+    | "blocked_unattended_real_host_execution_not_authorized"
+    | "unattended_real_host_execution_prerequisites_recorded";
   readiness_path: string;
   readiness_artifact: PiCodexUnattendedRealHostExecutionReadinessArtifact;
   requested_execution_mode: "production_unattended_real_host";
@@ -1344,6 +1442,11 @@ export type PiCodexUnattendedRealHostExecutionReadiness = {
   unattended_executor_contract_artifact: PiCodexUnattendedRealHostExecutorContractArtifact | null;
   unattended_executor_contract_current: boolean;
   service_owned_unattended_executor_configured: boolean;
+  durable_transport_contract_id: string | null;
+  durable_transport_contract_path: string | null;
+  durable_transport_contract_artifact: PiCodexUnattendedRealHostDurableTransportContractArtifact | null;
+  durable_transport_contract_current: boolean;
+  service_owned_durable_transport_prerequisite_configured: boolean;
   readiness_manifest_persisted: true;
   real_pi_runtime_probe_id: string;
   session_id: string;
@@ -3526,6 +3629,18 @@ function unattendedRealHostExecutorContractPath(executorContractId: string): str
       "pi-codex-lifecycle",
       executorContractId,
       "unattended-real-host-executor-contract.json"
+    )
+  );
+}
+
+function unattendedRealHostDurableTransportContractPath(durableTransportContractId: string): string {
+  return normalizeRelativePath(
+    join(
+      ".comath",
+      "release",
+      "pi-codex-lifecycle",
+      durableTransportContractId,
+      "unattended-real-host-durable-transport-contract.json"
     )
   );
 }
@@ -6506,6 +6621,315 @@ function readOptionalUnattendedRealHostExecutorContractArtifact(
   );
 }
 
+function assertUnattendedRealHostDurableTransportContractBoundary(
+  contract: PiCodexUnattendedRealHostDurableTransportContractBody
+): void {
+  const parsedLogSessionRoute =
+    typeof contract.service_route === "string" ? parseAgentRunLogSessionRoute(contract.service_route) : null;
+  if (
+    contract.schema_version !== "comath.pi_codex_unattended_real_host_durable_transport_contract.v1" ||
+    contract.durable_transport_contract_status !== "durable_transport_prerequisite_contract_recorded" ||
+    contract.durability_contract_kind !== "service_owned_external_durable_transport_prerequisite_contract" ||
+    contract.transport_prerequisite_state !== "contract_recorded_transport_not_opened" ||
+    contract.handoff_review_current !== true ||
+    contract.operator_approval_artifact_current !== true ||
+    contract.unattended_executor_contract_current !== true ||
+    contract.transport_continuity_current !== true ||
+    contract.service_owned_checkpoint_chain_reviewed !== true ||
+    contract.durable_transport_contract_manifest_persisted !== true ||
+    contract.durable_transport_contract_current !== true ||
+    contract.service_owned_durable_transport_prerequisite_configured !== true ||
+    contract.service_transport_primitive !== "node_http_agent_run_log_session_route" ||
+    contract.client_transport_primitive !== "pi_fetch_get_text" ||
+    parsedLogSessionRoute === null ||
+    parsedLogSessionRoute.route !== contract.service_route ||
+    parsedLogSessionRoute.runId !== contract.agent_run_id ||
+    contract.operator_approved !== false ||
+    contract.handoff_can_execute !== false ||
+    contract.unattended_execution_authorized !== false ||
+    contract.unattended_real_host_execution_completed !== false ||
+    contract.operator_confirmation_bypassed !== false ||
+    contract.durable_transport_provided !== false ||
+    contract.live_transport_open !== false ||
+    contract.indefinite_stream_open !== false ||
+    contract.long_lived_websocket_provided !== false ||
+    contract.long_lived_sse_provided !== false ||
+    contract.pi_direct_write_allowed !== false ||
+    contract.direct_trusted_state_mutation !== false ||
+    contract.proof_authority !== "none" ||
+    contract.can_promote_claim !== false ||
+    contract.can_certify_ga !== false
+  ) {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract violates boundaries", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_DURABLE_TRANSPORT_CONTRACT_INVALID"
+    });
+  }
+}
+
+function hasLifecycleArtifactReference(value: unknown, kind: string): value is {
+  kind: string;
+  path: string;
+  sha256: string;
+  size_bytes: number;
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const artifact = value as Record<string, unknown>;
+  return (
+    artifact.kind === kind &&
+    typeof artifact.path === "string" &&
+    artifact.path.length > 0 &&
+    typeof artifact.sha256 === "string" &&
+    /^[a-f0-9]{64}$/i.test(artifact.sha256) &&
+    typeof artifact.size_bytes === "number" &&
+    Number.isSafeInteger(artifact.size_bytes) &&
+    artifact.size_bytes >= 0
+  );
+}
+
+function assertUnattendedRealHostDurableTransportContractArtifactRefs(
+  contract: PiCodexUnattendedRealHostDurableTransportContractBody
+): void {
+  const material = contract as {
+    handoff_review_artifact?: unknown;
+    operator_approval_artifact?: unknown;
+    unattended_executor_contract_artifact?: unknown;
+    transport_continuity_artifact?: unknown;
+  };
+  if (
+    !hasLifecycleArtifactReference(material.handoff_review_artifact, "unattended_real_host_handoff_review") ||
+    !hasLifecycleArtifactReference(material.operator_approval_artifact, "unattended_real_host_operator_approval") ||
+    !hasLifecycleArtifactReference(
+      material.unattended_executor_contract_artifact,
+      "unattended_real_host_executor_contract"
+    ) ||
+    !hasLifecycleArtifactReference(material.transport_continuity_artifact, "operator_service_transport_continuity")
+  ) {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract artifact references are invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_DURABLE_TRANSPORT_CONTRACT_INVALID"
+    });
+  }
+}
+
+function lifecycleArtifactReferenceMatches(
+  actual: { kind: string; path: string; sha256: string; size_bytes: number },
+  expected: { kind: string; path: string; sha256: string; size_bytes: number }
+): boolean {
+  return (
+    actual.kind === expected.kind &&
+    actual.path === expected.path &&
+    actual.sha256 === expected.sha256 &&
+    actual.size_bytes === expected.size_bytes
+  );
+}
+
+function assertUnattendedRealHostDurableTransportContractMatchesChain(
+  contract: PiCodexUnattendedRealHostDurableTransportContractBody,
+  review: PiCodexUnattendedRealHostHandoffReviewBody,
+  handoffReviewArtifact: PiCodexUnattendedRealHostHandoffReviewArtifact,
+  approval: PiCodexUnattendedRealHostOperatorApprovalBody,
+  approvalArtifact: PiCodexUnattendedRealHostOperatorApprovalArtifact,
+  executorContract: PiCodexUnattendedRealHostExecutorContractBody,
+  executorContractArtifact: PiCodexUnattendedRealHostExecutorContractArtifact,
+  continuity: PiCodexOperatorServiceTransportContinuityBody,
+  continuityArtifact: PiCodexOperatorServiceTransportContinuityArtifact
+): void {
+  assertUnattendedRealHostDurableTransportContractArtifactRefs(contract);
+  if (
+    contract.handoff_review_id !== review.handoff_review_id ||
+    contract.handoff_review_path !== review.handoff_review_path ||
+    !lifecycleArtifactReferenceMatches(contract.handoff_review_artifact, handoffReviewArtifact) ||
+    contract.operator_approval_id !== approval.approval_id ||
+    contract.operator_approval_path !== approval.approval_path ||
+    !lifecycleArtifactReferenceMatches(contract.operator_approval_artifact, approvalArtifact) ||
+    contract.unattended_executor_contract_id !== executorContract.executor_contract_id ||
+    contract.unattended_executor_contract_path !== executorContract.executor_contract_path ||
+    !lifecycleArtifactReferenceMatches(contract.unattended_executor_contract_artifact, executorContractArtifact) ||
+    contract.transport_continuity_id !== continuity.continuity_id ||
+    contract.transport_continuity_path !== continuity.continuity_path ||
+    !lifecycleArtifactReferenceMatches(contract.transport_continuity_artifact, continuityArtifact) ||
+    contract.real_pi_runtime_probe_id !== review.real_pi_runtime_probe_id ||
+    contract.session_id !== review.session_id ||
+    contract.transport_recovery_id !== review.transport_recovery_id ||
+    contract.transport_lease_id !== review.transport_lease_id ||
+    contract.transport_heartbeat_id !== review.transport_heartbeat_id ||
+    contract.execution_id !== review.execution_id ||
+    contract.terminal_review_id !== review.terminal_review_id ||
+    contract.transport_contract_id !== review.transport_contract_id ||
+    contract.automatic_orchestration_id !== review.automatic_orchestration_id ||
+    contract.agent_run_id !== review.agent_run_id ||
+    contract.service_route !== review.service_route ||
+    contract.service_transport_primitive !== review.service_transport_primitive ||
+    contract.client_transport_primitive !== review.client_transport_primitive ||
+    continuity.continuity_id !== review.transport_continuity_id ||
+    continuity.transport_contract_id !== review.transport_contract_id ||
+    continuity.agent_run_id !== review.agent_run_id ||
+    continuity.service_route !== review.service_route ||
+    continuity.service_transport_primitive !== review.service_transport_primitive ||
+    continuity.client_transport_primitive !== review.client_transport_primitive
+  ) {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract does not bind the handoff chain", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_DURABLE_TRANSPORT_CONTRACT_INVALID"
+    });
+  }
+}
+
+function readUnattendedRealHostDurableTransportContractArtifact(
+  projectRoot: string,
+  projectId: string,
+  durableTransportContractId: string,
+  durableTransportContractPath: string,
+  expectedSha256: string,
+  review: PiCodexUnattendedRealHostHandoffReviewBody,
+  handoffReviewArtifact: PiCodexUnattendedRealHostHandoffReviewArtifact,
+  approval: PiCodexUnattendedRealHostOperatorApprovalBody,
+  approvalArtifact: PiCodexUnattendedRealHostOperatorApprovalArtifact,
+  executorContract: PiCodexUnattendedRealHostExecutorContractBody,
+  executorContractArtifact: PiCodexUnattendedRealHostExecutorContractArtifact
+): {
+  contract: PiCodexUnattendedRealHostDurableTransportContractBody;
+  artifact: PiCodexUnattendedRealHostDurableTransportContractArtifact;
+} {
+  const canonicalDurableTransportContractPath =
+    unattendedRealHostDurableTransportContractPath(durableTransportContractId);
+  const normalizedDurableTransportContractPath = projectRelativePath(
+    projectRoot,
+    assertPathAllowed(projectRoot, durableTransportContractPath, { purpose: "read", resolveRealpath: true })
+  );
+  if (normalizedDurableTransportContractPath !== canonicalDurableTransportContractPath) {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract path is not canonical", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_DURABLE_TRANSPORT_CONTRACT_INVALID"
+    });
+  }
+  const absolutePath = assertPathAllowed(projectRoot, canonicalDurableTransportContractPath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    throw new ComathError("Pi/Codex unattended real-host execution readiness requires durable transport evidence", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_DURABLE_TRANSPORT_CONTRACT_STALE"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  const actualSha256 = sha256Bytes(content);
+  if (assertPreparedCheckpointSha256(expectedSha256) !== actualSha256) {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract hash is stale", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_DURABLE_TRANSPORT_CONTRACT_STALE"
+    });
+  }
+  let parsed: PiCodexUnattendedRealHostDurableTransportContractBody;
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexUnattendedRealHostDurableTransportContractBody;
+  } catch {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract JSON is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_DURABLE_TRANSPORT_CONTRACT_INVALID"
+    });
+  }
+  if (
+    parsed.project_id !== projectId ||
+    parsed.durable_transport_contract_id !== durableTransportContractId ||
+    parsed.durable_transport_contract_path !== canonicalDurableTransportContractPath
+  ) {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract does not bind the request", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_DURABLE_TRANSPORT_CONTRACT_INVALID"
+    });
+  }
+  assertUnattendedRealHostDurableTransportContractArtifactRefs(parsed);
+  const { continuity, artifact: continuityArtifact } = readOperatorServiceTransportContinuityArtifact(
+    projectRoot,
+    projectId,
+    parsed.transport_continuity_id,
+    parsed.transport_continuity_path,
+    parsed.transport_continuity_artifact.sha256
+  );
+  assertUnattendedRealHostDurableTransportContractBoundary(parsed);
+  assertUnattendedRealHostDurableTransportContractMatchesChain(
+    parsed,
+    review,
+    handoffReviewArtifact,
+    approval,
+    approvalArtifact,
+    executorContract,
+    executorContractArtifact,
+    continuity,
+    continuityArtifact
+  );
+  return {
+    contract: parsed,
+    artifact: {
+      kind: "unattended_real_host_durable_transport_contract",
+      path: canonicalDurableTransportContractPath,
+      sha256: actualSha256,
+      size_bytes: content.byteLength
+    }
+  };
+}
+
+function readOptionalUnattendedRealHostDurableTransportContractArtifact(
+  projectRoot: string,
+  projectId: string,
+  input: PiCodexUnattendedRealHostExecutionReadinessInput,
+  review: PiCodexUnattendedRealHostHandoffReviewBody,
+  handoffReviewArtifact: PiCodexUnattendedRealHostHandoffReviewArtifact,
+  operatorApprovalBinding: {
+    approval: PiCodexUnattendedRealHostOperatorApprovalBody;
+    artifact: PiCodexUnattendedRealHostOperatorApprovalArtifact;
+  } | null,
+  executorContractBinding: {
+    contract: PiCodexUnattendedRealHostExecutorContractBody;
+    artifact: PiCodexUnattendedRealHostExecutorContractArtifact;
+  } | null
+):
+  | {
+      contract: PiCodexUnattendedRealHostDurableTransportContractBody;
+      artifact: PiCodexUnattendedRealHostDurableTransportContractArtifact;
+    }
+  | null {
+  const durableTransportFields = [
+    input.durable_transport_contract_id,
+    input.durable_transport_contract_path,
+    input.durable_transport_contract_sha256
+  ];
+  if (durableTransportFields.every((value) => value === undefined)) {
+    return null;
+  }
+  if (
+    durableTransportFields.some((value) => value === undefined) ||
+    operatorApprovalBinding === null ||
+    executorContractBinding === null
+  ) {
+    throw new ComathError(
+      "Pi/Codex unattended real-host execution readiness durable transport contract input is incomplete",
+      {
+        statusCode: 400,
+        code: "PI_CODEX_UNATTENDED_REAL_HOST_EXECUTION_READINESS_DURABLE_TRANSPORT_CONTRACT_INVALID"
+      }
+    );
+  }
+  return readUnattendedRealHostDurableTransportContractArtifact(
+    projectRoot,
+    projectId,
+    assertReviewId(input.durable_transport_contract_id),
+    input.durable_transport_contract_path as string,
+    input.durable_transport_contract_sha256 as string,
+    review,
+    handoffReviewArtifact,
+    operatorApprovalBinding.approval,
+    operatorApprovalBinding.artifact,
+    executorContractBinding.contract,
+    executorContractBinding.artifact
+  );
+}
+
 export function recordPiCodexLifecycleUnattendedRealHostOperatorApproval(
   projectRoot: string,
   input: PiCodexUnattendedRealHostOperatorApprovalInput
@@ -6856,6 +7280,224 @@ export function recordPiCodexLifecycleUnattendedRealHostExecutorContract(
   return result;
 }
 
+export function recordPiCodexLifecycleUnattendedRealHostDurableTransportContract(
+  projectRoot: string,
+  input: PiCodexUnattendedRealHostDurableTransportContractInput
+): PiCodexUnattendedRealHostDurableTransportContract {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const durableTransportContractId = assertReviewId(input.durable_transport_contract_id);
+  const handoffReviewId = assertReviewId(input.handoff_review_id);
+  const durabilityContractKind =
+    input.durability_contract_kind ?? "service_owned_external_durable_transport_prerequisite_contract";
+  if (durabilityContractKind !== "service_owned_external_durable_transport_prerequisite_contract") {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract kind is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_DURABLE_TRANSPORT_CONTRACT_INVALID_KIND"
+    });
+  }
+  const transportPrerequisiteState =
+    input.transport_prerequisite_state ?? "contract_recorded_transport_not_opened";
+  if (transportPrerequisiteState !== "contract_recorded_transport_not_opened") {
+    throw new ComathError("Pi/Codex unattended real-host durable transport prerequisite state is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_DURABLE_TRANSPORT_CONTRACT_INVALID_STATE"
+    });
+  }
+  const durableTransportContractPath = unattendedRealHostDurableTransportContractPath(durableTransportContractId);
+  const absoluteDurableTransportContractPath = assertPathAllowed(projectRoot, durableTransportContractPath, {
+    purpose: "runtime-write"
+  });
+  if (existsSync(absoluteDurableTransportContractPath)) {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract already exists", {
+      statusCode: 409,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_DURABLE_TRANSPORT_CONTRACT_ALREADY_EXISTS"
+    });
+  }
+
+  const { review, artifact: handoffReviewArtifact } = readUnattendedRealHostHandoffReviewArtifact(
+    projectRoot,
+    projectId,
+    handoffReviewId,
+    input.handoff_review_path,
+    input.handoff_review_sha256
+  );
+  const { approval, artifact: approvalArtifact } = readUnattendedRealHostOperatorApprovalArtifact(
+    projectRoot,
+    projectId,
+    assertReviewId(input.operator_approval_id),
+    input.operator_approval_path,
+    input.operator_approval_sha256,
+    review,
+    handoffReviewArtifact
+  );
+  const { contract: executorContract, artifact: executorContractArtifact } =
+    readUnattendedRealHostExecutorContractArtifact(
+      projectRoot,
+      projectId,
+      assertReviewId(input.unattended_executor_contract_id),
+      input.unattended_executor_contract_path,
+      input.unattended_executor_contract_sha256,
+      review,
+      handoffReviewArtifact
+    );
+  const canonicalContinuityPath = operatorServiceTransportContinuityPath(input.transport_continuity_id);
+  const normalizedContinuityPath = projectRelativePath(
+    projectRoot,
+    assertPathAllowed(projectRoot, input.transport_continuity_path, { purpose: "read", resolveRealpath: true })
+  );
+  if (normalizedContinuityPath !== canonicalContinuityPath) {
+    throw new ComathError("Pi/Codex unattended real-host durable transport continuity path is not canonical", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_DURABLE_TRANSPORT_CONTRACT_INVALID_CONTINUITY"
+    });
+  }
+  const { continuity, artifact: continuityArtifact } = readOperatorServiceTransportContinuityArtifact(
+    projectRoot,
+    projectId,
+    input.transport_continuity_id,
+    canonicalContinuityPath,
+    input.transport_continuity_sha256
+  );
+  if (
+    approval.approval_id !== input.operator_approval_id ||
+    executorContract.executor_contract_id !== input.unattended_executor_contract_id ||
+    continuity.continuity_id !== input.transport_continuity_id
+  ) {
+    throw new ComathError("Pi/Codex unattended real-host durable transport contract chain binding is invalid", {
+      statusCode: 400,
+      code: "PI_CODEX_UNATTENDED_REAL_HOST_DURABLE_TRANSPORT_CONTRACT_INVALID_CHAIN"
+    });
+  }
+
+  const body: PiCodexUnattendedRealHostDurableTransportContractBody = {
+    schema_version: "comath.pi_codex_unattended_real_host_durable_transport_contract.v1",
+    durable_transport_contract_id: durableTransportContractId,
+    project_id: projectId,
+    actor: sanitizeOperatorTransportText(input.actor),
+    created_at: new Date().toISOString(),
+    durable_transport_contract_status: "durable_transport_prerequisite_contract_recorded",
+    durable_transport_contract_path: durableTransportContractPath,
+    durability_contract_kind: "service_owned_external_durable_transport_prerequisite_contract",
+    transport_prerequisite_state: "contract_recorded_transport_not_opened",
+    handoff_review_id: handoffReviewId,
+    handoff_review_path: review.handoff_review_path,
+    handoff_review_artifact: handoffReviewArtifact,
+    operator_approval_id: approval.approval_id,
+    operator_approval_path: approval.approval_path,
+    operator_approval_artifact: approvalArtifact,
+    unattended_executor_contract_id: executorContract.executor_contract_id,
+    unattended_executor_contract_path: executorContract.executor_contract_path,
+    unattended_executor_contract_artifact: executorContractArtifact,
+    transport_continuity_id: continuity.continuity_id,
+    transport_continuity_path: continuity.continuity_path,
+    transport_continuity_artifact: continuityArtifact,
+    handoff_review_current: true,
+    operator_approval_artifact_current: true,
+    unattended_executor_contract_current: true,
+    transport_continuity_current: true,
+    service_owned_checkpoint_chain_reviewed: true,
+    durable_transport_contract_manifest_persisted: true,
+    durable_transport_contract_current: true,
+    service_owned_durable_transport_prerequisite_configured: true,
+    real_pi_runtime_probe_id: review.real_pi_runtime_probe_id,
+    session_id: review.session_id,
+    transport_recovery_id: review.transport_recovery_id,
+    transport_lease_id: review.transport_lease_id,
+    transport_heartbeat_id: review.transport_heartbeat_id,
+    execution_id: review.execution_id,
+    terminal_review_id: review.terminal_review_id,
+    transport_contract_id: review.transport_contract_id,
+    automatic_orchestration_id: review.automatic_orchestration_id,
+    agent_run_id: review.agent_run_id,
+    service_route: review.service_route,
+    service_transport_primitive: review.service_transport_primitive,
+    client_transport_primitive: review.client_transport_primitive,
+    operator_approved: false,
+    handoff_can_execute: false,
+    unattended_execution_authorized: false,
+    unattended_real_host_execution_completed: false,
+    operator_confirmation_bypassed: false,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+  assertUnattendedRealHostDurableTransportContractMatchesChain(
+    body,
+    review,
+    handoffReviewArtifact,
+    approval,
+    approvalArtifact,
+    executorContract,
+    executorContractArtifact,
+    continuity,
+    continuityArtifact
+  );
+  const artifactText = canonicalJson(body);
+  mkdirSync(dirname(absoluteDurableTransportContractPath), { recursive: true });
+  writeFileSync(absoluteDurableTransportContractPath, artifactText, "utf8");
+  const result: PiCodexUnattendedRealHostDurableTransportContract = {
+    ...body,
+    durable_transport_contract_artifact: {
+      kind: "unattended_real_host_durable_transport_contract",
+      path: durableTransportContractPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_unattended_real_host_durable_transport_contract_recorded",
+    actor: sanitizeOperatorTransportText(input.actor),
+    target_id: projectId,
+    payload: {
+      durable_transport_contract_id: durableTransportContractId,
+      durable_transport_contract_status: result.durable_transport_contract_status,
+      durable_transport_contract_path: durableTransportContractPath,
+      durable_transport_contract_artifact_sha256: result.durable_transport_contract_artifact.sha256,
+      durable_transport_contract_artifact_size_bytes: result.durable_transport_contract_artifact.size_bytes,
+      durability_contract_kind: result.durability_contract_kind,
+      transport_prerequisite_state: result.transport_prerequisite_state,
+      handoff_review_id: handoffReviewId,
+      handoff_review_path: result.handoff_review_path,
+      handoff_review_artifact_sha256: handoffReviewArtifact.sha256,
+      operator_approval_id: result.operator_approval_id,
+      operator_approval_artifact_sha256: approvalArtifact.sha256,
+      unattended_executor_contract_id: result.unattended_executor_contract_id,
+      unattended_executor_contract_artifact_sha256: executorContractArtifact.sha256,
+      transport_continuity_id: result.transport_continuity_id,
+      transport_continuity_artifact_sha256: continuityArtifact.sha256,
+      durable_transport_contract_current: true,
+      service_owned_durable_transport_prerequisite_configured: true,
+      service_transport_primitive: result.service_transport_primitive,
+      client_transport_primitive: result.client_transport_primitive,
+      service_route: result.service_route,
+      operator_approved: false,
+      handoff_can_execute: false,
+      unattended_execution_authorized: false,
+      unattended_real_host_execution_completed: false,
+      operator_confirmation_bypassed: false,
+      durable_transport_provided: false,
+      live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    }
+  });
+  return result;
+}
+
 export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
   projectRoot: string,
   input: PiCodexUnattendedRealHostExecutionReadinessInput
@@ -6900,6 +7542,15 @@ export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
     review,
     handoffReviewArtifact
   );
+  const durableTransportContractBinding = readOptionalUnattendedRealHostDurableTransportContractArtifact(
+    projectRoot,
+    projectId,
+    input,
+    review,
+    handoffReviewArtifact,
+    operatorApprovalBinding,
+    executorContractBinding
+  );
   const blockerReasons: PiCodexUnattendedRealHostExecutionReadinessBlockerReason[] = [
     ...(operatorApprovalBinding === null
       ? (["operator_approval_artifact_missing"] as PiCodexUnattendedRealHostExecutionReadinessBlockerReason[])
@@ -6907,15 +7558,21 @@ export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
     ...(executorContractBinding === null
       ? (["service_owned_unattended_executor_not_configured"] as PiCodexUnattendedRealHostExecutionReadinessBlockerReason[])
       : []),
-    "durable_transport_not_provided"
+    ...(durableTransportContractBinding === null
+      ? (["durable_transport_not_provided"] as PiCodexUnattendedRealHostExecutionReadinessBlockerReason[])
+      : [])
   ];
+  const readinessStatus =
+    blockerReasons.length === 0
+      ? "unattended_real_host_execution_prerequisites_recorded"
+      : "blocked_unattended_real_host_execution_not_authorized";
   const body: PiCodexUnattendedRealHostExecutionReadinessBody = {
     schema_version: "comath.pi_codex_unattended_real_host_execution_readiness.v1",
     readiness_id: readinessId,
     project_id: projectId,
     actor: sanitizeOperatorTransportText(input.actor),
     created_at: new Date().toISOString(),
-    readiness_status: "blocked_unattended_real_host_execution_not_authorized",
+    readiness_status: readinessStatus,
     readiness_path: readinessPath,
     requested_execution_mode: "production_unattended_real_host",
     blocker_reasons: blockerReasons,
@@ -6933,6 +7590,11 @@ export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
     unattended_executor_contract_artifact: executorContractBinding?.artifact ?? null,
     unattended_executor_contract_current: executorContractBinding !== null,
     service_owned_unattended_executor_configured: executorContractBinding !== null,
+    durable_transport_contract_id: durableTransportContractBinding?.contract.durable_transport_contract_id ?? null,
+    durable_transport_contract_path: durableTransportContractBinding?.contract.durable_transport_contract_path ?? null,
+    durable_transport_contract_artifact: durableTransportContractBinding?.artifact ?? null,
+    durable_transport_contract_current: durableTransportContractBinding !== null,
+    service_owned_durable_transport_prerequisite_configured: durableTransportContractBinding !== null,
     readiness_manifest_persisted: true,
     real_pi_runtime_probe_id: review.real_pi_runtime_probe_id,
     session_id: review.session_id,
@@ -6978,7 +7640,10 @@ export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
   };
   appendAuditEvent(projectRoot, {
     project_id: projectId,
-    event_type: "release.pi_codex_unattended_real_host_execution_readiness_blocked",
+    event_type:
+      readinessStatus === "unattended_real_host_execution_prerequisites_recorded"
+        ? "release.pi_codex_unattended_real_host_execution_readiness_prerequisites_recorded"
+        : "release.pi_codex_unattended_real_host_execution_readiness_blocked",
     actor: sanitizeOperatorTransportText(input.actor),
     target_id: projectId,
     payload: {
@@ -7007,6 +7672,14 @@ export function recordPiCodexLifecycleUnattendedRealHostExecutionReadiness(
         result.unattended_executor_contract_artifact?.size_bytes ?? null,
       unattended_executor_contract_current: result.unattended_executor_contract_current,
       service_owned_unattended_executor_configured: result.service_owned_unattended_executor_configured,
+      durable_transport_contract_id: result.durable_transport_contract_id,
+      durable_transport_contract_path: result.durable_transport_contract_path,
+      durable_transport_contract_artifact_sha256: result.durable_transport_contract_artifact?.sha256 ?? null,
+      durable_transport_contract_artifact_size_bytes:
+        result.durable_transport_contract_artifact?.size_bytes ?? null,
+      durable_transport_contract_current: result.durable_transport_contract_current,
+      service_owned_durable_transport_prerequisite_configured:
+        result.service_owned_durable_transport_prerequisite_configured,
       readiness_manifest_persisted: true,
       real_pi_runtime_probe_id: result.real_pi_runtime_probe_id,
       session_id: result.session_id,
