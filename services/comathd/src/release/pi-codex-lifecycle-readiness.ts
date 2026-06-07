@@ -1815,11 +1815,6 @@ export type PiCodexUnattendedRealHostCompletionCertificationPrerequisite = {
   service_owned_unattended_executor_configured: boolean;
   service_owned_durable_transport_prerequisite_configured: true;
   execution_attempt_manifest_persisted: true;
-  execution_attempt_command: PiCodexUnattendedRealHostExecutionAttemptCommandRecord | null;
-  execution_attempt_result: PiCodexUnattendedRealHostExecutionAttemptRunnerResult | null;
-  execution_attempt_result_path: string | null;
-  execution_attempt_result_artifact: PiCodexUnattendedRealHostExecutionAttemptResultArtifact | null;
-  execution_attempt_result_artifact_current: boolean;
   executor_invoked: boolean;
   execution_attempted: boolean;
   execution_attempt_succeeded: boolean;
@@ -9285,6 +9280,57 @@ function assertCompletionCertificationPrerequisiteReviewSha256(value: string): s
   return sha256;
 }
 
+function hasUnattendedRealHostExecutionAttemptCommandRecord(
+  value: unknown
+): value is PiCodexUnattendedRealHostExecutionAttemptCommandRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const command = value as Record<string, unknown>;
+  return (
+    typeof command.program_label === "string" &&
+    command.program_label.length > 0 &&
+    typeof command.program_path_sha256 === "string" &&
+    /^[a-f0-9]{64}$/iu.test(command.program_path_sha256) &&
+    typeof command.args_count === "number" &&
+    Number.isSafeInteger(command.args_count) &&
+    command.args_count >= 0 &&
+    typeof command.args_sha256 === "string" &&
+    /^[a-f0-9]{64}$/iu.test(command.args_sha256) &&
+    typeof command.expected_exit_code === "number" &&
+    Number.isSafeInteger(command.expected_exit_code) &&
+    typeof command.timeout_ms === "number" &&
+    Number.isSafeInteger(command.timeout_ms) &&
+    command.timeout_ms > 0 &&
+    command.shell === false &&
+    command.network === false
+  );
+}
+
+function hasUnattendedRealHostExecutionAttemptRunnerResult(
+  value: unknown
+): value is PiCodexUnattendedRealHostExecutionAttemptRunnerResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const result = value as Record<string, unknown>;
+  const exitCodeValid =
+    result.exit_code === null ||
+    (typeof result.exit_code === "number" && Number.isSafeInteger(result.exit_code));
+  const signalValid = result.signal === null || typeof result.signal === "string";
+  return (
+    exitCodeValid &&
+    signalValid &&
+    typeof result.timed_out === "boolean" &&
+    typeof result.ok === "boolean" &&
+    typeof result.stdout === "string" &&
+    typeof result.stderr === "string" &&
+    typeof result.duration_ms === "number" &&
+    Number.isSafeInteger(result.duration_ms) &&
+    result.duration_ms >= 0
+  );
+}
+
 function assertCompletionCertificationPrerequisiteReviewBoundary(
   review: PiCodexUnattendedRealHostExecutionAttemptReviewBody
 ): void {
@@ -9303,6 +9349,55 @@ function assertCompletionCertificationPrerequisiteReviewBoundary(
     "service_owned_unattended_executor_failed",
     "terminal_unattended_completion_evidence_missing"
   ]);
+  const parsedLogSessionRoute =
+    typeof review.service_route === "string" ? parseAgentRunLogSessionRoute(review.service_route) : null;
+  const canonicalResultPath =
+    typeof review.attempt_id === "string" ? unattendedRealHostExecutionAttemptResultPath(review.attempt_id) : null;
+  const resultArtifactValid =
+    canonicalResultPath !== null &&
+    hasLifecycleArtifactReference(review.execution_attempt_result_artifact, "unattended_real_host_execution_attempt_result") &&
+    review.execution_attempt_result_artifact.path === canonicalResultPath &&
+    review.execution_attempt_result_path === canonicalResultPath;
+  const resultEvidenceValid =
+    hasUnattendedRealHostExecutionAttemptCommandRecord(review.execution_attempt_command) &&
+    hasUnattendedRealHostExecutionAttemptRunnerResult(review.execution_attempt_result) &&
+    resultArtifactValid &&
+    review.execution_attempt_result_artifact_current === true &&
+    review.execution_attempt_exit_code === review.execution_attempt_result.exit_code;
+  const missingExecutorReview =
+    review.attempt_review_status === "blocked_unattended_real_host_executor_unavailable" &&
+    review.attempt_status === "blocked_unattended_real_host_executor_unavailable" &&
+    review.blocker_reasons.length === 1 &&
+    review.blocker_reasons[0] === "service_owned_unattended_executor_unavailable" &&
+    review.execution_attempt_command === null &&
+    review.execution_attempt_result === null &&
+    review.execution_attempt_result_path === null &&
+    review.execution_attempt_result_artifact === null &&
+    review.execution_attempt_result_artifact_current === false &&
+    review.executor_invoked === false &&
+    review.execution_attempted === false &&
+    review.execution_attempt_succeeded === false &&
+    review.execution_attempt_exit_code === null;
+  const failedAttemptReview =
+    review.attempt_review_status === "blocked_unattended_real_host_execution_attempt_failed" &&
+    review.attempt_status === "blocked_unattended_real_host_execution_attempt_failed" &&
+    review.blocker_reasons.length === 1 &&
+    review.blocker_reasons[0] === "service_owned_unattended_executor_failed" &&
+    resultEvidenceValid &&
+    review.execution_attempt_result?.ok === false &&
+    review.executor_invoked === true &&
+    review.execution_attempted === true &&
+    review.execution_attempt_succeeded === false;
+  const successfulAttemptStillBlockedReview =
+    review.attempt_review_status === "blocked_terminal_unattended_completion_review_required" &&
+    review.attempt_status === "unattended_real_host_execution_attempt_recorded" &&
+    review.blocker_reasons.length === 1 &&
+    review.blocker_reasons[0] === "terminal_unattended_completion_evidence_missing" &&
+    resultEvidenceValid &&
+    review.execution_attempt_result?.ok === true &&
+    review.executor_invoked === true &&
+    review.execution_attempted === true &&
+    review.execution_attempt_succeeded === true;
   if (
     review.schema_version !== "comath.pi_codex_unattended_real_host_execution_attempt_review.v1" ||
     !allowedReviewStatuses.has(review.attempt_review_status) ||
@@ -9312,6 +9407,7 @@ function assertCompletionCertificationPrerequisiteReviewBoundary(
     review.blocker_reasons.length === 0 ||
     review.blocker_reasons.some((reason) => !allowedBlockers.has(reason)) ||
     !allowedAttemptStatuses.has(review.attempt_status) ||
+    (!missingExecutorReview && !failedAttemptReview && !successfulAttemptStillBlockedReview) ||
     !hasLifecycleArtifactReference(review.attempt_artifact, "unattended_real_host_execution_attempt") ||
     review.attempt_current !== true ||
     review.readiness_status !== "unattended_real_host_execution_prerequisites_recorded" ||
@@ -9336,14 +9432,12 @@ function assertCompletionCertificationPrerequisiteReviewBoundary(
     review.terminal_unattended_completion_certified !== false ||
     review.service_owned_durable_transport_prerequisite_configured !== true ||
     review.execution_attempt_manifest_persisted !== true ||
-    typeof review.executor_invoked !== "boolean" ||
-    typeof review.execution_attempted !== "boolean" ||
-    typeof review.execution_attempt_succeeded !== "boolean" ||
-    (review.execution_attempt_exit_code !== null &&
-      (typeof review.execution_attempt_exit_code !== "number" ||
-        !Number.isSafeInteger(review.execution_attempt_exit_code))) ||
     review.service_transport_primitive !== "node_http_agent_run_log_session_route" ||
     review.client_transport_primitive !== "pi_fetch_get_text" ||
+    typeof review.agent_run_id !== "string" ||
+    parsedLogSessionRoute === null ||
+    parsedLogSessionRoute.route !== review.service_route ||
+    parsedLogSessionRoute.runId !== review.agent_run_id ||
     review.operator_approved !== false ||
     review.handoff_can_execute !== false ||
     review.unattended_execution_authorized !== false ||
@@ -9529,11 +9623,6 @@ export function recordPiCodexLifecycleUnattendedRealHostCompletionCertificationP
     service_owned_unattended_executor_configured: review.service_owned_unattended_executor_configured,
     service_owned_durable_transport_prerequisite_configured: true,
     execution_attempt_manifest_persisted: true,
-    execution_attempt_command: review.execution_attempt_command ?? null,
-    execution_attempt_result: review.execution_attempt_result ?? null,
-    execution_attempt_result_path: review.execution_attempt_result_path ?? null,
-    execution_attempt_result_artifact: review.execution_attempt_result_artifact ?? null,
-    execution_attempt_result_artifact_current: review.execution_attempt_result_artifact_current === true,
     executor_invoked: review.executor_invoked,
     execution_attempted: review.execution_attempted,
     execution_attempt_succeeded: review.execution_attempt_succeeded,

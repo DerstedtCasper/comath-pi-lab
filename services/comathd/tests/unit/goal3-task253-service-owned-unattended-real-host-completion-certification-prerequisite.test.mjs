@@ -21,6 +21,8 @@ const transportOverclaimTerms =
   /long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided|live transport open/i;
 const unattendedOverclaimTerms =
   /production unattended executor|operator-free execution completed|unattended real-host execution completed|operator confirmation bypassed|terminal unattended completion certified|service-owned evidence created|handoff can execute|unattended execution authorized|operator approval recorded/i;
+const executorLeakTerms =
+  /execution_attempt_command|execution_attempt_result|execution_attempt_result_path|execution_attempt_result_artifact|SHOULD_NOT_LEAK_EXECUTOR/i;
 
 function sha256Text(text) {
   return createHash("sha256").update(text).digest("hex");
@@ -45,6 +47,7 @@ function writeAttemptReviewFixture(suffix, overrides = {}) {
   const attemptReviewId = `LIFE-UNATTENDED-COMPLETION-REVIEW-${suffix}`;
   const attemptId = `LIFE-UNATTENDED-EXEC-ATTEMPT-${suffix}`;
   const attemptPath = `.comath/release/pi-codex-lifecycle/${attemptId}/unattended-real-host-execution-attempt.json`;
+  const resultPath = `.comath/release/pi-codex-lifecycle/${attemptId}/unattended-real-host-execution-attempt-result.json`;
   const path = reviewPath(attemptReviewId);
   const review = {
     schema_version: "comath.pi_codex_unattended_real_host_execution_attempt_review.v1",
@@ -119,11 +122,49 @@ function writeAttemptReviewFixture(suffix, overrides = {}) {
     service_owned_unattended_executor_configured: true,
     service_owned_durable_transport_prerequisite_configured: true,
     execution_attempt_manifest_persisted: true,
+    execution_attempt_command: {
+      program_label: "goal3-task253-fixture",
+      program_path_sha256: "1".repeat(64),
+      args_count: 1,
+      args_sha256: "2".repeat(64),
+      expected_exit_code: 0,
+      timeout_ms: 1000,
+      shell: false,
+      network: false
+    },
+    execution_attempt_result: {
+      exit_code: 0,
+      signal: null,
+      timed_out: false,
+      ok: true,
+      stdout: "SHOULD_NOT_LEAK_EXECUTOR_STDOUT",
+      stderr: "",
+      duration_ms: 12
+    },
+    execution_attempt_result_path: resultPath,
+    execution_attempt_result_artifact: {
+      kind: "unattended_real_host_execution_attempt_result",
+      path: resultPath,
+      sha256: "9".repeat(64),
+      size_bytes: 1800
+    },
     execution_attempt_result_artifact_current: true,
     executor_invoked: true,
     execution_attempted: true,
     execution_attempt_succeeded: true,
     execution_attempt_exit_code: 0,
+    real_pi_runtime_probe_id: `LIFE-PI-RUNTIME-${suffix}`,
+    session_id: `LIFE-SESSION-${suffix}`,
+    transport_recovery_id: `LIFE-TRANSPORT-RECOVERY-${suffix}`,
+    transport_lease_id: `LIFE-TRANSPORT-LEASE-${suffix}`,
+    transport_heartbeat_id: `LIFE-TRANSPORT-HEARTBEAT-${suffix}`,
+    execution_id: `LIFE-GUIDED-EXECUTION-${suffix}`,
+    terminal_review_id: `LIFE-TERMINAL-REVIEW-${suffix}`,
+    transport_contract_id: `LIFE-TRANSPORT-CONTRACT-${suffix}`,
+    automatic_orchestration_id: `LIFE-AUTOMATIC-ORCHESTRATION-${suffix}`,
+    transport_continuity_id: `LIFE-TRANSPORT-CONTINUITY-${suffix}`,
+    agent_run_id: `LIFE-AGENT-RUN-${suffix}`,
+    service_route: `/agent/run/LIFE-AGENT-RUN-${suffix}/log-session`,
     service_transport_primitive: "node_http_agent_run_log_session_route",
     client_transport_primitive: "pi_fetch_get_text",
     operator_approved: false,
@@ -217,6 +258,7 @@ assert.doesNotMatch(JSON.stringify(prerequisite), secretTerms);
 assert.doesNotMatch(JSON.stringify(prerequisite), privilegedPublicTerms);
 assert.doesNotMatch(JSON.stringify(prerequisite), transportOverclaimTerms);
 assert.doesNotMatch(JSON.stringify(prerequisite), unattendedOverclaimTerms);
+assert.doesNotMatch(JSON.stringify(prerequisite), executorLeakTerms);
 
 const persistedPath = join(projectRoot, prerequisite.completion_certification_prerequisite_path);
 assert.equal(existsSync(persistedPath), true, "completion certification prerequisite must persist append-only evidence");
@@ -234,6 +276,7 @@ assert.doesNotMatch(JSON.stringify(persisted), secretTerms);
 assert.doesNotMatch(JSON.stringify(persisted), privilegedPublicTerms);
 assert.doesNotMatch(JSON.stringify(persisted), transportOverclaimTerms);
 assert.doesNotMatch(JSON.stringify(persisted), unattendedOverclaimTerms);
+assert.doesNotMatch(JSON.stringify(persisted), executorLeakTerms);
 
 assert.throws(
   () =>
@@ -255,6 +298,24 @@ assert.throws(
     ),
   { code: "PI_CODEX_UNATTENDED_REAL_HOST_COMPLETION_CERTIFICATION_PREREQUISITE_REVIEW_STALE" },
   "completion certification prerequisite must reject stale review hashes"
+);
+
+const incompleteResultFixture = writeAttemptReviewFixture("0253-INCOMPLETE-RESULT", {
+  execution_attempt_command: undefined,
+  execution_attempt_result: undefined,
+  execution_attempt_result_path: undefined,
+  execution_attempt_result_artifact: undefined
+});
+assert.throws(
+  () =>
+    recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite(
+      projectRoot,
+      certificationInput(incompleteResultFixture, {
+        completion_certification_prerequisite_id: "LIFE-COMPLETION-CERTIFICATION-PREREQ-0253-INCOMPLETE-RESULT"
+      })
+    ),
+  { code: "PI_CODEX_UNATTENDED_REAL_HOST_COMPLETION_CERTIFICATION_PREREQUISITE_REVIEW_INVALID" },
+  "completion certification prerequisite must reject success-shaped reviews without result evidence fields"
 );
 
 const poisonedFixture = writeAttemptReviewFixture("0253-POISONED");
@@ -305,6 +366,7 @@ assert.doesNotMatch(JSON.stringify(routeResponse.body), secretTerms);
 assert.doesNotMatch(JSON.stringify(routeResponse.body), privilegedPublicTerms);
 assert.doesNotMatch(JSON.stringify(routeResponse.body), transportOverclaimTerms);
 assert.doesNotMatch(JSON.stringify(routeResponse.body), unattendedOverclaimTerms);
+assert.doesNotMatch(JSON.stringify(routeResponse.body), executorLeakTerms);
 
 const events = readAuditEvents(projectRoot);
 const event = events.find(
@@ -325,5 +387,6 @@ assert.doesNotMatch(JSON.stringify(events), secretTerms);
 assert.doesNotMatch(JSON.stringify(events), privilegedPublicTerms);
 assert.doesNotMatch(JSON.stringify(events), transportOverclaimTerms);
 assert.doesNotMatch(JSON.stringify(events), unattendedOverclaimTerms);
+assert.doesNotMatch(JSON.stringify(events), executorLeakTerms);
 
 console.log("Goal 3 Task253 unattended real-host completion certification prerequisite tests passed.");
