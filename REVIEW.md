@@ -1,3 +1,33 @@
+# Goal 3 Task 260 / Pi Goal-Mode Skeleton Blueprint From Hints
+
+Scope: connect Task259 formalization hints to the `skeleton_gate` blueprint output required by the GA design. This is service-owned skeleton planning metadata only; it is not literature evidence, theorem-search evidence, Lean replay evidence, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task260-pi-goal-mode-skeleton-blueprint-from-hints.test.mjs`.
+- Added `proof/blueprint.json` creation during `skeleton_gate`.
+- Bound `proof/formalization_hints.json` by path/hash into the blueprint.
+- Bound the blueprint into `plan.json`, `lemma_dag.json`, `line_map.json`, and `skeleton_report.md`.
+- Added blueprint step ids as planning metadata while keeping `Skeleton.lean` free of extracted paper theorem text.
+- Made `proof/blueprint.json` a required skeleton-gate artifact whose deletion rewinds later stages to `skeleton_gate`.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task260 service test: after `corepack pnpm --filter @comath/comathd build`, `node services/comathd/tests/unit/goal3-task260-pi-goal-mode-skeleton-blueprint-from-hints.test.mjs` failed because `skeleton_gate` did not attach a skeleton blueprint derived from formalization hints.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task260 exited 0.
+- Adjacent Task259, Task258, Task257, and Phase33 proof-obligation DAG regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task260 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task260, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task260 writes only service-owned `.comath/campaign/<campaign_id>/proof/blueprint.json` artifacts through `comathd`. Blueprint steps can seed lemma-DAG and line-map metadata, but each step remains `proof_authority="none"`, `can_promote_claim=false`, `can_certify_ga=false`, `result_can_be_used_as_proof=false`, `can_change_locked_statement=false`, and `can_create_proof_obligation_without_formal_spec_lock=false`. Missing blueprint artifacts fail closed before candidate generation.
+
+Residual risk: Goal 3 remains incomplete. Task260 does not implement actual Lean skeleton repair, live candidate orchestration from blueprint steps, maintained PDF parsing, external Lean repo inspection, live literature retrieval, live theorem-search providers, terminal proof/refutation/blocker completion, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 259 / Pi Goal-Mode Skeleton Formalization Hints
 
 Scope: connect Task258 local ingestion evidence to the `skeleton_gate` as service-owned formalization hints. This is skeleton-planning metadata only; it is not literature evidence, theorem-search evidence, Lean replay evidence, proof authority, promotion, or GA certification.

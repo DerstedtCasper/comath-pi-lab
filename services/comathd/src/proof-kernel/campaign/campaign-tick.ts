@@ -31,7 +31,7 @@ import {
 } from "../lean/lean-host-tools.js";
 import { listLeanProjectFiles, sha256FileSync, type LeanProjectFiles } from "../lean/lean-project.js";
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
-import { writeProofPlanningArtifacts } from "../stages/proof-obligation-dag.js";
+import { writeProofPlanningArtifacts, type GoalModeProofPlanningInput } from "../stages/proof-obligation-dag.js";
 import { hasFormalReplayAuthorityPassEvidence, sanitizePublicFormalAuthorityVocabulary } from "./external-terminal-vocabulary.js";
 import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
 import {
@@ -227,6 +227,7 @@ function skeletonGateArtifacts(campaign: ResearchCampaign): string[] {
   return [
     campaignProofRel(campaign, "lemma_dag.json"),
     campaignProofRel(campaign, "formalization_hints.json"),
+    campaignProofRel(campaign, "blueprint.json"),
     campaignProofRel(campaign, "Skeleton.lean"),
     campaignProofRel(campaign, "skeleton_report.md")
   ];
@@ -247,6 +248,7 @@ function rewindTargetForMissingArtifact(rel: string): ResearchCampaign["current_
     rel.includes("/Skeleton.lean") ||
     rel.includes("/lemma_dag.json") ||
     rel.includes("/formalization_hints.json") ||
+    rel.includes("/blueprint.json") ||
     rel.includes("/skeleton_report.md")
   ) {
     return "skeleton_gate";
@@ -2134,6 +2136,136 @@ function writeGoalModeFormalizationHints(input: {
     )}\n`
   );
   return rel;
+}
+
+function goalModeSkeletonBlueprintStepFromHint(hint: Record<string, unknown>, index: number): Record<string, unknown> | undefined {
+  const hintId = optionalStringField(hint, "hint_id");
+  const kind = optionalStringField(hint, "kind");
+  const sourceRef = optionalStringField(hint, "source_ref");
+  const lineRange = optionalStringField(hint, "line_range");
+  const statementSha256 = optionalStringField(hint, "statement_sha256");
+  if (!hintId || !kind || !sourceRef || !lineRange || !statementSha256) {
+    return undefined;
+  }
+  return {
+    step_id: `GMSB-${String(index).padStart(4, "0")}`,
+    formalization_hint_id: hintId,
+    kind,
+    source_ref: sourceRef,
+    source_adapter_provider: optionalStringField(hint, "source_adapter_provider") ?? null,
+    line_range: lineRange,
+    statement_sha256: statementSha256,
+    evidence_anchor_id: optionalStringField(hint, "evidence_anchor_id") ?? null,
+    suggested_planning_use: "candidate_lemma_planning_hint",
+    can_seed_lemma_dag_metadata: true,
+    can_create_proof_obligation_without_formal_spec_lock: false,
+    can_change_locked_statement: false,
+    requires_formal_spec_lock_approval: true,
+    requires_statement_diff_gate: true,
+    requires_clean_lean_replay_for_promotion: true,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    result_can_be_used_as_proof: false
+  };
+}
+
+function writeGoalModeSkeletonBlueprint(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  formalizationHintsRel: string;
+}): { path: string; blueprint_step_ids: string[] } {
+  const hintsExists = artifactExists(input.projectRoot, input.formalizationHintsRel);
+  const hintsSha256 = hintsExists ? sha256RuntimeFile(input.projectRoot, input.formalizationHintsRel) : null;
+  const hints = hintsExists
+    ? objectRecord(readJsonArtifact(input.projectRoot, input.formalizationHintsRel), "goal_mode_formalization_hints")
+    : undefined;
+  const invalidReasons: string[] = [];
+  if (!hints) {
+    invalidReasons.push("goal_mode_formalization_hints_missing");
+  } else {
+    if (hints.schema_version !== "comath.pi_goal_mode_formalization_hints.v1") {
+      invalidReasons.push("goal_mode_formalization_hints_schema_mismatch");
+    }
+    if (hints.campaign_id !== input.campaign.campaign_id) {
+      invalidReasons.push("goal_mode_formalization_hints_campaign_id_mismatch");
+    }
+    if (hints.claim_id !== input.campaign.root_claim_id) {
+      invalidReasons.push("goal_mode_formalization_hints_claim_id_mismatch");
+    }
+    if (hints.obligation_id !== input.obligation.obligation_id) {
+      invalidReasons.push("goal_mode_formalization_hints_obligation_id_mismatch");
+    }
+    if (hints.locked_statement_hash !== input.obligation.statement_hash) {
+      invalidReasons.push("goal_mode_formalization_hints_locked_statement_hash_mismatch");
+    }
+  }
+
+  const hintRecords = invalidReasons.length === 0 && hints ? goalModeRecordArray(hints.formalization_hints) : [];
+  const blueprintSteps = hintRecords
+    .map((hint, index) => goalModeSkeletonBlueprintStepFromHint(hint, index + 1))
+    .filter((step): step is Record<string, unknown> => !!step);
+  const formalizationHintIds = blueprintSteps
+    .map((step) => optionalStringField(step, "formalization_hint_id"))
+    .filter((hintId): hintId is string => typeof hintId === "string");
+  const blueprintStepIds = blueprintSteps
+    .map((step) => optionalStringField(step, "step_id"))
+    .filter((stepId): stepId is string => typeof stepId === "string");
+  const rel = campaignProofRel(input.campaign, "blueprint.json");
+  writeRuntimeFile(
+    input.projectRoot,
+    rel,
+    `${JSON.stringify(
+      {
+        schema_version: "comath.pi_goal_mode_skeleton_blueprint.v1",
+        campaign_id: input.campaign.campaign_id,
+        project_id: input.campaign.project_id,
+        claim_id: input.campaign.root_claim_id,
+        obligation_id: input.obligation.obligation_id,
+        locked_statement_hash: input.obligation.statement_hash,
+        consumes_goal_mode_formalization_hints: goalModeNonAuthorityBinding(
+          input.formalizationHintsRel,
+          hintsSha256,
+          hints?.schema_version
+        ),
+        service_owned_skeleton_blueprint: true,
+        formalization_hint_ids: formalizationHintIds,
+        blueprint_steps: blueprintSteps,
+        blueprint_steps_sha256: sha256Json(blueprintSteps),
+        summary: {
+          formalization_hint_count: hintRecords.length,
+          blueprint_step_count: blueprintSteps.length,
+          invalid_reason_count: invalidReasons.length
+        },
+        invalid_reasons: invalidReasons,
+        statement_drift_guard: {
+          locked_statement_hash: input.obligation.statement_hash,
+          blueprint_may_change_locked_statement: false,
+          formal_spec_lock_required_before_statement_change: true,
+          statement_diff_gate_required: true,
+          lean_replay_required_for_promotion: true
+        },
+        authority_boundary: {
+          blueprint_steps_are_planning_hints_only: true,
+          can_seed_lemma_dag_metadata: true,
+          cannot_create_proof_obligations_without_formal_spec_lock: true,
+          cannot_satisfy_literature_evidence: true,
+          cannot_satisfy_theorem_search_evidence: true,
+          cannot_satisfy_lean_replay: true,
+          final_authority: "Lean4/mathlib kernel clean replay"
+        },
+        proof_authority: "none",
+        can_promote_claim: false,
+        can_certify_ga: false,
+        result_can_be_used_as_proof: false,
+        created_at: now()
+      },
+      null,
+      2
+    )}\n`
+  );
+  return { path: rel, blueprint_step_ids: blueprintStepIds };
 }
 
 export function startCampaign(input: StartCampaignInput): CampaignTickResult {
@@ -4764,14 +4896,41 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     const formalizationHintsBinding = {
       path: formalizationHintsRel,
       sha256: sha256RuntimeFile(input.project_root, formalizationHintsRel),
+      schema_version: "comath.pi_goal_mode_formalization_hints.v1",
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false
     };
+    const skeletonBlueprint = writeGoalModeSkeletonBlueprint({
+      projectRoot: input.project_root,
+      campaign,
+      obligation,
+      formalizationHintsRel
+    });
+    const skeletonBlueprintBinding = {
+      path: skeletonBlueprint.path,
+      sha256: sha256RuntimeFile(input.project_root, skeletonBlueprint.path),
+      schema_version: "comath.pi_goal_mode_skeleton_blueprint.v1",
+      blueprint_step_ids: skeletonBlueprint.blueprint_step_ids,
+      proof_authority: "none" as const,
+      can_promote_claim: false as const,
+      can_certify_ga: false as const,
+      can_create_proof_obligations: false as const
+    };
+    const goalModePlanning: GoalModeProofPlanningInput = {
+      formalization_hints: {
+        ...formalizationHintsBinding,
+        proof_authority: "none",
+        can_promote_claim: false,
+        can_certify_ga: false
+      },
+      skeleton_blueprint: skeletonBlueprintBinding
+    };
     const proofPlanning = writeProofPlanningArtifacts({
       projectRoot: input.project_root,
       campaign,
-      obligation
+      obligation,
+      goalModePlanning
     });
     const planRel = writeSimpleStageArtifact(input.project_root, campaign, "plan.json", {
       campaign_id: campaign.campaign_id,
@@ -4779,6 +4938,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       obligation_id: obligation.obligation_id,
       proof_planning_artifacts: proofPlanning,
       goal_mode_formalization_hints: formalizationHintsBinding,
+      goal_mode_skeleton_blueprint: skeletonBlueprintBinding,
       public_stages: [
         "knowledge_pack",
         "notation_gate",
@@ -4809,6 +4969,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
           completedStageRun(campaign, "skeleton_gate", [
             planRel,
             formalizationHintsRel,
+            skeletonBlueprint.path,
             proofPlanning.lemma_dag_path,
             proofPlanning.skeleton_lean_path,
             proofPlanning.skeleton_report_path

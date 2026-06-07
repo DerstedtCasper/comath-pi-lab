@@ -13,6 +13,25 @@ export type ProofPlanningArtifacts = {
   skeleton_report_path: string;
 };
 
+export type GoalModePlanningBinding = {
+  path: string;
+  sha256: string;
+  schema_version?: string;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
+export type GoalModeSkeletonBlueprintPlanningBinding = GoalModePlanningBinding & {
+  blueprint_step_ids: string[];
+  can_create_proof_obligations: false;
+};
+
+export type GoalModeProofPlanningInput = {
+  formalization_hints: GoalModePlanningBinding;
+  skeleton_blueprint: GoalModeSkeletonBlueprintPlanningBinding;
+};
+
 export type ProofObligationDagNode = {
   obligation_id: string;
   claim_id: string;
@@ -39,6 +58,7 @@ export type ProofObligationDag = {
   nodes: ProofObligationDagNode[];
   edges: ProofObligationDagEdge[];
   leaf_obligation_ids: string[];
+  goal_mode_skeleton_blueprint?: GoalModeSkeletonBlueprintPlanningBinding;
   next_gate: "candidate_generation";
 };
 
@@ -227,15 +247,24 @@ export function writeProofPlanningArtifacts(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
   obligation: ProofObligation;
+  goalModePlanning?: GoalModeProofPlanningInput;
 }): ProofPlanningArtifacts {
   const theoremFamily = theoremFamilyId(input.obligation);
   const obligations = input.campaign.open_obligations.length > 0 ? input.campaign.open_obligations : [input.obligation];
   const lemmaDag = buildDag(input.campaign, input.obligation);
+  if (input.goalModePlanning) {
+    lemmaDag.goal_mode_skeleton_blueprint = input.goalModePlanning.skeleton_blueprint;
+  }
 
   const lineMap = {
     generated_by: "native_stage_gate",
     campaign_id: input.campaign.campaign_id,
     root_obligation_id: input.obligation.obligation_id,
+    ...(input.goalModePlanning
+      ? {
+          goal_mode_skeleton_blueprint: input.goalModePlanning.skeleton_blueprint
+        }
+      : {}),
     lines: obligations.map((item, index) => ({
       line_id: `LM-${String(index + 1).padStart(4, "0")}`,
       source: item.obligation_id === input.obligation.obligation_id ? "problem_lock" : "lemma_decomposition",
@@ -247,6 +276,7 @@ export function writeProofPlanningArtifacts(input: {
         typeof item.locked_statement_structured.statement_hash === "string" ? item.locked_statement_structured.statement_hash : null,
       assumptions_used: item.assumptions,
       dependencies: item.dependencies,
+      supporting_goal_mode_blueprint_step_ids: input.goalModePlanning?.skeleton_blueprint.blueprint_step_ids ?? [],
       expected_evidence: ["Lean", "static_audit", "statement_equivalence", "dependency_closure", "axiom_profile"]
     }))
   };
@@ -260,6 +290,13 @@ export function writeProofPlanningArtifacts(input: {
     `lemma_dag: .comath/campaign/${input.campaign.campaign_id}/proof/lemma_dag.json`,
     `line_map: .comath/campaign/${input.campaign.campaign_id}/proof/line_map.json`,
     `skeleton_lean: .comath/campaign/${input.campaign.campaign_id}/proof/Skeleton.lean`,
+    ...(input.goalModePlanning
+      ? [
+          `formalization_hints: ${input.goalModePlanning.formalization_hints.path}`,
+          `skeleton_blueprint: ${input.goalModePlanning.skeleton_blueprint.path}`,
+          "blueprint steps are planning hints only; not proof authority."
+        ]
+      : []),
     "",
     "## Placeholder Obligations",
     "",
