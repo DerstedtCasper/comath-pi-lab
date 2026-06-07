@@ -1,3 +1,31 @@
+# Goal 3 Task 255 / Pi Goal-Mode Service-Owned Intake Manifest
+
+Scope: add a service-owned intake manifest for Pi goal-mode research inputs at campaign start. This is provenance and UX plumbing only; papers, TeX/PDF/Markdown attachments, workspace refs, directory presence, Pi payloads, and intake manifests are not proof authority, Lean replay evidence, promotion gates, or GA certification.
+
+Implementation notes:
+- Added `goal3-task255-pi-goal-mode-intake-manifest.test.mjs`.
+- Added `goal_mode_intake_manifest.json` creation in `startCampaign()`.
+- Attached the manifest to the `initialized` campaign stage and audit payload.
+- Added Pi goal export path/hash surfacing with `proof_authority="none"`.
+- Normalized project-confined refs, hashed existing file inputs, recorded directory refs without recursive proof claims, and avoided raw host-root leakage.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task255 service test: after `corepack pnpm --filter @comath/comathd build`, `node services/comathd/tests/unit/goal3-task255-pi-goal-mode-intake-manifest.test.mjs` failed because `startCampaign` did not attach a service-owned goal-mode intake manifest to the `initialized` stage.
+- After implementation, focused Task255 exited 0.
+- Adjacent Task16 service route, Task100 export authority, and Pi extension Task16 goal-mode regressions exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task255 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task255, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task255 writes only service-owned `.comath/campaign/<campaign_id>/goal_mode_intake_manifest.json` artifacts through `comathd`. It records project-relative refs, file hashes, directory presence, path-policy boundaries, and non-authority flags. It does not ingest document content as trusted proof material, run Lean, call theorem search, call literature adapters, create proof obligations beyond the existing campaign path, promote claims, or certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task255 does not implement full PDF/TeX/Markdown ingestion adapters, retrieval planning, lemma decomposition, automatic Lean skeleton repair, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 254 / Pi Unattended Real-Host Completion Certification Prerequisite Consumer
 
 Scope: expose the Task253 service-owned completion-certification prerequisite gate through the Pi extension as a host-confirmed thin client and read-only planner checkpoint. This is Pi consumer wiring only; it is not a completion certificate, public executor/result/certificate authority, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.

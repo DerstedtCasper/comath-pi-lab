@@ -545,6 +545,94 @@ function createObligation(claimId: string, statementHash: string, goal: string):
   });
 }
 
+type GoalModeInputRefKind = "project_absolute" | "project_relative";
+type GoalModeIntakeRefKind = "paper" | "attachment" | "workspace";
+
+function goalModePolicySummary(input: StartCampaignInput): Record<string, unknown> {
+  const policy = input.goal_mode_policy ?? {};
+  const terminalStates = Array.isArray(policy.terminal_states)
+    ? policy.terminal_states.filter((state): state is string => typeof state === "string")
+    : [];
+  return {
+    mode: policy.mode === "goal" || policy.mode === "bounded" ? policy.mode : input.mode ?? "bounded",
+    terminal_states: terminalStates,
+    require_user_confirmation_for_statement_lock: policy.require_user_confirmation_for_statement_lock === true,
+    resume_enabled: policy.resume_enabled === true
+  };
+}
+
+function projectRelativePath(projectRoot: string, absolutePath: string): string {
+  const absoluteRoot = assertPathAllowed(projectRoot, ".", { purpose: "read", resolveRealpath: true });
+  const rel = normalizeRelPath(relative(absoluteRoot, absolutePath));
+  return rel === "" ? "." : rel;
+}
+
+function materializeGoalModeIntakeRefs(projectRoot: string, kind: GoalModeIntakeRefKind, refs: string[] = []): Record<string, unknown>[] {
+  return refs.map((ref, index) => {
+    const absolutePath = assertPathAllowed(projectRoot, ref, { purpose: "read", resolveRealpath: true });
+    const stat = existsSync(absolutePath) ? lstatSync(absolutePath) : undefined;
+    const hash = stat?.isFile() ? sha256FileSync(absolutePath) : undefined;
+    const entryType = !stat ? "missing" : stat.isFile() ? "file" : stat.isDirectory() ? "directory" : stat.isSymbolicLink() ? "symlink" : "other";
+    return {
+      ref_id: `GMI-${kind.toUpperCase()}-${String(index + 1).padStart(4, "0")}`,
+      kind,
+      input_ref_kind: (isAbsolute(ref) ? "project_absolute" : "project_relative") satisfies GoalModeInputRefKind,
+      normalized_path: projectRelativePath(projectRoot, absolutePath),
+      exists: stat !== undefined,
+      entry_type: entryType,
+      sha256: hash?.sha256 ?? null,
+      size_bytes: hash?.size_bytes ?? null,
+      proof_authority: "none",
+      external_evidence_authority: false,
+      can_promote_claim: false,
+      can_certify_ga: false,
+      permitted_use: ["hint", "evidence", "refutation_source"]
+    };
+  });
+}
+
+function writeGoalModeIntakeManifest(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  projectId: string;
+  claimId: string;
+  statementHash: string;
+  request: StartCampaignInput;
+  actor: string;
+  createdAt: string;
+}): string {
+  return writeSimpleStageArtifact(input.projectRoot, input.campaign, "goal_mode_intake_manifest.json", {
+    schema_version: "comath.pi_goal_mode_intake_manifest.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.projectId,
+    claim_id: input.claimId,
+    statement_hash: input.statementHash,
+    user_goal_sha256: sha256Text(input.request.user_goal),
+    mode: input.request.mode ?? "bounded",
+    budget: input.request.budget ?? null,
+    goal_mode_policy: goalModePolicySummary(input.request),
+    created_by: "comathd",
+    actor: input.actor,
+    paper_refs: materializeGoalModeIntakeRefs(input.projectRoot, "paper", input.request.paper_paths),
+    attachment_refs: materializeGoalModeIntakeRefs(input.projectRoot, "attachment", input.request.attachments),
+    workspace_refs: materializeGoalModeIntakeRefs(input.projectRoot, "workspace", input.request.workspace_refs),
+    path_policy: {
+      project_root_confined: true,
+      no_symlink_escape: true,
+      raw_host_paths_redacted: true
+    },
+    authority_boundary: {
+      external_inputs_are: ["hint", "evidence", "refutation_source"],
+      proof_authority: "Lean4/mathlib kernel clean replay only"
+    },
+    proof_authority: "none",
+    external_evidence_authority: false,
+    can_promote_claim: false,
+    can_certify_ga: false,
+    created_at: input.createdAt
+  });
+}
+
 export function startCampaign(input: StartCampaignInput): CampaignTickResult {
   const actor = input.actor ?? "campaign";
   const { project } = initProject({ name: input.project_name ?? "CoMath Research Campaign", root_path: input.project_root });
@@ -588,7 +676,7 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
       artifact_path: blockerRel,
       hard_vetoes: ["statement_unlocked"]
     };
-    const campaign = researchCampaignSchema.parse({
+    const campaignBase = researchCampaignSchema.parse({
       campaign_id: campaignId,
       project_id: project.project_id,
       root_claim_id: claim.id,
@@ -604,17 +692,36 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
       created_at: timestamp,
       updated_at: timestamp
     });
+    const intakeManifestRel = writeGoalModeIntakeManifest({
+      projectRoot: input.project_root,
+      campaign: campaignBase,
+      projectId: project.project_id,
+      claimId: claim.id,
+      statementHash: claim.statement_hash,
+      request: input,
+      actor,
+      createdAt: timestamp
+    });
+    const campaign = researchCampaignSchema.parse({
+      ...campaignBase,
+      stage_runs: [completedStageRun(campaignBase, "initialized", [intakeManifestRel])]
+    });
     appendAuditEvent(input.project_root, {
       project_id: project.project_id,
       event_type: "campaign.needs_formal_spec_lock",
       actor,
       target_id: campaign.campaign_id,
-    payload: { root_claim_id: claim.id, blocker_artifact_path: blockerRel }
+    payload: {
+      root_claim_id: claim.id,
+      blocker_artifact_path: blockerRel,
+      goal_mode_intake_manifest_path: intakeManifestRel,
+      goal_mode_intake_manifest_sha256: sha256RuntimeFile(input.project_root, intakeManifestRel)
+    }
     });
     return { campaign: writeCampaign(input.project_root, campaign, actor), blocker: "needs_formal_spec_lock" };
   }
   const obligation = createObligation(claim.id, claim.statement_hash, input.user_goal);
-  const campaign = researchCampaignSchema.parse({
+  const campaignBase = researchCampaignSchema.parse({
     campaign_id: campaignId,
     project_id: project.project_id,
     root_claim_id: claim.id,
@@ -630,12 +737,31 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
     created_at: timestamp,
     updated_at: timestamp
   });
+  const intakeManifestRel = writeGoalModeIntakeManifest({
+    projectRoot: input.project_root,
+    campaign: campaignBase,
+    projectId: project.project_id,
+    claimId: claim.id,
+    statementHash: claim.statement_hash,
+    request: input,
+    actor,
+    createdAt: timestamp
+  });
+  const campaign = researchCampaignSchema.parse({
+    ...campaignBase,
+    stage_runs: [completedStageRun(campaignBase, "initialized", [intakeManifestRel])]
+  });
   appendAuditEvent(input.project_root, {
     project_id: project.project_id,
     event_type: "campaign.started",
     actor,
     target_id: campaign.campaign_id,
-    payload: { root_claim_id: claim.id, strict_mode: campaign.strict_mode }
+    payload: {
+      root_claim_id: claim.id,
+      strict_mode: campaign.strict_mode,
+      goal_mode_intake_manifest_path: intakeManifestRel,
+      goal_mode_intake_manifest_sha256: sha256RuntimeFile(input.project_root, intakeManifestRel)
+    }
   });
   return { campaign: writeCampaign(input.project_root, campaign, actor), obligation };
 }
@@ -967,6 +1093,14 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
     evidence_pack_ready: boolean;
     proof_authority: "none" | "lean_kernel_clean_replay";
     can_promote_claim: false;
+    goal_mode_intake_manifest?: {
+      path: string;
+      sha256: string;
+      proof_authority: "none";
+      external_evidence_authority: false;
+      can_promote_claim: false;
+      can_certify_ga: false;
+    };
   };
 } {
   const campaign = getCampaign(input.project_root, input.campaign_id);
@@ -977,6 +1111,20 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
     campaign.terminal_state === "completed_formal_proof" &&
     hasFormalReplayAuthorityPassEvidence({ ...campaign, projectRoot: input.project_root });
   const publicProofTerminalWithoutAuthority = campaign.terminal_state === "completed_formal_proof" && !finalReplayAuthorityPassed;
+  const intakeManifestPath = campaign.stage_runs
+    .flatMap((run) => run.artifact_paths)
+    .find((path) => path.endsWith("goal_mode_intake_manifest.json"));
+  const intakeManifest =
+    intakeManifestPath && artifactExists(input.project_root, intakeManifestPath)
+      ? {
+          path: intakeManifestPath,
+          sha256: sha256RuntimeFile(input.project_root, intakeManifestPath),
+          proof_authority: "none" as const,
+          external_evidence_authority: false as const,
+          can_promote_claim: false as const,
+          can_certify_ga: false as const
+        }
+      : undefined;
   return {
     export_manifest: {
       schema_version: "comath.pi_goal_export.v1",
@@ -992,7 +1140,8 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
       next_actions: finalReplayAuthorityPassed ? campaign.next_actions : (sanitizePublicFormalAuthorityVocabulary(campaign.next_actions) as string[]),
       evidence_pack_ready: finalReplayAuthorityPassed,
       proof_authority: finalReplayAuthorityPassed ? "lean_kernel_clean_replay" : "none",
-      can_promote_claim: false
+      can_promote_claim: false,
+      ...(intakeManifest ? { goal_mode_intake_manifest: intakeManifest } : {})
     }
   };
 }
