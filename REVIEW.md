@@ -1,3 +1,31 @@
+# Goal 3 Task 244 / Pi Unattended Real-Host Operator Approval Consumer
+
+Scope: expose the Task243 service-owned operator approval checkpoint through a host-confirmed Pi tool and `/cm:release` command, and thread complete approval bindings into the existing readiness consumer/planner. This is a thin client and planner checkpoint only; it is not unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task244-pi-unattended-real-host-operator-approval-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleUnattendedRealHostOperatorApproval` plus `/cm:release lifecycle-unattended-real-host-operator-approval`.
+- Wired the tool to call only `POST /release/pi-codex-lifecycle/unattended-real-host-operator-approval` through host confirmation, strip caller/model `confirmation_id`, translate public handoff-review aliases to service-canonical request paths, and sanitize public request/result/confirmation/notification surfaces.
+- Extended the readiness Pi consumer to accept and require complete optional operator-approval id/path/hash bindings when any approval binding field is present.
+- Added `lifecycle-unattended-real-host-operator-approval` to the read-only interactive real-Pi planner before readiness, and made readiness commands include approval binding material when available.
+- Registered the focused suite in Pi package test discovery, phase0 smoke release-hardening discovery, GA release criteria, README, AGENTS, TODO, adapter contracts, threat model, REVIEW, and the Goal 3 tracker.
+
+Verification:
+- The Task244 focused regression was already present in the resumed worktree; current verification confirmed it exercises the missing consumer boundary, sanitizer, planner order, runtime registration, and readiness binding behavior.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- Focused Task244 exited 0.
+- Adjacent Task242 and Task223 regressions exited 0.
+- Phase6 and Phase26 Pi registration regressions exited 0 from the package cwd after root-cause analysis showed repo-root invocations use the wrong `process.cwd()` for those package-local tests.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task244 discovered by the default Pi runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests with Task244, comathd package tests through Task243, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task244 does not change the Task243 service verifier, does not make public aliases source-of-truth paths, does not approve or execute a handoff, does not authorize unattended host actions, does not mutate Pi trusted state directly, does not open durable/live transport, does not run Lean, does not promote claims, and does not certify GA. Public Pi output forces proof, GA, durable/live transport, direct-Pi-write, direct-trusted-state, operator-approved, and unattended-execution flags false.
+
 # Goal 3 Task 243 / Service-Owned Operator Approval Contract
 
 Scope: add a service-owned manual operator-approval artifact after the Task239 handoff review chain and before Task241 readiness consumption. This is approval checkpoint evidence only; it is not unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
