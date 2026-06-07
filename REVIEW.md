@@ -1,3 +1,30 @@
+# Goal 3 Task 250 / Pi Unattended Real-Host Execution Attempt Consumer
+
+Scope: expose the Task249 service-owned execution attempt/blocker gate through the Pi extension as a host-confirmed thin client and read-only planner checkpoint. This is Pi consumer wiring only; it is not public executor configuration, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task250-pi-unattended-real-host-execution-attempt-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleUnattendedRealHostExecutionAttempt` and `/cm:release lifecycle-unattended-real-host-execution-attempt`.
+- Added the interactive real-Pi planner checkpoint after readiness and before Codex API probe/review.
+- Registered the runtime subcommand, Phase6/Phase26 exposure checks, package-test discovery, and phase0 release-hardening discovery.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task250 Pi test: after `corepack pnpm --filter @comath/pi-extension build`, `node tests/goal3-task250-pi-unattended-real-host-execution-attempt-consumer.test.mjs` failed because `comath.release.piCodexLifecycleUnattendedRealHostExecutionAttempt` was not registered.
+- Follow-up RED was observed after initial implementation: focused Task250 failed because public summary text still exposed `execution_attempted=true` / `execution_attempt_succeeded=true`; the Pi public sanitizer now treats those as unattended-execution overclaims.
+- After implementation, focused Task250 exited 0.
+- Adjacent Task248, Task223, Phase6, and Phase26 Pi regressions exited 0.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task250 discovered by the default runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests with Task250, comathd package tests through Task249, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task250 calls only the existing Task249 service route through Pi host confirmation. It strips caller/model `confirmation_id`, requires readiness id/path/hash, translates public `service-owned-pi-lifecycle/.../unattended-real-host-execution-readiness.json` aliases to service-canonical request paths only inside the comathd request, keeps the interactive planner read-only, does not expose or forward public `executor_command`, and sanitizes public request/result/confirmation/notification surfaces. Public Pi output forces proof, GA, durable/live transport, direct-Pi-write, direct-trusted-state, executor-invoked, execution-attempt-success, and unattended-completion flags false.
+
+Residual risk: Goal 3 remains incomplete. Task250 does not provide terminal unattended real-host completion review, durable long-lived operator transport, public executor configuration, Pi trusted-state mutation, Lean/mathlib proof replay authority, claim promotion, real installed-toolchain Mathlib smoke completion, broad final release-candidate proof breadth, production OS-isolation helper binaries, or GA certification.
+
 # Goal 3 Task 249 / Service-Owned Unattended Real-Host Execution Attempt Gate
 
 Scope: add the first service-owned attempt/blocker gate after prerequisite-recorded unattended real-host readiness. This is operational provenance only; it is not a Pi consumer, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.

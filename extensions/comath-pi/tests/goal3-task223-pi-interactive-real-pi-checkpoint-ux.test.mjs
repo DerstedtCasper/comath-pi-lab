@@ -31,6 +31,7 @@ const expectedCheckpointSteps = [
   "lifecycle-unattended-real-host-executor-contract",
   "lifecycle-unattended-real-host-durable-transport-contract",
   "lifecycle-unattended-real-host-execution-readiness",
+  "lifecycle-unattended-real-host-execution-attempt",
   "run-codex-api-probe",
   "review"
 ];
@@ -247,6 +248,27 @@ const expectedNextActions = [
       "lifecycle-unattended-real-host-durable-transport-contract",
       "lifecycle-unattended-real-host-execution-readiness"
     ],
+    action: "lifecycle-unattended-real-host-execution-attempt",
+    command: /\/cm:release lifecycle-unattended-real-host-execution-attempt/
+  },
+  {
+    completed: [
+      "run-real-pi-runtime-probe",
+      "lifecycle-operator-session",
+      "lifecycle-operator-transport-recovery",
+      "lifecycle-operator-transport-lease",
+      "lifecycle-operator-transport-heartbeat",
+      "lifecycle-guided-real-pi-execution",
+      "lifecycle-operator-service-transport-contract",
+      "lifecycle-automatic-real-pi-execution",
+      "lifecycle-operator-service-transport-continuity",
+      "lifecycle-unattended-real-host-handoff-review",
+      "lifecycle-unattended-real-host-operator-approval",
+      "lifecycle-unattended-real-host-executor-contract",
+      "lifecycle-unattended-real-host-durable-transport-contract",
+      "lifecycle-unattended-real-host-execution-readiness",
+      "lifecycle-unattended-real-host-execution-attempt"
+    ],
     action: "run-codex-api-probe",
     command: /lifecycle-control run-codex-api-probe/
   },
@@ -266,6 +288,7 @@ const expectedNextActions = [
       "lifecycle-unattended-real-host-executor-contract",
       "lifecycle-unattended-real-host-durable-transport-contract",
       "lifecycle-unattended-real-host-execution-readiness",
+      "lifecycle-unattended-real-host-execution-attempt",
       "run-codex-api-probe"
     ],
     action: "review",
