@@ -1,3 +1,33 @@
+# Goal 3 Task 256 / Pi Goal-Mode Service-Owned Research Plan
+
+Scope: connect Task255 goal-mode intake provenance to the `knowledge_pack` product loop by writing a service-owned research plan artifact. This is adapter planning and lemma-planning bridge metadata only; it is not adapter execution, document extraction evidence, theorem-search evidence, Lean replay, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task256-pi-goal-mode-research-plan.test.mjs`.
+- Added `goal_mode_research_plan.json` creation during `knowledge_pack`.
+- Bound the Task255 intake manifest path/hash into the research plan and `knowledge_pack.json`.
+- Planned local PDF/TeX/Markdown/workspace ingestion tasks through the existing external wheel registry.
+- Planned literature retrieval and Lean theorem-search adapter tasks without executing network calls.
+- Added lemma DAG / `Skeleton.lean` planning seeds and made the plan a required knowledge-pack artifact.
+- Hardened intake consumption so the plan rejects stale/tampered intake manifests whose schema, campaign id, project id, claim id, statement hash, or normalized paths do not match the live campaign.
+- Added focused coverage that deleting the required research-plan artifact rewinds candidate generation to `knowledge_pack` through the existing stage-gate repair path.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task256 service test: after `corepack pnpm --filter @comath/comathd build`, `node services/comathd/tests/unit/goal3-task256-pi-goal-mode-research-plan.test.mjs` failed because `knowledge_pack` did not attach a service-owned goal-mode research plan.
+- A read-only subagent boundary review found no proof-authority violations and flagged two P3 hardening gaps: validate the consumed intake manifest binding and directly cover missing research-plan repair/rewind behavior. Follow-up RED was observed when the focused Task256 test failed because a tampered intake manifest was still consumed by the plan.
+- After implementation and hardening, focused Task256 exited 0.
+- Adjacent Task255, Task16 service route, Task100 export authority, Phase63 stage-artifact coverage, Phase65 proof-memory retrieval, and Phase71 repair/resume regressions exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task256 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task256, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task256 writes only service-owned `.comath/campaign/<campaign_id>/goal_mode_research_plan.json` artifacts through `comathd`. It records adapter tasks as `execution_state="planned"`, `service_owned_execution_required=true`, `network_execution_performed=false`, `proof_authority="none"`, and `can_promote_claim=false`. It does not execute retrieval, parse papers or attachments as trusted proof material, run Lean, create promotion-grade evidence, promote claims, or certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task256 does not execute PDF/TeX/Markdown ingestion adapters, retrieve literature, call theorem-search providers, extract citation anchors, generate richer automatic lemma decompositions, repair Lean skeletons, complete durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 255 / Pi Goal-Mode Service-Owned Intake Manifest
 
 Scope: add a service-owned intake manifest for Pi goal-mode research inputs at campaign start. This is provenance and UX plumbing only; papers, TeX/PDF/Markdown attachments, workspace refs, directory presence, Pi payloads, and intake manifests are not proof authority, Lean replay evidence, promotion gates, or GA certification.

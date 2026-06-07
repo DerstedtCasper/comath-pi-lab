@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, extname, isAbsolute, join, relative } from "node:path";
+import {
+  createDefaultExternalWheelRegistry,
+  listExternalWheelAdapters,
+  type ExternalWheelAdapterDescriptor,
+  type ExternalWheelKind
+} from "../../adapters/external-wheel-registry.js";
 import { importArtifact } from "../../artifacts/store.js";
 import { appendAuditEvent } from "../../audit/jsonl-writer.js";
 import { applyGatePromotedClaim, getClaim, registerClaim } from "../../claim/claim-store.js";
@@ -203,7 +209,8 @@ function knowledgePackArtifacts(campaign: ResearchCampaign): string[] {
     `.comath/context_lake/shards/knowledge-${campaign.campaign_id}.md`,
     ".comath/literature/references.bib",
     ".comath/memory/library_search.jsonl",
-    ".comath/memory/premise_candidates.jsonl"
+    ".comath/memory/premise_candidates.jsonl",
+    campaignRel(campaign, "goal_mode_research_plan.json")
   ];
 }
 
@@ -239,7 +246,12 @@ function rewindTargetForMissingArtifact(rel: string): ResearchCampaign["current_
   if (rel.includes("/Definitions.lean") || rel.includes("/notation-")) {
     return "notation_gate";
   }
-  if (rel.includes("/knowledge-") || rel.includes("/references.bib") || rel.includes("/library_search.jsonl")) {
+  if (
+    rel.includes("/knowledge-") ||
+    rel.includes("/references.bib") ||
+    rel.includes("/library_search.jsonl") ||
+    rel.includes("/goal_mode_research_plan.json")
+  ) {
     return "knowledge_pack";
   }
   if (rel.includes("/refutation_red_team.json")) {
@@ -630,6 +642,369 @@ function writeGoalModeIntakeManifest(input: {
     can_promote_claim: false,
     can_certify_ga: false,
     created_at: input.createdAt
+  });
+}
+
+type GoalModeIntakeRef = {
+  ref_id: string;
+  kind: GoalModeIntakeRefKind;
+  normalized_path: string;
+  exists: boolean;
+  entry_type: string;
+  sha256: string | null;
+  size_bytes: number | null;
+};
+
+type GoalModeIntakeManifest = {
+  schema_version: string;
+  campaign_id: string;
+  project_id: string;
+  claim_id: string;
+  statement_hash: string;
+  paper_refs?: unknown[];
+  attachment_refs?: unknown[];
+  workspace_refs?: unknown[];
+};
+
+type GoalModeIngestionProvider = {
+  kind: ExternalWheelKind;
+  provider: string;
+  reason: string;
+};
+
+type GoalModeIntakeManifestBinding = {
+  path: string;
+  sha256: string;
+  manifest?: GoalModeIntakeManifest;
+  invalid_reasons: string[];
+};
+
+function isGoalModeIntakeRef(value: unknown): value is GoalModeIntakeRef {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const ref = value as Record<string, unknown>;
+  return (
+    typeof ref.ref_id === "string" &&
+    (ref.kind === "paper" || ref.kind === "attachment" || ref.kind === "workspace") &&
+    typeof ref.normalized_path === "string" &&
+    typeof ref.exists === "boolean" &&
+    typeof ref.entry_type === "string" &&
+    (typeof ref.sha256 === "string" || ref.sha256 === null) &&
+    (typeof ref.size_bytes === "number" || ref.size_bytes === null)
+  );
+}
+
+function goalModeIntakeRefs(manifest: GoalModeIntakeManifest | undefined): GoalModeIntakeRef[] {
+  if (!manifest) {
+    return [];
+  }
+  return [
+    ...(manifest.paper_refs ?? []),
+    ...(manifest.attachment_refs ?? []),
+    ...(manifest.workspace_refs ?? [])
+  ].filter(isGoalModeIntakeRef);
+}
+
+function safeGoalModeNormalizedPath(value: string): boolean {
+  if (value === ".") {
+    return true;
+  }
+  if (value.length === 0 || isAbsolute(value) || value.includes(":") || normalizeRelPath(value) !== value) {
+    return false;
+  }
+  return value.split("/").every((part) => part.length > 0 && part !== "." && part !== "..");
+}
+
+function validateGoalModeIntakeManifest(input: {
+  manifest: GoalModeIntakeManifest;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+}): string[] {
+  const reasons: string[] = [];
+  if (input.manifest.schema_version !== "comath.pi_goal_mode_intake_manifest.v1") {
+    reasons.push("schema_version_mismatch");
+  }
+  if (input.manifest.campaign_id !== input.campaign.campaign_id) {
+    reasons.push("campaign_id_mismatch");
+  }
+  if (input.manifest.project_id !== input.campaign.project_id) {
+    reasons.push("project_id_mismatch");
+  }
+  if (input.manifest.claim_id !== input.campaign.root_claim_id) {
+    reasons.push("claim_id_mismatch");
+  }
+  if (input.manifest.statement_hash !== input.obligation.statement_hash) {
+    reasons.push("statement_hash_mismatch");
+  }
+  for (const key of ["paper_refs", "attachment_refs", "workspace_refs"] as const) {
+    const refs = input.manifest[key];
+    if (refs === undefined) {
+      continue;
+    }
+    if (!Array.isArray(refs)) {
+      reasons.push(`${key}_not_array`);
+      continue;
+    }
+    refs.forEach((ref, index) => {
+      if (!isGoalModeIntakeRef(ref)) {
+        reasons.push(`${key}_${index}_invalid_ref_shape`);
+        return;
+      }
+      if (!safeGoalModeNormalizedPath(ref.normalized_path)) {
+        reasons.push(`${ref.ref_id}_unsafe_normalized_path`);
+      }
+    });
+  }
+  return reasons;
+}
+
+function readGoalModeIntakeManifest(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+}): GoalModeIntakeManifestBinding | undefined {
+  const rel = input.campaign.stage_runs
+    .flatMap((run) => run.artifact_paths)
+    .find((path) => path.endsWith("goal_mode_intake_manifest.json"));
+  if (!rel || !artifactExists(input.projectRoot, rel)) {
+    return undefined;
+  }
+  const raw = readJsonArtifact(input.projectRoot, rel);
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const manifest = raw as GoalModeIntakeManifest;
+  const invalidReasons = validateGoalModeIntakeManifest({ manifest, campaign: input.campaign, obligation: input.obligation });
+  return {
+    path: rel,
+    sha256: sha256RuntimeFile(input.projectRoot, rel),
+    manifest: invalidReasons.length === 0 ? manifest : undefined,
+    invalid_reasons: invalidReasons
+  };
+}
+
+function externalWheelDescriptor(kind: ExternalWheelKind, provider: string): ExternalWheelAdapterDescriptor {
+  const descriptor = listExternalWheelAdapters(createDefaultExternalWheelRegistry()).find(
+    (adapter) => adapter.kind === kind && adapter.provider === provider
+  );
+  if (!descriptor) {
+    throw new Error(`goal_mode_research_plan_missing_adapter:${kind}:${provider}`);
+  }
+  return descriptor;
+}
+
+function localIngestionProviderForRef(ref: GoalModeIntakeRef): GoalModeIngestionProvider | undefined {
+  if (ref.kind === "workspace") {
+    return {
+      kind: "external_lean_repo",
+      provider: "local_lean_repo",
+      reason: "inspect user-provided Lean workspace as a dependency candidate only"
+    };
+  }
+  const ext = extname(ref.normalized_path).toLowerCase();
+  if (ext === ".pdf") {
+    return { kind: "retrieval", provider: "local_pdf", reason: "extract user-provided PDF text as evidence only" };
+  }
+  if (ext === ".tex" || ext === ".latex") {
+    return { kind: "retrieval", provider: "local_tex", reason: "ingest user-provided TeX source as evidence only" };
+  }
+  if (ext === ".md" || ext === ".markdown") {
+    return {
+      kind: "retrieval",
+      provider: "local_markdown",
+      reason: "ingest user-provided Markdown as evidence only"
+    };
+  }
+  if (ext === ".bib") {
+    return { kind: "retrieval", provider: "bibtex", reason: "ingest bibliography metadata as citation metadata only" };
+  }
+  return undefined;
+}
+
+function plannedAdapterTask(input: {
+  taskId: string;
+  descriptor: ExternalWheelAdapterDescriptor;
+  purpose: string;
+  query?: string;
+  ref?: GoalModeIntakeRef;
+  reason?: string;
+}): Record<string, unknown> {
+  return {
+    task_id: input.taskId,
+    adapter_id: input.descriptor.id,
+    adapter_kind: input.descriptor.kind,
+    adapter_provider: input.descriptor.provider,
+    capabilities: input.descriptor.capabilities,
+    purpose: input.purpose,
+    query_hash: input.query ? sha256Text(input.query) : null,
+    input_ref_id: input.ref?.ref_id ?? null,
+    input_kind: input.ref?.kind ?? null,
+    normalized_path: input.ref?.normalized_path ?? null,
+    input_entry_type: input.ref?.entry_type ?? null,
+    input_sha256: input.ref?.sha256 ?? null,
+    input_size_bytes: input.ref?.size_bytes ?? null,
+    reason: input.reason ?? null,
+    service_owned_execution_required: true,
+    execution_state: "planned",
+    executed_at: null,
+    prompt_injection_scan_required: input.descriptor.kind === "retrieval",
+    terms: input.descriptor.terms,
+    proof_authority: "none",
+    external_evidence_authority: false,
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+}
+
+function writeGoalModeResearchPlan(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+}): string {
+  const intake = readGoalModeIntakeManifest({
+    projectRoot: input.projectRoot,
+    campaign: input.campaign,
+    obligation: input.obligation
+  });
+  const refs = goalModeIntakeRefs(intake?.manifest);
+  const blockedCapabilities: Record<string, unknown>[] = [];
+  const ingestionTasks: Record<string, unknown>[] = [];
+  let ingestionIndex = 1;
+  for (const ref of refs) {
+    const provider = localIngestionProviderForRef(ref);
+    if (!ref.exists) {
+      blockedCapabilities.push({
+        code: "goal_mode_input_ref_missing",
+        ref_id: ref.ref_id,
+        normalized_path: ref.normalized_path,
+        proof_authority: "none",
+        can_promote_claim: false
+      });
+      continue;
+    }
+    if (!provider) {
+      blockedCapabilities.push({
+        code: "goal_mode_local_ingestion_adapter_missing",
+        ref_id: ref.ref_id,
+        normalized_path: ref.normalized_path,
+        entry_type: ref.entry_type,
+        proof_authority: "none",
+        can_promote_claim: false
+      });
+      continue;
+    }
+    ingestionTasks.push(
+      plannedAdapterTask({
+        taskId: `GMRP-INGEST-${String(ingestionIndex).padStart(4, "0")}`,
+        descriptor: externalWheelDescriptor(provider.kind, provider.provider),
+        purpose: "local_ingestion",
+        ref,
+        reason: provider.reason
+      })
+    );
+    ingestionIndex += 1;
+  }
+
+  const query = `${input.campaign.user_goal}\n${input.obligation.locked_statement_nl}`;
+  const retrievalTasks = ["arxiv", "semantic_scholar", "openalex", "crossref", "unpaywall", "jina_search", "anysearch"].map(
+    (provider, index) =>
+      plannedAdapterTask({
+        taskId: `GMRP-RETRIEVAL-${String(index + 1).padStart(4, "0")}`,
+        descriptor: externalWheelDescriptor("retrieval", provider),
+        purpose: "literature_retrieval",
+        query,
+        reason: "retrieve source-linked literature and metadata as non-authoritative grounding"
+      })
+  );
+  const theoremSearchTasks = ["loogle", "leansearch", "moogle", "leanexplore"].map((provider, index) =>
+    plannedAdapterTask({
+      taskId: `GMRP-THEOREM-SEARCH-${String(index + 1).padStart(4, "0")}`,
+      descriptor: externalWheelDescriptor("theorem_search", provider),
+      purpose: "lean_theorem_search",
+      query: input.obligation.locked_statement_nl,
+      reason: "find Lean/mathlib premises as hints before candidate generation"
+    })
+  );
+
+  const plannedDescriptors = [...ingestionTasks, ...retrievalTasks, ...theoremSearchTasks].map((task) => ({
+    adapter_id: task.adapter_id,
+    adapter_kind: task.adapter_kind,
+    adapter_provider: task.adapter_provider,
+    capabilities: task.capabilities,
+    proof_authority: "none",
+    can_promote_claim: false
+  }));
+
+  return writeSimpleStageArtifact(input.projectRoot, input.campaign, "goal_mode_research_plan.json", {
+    schema_version: "comath.pi_goal_mode_research_plan.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.campaign.project_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    locked_statement_hash: input.obligation.statement_hash,
+    consumes_goal_mode_intake_manifest: intake?.manifest
+      ? {
+          path: intake.path,
+          sha256: intake.sha256,
+          schema_version: intake.manifest.schema_version,
+          proof_authority: "none",
+          can_promote_claim: false
+        }
+      : null,
+    execution_status: "planned_not_executed",
+    network_execution_performed: false,
+    ingestion_tasks: ingestionTasks,
+    retrieval_tasks: retrievalTasks,
+    theorem_search_tasks: theoremSearchTasks,
+    planned_external_adapters: plannedDescriptors,
+    lemma_planning_seed: {
+      stage: "skeleton_gate",
+      obligation_ids: input.campaign.open_obligations.map((obligation) => obligation.obligation_id),
+      lemma_dag_path: campaignProofRel(input.campaign, "lemma_dag.json"),
+      skeleton_lean_path: campaignProofRel(input.campaign, "Skeleton.lean"),
+      skeleton_report_path: campaignProofRel(input.campaign, "skeleton_report.md"),
+      line_map_path: campaignProofRel(input.campaign, "line_map.json"),
+      required_after: ["FormalSpecLock", "AssumptionLedger", "StatementDiffGate"],
+      proof_authority: "none",
+      can_promote_claim: false
+    },
+    blocked_capabilities: [
+      ...(
+        !intake
+          ? [
+              {
+                code: "goal_mode_intake_manifest_missing",
+                proof_authority: "none",
+                can_promote_claim: false
+              }
+            ]
+          : !intake.manifest
+            ? [
+                {
+                  code: "goal_mode_intake_manifest_invalid",
+                  path: intake.path,
+                  sha256: intake.sha256,
+                  invalid_reasons: intake.invalid_reasons,
+                  proof_authority: "none",
+                  can_promote_claim: false
+                }
+              ]
+            : []
+      ),
+      ...blockedCapabilities
+    ],
+    no_reinvent_policy: {
+      theorem_search: "planned through external wheel adapters",
+      literature_retrieval: "planned through external wheel adapters",
+      local_ingestion: "planned through maintained adapter contracts",
+      proof_authority: "Lean4/mathlib clean replay only"
+    },
+    proof_authority: "none",
+    external_evidence_authority: false,
+    can_promote_claim: false,
+    can_certify_ga: false,
+    created_at: now()
   });
 }
 
@@ -3091,6 +3466,14 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         created_at: now()
       })}\n`
     );
+    const researchPlanRel = writeGoalModeResearchPlan({ projectRoot: input.project_root, campaign, obligation });
+    const researchPlanBinding = {
+      path: researchPlanRel,
+      sha256: sha256RuntimeFile(input.project_root, researchPlanRel),
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    };
     const contextRel = writeSimpleStageArtifact(input.project_root, campaign, "knowledge_pack.json", {
       campaign_id: campaign.campaign_id,
       root_claim_id: campaign.root_claim_id,
@@ -3110,6 +3493,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         ".comath/lock/notation.md",
         ".comath/goals.yaml"
       ],
+      goal_mode_research_plan: researchPlanBinding,
       retrieval_mode: "service-owned-local-context-pack",
       stage_gate: "knowledge_pack",
       created_at: now()
@@ -3123,7 +3507,10 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
           ...campaign.stage_runs,
           completedStageRun(campaign, "knowledge_pack", [contextRel, ...knowledgePackArtifacts(campaign)])
         ],
-        next_actions: ["resolve notation and Lean definitions for the locked problem"]
+        next_actions: [
+          "run goal-mode ingestion, retrieval, theorem-search, and lemma-planning adapters before any proof claim promotion",
+          "resolve notation and Lean definitions for the locked problem"
+        ]
       }),
       actor
     );
