@@ -1,3 +1,31 @@
+# Goal 3 Task 254 / Pi Unattended Real-Host Completion Certification Prerequisite Consumer
+
+Scope: expose the Task253 service-owned completion-certification prerequisite gate through the Pi extension as a host-confirmed thin client and read-only planner checkpoint. This is Pi consumer wiring only; it is not a completion certificate, public executor/result/certificate authority, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task254-pi-unattended-real-host-completion-certification-prerequisite-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite`.
+- Added `/cm:release lifecycle-unattended-real-host-completion-certification-prerequisite`.
+- Added the interactive real-Pi planner checkpoint after attempt review and before Codex API probe/review.
+- Registered the runtime subcommand, Phase6/Phase26 exposure checks, package-test discovery, and phase0 release-hardening discovery.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task254 Pi test: after `corepack pnpm --filter @comath/pi-extension build`, `node extensions/comath-pi/tests/goal3-task254-pi-unattended-real-host-completion-certification-prerequisite-consumer.test.mjs` failed because `comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite` was not registered.
+- After implementation, focused Task254 exited 0.
+- Adjacent Task252, Task250, Task223, Phase6, and Phase26 Pi regressions exited 0. Phase6/Phase26 must be run from `extensions/comath-pi` because those tests intentionally use the package root as `process.cwd()`.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task254 discovered by the default Pi runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests with Task254, comathd package tests through Task253, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task254 calls only the Task253 `POST /release/pi-codex-lifecycle/unattended-real-host-completion-certification-prerequisite` service route through Pi host confirmation. It strips caller/model `confirmation_id`, requires attempt-review id/path/hash, translates only `service-owned-pi-lifecycle/<attempt_review_id>/unattended-real-host-execution-attempt-review.json` aliases to service-canonical paths inside the comathd request, keeps the interactive planner read-only, and does not expose or forward public `executor_command`, caller-supplied attempt results, or completion certificates. Public Pi output forces proof, GA, durable/live transport, direct-Pi-write, direct-trusted-state, terminal unattended completion, completion-certificate, and unattended-execution authority flags false.
+
+Residual risk: Goal 3 remains incomplete. Task254 does not provide durable long-lived operator transport, public executor configuration, production unattended real-host completion certification, Pi trusted-state mutation, Lean/mathlib proof replay authority, claim promotion, real installed-toolchain Mathlib smoke completion, broad final release-candidate proof breadth, production OS-isolation helper binaries, or GA certification.
+
 # Goal 3 Task 253 / Service-Owned Unattended Real-Host Completion Certification Prerequisite
 
 Scope: add a service-owned prerequisite gate after Task251 attempt-review evidence. This is append-only operational blocker evidence only; it is not a Pi consumer, public executor configuration, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.

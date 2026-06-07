@@ -198,6 +198,7 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness",
       "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttempt",
       "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttemptReview",
+      "comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite",
       "comath.release.agentAdapterOsIsolationProbe",
       "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
       "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",

@@ -165,6 +165,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness",
   "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttempt",
   "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttemptReview",
+  "comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
   "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",
@@ -429,7 +430,7 @@ const privilegedProofAuthorityPattern =
 const publicTransportOverclaimPattern =
   /\b(?:long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided|live transport open|direct[- ]Pi[- ]write allowed)\b/gi;
 const publicUnattendedOverclaimPattern =
-  /\b(?:production unattended executor|operator[- ]free execution completed|unattended real[- ]host execution completed|terminal unattended completion certified|terminal_unattended_completion_certified\s*[:=]\s*(?:true|1)|terminalUnattendedCompletionCertified\s*[:=]\s*(?:true|1)|terminal_goal_completed|reviewed_terminal_completion|attempt review status recorded terminal|service[- ]owned attempt review completed|service_owned_attempt_review_completed\s*[:=]\s*(?:true|1)|serviceOwnedAttemptReviewCompleted\s*[:=]\s*(?:true|1)|unattended execution authorized|operator confirmation bypassed|operator approval recorded|operator approved|executor invoked|executor_invoked\s*[:=]\s*(?:true|1)|executorInvoked\s*[:=]\s*(?:true|1)|execution_attempted\s*[:=]\s*(?:true|1)|executionAttempted\s*[:=]\s*(?:true|1)|execution_attempt_succeeded\s*[:=]\s*(?:true|1)|executionAttemptSucceeded\s*[:=]\s*(?:true|1)|service[- ]owned evidence created|handoff can execute|GA certified|GA certification|can certify GA)\b/gi;
+  /\b(?:production unattended executor|operator[- ]free execution completed|unattended real[- ]host execution completed|terminal unattended completion certified|terminal_unattended_completion_certified\s*[:=]\s*(?:true|1)|terminalUnattendedCompletionCertified\s*[:=]\s*(?:true|1)|completion certificate available|completion_certificate_available\s*[:=]\s*(?:true|1)|completionCertificateAvailable\s*[:=]\s*(?:true|1)|certified_terminal_completion|completion certification prerequisite recorded terminal|terminal_goal_completed|reviewed_terminal_completion|attempt review status recorded terminal|service[- ]owned attempt review completed|service_owned_attempt_review_completed\s*[:=]\s*(?:true|1)|serviceOwnedAttemptReviewCompleted\s*[:=]\s*(?:true|1)|unattended execution authorized|operator confirmation bypassed|operator approval recorded|operator approved|executor invoked|executor_invoked\s*[:=]\s*(?:true|1)|executorInvoked\s*[:=]\s*(?:true|1)|execution_attempted\s*[:=]\s*(?:true|1)|executionAttempted\s*[:=]\s*(?:true|1)|execution_attempt_succeeded\s*[:=]\s*(?:true|1)|executionAttemptSucceeded\s*[:=]\s*(?:true|1)|service[- ]owned evidence created|handoff can execute|GA certified|GA certification|can certify GA)\b/gi;
 
 const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
 const posixHostPathEchoPattern =
@@ -447,7 +448,9 @@ const secretEchoPattern =
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
 const publicProofAuthorityKeyPattern = /^(?:proof_authority|proofAuthority)$/i;
 const publicFalseAuthorityKeyPattern =
-  /^(?:can_promote_claim|canPromoteClaim|can_certify_ga|canCertifyGa|durable_transport_provided|durableTransportProvided|live_transport_open|liveTransportOpen|indefinite_stream_open|indefiniteStreamOpen|long_lived_websocket_provided|longLivedWebsocketProvided|long_lived_sse_provided|longLivedSseProvided|pi_direct_write_allowed|piDirectWriteAllowed|direct_trusted_state_mutation|directTrustedStateMutation|os_enforced|osEnforced|operator_approved|operatorApproved|operatorApproval|executor_invoked|executorInvoked|execution_attempted|executionAttempted|execution_attempt_succeeded|executionAttemptSucceeded|execution_attempt_exit_code|executionAttemptExitCode|unattended_execution_authorized|unattendedExecutionAuthorized|unattended_real_host_execution_completed|unattendedRealHostExecutionCompleted|terminal_unattended_completion_certified|terminalUnattendedCompletionCertified|operator_confirmation_bypassed|operatorConfirmationBypassed|service_owned_evidence_created|serviceOwnedEvidenceCreated|service_owned_attempt_review_completed|serviceOwnedAttemptReviewCompleted|service_owned_checkpoint_chain_reviewed|serviceOwnedCheckpointChainReviewed|handoff_can_execute|handoffCanExecute)$/i;
+  /^(?:can_promote_claim|canPromoteClaim|can_certify_ga|canCertifyGa|durable_transport_provided|durableTransportProvided|live_transport_open|liveTransportOpen|indefinite_stream_open|indefiniteStreamOpen|long_lived_websocket_provided|longLivedWebsocketProvided|long_lived_sse_provided|longLivedSseProvided|pi_direct_write_allowed|piDirectWriteAllowed|direct_trusted_state_mutation|directTrustedStateMutation|os_enforced|osEnforced|operator_approved|operatorApproved|operatorApproval|executor_invoked|executorInvoked|execution_attempted|executionAttempted|execution_attempt_succeeded|executionAttemptSucceeded|execution_attempt_exit_code|executionAttemptExitCode|unattended_execution_authorized|unattendedExecutionAuthorized|unattended_real_host_execution_completed|unattendedRealHostExecutionCompleted|terminal_unattended_completion_certified|terminalUnattendedCompletionCertified|completion_certificate_available|completionCertificateAvailable|operator_confirmation_bypassed|operatorConfirmationBypassed|service_owned_evidence_created|serviceOwnedEvidenceCreated|service_owned_attempt_review_completed|serviceOwnedAttemptReviewCompleted|service_owned_checkpoint_chain_reviewed|serviceOwnedCheckpointChainReviewed|handoff_can_execute|handoffCanExecute)$/i;
+const publicOmittedMaterialKeyPattern =
+  /^(?:executor_command|executorCommand|execution_attempt_command|executionAttemptCommand|attempt_result|attemptResult|execution_attempt_result|executionAttemptResult|execution_attempt_result_path|executionAttemptResultPath|execution_attempt_result_artifact|executionAttemptResultArtifact|completion_certificate|completionCertificate)$/i;
 
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
@@ -464,15 +467,17 @@ function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, item]) =>
-        secretObjectKeyPattern.test(key)
-          ? ["[redacted_secret_key]", "[redacted_secret]"]
-          : publicProofAuthorityKeyPattern.test(key)
-            ? [key, "none"]
-          : publicFalseAuthorityKeyPattern.test(key)
-            ? [key, false]
-          : [sanitizePublicProofAuthorityValue(key) as string, sanitizePublicProofAuthorityValue(item)]
-      )
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => !publicOmittedMaterialKeyPattern.test(key))
+        .map(([key, item]) =>
+          secretObjectKeyPattern.test(key)
+            ? ["[redacted_secret_key]", "[redacted_secret]"]
+            : publicProofAuthorityKeyPattern.test(key)
+              ? [key, "none"]
+            : publicFalseAuthorityKeyPattern.test(key)
+              ? [key, false]
+            : [sanitizePublicProofAuthorityValue(key) as string, sanitizePublicProofAuthorityValue(item)]
+        )
     );
   }
   return value;
@@ -532,6 +537,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttempt" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttemptReview" ||
+    name === "comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
     name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe" ||
@@ -582,6 +588,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "lifecycle-unattended-real-host-execution-readiness",
   "lifecycle-unattended-real-host-execution-attempt",
   "lifecycle-unattended-real-host-execution-attempt-review",
+  "lifecycle-unattended-real-host-completion-certification-prerequisite",
   "run-codex-api-probe",
   "review"
 ] as const;
@@ -654,6 +661,20 @@ function piLifecycleAttemptArtifactPathText(value: string, attemptId: string): s
   }
   if (match[1] !== attemptId || match[2] !== "unattended-real-host-execution-attempt.json") {
     throw new Error("attempt_path must reference service-owned-pi-lifecycle/<attempt_id>/unattended-real-host-execution-attempt.json");
+  }
+  return `${trustedRuntimeRootName}/release/pi-codex-lifecycle/${match[1]}/${match[2]}`;
+}
+
+function piLifecycleAttemptReviewArtifactPathText(value: string, attemptReviewId: string): string {
+  const sanitized = serviceArtifactPathText(value).trim();
+  const match = sanitized.match(publicPiLifecycleArtifactPathPattern);
+  if (!match) {
+    return sanitized;
+  }
+  if (match[1] !== attemptReviewId || match[2] !== "unattended-real-host-execution-attempt-review.json") {
+    throw new Error(
+      "attempt_review_path must reference service-owned-pi-lifecycle/<attempt_review_id>/unattended-real-host-execution-attempt-review.json"
+    );
   }
   return `${trustedRuntimeRootName}/release/pi-codex-lifecycle/${match[1]}/${match[2]}`;
 }
@@ -1278,6 +1299,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     "attempt_review_id",
     `${sessionId}-EXECUTION-ATTEMPT-REVIEW`
   );
+  const completionCertificationPrerequisiteId = optionalPublicPlannerToken(
+    input,
+    "completion_certification_prerequisite_id",
+    `${sessionId}-COMPLETION-CERTIFICATION-PREREQ`
+  );
   const continuityId = optionalPublicPlannerToken(
     input,
     "continuity_id",
@@ -1352,6 +1378,16 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     `service-owned-pi-lifecycle/${attemptId}/unattended-real-host-execution-attempt.json`
   );
   const attemptSha256 = optionalPublicPlannerToken(input, "attempt_sha256", "EXECUTION-ATTEMPT-SHA256");
+  const attemptReviewPath = optionalPublicPlannerPath(
+    input,
+    "attempt_review_path",
+    `service-owned-pi-lifecycle/${attemptReviewId}/unattended-real-host-execution-attempt-review.json`
+  );
+  const attemptReviewSha256 = optionalPublicPlannerToken(
+    input,
+    "attempt_review_sha256",
+    "ATTEMPT-REVIEW-SHA256"
+  );
   const sessionManifestPath = optionalPublicPlannerPath(
     input,
     "session_manifest_path",
@@ -1468,6 +1504,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `/cm:release lifecycle-unattended-real-host-execution-attempt-review --project-id ${projectId} ` +
       `--attempt-review-id ${attemptReviewId} --attempt-id ${attemptId} ` +
       `--attempt-path ${attemptPath} --attempt-sha256 ${attemptSha256}`,
+    "lifecycle-unattended-real-host-completion-certification-prerequisite":
+      `/cm:release lifecycle-unattended-real-host-completion-certification-prerequisite --project-id ${projectId} ` +
+      `--completion-certification-prerequisite-id ${completionCertificationPrerequisiteId} ` +
+      `--attempt-review-id ${attemptReviewId} --attempt-review-path ${attemptReviewPath} ` +
+      `--attempt-review-sha256 ${attemptReviewSha256}`,
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -1538,6 +1579,9 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       readiness_sha256: readinessSha256,
       attempt_path: attemptPath,
       attempt_sha256: attemptSha256,
+      completion_certification_prerequisite_id: completionCertificationPrerequisiteId,
+      attempt_review_path: attemptReviewPath,
+      attempt_review_sha256: attemptReviewSha256,
       pi_install_transcript_path: piInstallTranscriptPath,
       runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath
     },
@@ -2712,6 +2756,40 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
         ...(requestedReviewMode === "terminal_unattended_real_host_execution"
           ? {}
           : { requested_review_mode: requestedReviewMode })
+      })
+    );
+  }
+
+  if (name === "comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite") {
+    const completionCertificationPrerequisiteId = readString(input, "completion_certification_prerequisite_id", {
+      optional: true
+    });
+    const attemptReviewId = readString(input, "attempt_review_id");
+    const requestedCompletionMode =
+      readString(input, "requested_completion_mode", { optional: true }) ??
+      "production_unattended_real_host_completion";
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/unattended-real-host-completion-certification-prerequisite", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        ...(completionCertificationPrerequisiteId === undefined
+          ? {}
+          : {
+              completion_certification_prerequisite_id: publicOperatorText(
+                completionCertificationPrerequisiteId
+              )
+            }),
+        attempt_review_id: attemptReviewId,
+        attempt_review_path: piLifecycleAttemptReviewArtifactPathText(
+          readString(input, "attempt_review_path"),
+          attemptReviewId
+        ),
+        attempt_review_sha256: readString(input, "attempt_review_sha256"),
+        ...(requestedCompletionMode === "production_unattended_real_host_completion"
+          ? {}
+          : { requested_completion_mode: requestedCompletionMode })
       })
     );
   }
@@ -4199,6 +4277,37 @@ export function createComathTools(): ToolDescriptor[] {
             requested_review_mode: {
               type: "string",
               enum: ["terminal_unattended_real_host_execution"]
+            }
+          }
+        )
+      )
+    },
+    {
+      name: "comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite",
+      description:
+        "Record a host-confirmed service-owned unattended real-host completion-certification prerequisite through comathd using attempt-review id/path/hash, without exposing executor commands, caller attempt results, completion certificates, terminal completion, proof authority, GA certification, direct Pi mutation, or durable/live transport claims.",
+      mutates: true,
+      input_schema: requireConfirmationSchema(
+        objectSchema(
+          [
+            "project_root",
+            "project_id",
+            "actor",
+            "attempt_review_id",
+            "attempt_review_path",
+            "attempt_review_sha256"
+          ],
+          {
+            project_root: stringProp,
+            project_id: stringProp,
+            actor: stringProp,
+            completion_certification_prerequisite_id: stringProp,
+            attempt_review_id: stringProp,
+            attempt_review_path: stringProp,
+            attempt_review_sha256: stringProp,
+            requested_completion_mode: {
+              type: "string",
+              enum: ["production_unattended_real_host_completion"]
             }
           }
         )
@@ -6481,6 +6590,47 @@ async function handleReleaseCommand(
           attempt_sha256: requiredOption(optionValue(parsed.args, "--attempt-sha256"), "attempt_sha256"),
           requested_review_mode:
             optionValue(parsed.args, "--requested-review-mode") ?? "terminal_unattended_real_host_execution"
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-unattended-real-host-completion-certification-prerequisite") {
+    const tool = createComathTools().find(
+      (descriptor) =>
+        descriptor.name === "comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite"
+    );
+    if (!tool) {
+      throw new Error(
+        "Pi/Codex lifecycle unattended real-host completion certification prerequisite tool is not registered"
+      );
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          completion_certification_prerequisite_id: optionValue(
+            parsed.args,
+            "--completion-certification-prerequisite-id"
+          ),
+          attempt_review_id: requiredOption(optionValue(parsed.args, "--attempt-review-id"), "attempt_review_id"),
+          attempt_review_path: requiredOption(
+            optionValue(parsed.args, "--attempt-review-path"),
+            "attempt_review_path"
+          ),
+          attempt_review_sha256: requiredOption(
+            optionValue(parsed.args, "--attempt-review-sha256"),
+            "attempt_review_sha256"
+          ),
+          requested_completion_mode:
+            optionValue(parsed.args, "--requested-completion-mode") ??
+            "production_unattended_real_host_completion"
         },
         ctx
       )

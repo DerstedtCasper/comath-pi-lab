@@ -33,6 +33,7 @@ const expectedCheckpointSteps = [
   "lifecycle-unattended-real-host-execution-readiness",
   "lifecycle-unattended-real-host-execution-attempt",
   "lifecycle-unattended-real-host-execution-attempt-review",
+  "lifecycle-unattended-real-host-completion-certification-prerequisite",
   "run-codex-api-probe",
   "review"
 ];
@@ -292,6 +293,29 @@ const expectedNextActions = [
       "lifecycle-unattended-real-host-execution-attempt",
       "lifecycle-unattended-real-host-execution-attempt-review"
     ],
+    action: "lifecycle-unattended-real-host-completion-certification-prerequisite",
+    command: /\/cm:release lifecycle-unattended-real-host-completion-certification-prerequisite/
+  },
+  {
+    completed: [
+      "run-real-pi-runtime-probe",
+      "lifecycle-operator-session",
+      "lifecycle-operator-transport-recovery",
+      "lifecycle-operator-transport-lease",
+      "lifecycle-operator-transport-heartbeat",
+      "lifecycle-guided-real-pi-execution",
+      "lifecycle-operator-service-transport-contract",
+      "lifecycle-automatic-real-pi-execution",
+      "lifecycle-operator-service-transport-continuity",
+      "lifecycle-unattended-real-host-handoff-review",
+      "lifecycle-unattended-real-host-operator-approval",
+      "lifecycle-unattended-real-host-executor-contract",
+      "lifecycle-unattended-real-host-durable-transport-contract",
+      "lifecycle-unattended-real-host-execution-readiness",
+      "lifecycle-unattended-real-host-execution-attempt",
+      "lifecycle-unattended-real-host-execution-attempt-review",
+      "lifecycle-unattended-real-host-completion-certification-prerequisite"
+    ],
     action: "run-codex-api-probe",
     command: /lifecycle-control run-codex-api-probe/
   },
@@ -313,6 +337,7 @@ const expectedNextActions = [
       "lifecycle-unattended-real-host-execution-readiness",
       "lifecycle-unattended-real-host-execution-attempt",
       "lifecycle-unattended-real-host-execution-attempt-review",
+      "lifecycle-unattended-real-host-completion-certification-prerequisite",
       "run-codex-api-probe"
     ],
     action: "review",
