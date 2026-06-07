@@ -382,7 +382,7 @@ assert.doesNotMatch(JSON.stringify(interactivePlan), secretTerms);
 assert.doesNotMatch(JSON.stringify(interactivePlan), transportOverclaimTerms);
 assert.doesNotMatch(JSON.stringify(interactivePlan), unattendedOverclaimTerms);
 
-const readinessPlan = await executeComathTool(client, "comath.release.piCodexLifecycleInteractiveRealPi", {
+const executorContractPlan = await executeComathTool(client, "comath.release.piCodexLifecycleInteractiveRealPi", {
   project_id: "PRJ-2440",
   actor: "goal3-task244",
   pi_host_label: "pi-host-lab-01",
@@ -410,6 +410,44 @@ const readinessPlan = await executeComathTool(client, "comath.release.piCodexLif
   approval_path:
     "service-owned-pi-lifecycle/LIFE-OPERATOR-APPROVAL-0244/unattended-real-host-operator-approval.json",
   approval_sha256: "c".repeat(64)
+});
+assert.equal(executorContractPlan.next_action.action_id, "lifecycle-unattended-real-host-executor-contract");
+assert.match(executorContractPlan.next_action.command, /\/cm:release lifecycle-unattended-real-host-executor-contract/);
+assert.match(executorContractPlan.next_action.command, /--handoff-review-sha256 a{64}/);
+
+const readinessPlan = await executeComathTool(client, "comath.release.piCodexLifecycleInteractiveRealPi", {
+  project_id: "PRJ-2440",
+  actor: "goal3-task244",
+  pi_host_label: "pi-host-lab-01",
+  session_id: "LIFE-OP-SESSION-0244",
+  action: "resume-plan",
+  completed_steps: [
+    "run-real-pi-runtime-probe",
+    "lifecycle-operator-session",
+    "lifecycle-operator-transport-recovery",
+    "lifecycle-operator-transport-lease",
+    "lifecycle-operator-transport-heartbeat",
+    "lifecycle-guided-real-pi-execution",
+    "lifecycle-operator-service-transport-contract",
+    "lifecycle-automatic-real-pi-execution",
+    "lifecycle-operator-service-transport-continuity",
+    "lifecycle-unattended-real-host-handoff-review",
+    "lifecycle-unattended-real-host-operator-approval",
+    "lifecycle-unattended-real-host-executor-contract"
+  ],
+  readiness_id: "LIFE-EXEC-READINESS-0244",
+  handoff_review_id: "LIFE-HANDOFF-REVIEW-0244",
+  handoff_review_path:
+    "service-owned-pi-lifecycle/LIFE-HANDOFF-REVIEW-0244/unattended-real-host-handoff-review.json",
+  handoff_review_sha256: "a".repeat(64),
+  approval_id: "LIFE-OPERATOR-APPROVAL-0244",
+  approval_path:
+    "service-owned-pi-lifecycle/LIFE-OPERATOR-APPROVAL-0244/unattended-real-host-operator-approval.json",
+  approval_sha256: "c".repeat(64),
+  executor_contract_id: "LIFE-UNATTENDED-EXECUTOR-CONTRACT-0244",
+  executor_contract_path:
+    "service-owned-pi-lifecycle/LIFE-UNATTENDED-EXECUTOR-CONTRACT-0244/unattended-real-host-executor-contract.json",
+  executor_contract_sha256: "d".repeat(64)
 });
 assert.equal(readinessPlan.next_action.action_id, "lifecycle-unattended-real-host-execution-readiness");
 assert.match(readinessPlan.next_action.command, /--operator-approval-id LIFE-OPERATOR-APPROVAL-0244/);

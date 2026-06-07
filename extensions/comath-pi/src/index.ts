@@ -160,6 +160,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleInteractiveRealPi",
   "comath.release.piCodexLifecycleUnattendedRealHostHandoffReview",
   "comath.release.piCodexLifecycleUnattendedRealHostOperatorApproval",
+  "comath.release.piCodexLifecycleUnattendedRealHostExecutorContract",
   "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
@@ -425,7 +426,7 @@ const privilegedProofAuthorityPattern =
 const publicTransportOverclaimPattern =
   /\b(?:long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided|live transport open|direct[- ]Pi[- ]write allowed)\b/gi;
 const publicUnattendedOverclaimPattern =
-  /\b(?:production unattended executor|operator[- ]free execution completed|unattended real[- ]host execution completed|unattended execution authorized|operator confirmation bypassed|operator approval recorded|operator approved|service[- ]owned evidence created|handoff can execute|GA certified|GA certification|can certify GA)\b/gi;
+  /\b(?:production unattended executor|operator[- ]free execution completed|unattended real[- ]host execution completed|unattended execution authorized|operator confirmation bypassed|operator approval recorded|operator approved|executor invoked|executor_invoked\s*[:=]\s*(?:true|1)|executorInvoked\s*[:=]\s*(?:true|1)|service[- ]owned evidence created|handoff can execute|GA certified|GA certification|can certify GA)\b/gi;
 
 const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
 const posixHostPathEchoPattern =
@@ -443,7 +444,7 @@ const secretEchoPattern =
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
 const publicProofAuthorityKeyPattern = /^(?:proof_authority|proofAuthority)$/i;
 const publicFalseAuthorityKeyPattern =
-  /^(?:can_promote_claim|canPromoteClaim|can_certify_ga|canCertifyGa|durable_transport_provided|durableTransportProvided|live_transport_open|liveTransportOpen|indefinite_stream_open|indefiniteStreamOpen|long_lived_websocket_provided|longLivedWebsocketProvided|long_lived_sse_provided|longLivedSseProvided|pi_direct_write_allowed|piDirectWriteAllowed|direct_trusted_state_mutation|directTrustedStateMutation|os_enforced|osEnforced|operator_approved|operatorApproved|operatorApproval|unattended_execution_authorized|unattendedExecutionAuthorized|unattended_real_host_execution_completed|unattendedRealHostExecutionCompleted|operator_confirmation_bypassed|operatorConfirmationBypassed|service_owned_evidence_created|serviceOwnedEvidenceCreated|handoff_can_execute|handoffCanExecute)$/i;
+  /^(?:can_promote_claim|canPromoteClaim|can_certify_ga|canCertifyGa|durable_transport_provided|durableTransportProvided|live_transport_open|liveTransportOpen|indefinite_stream_open|indefiniteStreamOpen|long_lived_websocket_provided|longLivedWebsocketProvided|long_lived_sse_provided|longLivedSseProvided|pi_direct_write_allowed|piDirectWriteAllowed|direct_trusted_state_mutation|directTrustedStateMutation|os_enforced|osEnforced|operator_approved|operatorApproved|operatorApproval|executor_invoked|executorInvoked|unattended_execution_authorized|unattendedExecutionAuthorized|unattended_real_host_execution_completed|unattendedRealHostExecutionCompleted|operator_confirmation_bypassed|operatorConfirmationBypassed|service_owned_evidence_created|serviceOwnedEvidenceCreated|handoff_can_execute|handoffCanExecute)$/i;
 
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
@@ -523,6 +524,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleInteractiveRealPi" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostHandoffReview" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostOperatorApproval" ||
+    name === "comath.release.piCodexLifecycleUnattendedRealHostExecutorContract" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
@@ -569,6 +571,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "lifecycle-operator-service-transport-continuity",
   "lifecycle-unattended-real-host-handoff-review",
   "lifecycle-unattended-real-host-operator-approval",
+  "lifecycle-unattended-real-host-executor-contract",
   "lifecycle-unattended-real-host-execution-readiness",
   "run-codex-api-probe",
   "review"
@@ -1234,6 +1237,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
   );
   const handoffReviewId = optionalPublicPlannerToken(input, "handoff_review_id", `${sessionId}-HANDOFF-REVIEW`);
   const approvalId = optionalPublicPlannerToken(input, "approval_id", `${sessionId}-OPERATOR-APPROVAL`);
+  const executorContractId = optionalPublicPlannerToken(
+    input,
+    "executor_contract_id",
+    `${sessionId}-EXECUTOR-CONTRACT`
+  );
   const readinessId = optionalPublicPlannerToken(
     input,
     "readiness_id",
@@ -1276,6 +1284,16 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     `service-owned-pi-lifecycle/${approvalId}/unattended-real-host-operator-approval.json`
   );
   const approvalSha256 = optionalPublicPlannerToken(input, "approval_sha256", "OPERATOR-APPROVAL-SHA256");
+  const executorContractPath = optionalPublicPlannerPath(
+    input,
+    "executor_contract_path",
+    `service-owned-pi-lifecycle/${executorContractId}/unattended-real-host-executor-contract.json`
+  );
+  const executorContractSha256 = optionalPublicPlannerToken(
+    input,
+    "executor_contract_sha256",
+    "EXECUTOR-CONTRACT-SHA256"
+  );
   const sessionManifestPath = optionalPublicPlannerPath(
     input,
     "session_manifest_path",
@@ -1359,12 +1377,18 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `/cm:release lifecycle-unattended-real-host-operator-approval --project-id ${projectId} ` +
       `--approval-id ${approvalId} --handoff-review-id ${handoffReviewId} ` +
       `--handoff-review-path ${handoffReviewPath} --handoff-review-sha256 ${handoffReviewSha256}`,
+    "lifecycle-unattended-real-host-executor-contract":
+      `/cm:release lifecycle-unattended-real-host-executor-contract --project-id ${projectId} ` +
+      `--executor-contract-id ${executorContractId} --handoff-review-id ${handoffReviewId} ` +
+      `--handoff-review-path ${handoffReviewPath} --handoff-review-sha256 ${handoffReviewSha256}`,
     "lifecycle-unattended-real-host-execution-readiness":
       `/cm:release lifecycle-unattended-real-host-execution-readiness --project-id ${projectId} ` +
       `--readiness-id ${readinessId} --handoff-review-id ${handoffReviewId} ` +
       `--handoff-review-path ${handoffReviewPath} --handoff-review-sha256 ${handoffReviewSha256} ` +
       `--operator-approval-id ${approvalId} --operator-approval-path ${approvalPath} ` +
-      `--operator-approval-sha256 ${approvalSha256}`,
+      `--operator-approval-sha256 ${approvalSha256} --unattended-executor-contract-id ${executorContractId} ` +
+      `--unattended-executor-contract-path ${executorContractPath} ` +
+      `--unattended-executor-contract-sha256 ${executorContractSha256}`,
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -1415,6 +1439,7 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       transport_contract_sha256: transportContractSha256,
       orchestration_id: orchestrationId,
       handoff_review_id: handoffReviewId,
+      executor_contract_id: executorContractId,
       readiness_id: readinessId,
       automatic_orchestration_path: automaticOrchestrationPath,
       automatic_orchestration_sha256: automaticOrchestrationSha256,
@@ -1423,6 +1448,8 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       transport_continuity_sha256: transportContinuitySha256,
       handoff_review_path: handoffReviewPath,
       handoff_review_sha256: handoffReviewSha256,
+      executor_contract_path: executorContractPath,
+      executor_contract_sha256: executorContractSha256,
       pi_install_transcript_path: piInstallTranscriptPath,
       runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath
     },
@@ -2416,6 +2443,34 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.piCodexLifecycleUnattendedRealHostExecutorContract") {
+    const executorContractId = readString(input, "executor_contract_id", { optional: true });
+    const requestedExecutionMode =
+      readString(input, "requested_execution_mode", { optional: true }) ?? "production_unattended_real_host";
+    const executorContractKind =
+      readString(input, "executor_contract_kind", { optional: true }) ??
+      "service_owned_unattended_real_host_executor_contract";
+    const executorConfigurationState =
+      readString(input, "executor_configuration_state", { optional: true }) ?? "contract_recorded_executor_not_invoked";
+    const executorContractNote = readString(input, "executor_contract_note", { optional: true });
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/unattended-real-host-executor-contract", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        ...(executorContractId === undefined ? {} : { executor_contract_id: publicOperatorText(executorContractId) }),
+        handoff_review_id: readString(input, "handoff_review_id"),
+        handoff_review_path: piLifecycleCanonicalArtifactPathText(readString(input, "handoff_review_path")),
+        handoff_review_sha256: readString(input, "handoff_review_sha256"),
+        requested_execution_mode: requestedExecutionMode,
+        executor_contract_kind: executorContractKind,
+        executor_configuration_state: executorConfigurationState,
+        ...(executorContractNote === undefined ? {} : { executor_contract_note: publicOperatorText(executorContractNote) })
+      })
+    );
+  }
+
   if (name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness") {
     const readinessId = readString(input, "readiness_id", { optional: true });
     const requestedExecutionMode =
@@ -2423,8 +2478,17 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     const operatorApprovalId = readString(input, "operator_approval_id", { optional: true });
     const operatorApprovalPath = readString(input, "operator_approval_path", { optional: true });
     const operatorApprovalSha256 = readString(input, "operator_approval_sha256", { optional: true });
+    const unattendedExecutorContractId = readString(input, "unattended_executor_contract_id", { optional: true });
+    const unattendedExecutorContractPath = readString(input, "unattended_executor_contract_path", { optional: true });
+    const unattendedExecutorContractSha256 = readString(input, "unattended_executor_contract_sha256", {
+      optional: true
+    });
     const hasOperatorApprovalBinding =
       operatorApprovalId !== undefined || operatorApprovalPath !== undefined || operatorApprovalSha256 !== undefined;
+    const hasExecutorContractBinding =
+      unattendedExecutorContractId !== undefined ||
+      unattendedExecutorContractPath !== undefined ||
+      unattendedExecutorContractSha256 !== undefined;
     return publicToolResult(
       name,
       client.post("/release/pi-codex-lifecycle/unattended-real-host-execution-readiness", {
@@ -2442,6 +2506,21 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
                 requiredOption(operatorApprovalPath, "operator_approval_path")
               ),
               operator_approval_sha256: requiredOption(operatorApprovalSha256, "operator_approval_sha256")
+            }
+          : {}),
+        ...(hasExecutorContractBinding
+          ? {
+              unattended_executor_contract_id: requiredOption(
+                unattendedExecutorContractId,
+                "unattended_executor_contract_id"
+              ),
+              unattended_executor_contract_path: piLifecycleCanonicalArtifactPathText(
+                requiredOption(unattendedExecutorContractPath, "unattended_executor_contract_path")
+              ),
+              unattended_executor_contract_sha256: requiredOption(
+                unattendedExecutorContractSha256,
+                "unattended_executor_contract_sha256"
+              )
             }
           : {}),
         requested_execution_mode: requestedExecutionMode
@@ -3743,6 +3822,46 @@ export function createComathTools(): ToolDescriptor[] {
       )
     },
     {
+      name: "comath.release.piCodexLifecycleUnattendedRealHostExecutorContract",
+      description:
+        "Record a service-owned unattended real-host executor prerequisite contract through comathd without invoking an executor, authorizing execution, proof authority, GA certification, direct Pi mutation, or durable transport claims.",
+      mutates: true,
+      input_schema: requireConfirmationSchema(
+        objectSchema(
+          [
+            "project_root",
+            "project_id",
+            "actor",
+            "handoff_review_id",
+            "handoff_review_path",
+            "handoff_review_sha256"
+          ],
+          {
+            project_root: stringProp,
+            project_id: stringProp,
+            actor: stringProp,
+            executor_contract_id: stringProp,
+            handoff_review_id: stringProp,
+            handoff_review_path: stringProp,
+            handoff_review_sha256: stringProp,
+            requested_execution_mode: {
+              type: "string",
+              enum: ["production_unattended_real_host"]
+            },
+            executor_contract_kind: {
+              type: "string",
+              enum: ["service_owned_unattended_real_host_executor_contract"]
+            },
+            executor_configuration_state: {
+              type: "string",
+              enum: ["contract_recorded_executor_not_invoked"]
+            },
+            executor_contract_note: stringProp
+          }
+        )
+      )
+    },
+    {
       name: "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness",
       description:
         "Record a service-owned unattended real-host execution readiness blocker through comathd, consuming a Task239 handoff-review hash without approval, execution, proof authority, GA certification, or durable transport claims.",
@@ -3768,6 +3887,9 @@ export function createComathTools(): ToolDescriptor[] {
             operator_approval_id: stringProp,
             operator_approval_path: stringProp,
             operator_approval_sha256: stringProp,
+            unattended_executor_contract_id: stringProp,
+            unattended_executor_contract_path: stringProp,
+            unattended_executor_contract_sha256: stringProp,
             requested_execution_mode: {
               type: "string",
               enum: ["production_unattended_real_host"]
@@ -5459,6 +5581,16 @@ async function handleReleaseCommand(
         continuity_id: optionValue(parsed.args, "--continuity-id"),
         transport_continuity_path: optionValue(parsed.args, "--transport-continuity-path"),
         transport_continuity_sha256: optionValue(parsed.args, "--transport-continuity-sha256"),
+        handoff_review_id: optionValue(parsed.args, "--handoff-review-id"),
+        handoff_review_path: optionValue(parsed.args, "--handoff-review-path"),
+        handoff_review_sha256: optionValue(parsed.args, "--handoff-review-sha256"),
+        approval_id: optionValue(parsed.args, "--approval-id"),
+        approval_path: optionValue(parsed.args, "--approval-path"),
+        approval_sha256: optionValue(parsed.args, "--approval-sha256"),
+        executor_contract_id: optionValue(parsed.args, "--executor-contract-id"),
+        executor_contract_path: optionValue(parsed.args, "--executor-contract-path"),
+        executor_contract_sha256: optionValue(parsed.args, "--executor-contract-sha256"),
+        readiness_id: optionValue(parsed.args, "--readiness-id"),
         pi_install_transcript_path: optionValue(parsed.args, "--pi-install-transcript-path"),
         runtime_registration_snapshot_path: optionValue(parsed.args, "--runtime-registration-snapshot-path"),
         operator_event_cursor: optionValue(parsed.args, "--operator-event-cursor"),
@@ -5840,6 +5972,43 @@ async function handleReleaseCommand(
     );
     return;
   }
+  if (subcommand === "lifecycle-unattended-real-host-executor-contract") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.piCodexLifecycleUnattendedRealHostExecutorContract"
+    );
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle unattended real-host executor contract tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          executor_contract_id: optionValue(parsed.args, "--executor-contract-id"),
+          handoff_review_id: requiredOption(optionValue(parsed.args, "--handoff-review-id"), "handoff_review_id"),
+          handoff_review_path: requiredOption(optionValue(parsed.args, "--handoff-review-path"), "handoff_review_path"),
+          handoff_review_sha256: requiredOption(
+            optionValue(parsed.args, "--handoff-review-sha256"),
+            "handoff_review_sha256"
+          ),
+          requested_execution_mode:
+            optionValue(parsed.args, "--requested-execution-mode") ?? "production_unattended_real_host",
+          executor_contract_kind:
+            optionValue(parsed.args, "--executor-contract-kind") ??
+            "service_owned_unattended_real_host_executor_contract",
+          executor_configuration_state:
+            optionValue(parsed.args, "--executor-configuration-state") ?? "contract_recorded_executor_not_invoked",
+          executor_contract_note: optionValue(parsed.args, "--executor-contract-note")
+        },
+        ctx
+      )
+    );
+    return;
+  }
   if (subcommand === "lifecycle-unattended-real-host-execution-readiness") {
     const tool = createComathTools().find(
       (descriptor) => descriptor.name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness"
@@ -5866,6 +6035,9 @@ async function handleReleaseCommand(
           operator_approval_id: optionValue(parsed.args, "--operator-approval-id"),
           operator_approval_path: optionValue(parsed.args, "--operator-approval-path"),
           operator_approval_sha256: optionValue(parsed.args, "--operator-approval-sha256"),
+          unattended_executor_contract_id: optionValue(parsed.args, "--unattended-executor-contract-id"),
+          unattended_executor_contract_path: optionValue(parsed.args, "--unattended-executor-contract-path"),
+          unattended_executor_contract_sha256: optionValue(parsed.args, "--unattended-executor-contract-sha256"),
           requested_execution_mode:
             optionValue(parsed.args, "--requested-execution-mode") ?? "production_unattended_real_host"
         },

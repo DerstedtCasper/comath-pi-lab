@@ -1,3 +1,31 @@
+# Goal 3 Task 246 / Pi Unattended Real-Host Executor Contract Consumer
+
+Scope: expose the Task245 service-owned unattended real-host executor contract checkpoint through the Pi extension as a host-confirmed thin client and read-only planner step. This is executor-prerequisite consumer wiring only; it is not an executor invocation, unattended execution authorization, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task246-pi-unattended-real-host-executor-contract-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleUnattendedRealHostExecutorContract` plus `/cm:release lifecycle-unattended-real-host-executor-contract`.
+- Wired the tool to call only `POST /release/pi-codex-lifecycle/unattended-real-host-executor-contract` through host confirmation, strip caller/model `confirmation_id`, translate public handoff-review aliases to service-canonical request paths, and sanitize public request/result/confirmation/notification surfaces.
+- Extended the Task242 readiness Pi consumer so optional executor-contract bindings are all-or-nothing and are translated to service-canonical request paths only inside the comathd request.
+- Hardened the public text sanitizer for `executor_invoked=true` / `executorInvoked=true` string overclaims after read-only review identified that object keys were forced false but arbitrary text tokens were still possible.
+- Updated the read-only interactive planner order to handoff review -> operator approval -> executor contract -> readiness, then synchronized Task223/242/244 planner regressions, Phase6/Phase26 exposure guards, Pi package test discovery, phase0 smoke discovery, README, AGENTS, TODO, adapter contracts, GA release criteria, threat model, REVIEW, and the Goal 3 tracker.
+
+Verification:
+- TDD RED was observed after updating the focused Task246 expectation to the Task245 service vocabulary: focused Task246 failed because Pi still sent `contract_record_only` instead of `production_unattended_real_host`.
+- A read-only code-review pass found that free-text `executor_invoked=true` / `executorInvoked=true` overclaims were not sanitized; TDD RED was observed when focused Task246 failed on those string tokens before the sanitizer fix.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- Focused Task246 exited 0.
+- Adjacent Task244, Task242, Task223, Phase6, and Phase26 Pi regressions exited 0.
+- Adjacent Task245 service regression exited 0.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task246 discovered by the default Pi runner.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests with Task246, comathd package tests through Task245, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task246 does not change the Task245 service verifier, does not make public aliases source-of-truth paths, does not invoke an executor, does not approve or execute a handoff, does not authorize unattended host actions, does not mutate Pi trusted state directly, does not open durable/live transport, does not run Lean, does not promote claims, and does not certify GA. Public Pi output forces proof, GA, durable/live transport, direct-Pi-write, direct-trusted-state, executor-invoked, and unattended-execution flags false.
+
 # Goal 3 Task 245 / Service-Owned Unattended Real-Host Executor Contract
 
 Scope: add a service-owned unattended real-host executor contract checkpoint after the Task239 handoff review chain and before Task241 readiness consumption. This is executor-prerequisite evidence only; it is not real unattended host execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
