@@ -421,6 +421,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",
   "goal3-task258-pi-goal-mode-local-ingestion-evidence.test.mjs",
+  "goal3-task259-pi-goal-mode-skeleton-formalization-hints.test.mjs",
   "goal3-task232-agent-adapter-os-isolation-nix-production-helper-profile-contract.test.mjs",
   "goal3-task233-pi-operator-service-transport-check-debug.test.mjs",
   "goal3-task234-agent-adapter-os-isolation-firejail-production-helper-profile-contract.test.mjs",

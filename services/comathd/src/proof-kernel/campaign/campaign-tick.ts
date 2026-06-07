@@ -226,6 +226,7 @@ function notationGateArtifacts(campaign: ResearchCampaign): string[] {
 function skeletonGateArtifacts(campaign: ResearchCampaign): string[] {
   return [
     campaignProofRel(campaign, "lemma_dag.json"),
+    campaignProofRel(campaign, "formalization_hints.json"),
     campaignProofRel(campaign, "Skeleton.lean"),
     campaignProofRel(campaign, "skeleton_report.md")
   ];
@@ -242,7 +243,12 @@ function rewindTargetForMissingArtifact(rel: string): ResearchCampaign["current_
   if (rel.includes("/line_map.json") || rel.includes("/proof/obligations/")) {
     return "line_map_gate";
   }
-  if (rel.includes("/Skeleton.lean") || rel.includes("/lemma_dag.json") || rel.includes("/skeleton_report.md")) {
+  if (
+    rel.includes("/Skeleton.lean") ||
+    rel.includes("/lemma_dag.json") ||
+    rel.includes("/formalization_hints.json") ||
+    rel.includes("/skeleton_report.md")
+  ) {
     return "skeleton_gate";
   }
   if (rel.includes("/Definitions.lean") || rel.includes("/notation-")) {
@@ -1849,6 +1855,285 @@ function writeGoalModeLocalIngestionEvidence(input: {
     can_certify_ga: false,
     created_at: now()
   });
+}
+
+const goalModeFormalizationCandidateKinds = new Set(["paper_definition", "paper_theorem", "paper_lemma", "paper_proof_step"]);
+
+function goalModeRecordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item))
+    : [];
+}
+
+function goalModeOptionalRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function goalModeKnowledgePackRel(campaign: ResearchCampaign): string {
+  return campaignRel(campaign, "knowledge_pack.json");
+}
+
+function goalModeLocalIngestionEvidenceRel(campaign: ResearchCampaign): string {
+  return campaignRel(campaign, "goal_mode_local_ingestion_evidence.json");
+}
+
+function goalModeNonAuthorityBinding(path: string, sha256: string | null, schemaVersion?: unknown): Record<string, unknown> {
+  return {
+    path,
+    sha256,
+    schema_version: typeof schemaVersion === "string" ? schemaVersion : null,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+}
+
+function goalModeFormalizationHintFromClaim(input: {
+  record: Record<string, unknown>;
+  claim: Record<string, unknown>;
+  anchor: Record<string, unknown>;
+  index: number;
+}): Record<string, unknown> | undefined {
+  const kind = optionalStringField(input.claim, "kind");
+  const statementSha256 = optionalStringField(input.claim, "statement_sha256");
+  const evidenceAnchorId = optionalStringField(input.claim, "evidence_anchor_id");
+  const sourceRef = optionalStringField(input.claim, "source_ref") ?? optionalStringField(input.record, "normalized_path");
+  const lineRange = optionalStringField(input.anchor, "line_range");
+  const extractedClaimId = optionalStringField(input.claim, "claim_id");
+  const ingestionRecordId = optionalStringField(input.record, "ingestion_record_id");
+  if (
+    !kind ||
+    !goalModeFormalizationCandidateKinds.has(kind) ||
+    !statementSha256 ||
+    !evidenceAnchorId ||
+    !sourceRef ||
+    !lineRange ||
+    !extractedClaimId ||
+    !ingestionRecordId
+  ) {
+    return undefined;
+  }
+  return {
+    hint_id: `GMFH-${String(input.index).padStart(4, "0")}`,
+    ingestion_record_id: ingestionRecordId,
+    extracted_claim_id: extractedClaimId,
+    kind,
+    statement: optionalStringField(input.claim, "statement") ?? null,
+    statement_sha256: statementSha256,
+    evidence_anchor_id: evidenceAnchorId,
+    source_ref: sourceRef,
+    source_adapter_provider: optionalStringField(input.claim, "source_adapter_provider") ?? optionalStringField(input.record, "adapter_provider") ?? null,
+    line_range: lineRange,
+    anchor_excerpt: optionalStringField(input.anchor, "excerpt") ?? null,
+    can_inform_skeleton: true,
+    can_change_locked_statement: false,
+    requires_formal_spec_lock_approval: true,
+    requires_statement_diff_gate: true,
+    proof_authority: "none",
+    external_evidence_authority: false,
+    can_promote_claim: false,
+    can_certify_ga: false,
+    result_can_be_used_as_proof: false
+  };
+}
+
+function goalModeFormalizationHintsFromEvidence(evidence: Record<string, unknown>): Record<string, unknown>[] {
+  const hints: Record<string, unknown>[] = [];
+  for (const record of goalModeRecordArray(evidence.ingestion_records)) {
+    const promptInjectionScan = goalModeOptionalRecord(record.prompt_injection_scan);
+    if (record.execution_state !== "local_text_extracted" || promptInjectionScan?.status !== "pass") {
+      continue;
+    }
+    const anchors = new Map(
+      goalModeRecordArray(record.anchors)
+        .map((anchor) => [optionalStringField(anchor, "anchor_id"), anchor] as const)
+        .filter((entry): entry is readonly [string, Record<string, unknown>] => typeof entry[0] === "string")
+    );
+    for (const claim of goalModeRecordArray(record.extracted_claims)) {
+      const anchor = anchors.get(optionalStringField(claim, "evidence_anchor_id") ?? "");
+      if (!anchor) {
+        continue;
+      }
+      const hint = goalModeFormalizationHintFromClaim({ record, claim, anchor, index: hints.length + 1 });
+      if (hint) {
+        hints.push(hint);
+      }
+    }
+  }
+  return hints;
+}
+
+function validateGoalModeFormalizationHintBindings(input: {
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  knowledgePack: Record<string, unknown> | undefined;
+  knowledgePackRel: string;
+  localEvidence: Record<string, unknown> | undefined;
+  localEvidenceRel: string | undefined;
+  localEvidenceSha256: string | undefined;
+}): string[] {
+  const invalidReasons: string[] = [];
+  if (!input.knowledgePack) {
+    invalidReasons.push("goal_mode_knowledge_pack_missing");
+  } else {
+    if (input.knowledgePack.campaign_id !== input.campaign.campaign_id) {
+      invalidReasons.push("knowledge_pack_campaign_id_mismatch");
+    }
+    if (input.knowledgePack.root_claim_id !== input.campaign.root_claim_id) {
+      invalidReasons.push("knowledge_pack_claim_id_mismatch");
+    }
+    if (input.knowledgePack.obligation_id !== input.obligation.obligation_id) {
+      invalidReasons.push("knowledge_pack_obligation_id_mismatch");
+    }
+    if (input.knowledgePack.locked_statement_hash !== input.obligation.statement_hash) {
+      invalidReasons.push("knowledge_pack_locked_statement_hash_mismatch");
+    }
+  }
+
+  const expectedLocalEvidenceRel = goalModeLocalIngestionEvidenceRel(input.campaign);
+  if (!input.localEvidenceRel) {
+    invalidReasons.push("goal_mode_local_ingestion_evidence_binding_missing");
+  } else if (
+    !safeGoalModeNormalizedPath(input.localEvidenceRel) ||
+    normalizeRelPath(input.localEvidenceRel) !== expectedLocalEvidenceRel
+  ) {
+    invalidReasons.push("goal_mode_local_ingestion_evidence_path_mismatch");
+  }
+
+  if (!input.localEvidenceSha256) {
+    invalidReasons.push("goal_mode_local_ingestion_evidence_hash_missing");
+  }
+
+  if (!input.localEvidence) {
+    invalidReasons.push("goal_mode_local_ingestion_evidence_missing");
+  } else {
+    if (input.localEvidence.schema_version !== "comath.pi_goal_mode_local_ingestion_evidence.v1") {
+      invalidReasons.push("goal_mode_local_ingestion_evidence_schema_mismatch");
+    }
+    if (input.localEvidence.campaign_id !== input.campaign.campaign_id) {
+      invalidReasons.push("goal_mode_local_ingestion_evidence_campaign_id_mismatch");
+    }
+    if (input.localEvidence.claim_id !== input.campaign.root_claim_id) {
+      invalidReasons.push("goal_mode_local_ingestion_evidence_claim_id_mismatch");
+    }
+    if (input.localEvidence.obligation_id !== input.obligation.obligation_id) {
+      invalidReasons.push("goal_mode_local_ingestion_evidence_obligation_id_mismatch");
+    }
+    if (input.localEvidence.locked_statement_hash !== input.obligation.statement_hash) {
+      invalidReasons.push("goal_mode_local_ingestion_evidence_locked_statement_hash_mismatch");
+    }
+  }
+
+  return invalidReasons;
+}
+
+function writeGoalModeFormalizationHints(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+}): string {
+  const knowledgePackRel = goalModeKnowledgePackRel(input.campaign);
+  const knowledgePackExists = artifactExists(input.projectRoot, knowledgePackRel);
+  const knowledgePack = knowledgePackExists
+    ? objectRecord(readJsonArtifact(input.projectRoot, knowledgePackRel), "knowledge_pack")
+    : undefined;
+  const knowledgePackSha256 = knowledgePackExists ? sha256RuntimeFile(input.projectRoot, knowledgePackRel) : null;
+  const localEvidenceBinding = knowledgePack
+    ? goalModeOptionalRecord(knowledgePack.goal_mode_local_ingestion_evidence)
+    : undefined;
+  const localEvidenceRel = localEvidenceBinding ? optionalStringField(localEvidenceBinding, "path") : undefined;
+  const safeLocalEvidenceRel =
+    localEvidenceRel && safeGoalModeNormalizedPath(localEvidenceRel) ? normalizeRelPath(localEvidenceRel) : undefined;
+  const localEvidenceBindingSha256 = localEvidenceBinding ? optionalStringField(localEvidenceBinding, "sha256") : undefined;
+  const localEvidenceExists = !!safeLocalEvidenceRel && artifactExists(input.projectRoot, safeLocalEvidenceRel);
+  const localEvidenceSha256 = localEvidenceExists ? sha256RuntimeFile(input.projectRoot, safeLocalEvidenceRel) : undefined;
+  const localEvidence =
+    localEvidenceExists && localEvidenceSha256 === localEvidenceBindingSha256
+      ? objectRecord(readJsonArtifact(input.projectRoot, safeLocalEvidenceRel), "goal_mode_local_ingestion_evidence")
+      : undefined;
+  const invalidReasons = validateGoalModeFormalizationHintBindings({
+    campaign: input.campaign,
+    obligation: input.obligation,
+    knowledgePack,
+    knowledgePackRel,
+    localEvidence,
+    localEvidenceRel,
+    localEvidenceSha256
+  });
+  if (localEvidenceBindingSha256 && localEvidenceSha256 && localEvidenceSha256 !== localEvidenceBindingSha256) {
+    invalidReasons.push("goal_mode_local_ingestion_evidence_hash_mismatch");
+  }
+
+  const formalizationHints = invalidReasons.length === 0 && localEvidence ? goalModeFormalizationHintsFromEvidence(localEvidence) : [];
+  const ingestionRecords = localEvidence ? goalModeRecordArray(localEvidence.ingestion_records) : [];
+  const blockedRecordCount = ingestionRecords.filter((record) => typeof record.blocker === "object" && record.blocker !== null).length;
+  const promptInjectionBlockerCount = ingestionRecords.filter((record) => {
+    const scan = record.prompt_injection_scan;
+    return !!scan && typeof scan === "object" && !Array.isArray(scan) && (scan as Record<string, unknown>).status === "fail";
+  }).length;
+  const rel = campaignProofRel(input.campaign, "formalization_hints.json");
+  writeRuntimeFile(
+    input.projectRoot,
+    rel,
+    `${JSON.stringify(
+      {
+        schema_version: "comath.pi_goal_mode_formalization_hints.v1",
+        campaign_id: input.campaign.campaign_id,
+        project_id: input.campaign.project_id,
+        claim_id: input.campaign.root_claim_id,
+        obligation_id: input.obligation.obligation_id,
+        locked_statement_hash: input.obligation.statement_hash,
+        consumes_knowledge_pack: goalModeNonAuthorityBinding(knowledgePackRel, knowledgePackSha256),
+        consumes_goal_mode_local_ingestion_evidence: goalModeNonAuthorityBinding(
+          safeLocalEvidenceRel ?? goalModeLocalIngestionEvidenceRel(input.campaign),
+          localEvidenceSha256 ?? null,
+          localEvidence?.schema_version
+        ),
+        service_owned_formalization_hints: true,
+        formalization_hints: formalizationHints,
+        formalization_hints_sha256: sha256Json(formalizationHints),
+        summary: {
+          ingestion_record_count: ingestionRecords.length,
+          source_extracted_claim_count:
+            typeof localEvidence?.summary === "object" &&
+            localEvidence.summary !== null &&
+            !Array.isArray(localEvidence.summary) &&
+            typeof (localEvidence.summary as Record<string, unknown>).extracted_claim_count === "number"
+              ? (localEvidence.summary as Record<string, unknown>).extracted_claim_count
+              : formalizationHints.length,
+          formalization_hint_count: formalizationHints.length,
+          blocked_ingestion_record_count: blockedRecordCount,
+          prompt_injection_blocker_count: promptInjectionBlockerCount,
+          allowed_candidate_kinds: [...goalModeFormalizationCandidateKinds]
+        },
+        invalid_reasons: invalidReasons,
+        statement_drift_guard: {
+          locked_statement_hash: input.obligation.statement_hash,
+          extracted_claims_may_change_locked_statement: false,
+          formal_spec_lock_required_before_statement_change: true,
+          statement_diff_gate_required: true,
+          lean_replay_required_for_promotion: true
+        },
+        authority_boundary: {
+          extracted_claims_are_hints_only: true,
+          can_seed_blueprint_or_skeleton: true,
+          cannot_satisfy_literature_evidence: true,
+          cannot_satisfy_theorem_search_evidence: true,
+          cannot_satisfy_lean_replay: true,
+          final_authority: "Lean4/mathlib kernel clean replay"
+        },
+        proof_authority: "none",
+        external_evidence_authority: false,
+        can_promote_claim: false,
+        can_certify_ga: false,
+        result_can_be_used_as_proof: false,
+        created_at: now()
+      },
+      null,
+      2
+    )}\n`
+  );
+  return rel;
 }
 
 export function startCampaign(input: StartCampaignInput): CampaignTickResult {
@@ -4471,6 +4756,18 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
 
   if (campaign.current_stage === "skeleton_gate" || campaign.current_stage === "planning") {
+    const formalizationHintsRel = writeGoalModeFormalizationHints({
+      projectRoot: input.project_root,
+      campaign,
+      obligation
+    });
+    const formalizationHintsBinding = {
+      path: formalizationHintsRel,
+      sha256: sha256RuntimeFile(input.project_root, formalizationHintsRel),
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false
+    };
     const proofPlanning = writeProofPlanningArtifacts({
       projectRoot: input.project_root,
       campaign,
@@ -4481,6 +4778,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       root_claim_id: campaign.root_claim_id,
       obligation_id: obligation.obligation_id,
       proof_planning_artifacts: proofPlanning,
+      goal_mode_formalization_hints: formalizationHintsBinding,
       public_stages: [
         "knowledge_pack",
         "notation_gate",
@@ -4510,12 +4808,16 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
           ...campaign.stage_runs,
           completedStageRun(campaign, "skeleton_gate", [
             planRel,
+            formalizationHintsRel,
             proofPlanning.lemma_dag_path,
             proofPlanning.skeleton_lean_path,
             proofPlanning.skeleton_report_path
           ])
         ],
-        next_actions: ["validate line map and proof obligations before candidate generation"]
+        next_actions: [
+          "validate line map and proof obligations before candidate generation",
+          "use goal-mode formalization hints only as non-authoritative skeleton planning input"
+        ]
       }),
       actor
     );

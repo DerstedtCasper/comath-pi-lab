@@ -1,3 +1,33 @@
+# Goal 3 Task 259 / Pi Goal-Mode Skeleton Formalization Hints
+
+Scope: connect Task258 local ingestion evidence to the `skeleton_gate` as service-owned formalization hints. This is skeleton-planning metadata only; it is not literature evidence, theorem-search evidence, Lean replay evidence, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task259-pi-goal-mode-skeleton-formalization-hints.test.mjs`.
+- Added `proof/formalization_hints.json` creation during `skeleton_gate`.
+- Bound `knowledge_pack.json` and `goal_mode_local_ingestion_evidence.json` by path/hash into the hint artifact.
+- Converted only prompt-injection-scanned formalization-candidate extracted claim kinds into hints.
+- Recorded `can_change_locked_statement=false`, FormalSpecLock approval requirements, and StatementDiffGate requirements for statement changes.
+- Bound the hint artifact into `plan.json` and made it a required skeleton-gate artifact whose deletion rewinds later stages to `skeleton_gate`.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task259 service test: after `corepack pnpm --filter @comath/comathd build`, `node services/comathd/tests/unit/goal3-task259-pi-goal-mode-skeleton-formalization-hints.test.mjs` failed because `skeleton_gate` did not attach formalization hints derived from local ingestion evidence.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task259 exited 0.
+- Adjacent Task258, Task257, Task256, and Phase33 proof-obligation DAG regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task259 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task259, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task259 writes only service-owned `.comath/campaign/<campaign_id>/proof/formalization_hints.json` artifacts through `comathd`. Hints may inform blueprint/skeleton planning, but every hint remains `proof_authority="none"`, `can_promote_claim=false`, `can_certify_ga=false`, `result_can_be_used_as_proof=false`, and `can_change_locked_statement=false`. Prompt-injected local text is excluded, and missing hint artifacts fail closed before candidate generation.
+
+Residual risk: Goal 3 remains incomplete. Task259 does not implement richer lemma DAG generation from hints, Lean skeleton repair, maintained PDF parsing, external Lean repo inspection, live literature retrieval, live theorem-search providers, terminal proof/refutation/blocker completion, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 258 / Pi Goal-Mode Service-Owned Local Ingestion Evidence
 
 Scope: connect Task257 goal-mode adapter execution manifests to service-owned local ingestion evidence. This is prompt-injection-scanned local draft evidence and blocker provenance only; it is not PDF parsing authority, external Lean repo inspection, live retrieval, theorem-search evidence, Lean replay, proof authority, promotion, or GA certification.
