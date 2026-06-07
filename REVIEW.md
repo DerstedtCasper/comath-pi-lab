@@ -1,3 +1,28 @@
+# Goal 3 Task 248 / Pi Unattended Real-Host Durable Transport Contract Consumer
+
+Scope: expose the Task247 service-owned durable-transport prerequisite contract through the Pi extension as a host-confirmed thin client and read-only planner step. This is prerequisite-consumer wiring only; it is not a CoMath transport stack, durable/live channel, executor invocation, unattended execution authorization, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task248-pi-unattended-real-host-durable-transport-contract-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleUnattendedRealHostDurableTransportContract` plus `/cm:release lifecycle-unattended-real-host-durable-transport-contract`.
+- Added the durable prerequisite planner step between executor contract and readiness.
+- Extended the readiness Pi consumer so optional durable-contract id/path/hash bindings are all-or-nothing and translated to service-canonical request paths only inside the comathd request.
+- Synchronized runtime-registration subcommands, Phase6/Phase26 exposure guards, Task223/242/244/246 planner expectations, Pi package test discovery, phase0 smoke discovery, README, AGENTS, TODO, adapter contracts, GA release criteria, threat model, REVIEW, and the Goal 3 tracker.
+
+Verification:
+- TDD RED was observed after adding the focused Task248 test: `node tests/goal3-task248-pi-unattended-real-host-durable-transport-contract-consumer.test.mjs` failed because `comath.release.piCodexLifecycleUnattendedRealHostDurableTransportContract` was not registered.
+- After implementation, `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- `corepack pnpm --filter @comath/pi-extension typecheck` exited 0.
+- `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task248, Task246, Task244, Task242, Task223, Phase6, and Phase26 covered by the package runner.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Adjacent service Task247 exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests with Task248, comathd package tests through Task247, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task248 calls only the existing Task247 `POST /release/pi-codex-lifecycle/unattended-real-host-durable-transport-contract` service route through Pi host confirmation. It strips caller/model `confirmation_id`, translates public `service-owned-pi-lifecycle/...` aliases to service-canonical request paths only inside the comathd request, keeps the interactive planner read-only, and sanitizes public request/result/confirmation/notification surfaces. Readiness may forward a complete durable-contract id/path/hash binding, but incomplete bindings fail before any POST. Public Pi output forces proof, GA, durable/live transport, direct-Pi-write, direct-trusted-state, executor-invoked, and unattended-execution flags false.
+
 # Goal 3 Task 247 / Service-Owned Unattended Real-Host Durable Transport Contract
 
 Scope: add a service-owned durable-transport prerequisite contract after the Task239 handoff review, Task243 operator approval, Task245 executor contract, and Task229 maintained transport continuity. This is prerequisite evidence only; it is not a CoMath transport stack, durable/live channel, unattended execution authorization, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.

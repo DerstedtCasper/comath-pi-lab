@@ -161,6 +161,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleUnattendedRealHostHandoffReview",
   "comath.release.piCodexLifecycleUnattendedRealHostOperatorApproval",
   "comath.release.piCodexLifecycleUnattendedRealHostExecutorContract",
+  "comath.release.piCodexLifecycleUnattendedRealHostDurableTransportContract",
   "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
@@ -525,6 +526,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleUnattendedRealHostHandoffReview" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostOperatorApproval" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostExecutorContract" ||
+    name === "comath.release.piCodexLifecycleUnattendedRealHostDurableTransportContract" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
@@ -572,6 +574,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "lifecycle-unattended-real-host-handoff-review",
   "lifecycle-unattended-real-host-operator-approval",
   "lifecycle-unattended-real-host-executor-contract",
+  "lifecycle-unattended-real-host-durable-transport-contract",
   "lifecycle-unattended-real-host-execution-readiness",
   "run-codex-api-probe",
   "review"
@@ -1294,6 +1297,21 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     "executor_contract_sha256",
     "EXECUTOR-CONTRACT-SHA256"
   );
+  const durableTransportContractId = optionalPublicPlannerToken(
+    input,
+    "durable_transport_contract_id",
+    `${sessionId}-DURABLE-TRANSPORT-CONTRACT`
+  );
+  const durableTransportContractPath = optionalPublicPlannerPath(
+    input,
+    "durable_transport_contract_path",
+    `service-owned-pi-lifecycle/${durableTransportContractId}/unattended-real-host-durable-transport-contract.json`
+  );
+  const durableTransportContractSha256 = optionalPublicPlannerToken(
+    input,
+    "durable_transport_contract_sha256",
+    "DURABLE-TRANSPORT-CONTRACT-SHA256"
+  );
   const sessionManifestPath = optionalPublicPlannerPath(
     input,
     "session_manifest_path",
@@ -1381,6 +1399,16 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `/cm:release lifecycle-unattended-real-host-executor-contract --project-id ${projectId} ` +
       `--executor-contract-id ${executorContractId} --handoff-review-id ${handoffReviewId} ` +
       `--handoff-review-path ${handoffReviewPath} --handoff-review-sha256 ${handoffReviewSha256}`,
+    "lifecycle-unattended-real-host-durable-transport-contract":
+      `/cm:release lifecycle-unattended-real-host-durable-transport-contract --project-id ${projectId} ` +
+      `--durable-transport-contract-id ${durableTransportContractId} --handoff-review-id ${handoffReviewId} ` +
+      `--handoff-review-path ${handoffReviewPath} --handoff-review-sha256 ${handoffReviewSha256} ` +
+      `--operator-approval-id ${approvalId} --operator-approval-path ${approvalPath} ` +
+      `--operator-approval-sha256 ${approvalSha256} --unattended-executor-contract-id ${executorContractId} ` +
+      `--unattended-executor-contract-path ${executorContractPath} ` +
+      `--unattended-executor-contract-sha256 ${executorContractSha256} ` +
+      `--transport-continuity-id ${continuityId} --transport-continuity-path ${transportContinuityPath} ` +
+      `--transport-continuity-sha256 ${transportContinuitySha256}`,
     "lifecycle-unattended-real-host-execution-readiness":
       `/cm:release lifecycle-unattended-real-host-execution-readiness --project-id ${projectId} ` +
       `--readiness-id ${readinessId} --handoff-review-id ${handoffReviewId} ` +
@@ -1388,7 +1416,10 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `--operator-approval-id ${approvalId} --operator-approval-path ${approvalPath} ` +
       `--operator-approval-sha256 ${approvalSha256} --unattended-executor-contract-id ${executorContractId} ` +
       `--unattended-executor-contract-path ${executorContractPath} ` +
-      `--unattended-executor-contract-sha256 ${executorContractSha256}`,
+      `--unattended-executor-contract-sha256 ${executorContractSha256} ` +
+      `--durable-transport-contract-id ${durableTransportContractId} ` +
+      `--durable-transport-contract-path ${durableTransportContractPath} ` +
+      `--durable-transport-contract-sha256 ${durableTransportContractSha256}`,
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -1450,6 +1481,9 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       handoff_review_sha256: handoffReviewSha256,
       executor_contract_path: executorContractPath,
       executor_contract_sha256: executorContractSha256,
+      durable_transport_contract_id: durableTransportContractId,
+      durable_transport_contract_path: durableTransportContractPath,
+      durable_transport_contract_sha256: durableTransportContractSha256,
       pi_install_transcript_path: piInstallTranscriptPath,
       runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath
     },
@@ -2471,6 +2505,43 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     );
   }
 
+  if (name === "comath.release.piCodexLifecycleUnattendedRealHostDurableTransportContract") {
+    const durableTransportContractId = readString(input, "durable_transport_contract_id", { optional: true });
+    const durabilityContractKind =
+      readString(input, "durability_contract_kind", { optional: true }) ??
+      "service_owned_external_durable_transport_prerequisite_contract";
+    const transportPrerequisiteState =
+      readString(input, "transport_prerequisite_state", { optional: true }) ??
+      "contract_recorded_transport_not_opened";
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/unattended-real-host-durable-transport-contract", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        ...(durableTransportContractId === undefined
+          ? {}
+          : { durable_transport_contract_id: publicOperatorText(durableTransportContractId) }),
+        handoff_review_id: readString(input, "handoff_review_id"),
+        handoff_review_path: piLifecycleCanonicalArtifactPathText(readString(input, "handoff_review_path")),
+        handoff_review_sha256: readString(input, "handoff_review_sha256"),
+        operator_approval_id: readString(input, "operator_approval_id"),
+        operator_approval_path: piLifecycleCanonicalArtifactPathText(readString(input, "operator_approval_path")),
+        operator_approval_sha256: readString(input, "operator_approval_sha256"),
+        unattended_executor_contract_id: readString(input, "unattended_executor_contract_id"),
+        unattended_executor_contract_path: piLifecycleCanonicalArtifactPathText(
+          readString(input, "unattended_executor_contract_path")
+        ),
+        unattended_executor_contract_sha256: readString(input, "unattended_executor_contract_sha256"),
+        transport_continuity_id: readString(input, "transport_continuity_id"),
+        transport_continuity_path: piLifecycleCanonicalArtifactPathText(readString(input, "transport_continuity_path")),
+        transport_continuity_sha256: readString(input, "transport_continuity_sha256"),
+        durability_contract_kind: durabilityContractKind,
+        transport_prerequisite_state: transportPrerequisiteState
+      })
+    );
+  }
+
   if (name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness") {
     const readinessId = readString(input, "readiness_id", { optional: true });
     const requestedExecutionMode =
@@ -2483,12 +2554,19 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
     const unattendedExecutorContractSha256 = readString(input, "unattended_executor_contract_sha256", {
       optional: true
     });
+    const durableTransportContractId = readString(input, "durable_transport_contract_id", { optional: true });
+    const durableTransportContractPath = readString(input, "durable_transport_contract_path", { optional: true });
+    const durableTransportContractSha256 = readString(input, "durable_transport_contract_sha256", { optional: true });
     const hasOperatorApprovalBinding =
       operatorApprovalId !== undefined || operatorApprovalPath !== undefined || operatorApprovalSha256 !== undefined;
     const hasExecutorContractBinding =
       unattendedExecutorContractId !== undefined ||
       unattendedExecutorContractPath !== undefined ||
       unattendedExecutorContractSha256 !== undefined;
+    const hasDurableTransportContractBinding =
+      durableTransportContractId !== undefined ||
+      durableTransportContractPath !== undefined ||
+      durableTransportContractSha256 !== undefined;
     return publicToolResult(
       name,
       client.post("/release/pi-codex-lifecycle/unattended-real-host-execution-readiness", {
@@ -2520,6 +2598,21 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
               unattended_executor_contract_sha256: requiredOption(
                 unattendedExecutorContractSha256,
                 "unattended_executor_contract_sha256"
+              )
+            }
+          : {}),
+        ...(hasDurableTransportContractBinding
+          ? {
+              durable_transport_contract_id: requiredOption(
+                durableTransportContractId,
+                "durable_transport_contract_id"
+              ),
+              durable_transport_contract_path: piLifecycleCanonicalArtifactPathText(
+                requiredOption(durableTransportContractPath, "durable_transport_contract_path")
+              ),
+              durable_transport_contract_sha256: requiredOption(
+                durableTransportContractSha256,
+                "durable_transport_contract_sha256"
               )
             }
           : {}),
@@ -3862,6 +3955,59 @@ export function createComathTools(): ToolDescriptor[] {
       )
     },
     {
+      name: "comath.release.piCodexLifecycleUnattendedRealHostDurableTransportContract",
+      description:
+        "Record a service-owned durable transport prerequisite contract through comathd without opening durable/live transport, invoking an executor, authorizing execution, proof authority, GA certification, or direct Pi mutation.",
+      mutates: true,
+      input_schema: requireConfirmationSchema(
+        objectSchema(
+          [
+            "project_root",
+            "project_id",
+            "actor",
+            "handoff_review_id",
+            "handoff_review_path",
+            "handoff_review_sha256",
+            "operator_approval_id",
+            "operator_approval_path",
+            "operator_approval_sha256",
+            "unattended_executor_contract_id",
+            "unattended_executor_contract_path",
+            "unattended_executor_contract_sha256",
+            "transport_continuity_id",
+            "transport_continuity_path",
+            "transport_continuity_sha256"
+          ],
+          {
+            project_root: stringProp,
+            project_id: stringProp,
+            actor: stringProp,
+            durable_transport_contract_id: stringProp,
+            handoff_review_id: stringProp,
+            handoff_review_path: stringProp,
+            handoff_review_sha256: stringProp,
+            operator_approval_id: stringProp,
+            operator_approval_path: stringProp,
+            operator_approval_sha256: stringProp,
+            unattended_executor_contract_id: stringProp,
+            unattended_executor_contract_path: stringProp,
+            unattended_executor_contract_sha256: stringProp,
+            transport_continuity_id: stringProp,
+            transport_continuity_path: stringProp,
+            transport_continuity_sha256: stringProp,
+            durability_contract_kind: {
+              type: "string",
+              enum: ["service_owned_external_durable_transport_prerequisite_contract"]
+            },
+            transport_prerequisite_state: {
+              type: "string",
+              enum: ["contract_recorded_transport_not_opened"]
+            }
+          }
+        )
+      )
+    },
+    {
       name: "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness",
       description:
         "Record a service-owned unattended real-host execution readiness blocker through comathd, consuming a Task239 handoff-review hash without approval, execution, proof authority, GA certification, or durable transport claims.",
@@ -3890,6 +4036,9 @@ export function createComathTools(): ToolDescriptor[] {
             unattended_executor_contract_id: stringProp,
             unattended_executor_contract_path: stringProp,
             unattended_executor_contract_sha256: stringProp,
+            durable_transport_contract_id: stringProp,
+            durable_transport_contract_path: stringProp,
+            durable_transport_contract_sha256: stringProp,
             requested_execution_mode: {
               type: "string",
               enum: ["production_unattended_real_host"]
@@ -5590,6 +5739,9 @@ async function handleReleaseCommand(
         executor_contract_id: optionValue(parsed.args, "--executor-contract-id"),
         executor_contract_path: optionValue(parsed.args, "--executor-contract-path"),
         executor_contract_sha256: optionValue(parsed.args, "--executor-contract-sha256"),
+        durable_transport_contract_id: optionValue(parsed.args, "--durable-transport-contract-id"),
+        durable_transport_contract_path: optionValue(parsed.args, "--durable-transport-contract-path"),
+        durable_transport_contract_sha256: optionValue(parsed.args, "--durable-transport-contract-sha256"),
         readiness_id: optionValue(parsed.args, "--readiness-id"),
         pi_install_transcript_path: optionValue(parsed.args, "--pi-install-transcript-path"),
         runtime_registration_snapshot_path: optionValue(parsed.args, "--runtime-registration-snapshot-path"),
@@ -6009,6 +6161,76 @@ async function handleReleaseCommand(
     );
     return;
   }
+  if (subcommand === "lifecycle-unattended-real-host-durable-transport-contract") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.piCodexLifecycleUnattendedRealHostDurableTransportContract"
+    );
+    if (!tool) {
+      throw new Error("Pi/Codex lifecycle unattended real-host durable transport contract tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          durable_transport_contract_id: optionValue(parsed.args, "--durable-transport-contract-id"),
+          handoff_review_id: requiredOption(optionValue(parsed.args, "--handoff-review-id"), "handoff_review_id"),
+          handoff_review_path: requiredOption(optionValue(parsed.args, "--handoff-review-path"), "handoff_review_path"),
+          handoff_review_sha256: requiredOption(
+            optionValue(parsed.args, "--handoff-review-sha256"),
+            "handoff_review_sha256"
+          ),
+          operator_approval_id: requiredOption(
+            optionValue(parsed.args, "--operator-approval-id"),
+            "operator_approval_id"
+          ),
+          operator_approval_path: requiredOption(
+            optionValue(parsed.args, "--operator-approval-path"),
+            "operator_approval_path"
+          ),
+          operator_approval_sha256: requiredOption(
+            optionValue(parsed.args, "--operator-approval-sha256"),
+            "operator_approval_sha256"
+          ),
+          unattended_executor_contract_id: requiredOption(
+            optionValue(parsed.args, "--unattended-executor-contract-id"),
+            "unattended_executor_contract_id"
+          ),
+          unattended_executor_contract_path: requiredOption(
+            optionValue(parsed.args, "--unattended-executor-contract-path"),
+            "unattended_executor_contract_path"
+          ),
+          unattended_executor_contract_sha256: requiredOption(
+            optionValue(parsed.args, "--unattended-executor-contract-sha256"),
+            "unattended_executor_contract_sha256"
+          ),
+          transport_continuity_id: requiredOption(
+            optionValue(parsed.args, "--transport-continuity-id"),
+            "transport_continuity_id"
+          ),
+          transport_continuity_path: requiredOption(
+            optionValue(parsed.args, "--transport-continuity-path"),
+            "transport_continuity_path"
+          ),
+          transport_continuity_sha256: requiredOption(
+            optionValue(parsed.args, "--transport-continuity-sha256"),
+            "transport_continuity_sha256"
+          ),
+          durability_contract_kind:
+            optionValue(parsed.args, "--durability-contract-kind") ??
+            "service_owned_external_durable_transport_prerequisite_contract",
+          transport_prerequisite_state:
+            optionValue(parsed.args, "--transport-prerequisite-state") ?? "contract_recorded_transport_not_opened"
+        },
+        ctx
+      )
+    );
+    return;
+  }
   if (subcommand === "lifecycle-unattended-real-host-execution-readiness") {
     const tool = createComathTools().find(
       (descriptor) => descriptor.name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness"
@@ -6038,6 +6260,9 @@ async function handleReleaseCommand(
           unattended_executor_contract_id: optionValue(parsed.args, "--unattended-executor-contract-id"),
           unattended_executor_contract_path: optionValue(parsed.args, "--unattended-executor-contract-path"),
           unattended_executor_contract_sha256: optionValue(parsed.args, "--unattended-executor-contract-sha256"),
+          durable_transport_contract_id: optionValue(parsed.args, "--durable-transport-contract-id"),
+          durable_transport_contract_path: optionValue(parsed.args, "--durable-transport-contract-path"),
+          durable_transport_contract_sha256: optionValue(parsed.args, "--durable-transport-contract-sha256"),
           requested_execution_mode:
             optionValue(parsed.args, "--requested-execution-mode") ?? "production_unattended_real_host"
         },

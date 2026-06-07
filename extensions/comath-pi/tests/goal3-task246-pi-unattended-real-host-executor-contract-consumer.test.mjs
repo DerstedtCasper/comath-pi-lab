@@ -361,7 +361,7 @@ assert.doesNotMatch(JSON.stringify(interactivePlan), secretTerms);
 assert.doesNotMatch(JSON.stringify(interactivePlan), transportOverclaimTerms);
 assert.doesNotMatch(JSON.stringify(interactivePlan), unattendedOverclaimTerms);
 
-const readinessPlan = await executeComathTool(client, "comath.release.piCodexLifecycleInteractiveRealPi", {
+const durableContractPlan = await executeComathTool(client, "comath.release.piCodexLifecycleInteractiveRealPi", {
   project_id: "PRJ-2460",
   actor: "goal3-task246",
   pi_host_label: "pi-host-lab-01",
@@ -395,9 +395,13 @@ const readinessPlan = await executeComathTool(client, "comath.release.piCodexLif
     "service-owned-pi-lifecycle/LIFE-UNATTENDED-EXECUTOR-CONTRACT-0246/unattended-real-host-executor-contract.json",
   executor_contract_sha256: "d".repeat(64)
 });
-assert.equal(readinessPlan.next_action.action_id, "lifecycle-unattended-real-host-execution-readiness");
-assert.match(readinessPlan.next_action.command, /--unattended-executor-contract-id LIFE-UNATTENDED-EXECUTOR-CONTRACT-0246/);
-assert.match(readinessPlan.next_action.command, /--unattended-executor-contract-sha256 d{64}/);
+assert.equal(durableContractPlan.next_action.action_id, "lifecycle-unattended-real-host-durable-transport-contract");
+assert.match(durableContractPlan.next_action.command, /\/cm:release lifecycle-unattended-real-host-durable-transport-contract/);
+assert.match(
+  durableContractPlan.next_action.command,
+  /--unattended-executor-contract-id LIFE-UNATTENDED-EXECUTOR-CONTRACT-0246/
+);
+assert.match(durableContractPlan.next_action.command, /--unattended-executor-contract-sha256 d{64}/);
 
 const registeredTools = new Map();
 const commands = new Map();

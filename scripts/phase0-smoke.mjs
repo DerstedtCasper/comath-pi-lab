@@ -410,6 +410,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task245-pi-unattended-real-host-executor-contract.test.mjs",
   "goal3-task246-pi-unattended-real-host-executor-contract-consumer.test.mjs",
   "goal3-task247-pi-unattended-real-host-durable-transport-contract.test.mjs",
+  "goal3-task248-pi-unattended-real-host-durable-transport-contract-consumer.test.mjs",
   "goal3-task232-agent-adapter-os-isolation-nix-production-helper-profile-contract.test.mjs",
   "goal3-task233-pi-operator-service-transport-check-debug.test.mjs",
   "goal3-task234-agent-adapter-os-isolation-firejail-production-helper-profile-contract.test.mjs",

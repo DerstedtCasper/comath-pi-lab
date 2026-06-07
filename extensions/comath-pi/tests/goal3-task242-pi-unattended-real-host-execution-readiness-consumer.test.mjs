@@ -238,13 +238,18 @@ const interactivePlan = await executeComathTool(client, "comath.release.piCodexL
     "lifecycle-operator-service-transport-continuity",
     "lifecycle-unattended-real-host-handoff-review",
     "lifecycle-unattended-real-host-operator-approval",
-    "lifecycle-unattended-real-host-executor-contract"
+    "lifecycle-unattended-real-host-executor-contract",
+    "lifecycle-unattended-real-host-durable-transport-contract"
   ],
   readiness_id: "LIFE-EXEC-READINESS-0242",
   handoff_review_id: "LIFE-HANDOFF-REVIEW-0242",
   handoff_review_path:
     "service-owned-pi-lifecycle/LIFE-HANDOFF-REVIEW-0242/unattended-real-host-handoff-review.json",
   handoff_review_sha256: "a".repeat(64),
+  durable_transport_contract_id: "LIFE-DURABLE-TRANSPORT-CONTRACT-0242",
+  durable_transport_contract_path:
+    "service-owned-pi-lifecycle/LIFE-DURABLE-TRANSPORT-CONTRACT-0242/unattended-real-host-durable-transport-contract.json",
+  durable_transport_contract_sha256: "f".repeat(64),
   last_result_summary: "proof_success from D:/research/project with sk-should-not-leak long-lived SSE"
 });
 assert.equal(calls.length, 1, "interactive planner must remain read-only and must not call comathd");
