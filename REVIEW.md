@@ -1,3 +1,29 @@
+# Goal 3 Task 245 / Service-Owned Unattended Real-Host Executor Contract
+
+Scope: add a service-owned unattended real-host executor contract checkpoint after the Task239 handoff review chain and before Task241 readiness consumption. This is executor-prerequisite evidence only; it is not real unattended host execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task245-pi-unattended-real-host-executor-contract.test.mjs`.
+- Added `recordPiCodexLifecycleUnattendedRealHostExecutorContract()` plus `POST /release/pi-codex-lifecycle/unattended-real-host-executor-contract`.
+- Added append-only `comath.pi_codex_unattended_real_host_executor_contract.v1` manifests and `release.pi_codex_unattended_real_host_executor_contract_recorded` audit events.
+- Extended `recordPiCodexLifecycleUnattendedRealHostExecutionReadiness()` so a current executor contract removes only `service_owned_unattended_executor_not_configured`; durable transport remains blocked.
+- Registered the capability, phase0 smoke release-hardening discovery, GA release criteria, README, AGENTS, adapter contracts, threat model, REVIEW, and the Goal 3 tracker.
+
+Verification:
+- TDD RED was observed before implementation when the focused Task245 suite failed because `recordPiCodexLifecycleUnattendedRealHostExecutorContract` was not exported.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task245 exited 0, including invalid mode/kind/state, incomplete readiness binding, stale executor hash, non-canonical executor path, wrong handoff binding, hash-current poisoned executor contract, service route, and audit regressions.
+- Adjacent Task239, Task241, Task243, Task233, and Pi Task244 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task245 discovered by the default runner.
+- `corepack pnpm --filter @comath/pi-extension build` exited 0.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests with Task244, comathd package tests through Task245, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task245 re-reads the canonical Task239 handoff review artifact and caller-supplied hash, rejects duplicate executor contract ids, stale handoff-review hashes, invalid executor modes/kinds/states, poisoned executor contracts consumed by readiness, non-canonical executor paths, and authority-shaped caller fields. The executor contract keeps executor-invoked/execution/proof/GA/durable/live/direct-Pi-write/trusted-state flags false and does not authorize production unattended execution.
+
 # Goal 3 Task 244 / Pi Unattended Real-Host Operator Approval Consumer
 
 Scope: expose the Task243 service-owned operator approval checkpoint through a host-confirmed Pi tool and `/cm:release` command, and thread complete approval bindings into the existing readiness consumer/planner. This is a thin client and planner checkpoint only; it is not unattended execution, durable transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.

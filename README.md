@@ -47,6 +47,8 @@ Task240 exposes the Task239 unattended handoff review through a host-confirmed P
 
 Task244 exposes the Task243 operator-approval checkpoint through a host-confirmed Pi consumer and read-only planner step before readiness. It calls only the service-owned approval route, strips model confirmation ids, sanitizes approval/request/result surfaces, and lets readiness forward a complete approval id/path/hash binding without turning approval into execution authorization, proof authority, durable/live transport, direct Pi mutation, or GA certification.
 
+Task245 adds a service-owned unattended real-host executor contract checkpoint after the same reviewed handoff chain. The checkpoint records that an executor prerequisite has been configured as append-only service evidence, but explicitly records `executor_invoked=false`, `unattended_execution_authorized=false`, `durable_transport_provided=false`, `proof_authority="none"`, and `can_certify_ga=false`. Readiness may bind a current executor contract to remove only the missing-executor blocker; the durable-transport blocker remains fail-closed, and no real host executor, Pi consumer, Lean run, claim promotion, or GA certification is introduced.
+
 ## Runtime Baseline
 
 - Node.js: `>=22.19.0`
