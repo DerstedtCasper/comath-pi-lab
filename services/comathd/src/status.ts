@@ -148,7 +148,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_codex_unattended_real_host_operator_approval_contract",
       "pi_codex_unattended_real_host_executor_contract",
       "pi_codex_unattended_real_host_durable_transport_contract",
-      "pi_codex_unattended_real_host_execution_readiness_blocker"
+      "pi_codex_unattended_real_host_execution_readiness_blocker",
+      "pi_codex_unattended_real_host_execution_attempt_gate"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

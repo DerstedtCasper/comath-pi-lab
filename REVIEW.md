@@ -1,3 +1,29 @@
+# Goal 3 Task 249 / Service-Owned Unattended Real-Host Execution Attempt Gate
+
+Scope: add the first service-owned attempt/blocker gate after prerequisite-recorded unattended real-host readiness. This is operational provenance only; it is not a Pi consumer, terminal unattended completion, durable/live transport, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task249-pi-unattended-real-host-execution-attempt.test.mjs`.
+- Added `recordPiCodexLifecycleUnattendedRealHostExecutionAttempt()` and `POST /release/pi-codex-lifecycle/unattended-real-host-execution-attempt`.
+- Added append-only `comath.pi_codex_unattended_real_host_execution_attempt.v1` manifests, optional `comath.pi_codex_unattended_real_host_execution_attempt_result.v1` result artifacts, and attempt/blocker audit events.
+- The attempt gate consumes only current `unattended_real_host_execution_prerequisites_recorded` readiness and re-reads the handoff review, operator approval, executor contract, durable-transport prerequisite, and continuity chain before writing evidence.
+- Executor commands are explicit service inputs only: allowlisted absolute program, fixed argv/env, `shell:false`, bounded timeout, sanitized stdout/stderr, and no proof/GA authority.
+
+Verification:
+- TDD RED was observed after adding the focused Task249 service test: after `corepack pnpm --filter @comath/comathd build`, `node services/comathd/tests/unit/goal3-task249-pi-unattended-real-host-execution-attempt.test.mjs` failed because `recordPiCodexLifecycleUnattendedRealHostExecutionAttempt` was not exported.
+- Follow-up RED was observed for failed executor attempts: focused Task249 failed because failed executor attempts were incorrectly audited as recorded attempts rather than blocked attempts.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task249 exited 0.
+- Adjacent service regressions Task247, Task245, Task243, and Task241 exited 0.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task249 discovered by the default runner.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task248, comathd package tests through Task249, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only, and `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task249 writes a replayable `blocked_unattended_real_host_executor_unavailable` manifest when no executor command is supplied. When a command is supplied, process output and exit status are attempt evidence only. Public/result/audit surfaces force completion, unattended authorization, proof, GA, durable/live transport, direct-Pi-write, and direct-trusted-state flags false.
+
 # Goal 3 Task 248 / Pi Unattended Real-Host Durable Transport Contract Consumer
 
 Scope: expose the Task247 service-owned durable-transport prerequisite contract through the Pi extension as a host-confirmed thin client and read-only planner step. This is prerequisite-consumer wiring only; it is not a CoMath transport stack, durable/live channel, executor invocation, unattended execution authorization, direct Pi mutation, Lean execution, proof authority, promotion, or GA certification.
