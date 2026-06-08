@@ -151,7 +151,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_codex_unattended_real_host_execution_readiness_blocker",
       "pi_codex_unattended_real_host_execution_attempt_gate",
       "pi_codex_unattended_real_host_execution_attempt_review_gate",
-      "pi_codex_unattended_real_host_completion_certification_prerequisite_gate"
+      "pi_codex_unattended_real_host_completion_certification_prerequisite_gate",
+      "pi_goal_mode_leanrunner_feedback_repair_loop"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

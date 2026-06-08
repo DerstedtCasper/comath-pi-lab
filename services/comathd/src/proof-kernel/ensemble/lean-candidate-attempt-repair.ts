@@ -23,7 +23,7 @@ export type LeanCandidateAttemptRepairTask = {
   };
   source_check: {
     result: "repair_required";
-    has_sorry: true;
+    has_sorry: boolean;
     plan_path: string;
     plan_sha256: string | null;
     lean_file_path: string;
@@ -57,6 +57,11 @@ export type LeanCandidateAttemptRepairBatch = {
     sha256: string;
     proof_authority: "none";
     can_promote_claim: false;
+  };
+  source_feedback_batch?: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
   };
   repair_iteration: number;
   repair_required_candidate_count: number;

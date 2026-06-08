@@ -51,6 +51,7 @@ export * from "./proof-kernel/ensemble/ga-agent-stage-runner.js";
 export * from "./proof-kernel/ensemble/lean-candidate-attempt-check.js";
 export * from "./proof-kernel/ensemble/lean-candidate-attempt-leanrunner-execution.js";
 export * from "./proof-kernel/ensemble/lean-candidate-attempt-repair.js";
+export * from "./proof-kernel/ensemble/lean-candidate-attempt-repair-feedback.js";
 export * from "./proof-kernel/ensemble/lean-candidate-attempt-repair-execution.js";
 export * from "./proof-kernel/ensemble/live-candidate-lean-check.js";
 export * from "./proof-kernel/ensemble/candidate-proof-grade-summary.js";

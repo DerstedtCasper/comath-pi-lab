@@ -211,6 +211,8 @@ Task265 makes that `repair` stage executable and resumable. A repair tick consum
 
 Task266 connects re-ingested ready attempts to the service-owned LeanRunner. `candidate_verification` now records a ready-for-LeanRunner preflight before running Lean, then a later tick writes append-only LeanRunManifest evidence for each ready candidate attempt. If Lean rejects every repaired attempt, CoMath writes `lean_candidate_attempt_leanrunner_execution.json`, updates candidate manifests as failed, and terminates with a replayable blocker instead of promoting anything. Placeholder-bearing drafts remain non-authoritative even if a runner shim reports success.
 
+Task267 closes the first rejected-Lean feedback loop. A terminal all-rejected LeanRunner blocker in explicit Pi goal-mode can be ticked again to write `lean_candidate_attempt_repair_feedback_batch.json`, bind each failed LeanRunManifest stdout/stderr hash as non-authoritative repair evidence, materialize a second repair batch, and resume `current_stage="repair"` / `status="repairing"`. The follow-up repair tick consumes that feedback, annotates candidate drafts with `comath_repair_feedback`, and returns to `candidate_verification` without invoking LeanRunner, emitting proof claims, or changing the locked statement.
+
 Boundary unchanged: this provider-helper chain does not alter Lean clean replay authority, live Pi status, provider coverage, or certify/complete release readiness.
 
 Task180 revalidated the Task175-179 provider-helper chain, public route sanitization, current Pi probe/sandbox-execution consumers, and readiness boundary without adding a new authority surface or closing the remaining production-helper, durable-transport, broad OS-enforced execution, Lean replay, or real-Pi blockers.

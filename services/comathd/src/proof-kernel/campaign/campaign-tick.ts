@@ -32,6 +32,10 @@ import {
   executeLeanCandidateAttemptRepairBatch,
   type LeanCandidateAttemptRepairExecution
 } from "../ensemble/lean-candidate-attempt-repair-execution.js";
+import {
+  writeLeanCandidateAttemptRepairFeedbackBatch,
+  type LeanCandidateAttemptRepairFeedbackBatch
+} from "../ensemble/lean-candidate-attempt-repair-feedback.js";
 import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-candidate-lean-check.js";
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
 import { defaultVariants } from "../ensemble/variant-registry.js";
@@ -115,6 +119,7 @@ export type CampaignTickResult = {
   final_replay?: CleanReplayResult["final_replay"];
   static_audit?: CleanReplayResult["static_audit"];
   repair_execution?: LeanCandidateAttemptRepairExecution;
+  lean_candidate_attempt_repair_feedback?: LeanCandidateAttemptRepairFeedbackBatch;
   lean_candidate_attempt_leanrunner_execution?: LeanCandidateAttemptLeanRunnerExecution;
   counterexample?: {
     counterexample_id: string;
@@ -2539,6 +2544,21 @@ function readLeanCandidateAttemptRepairBatchForCampaign(
   return { path: batchRel, batch: batch as unknown as LeanCandidateAttemptRepairBatch };
 }
 
+function readLeanCandidateAttemptLeanRunnerExecutionForCampaign(
+  projectRoot: string,
+  campaign: ResearchCampaign
+): { path: string; execution: LeanCandidateAttemptLeanRunnerExecution } | undefined {
+  const executionRel = campaignRel(campaign, "lean_candidate_attempt_leanrunner_execution.json");
+  if (!artifactExists(projectRoot, executionRel)) {
+    return undefined;
+  }
+  const execution = objectRecord(readJsonArtifact(projectRoot, executionRel), "lean_candidate_attempt_leanrunner_execution");
+  if (execution.schema_version !== "comath.pi_goal_mode_lean_candidate_attempt_leanrunner_execution.v1") {
+    return undefined;
+  }
+  return { path: executionRel, execution: execution as unknown as LeanCandidateAttemptLeanRunnerExecution };
+}
+
 function writeSimpleStageArtifact(projectRoot: string, campaign: ResearchCampaign, filename: string, payload: unknown): string {
   const rel = join(".comath", "campaign", campaign.campaign_id, filename);
   writeRuntimeFile(projectRoot, rel, `${JSON.stringify(payload, null, 2)}\n`);
@@ -3056,6 +3076,82 @@ function blockCampaignAtFinalReplay(input: {
     campaign: next,
     obligation: { ...input.obligation, status: "blocked" },
     blocker: input.reason
+  };
+}
+
+function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  actor: string;
+}): CampaignTickResult | undefined {
+  if (
+    input.campaign.status !== "terminal" ||
+    input.campaign.terminal_state !== "blocked_with_replayable_reason" ||
+    input.campaign.current_stage !== "blocked" ||
+    !isGoalModeCampaign(input.projectRoot, input.campaign)
+  ) {
+    return undefined;
+  }
+  const obligation = input.campaign.open_obligations[0];
+  if (!obligation) {
+    return undefined;
+  }
+  const leanRunnerExecution = readLeanCandidateAttemptLeanRunnerExecutionForCampaign(input.projectRoot, input.campaign);
+  if (!leanRunnerExecution || leanRunnerExecution.execution.execution_result !== "all_attempts_rejected") {
+    return undefined;
+  }
+  const leanRunnerBlockerRel = campaignRel(input.campaign, "lean_candidate_attempt_leanrunner_blocker.json");
+  const currentBlockerMatchesExecution = input.campaign.blockers.some((blocker) => {
+    const executionPath = typeof blocker.execution_path === "string" ? blocker.execution_path : undefined;
+    const artifactPath = typeof blocker.artifact_path === "string" ? blocker.artifact_path : undefined;
+    const reason = typeof blocker.reason === "string" ? blocker.reason : "";
+    return (
+      executionPath === leanRunnerExecution.path ||
+      artifactPath === leanRunnerBlockerRel ||
+      /LeanRunner rejected all repaired candidate attempts/i.test(reason)
+    );
+  });
+  if (!currentBlockerMatchesExecution) {
+    return undefined;
+  }
+  const feedback = writeLeanCandidateAttemptRepairFeedbackBatch({
+    projectRoot: input.projectRoot,
+    campaign: input.campaign,
+    obligation,
+    executionPath: leanRunnerExecution.path,
+    execution: leanRunnerExecution.execution
+  });
+  const nextObligation = { ...obligation, status: "candidate_search" as const };
+  const stageArtifacts = Array.from(
+    new Set([
+      leanRunnerExecution.path,
+      feedback.feedback_batch_path,
+      feedback.repair_batch_path,
+      ...feedback.task_paths
+    ])
+  );
+  const next = writeCampaign(
+    input.projectRoot,
+    researchCampaignSchema.parse({
+      ...input.campaign,
+      current_stage: "repair",
+      status: "repairing",
+      terminal_state: undefined,
+      open_obligations: [nextObligation],
+      stage_runs: [...input.campaign.stage_runs, completedStageRun(input.campaign, "blocked", stageArtifacts)],
+      next_actions: [
+        "execute repair tasks using LeanRunner stderr/stdout feedback",
+        "rerun candidate verification before any future LeanRunner attempt",
+        "keep failed LeanRunManifest evidence non-authoritative"
+      ]
+    }),
+    input.actor
+  );
+  return {
+    campaign: next,
+    obligation: nextObligation,
+    lean_candidate_attempt_repair_feedback: feedback.feedback_batch,
+    lean_candidate_attempt_leanrunner_execution: leanRunnerExecution.execution
   };
 }
 
@@ -4842,6 +4938,14 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
   }
   if (campaign.status === "terminal") {
+    const resumed = resumeLeanRunnerRejectedAttemptsFromTerminal({
+      projectRoot: input.project_root,
+      campaign,
+      actor
+    });
+    if (resumed) {
+      return resumed;
+    }
     return { campaign };
   }
   if (campaign.status === "paused") {

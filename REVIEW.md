@@ -1,3 +1,33 @@
+# Goal 3 Task 267 / Pi Goal-Mode LeanRunner Feedback Repair Loop
+
+Scope: turn an explicit Pi goal-mode all-rejected LeanRunner terminal blocker into a service-owned feedback repair loop. This is not final clean replay, proof promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task267-pi-goal-mode-leanrunner-feedback-repair-loop.test.mjs`.
+- Added `writeLeanCandidateAttemptRepairFeedbackBatch()` in `proof-kernel/ensemble/lean-candidate-attempt-repair-feedback.ts`.
+- `tickCampaign()` now special-cases terminal explicit goal-mode campaigns whose canonical `lean_candidate_attempt_leanrunner_execution.json` records `all_attempts_rejected`, writes `lean_candidate_attempt_repair_feedback_batch.json`, materializes a replacement `lean_candidate_attempt_repair_batch.json`, and resumes `current_stage="repair"` / `status="repairing"`.
+- Failed LeanRunManifest stdout/stderr paths and hashes are bound into per-candidate repair tasks as non-authoritative diagnostics only.
+- Terminal resume is additionally gated by the current blocker binding the canonical LeanRunner execution or blocker artifact, so unrelated terminal blockers cannot be rewound by stale all-rejected execution files.
+- Repair execution now carries optional feedback bindings, appends `comath_repair_feedback` markers to revised candidate drafts, records `repair_iteration`, and still keeps LeanRunner invocations and repair-stage LeanRunManifest paths empty.
+- Added `pi_goal_mode_leanrunner_feedback_repair_loop` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task267 service test: `node services/comathd/tests/unit/goal3-task267-pi-goal-mode-leanrunner-feedback-repair-loop.test.mjs` failed because a second tick on the all-rejected terminal campaign returned `status="terminal"` instead of `status="repairing"`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task267 exited 0, including a negative check that an unrelated terminal blocker with a stale all-rejected execution file stays terminal and writes no feedback batch.
+- Adjacent Task266, Task265, Task264, and Task263 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task267 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task267, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task267 consumes failed LeanRunner evidence only as repair input. The feedback batch, second repair batch, repair tasks, and repair execution all keep `proof_authority="none"` and cannot promote claims or certify GA. Failed Lean stdout/stderr do not prove anything; they only guide the next candidate revision before a later service-owned Lean pass and final clean replay gates.
+
+Residual risk: Goal 3 remains incomplete. Task267 does not synthesize mathematically meaningful repairs from theorem-search/literature/CAS hints, carry a LeanRunner-passing candidate through arbitration/red-team/integration, run final hermetic clean replay for a promoted artifact, provide terminal proof success, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 266 / Pi Goal-Mode Ready Attempt LeanRunner Blocker
 
 Scope: connect Task265 re-ingested ready attempts to the service-owned LeanRunner, while routing all rejected attempts to replayable blocker evidence. This is not final clean replay, proof promotion, or GA certification.

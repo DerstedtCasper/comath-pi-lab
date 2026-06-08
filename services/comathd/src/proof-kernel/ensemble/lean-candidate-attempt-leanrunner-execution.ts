@@ -50,6 +50,8 @@ export type LeanCandidateAttemptLeanRunnerExecution = {
     candidate_id: string;
     variant_id: CandidateRun["variant_id"];
     result: "kernel_checked" | "lean_runner_rejected";
+    plan_path: string;
+    plan_sha256: string | null;
     lean_file_path: string;
     lean_file_sha256: string;
     lakefile_path: string;
@@ -383,6 +385,8 @@ export function executeLeanCandidateAttemptLeanRunner(input: {
       candidate_id: candidate.candidate_id,
       variant_id: candidate.variant_id,
       result: accepted ? "kernel_checked" : "lean_runner_rejected",
+      plan_path: check.plan_path,
+      plan_sha256: check.plan_sha256,
       lean_file_path: check.lean_file_path,
       lean_file_sha256: sha256RuntimeFile(input.projectRoot, check.lean_file_path),
       lakefile_path: lakefileRel,

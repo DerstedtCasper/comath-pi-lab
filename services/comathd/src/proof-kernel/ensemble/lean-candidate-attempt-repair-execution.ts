@@ -18,6 +18,12 @@ export type LeanCandidateAttemptRepairExecution = {
     sha256: string;
     proof_authority: "none";
   };
+  source_feedback_batch?: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
+  repair_iteration: number;
   repaired_candidate_count: number;
   repaired_attempts_materialized: true;
   repaired_attempts_ready_for_preflight: number;
@@ -30,6 +36,13 @@ export type LeanCandidateAttemptRepairExecution = {
     repaired_lean_file_path: string;
     original_lean_file_sha256: string;
     repaired_lean_file_sha256: string;
+    source_feedback_batch?: {
+      path: string;
+      sha256: string;
+      proof_authority: "none";
+    };
+    source_feedback?: Record<string, unknown>;
+    feedback_guided_revision_applied?: boolean;
     original_had_sorry: boolean;
     repaired_has_sorry: false;
     repair_placeholder_present: true;
@@ -88,13 +101,30 @@ function hasSorry(text: string): boolean {
   return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(text);
 }
 
-function repairLeanDraft(text: string): string {
+function repairLeanDraft(text: string, task: Record<string, unknown>): { text: string; feedbackGuidedRevisionApplied: boolean } {
   const placeholder = [
     "by",
     "  -- comath_repair_placeholder: non-authoritative draft for LeanRunner.",
     "  exact ?comath_repair_placeholder"
   ].join("\n");
-  return text.replace(/(^|[^A-Za-z0-9_'])sorry([^A-Za-z0-9_']|$)/gu, `$1${placeholder}$2`);
+  const replaced = text.replace(/(^|[^A-Za-z0-9_'])sorry([^A-Za-z0-9_']|$)/gu, `$1${placeholder}$2`);
+  const sourceFeedback =
+    task.source_feedback && typeof task.source_feedback === "object" && !Array.isArray(task.source_feedback)
+      ? (task.source_feedback as Record<string, unknown>)
+      : undefined;
+  if (!sourceFeedback) {
+    return { text: replaced, feedbackGuidedRevisionApplied: false };
+  }
+  const manifestPath = typeof sourceFeedback.lean_run_manifest_path === "string" ? sourceFeedback.lean_run_manifest_path : "unknown";
+  const stderrSha = typeof sourceFeedback.stderr_sha256 === "string" ? sourceFeedback.stderr_sha256 : "unknown";
+  const marker = [
+    "",
+    "-- comath_repair_feedback: non-authoritative LeanRunner diagnostics were bound for the next repair pass.",
+    `-- lean_run_manifest: ${manifestPath}`,
+    `-- stderr_sha256: ${stderrSha}`,
+    ""
+  ].join("\n");
+  return { text: `${replaced.trimEnd()}${marker}`, feedbackGuidedRevisionApplied: true };
 }
 
 function readRepairTask(projectRoot: string, relativePath: string): Record<string, unknown> {
@@ -107,6 +137,26 @@ function readRepairTask(projectRoot: string, relativePath: string): Record<strin
     throw new Error("lean_candidate_repair_task_schema_invalid");
   }
   return task;
+}
+
+function feedbackBatchFromTask(task: Record<string, unknown>): LeanCandidateAttemptRepairExecution["source_feedback_batch"] | undefined {
+  const source = task.source_feedback_batch;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return undefined;
+  }
+  const record = source as Record<string, unknown>;
+  if (typeof record.path !== "string" || typeof record.sha256 !== "string" || record.proof_authority !== "none") {
+    return undefined;
+  }
+  return { path: record.path, sha256: record.sha256, proof_authority: "none" };
+}
+
+function sourceFeedbackFromTask(task: Record<string, unknown>): Record<string, unknown> | undefined {
+  const source = task.source_feedback;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return undefined;
+  }
+  return source as Record<string, unknown>;
 }
 
 export function executeLeanCandidateAttemptRepairBatch(input: {
@@ -134,7 +184,10 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
     const inputSnapshotRel = normalizedRel(join(repairDir, "LeanCandidate.repair-input-1.lean"));
     const perCandidateExecutionRel = normalizedRel(join(repairDir, "lean_candidate_repair_execution.json"));
     writeText(input.projectRoot, inputSnapshotRel, originalLean);
-    const repairedLean = repairLeanDraft(originalLean);
+    const feedbackBatch = feedbackBatchFromTask(task);
+    const sourceFeedback = sourceFeedbackFromTask(task);
+    const repaired = repairLeanDraft(originalLean, task);
+    const repairedLean = repaired.text;
     writeText(input.projectRoot, sourceLeanRel, repairedLean);
     const repairedHasSorry = hasSorry(repairedLean);
     if (repairedHasSorry) {
@@ -152,11 +205,14 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
         sha256: batchSha256,
         proof_authority: "none"
       },
+      source_feedback_batch: feedbackBatch,
+      source_feedback: sourceFeedback,
       repair_task_path: repair.repair_task_path,
       repair_input_snapshot_path: inputSnapshotRel,
       repaired_lean_file_path: sourceLeanRel,
       original_lean_file_sha256: originalSha256,
       repaired_lean_file_sha256: repairedSha256,
+      feedback_guided_revision_applied: repaired.feedbackGuidedRevisionApplied,
       original_had_sorry: originalHadSorry,
       repaired_has_sorry: false,
       repair_placeholder_present: repairedLean.includes("comath_repair_placeholder"),
@@ -178,6 +234,9 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
       repaired_lean_file_path: sourceLeanRel,
       original_lean_file_sha256: originalSha256,
       repaired_lean_file_sha256: repairedSha256,
+      source_feedback_batch: feedbackBatch,
+      source_feedback: sourceFeedback,
+      feedback_guided_revision_applied: repaired.feedbackGuidedRevisionApplied,
       original_had_sorry: originalHadSorry,
       repaired_has_sorry: false,
       repair_placeholder_present: true,
@@ -200,6 +259,8 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
       sha256: batchSha256,
       proof_authority: "none"
     },
+    source_feedback_batch: input.batch.source_feedback_batch,
+    repair_iteration: input.batch.repair_iteration,
     repaired_candidate_count: perCandidateExecutions.length,
     repaired_attempts_materialized: true,
     repaired_attempts_ready_for_preflight: perCandidateExecutions.length,
