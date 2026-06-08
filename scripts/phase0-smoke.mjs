@@ -440,6 +440,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task275-pi-goal-mode-live-retrieval-final-replay-provenance.test.mjs",
   "goal3-task276-pi-goal-mode-live-theorem-search-repair-hint-execution.test.mjs",
   "goal3-task277-pi-goal-mode-live-theorem-search-conjunction-repair.test.mjs",
+  "goal3-task283-pi-goal-mode-live-theorem-search-iff-repair.test.mjs",
   "goal3-task278-pi-goal-mode-live-computation-repair-hint-execution.test.mjs",
   "goal3-task279-pi-goal-mode-live-computation-decide-repair.test.mjs",
   "goal3-task280-pi-goal-mode-live-computation-final-replay-provenance.test.mjs",

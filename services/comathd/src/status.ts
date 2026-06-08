@@ -165,7 +165,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_goal_mode_live_computation_repair_hint_execution",
       "pi_goal_mode_live_computation_decide_repair",
       "pi_goal_mode_live_computation_final_replay_provenance",
-      "pi_goal_mode_live_theorem_search_conjunction_repair"
+      "pi_goal_mode_live_theorem_search_conjunction_repair",
+      "pi_goal_mode_live_theorem_search_iff_intro_repair"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",

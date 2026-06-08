@@ -92,6 +92,7 @@ type PlaceholderFreeRepairStrategy =
   | "locked_reflexive_equality_rfl"
   | "live_retrieval_exact_statement_lean_suggestion"
   | "live_theorem_search_and_intro_conjunction_repair"
+  | "live_theorem_search_iff_intro_repair"
   | "live_computation_sympy_true_decide_repair";
 
 export type ExecuteLeanCandidateAttemptRepairBatchResult = {
@@ -502,6 +503,62 @@ function liveTheoremSearchConjunctionRepair(
   };
 }
 
+function isLockedTrueIffStatement(statement: string): boolean {
+  return /^True\s*<->\s*True$/u.test(normalizeLeanStatementText(statement));
+}
+
+function hasLiveLoogleIffIntroHint(task: Record<string, unknown>): boolean {
+  for (const result of sourceRepairHintResultsFromUnknownTask(task)) {
+    if (
+      result.kind !== "theorem_search" ||
+      result.provider !== "loogle" ||
+      result.adapter_execution_state !== "live_provider_result_recorded" ||
+      result.proof_authority !== "none" ||
+      result.can_promote_claim !== false ||
+      result.result_can_be_used_as_proof !== false
+    ) {
+      continue;
+    }
+    const summary = objectRecord(result.result_payload_summary);
+    const liveProvider = objectRecord(summary?.live_provider);
+    const promptInjectionScan = objectRecord(liveProvider?.prompt_injection_scan);
+    if (promptInjectionScan?.status !== "pass") {
+      continue;
+    }
+    const theoremResults = Array.isArray(summary?.results) ? summary.results : [];
+    for (const theoremResultValue of theoremResults) {
+      const theoremResult = objectRecord(theoremResultValue);
+      if (
+        theoremResult?.declaration_name === "Iff.intro" &&
+        theoremResult.proof_authority === "none" &&
+        theoremResult.can_promote_claim === false &&
+        theoremResult.result_can_be_used_as_proof === false
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function liveTheoremSearchIffRepair(
+  text: string,
+  task: Record<string, unknown>
+): { text: string; strategy: PlaceholderFreeRepairStrategy } | null {
+  const current = parseFirstLeanDeclaration(text);
+  if (!current || !isLockedTrueIffStatement(current.normalizedStatement) || !hasLiveLoogleIffIntroHint(task)) {
+    return null;
+  }
+  const repaired = [
+    `${current.declarationKind} ${current.declarationName} : ${current.normalizedStatement} := by`,
+    "  exact Iff.intro (fun _ => trivial) (fun _ => trivial)"
+  ].join("\n");
+  return {
+    text: `${text.slice(0, current.start)}${repaired}${text.slice(current.end)}`,
+    strategy: "live_theorem_search_iff_intro_repair"
+  };
+}
+
 function isClosedDecidableArithmeticStatement(statement: string): boolean {
   const normalized = normalizeLeanStatementText(statement);
   if (!/\d/u.test(normalized) || !topLevelLeanEquality(normalized)) {
@@ -585,15 +642,28 @@ function repairLeanDraft(
   const liveSuggestionRepair = localRepairStrategy === null ? liveRetrievalSuggestionRepair(text, task) : null;
   const liveTheoremSearchRepair =
     localRepairStrategy === null && liveSuggestionRepair === null ? liveTheoremSearchConjunctionRepair(text, task) : null;
-  const liveComputationRepair =
+  const liveTheoremSearchIffIntroRepair =
     localRepairStrategy === null && liveSuggestionRepair === null && liveTheoremSearchRepair === null
+      ? liveTheoremSearchIffRepair(text, task)
+      : null;
+  const liveComputationRepair =
+    localRepairStrategy === null &&
+    liveSuggestionRepair === null &&
+    liveTheoremSearchRepair === null &&
+    liveTheoremSearchIffIntroRepair === null
       ? liveComputationSympyTrueDecideRepair(text, task)
       : null;
   const repairStrategy =
-    localRepairStrategy ?? liveSuggestionRepair?.strategy ?? liveTheoremSearchRepair?.strategy ?? liveComputationRepair?.strategy ?? null;
+    localRepairStrategy ??
+    liveSuggestionRepair?.strategy ??
+    liveTheoremSearchRepair?.strategy ??
+    liveTheoremSearchIffIntroRepair?.strategy ??
+    liveComputationRepair?.strategy ??
+    null;
   const replaced =
     liveSuggestionRepair?.text ??
     liveTheoremSearchRepair?.text ??
+    liveTheoremSearchIffIntroRepair?.text ??
     liveComputationRepair?.text ??
     replaceLeanSorryTokens(text, placeholderFreeRepairReplacement(repairStrategy) ?? placeholder);
   const markers: string[] = [];
@@ -732,6 +802,10 @@ function validateRepairTaskAgainstBatch(input: {
 }): void {
   if (input.task.proof_authority !== "none" || input.task.can_promote_claim !== false || input.task.lean_runner_invocation_allowed !== false) {
     throw new Error("lean_candidate_repair_task_authority_flags_invalid");
+  }
+  const sourceCheck = objectRecord(input.task.source_check);
+  if (sourceCheck && sourceCheck.statement_boundary_hash_matches !== true) {
+    throw new Error("lean_candidate_repair_task_statement_boundary_mismatch");
   }
   const currentTaskSha256 = sha256RuntimeFile(input.projectRoot, input.repair.repair_task_path);
   if (currentTaskSha256 !== input.repair.repair_task_sha256) {

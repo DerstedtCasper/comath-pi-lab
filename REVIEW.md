@@ -1,3 +1,22 @@
+# Goal 3 Task 283 / Pi Goal-Mode Live Theorem-Search Iff Repair
+
+Scope: add the next narrow theorem-search-guided candidate repair without changing proof authority. The only accepted shape is a locked `True <-> True` theorem/lemma with a live non-authoritative `Iff.intro` result; proof authority still comes only from LeanRunner and downstream clean replay.
+
+Implementation notes:
+- Added `goal3-task283-pi-goal-mode-live-theorem-search-iff-repair.test.mjs`.
+- Added `live_theorem_search_iff_intro_repair` as a placeholder-free repair strategy in `lean-candidate-attempt-repair-execution.ts`.
+- The strategy requires live `theorem_search:loogle`, `adapter_execution_state="live_provider_result_recorded"`, passing prompt-injection scan, `Iff.intro`, and no-authority flags before materializing `exact Iff.intro (fun _ => trivial) (fun _ => trivial)`.
+- Hardened repair task consumption so explicit statement-boundary mismatch fails closed before a repair execution can overwrite candidate drafts.
+- Added `pi_goal_mode_live_theorem_search_iff_intro_repair` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding Task283 negative coverage: `statement boundary mismatch must not materialize a placeholder-free Iff.intro repair` failed with `1 !== 0` because repair execution did not reject `statement_boundary_hash_matches=false`.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task283 exited 0; adjacent Task277, Task279, and Task276 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` initially hit the 5-minute tool timeout without a failure assertion, then exited 0 with Task283 discovered by the default runner when rerun with a longer timeout; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task283 uses `Iff.intro` only as candidate context. It does not make theorem-search declarations, provider status, request/response hashes, or repair execution proof authority. It cannot infer imports, generalize from provider declaration types, change the locked statement, promote claims, or certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task283 does not synthesize general iff proofs, use arbitrary theorem-search declarations, implement broader CAS/theorem-search repair synthesis, close real Pi/operator workflow, provide production OS-isolation helper binaries, run release-candidate proof breadth, or certify GA.
+
 # Goal 3 Task 282 / Pi Research Loop Export Repair Provenance
 
 Summary:
