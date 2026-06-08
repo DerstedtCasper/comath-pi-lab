@@ -1,3 +1,23 @@
+# Goal 3 Task 288 / Service-Owned Terminal Completion Certificate Evidence Gate
+
+Scope: create a service-owned terminal completion certificate evidence gate that consumes the current Task286 design and closes the Pi/Codex unattended lifecycle blocker without creating Lean proof authority or GA certification.
+
+Implementation notes:
+- Added `goal3-task288-service-owned-terminal-completion-certificate.test.mjs`.
+- Added `recordPiCodexLifecycleUnattendedRealHostTerminalCompletionCertificate()` and `POST /release/pi-codex-lifecycle/unattended-real-host-terminal-completion-certificate`.
+- The gate re-reads the canonical Task286 design, Task253 prerequisite, Task251 attempt-review, and current attempt-result artifact bytes by id/path/hash, rejects duplicate, stale, non-canonical, promotional, or tampered chains, and writes append-only `comath.pi_codex_unattended_real_host_terminal_completion_certificate.v1` evidence.
+- The persisted certificate records only neutral attempt-result evidence hash/size summary, not executor stdout/stderr/result payloads or result-artifact path/kind naming.
+- The certificate may mark Pi/Codex unattended lifecycle completion, but keeps `proof_authority=none`, `can_promote_claim=false`, `can_certify_ga=false`, and `ga_certification_gate_separate=true`.
+- Registered the service capability and synchronized AGENTS guidance, README, TODO, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed before implementation: focused Task288 failed because the service-owned terminal completion certificate evidence gate export was undefined.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task288 exited 0, including stale attempt-result artifact byte tamper rejection; adjacent Task249, Task251, Task253, Task284, Task286, and Task287 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task288 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task288 is terminal lifecycle certificate evidence only. It does not run Lean, create mathematical proof authority, promote claims, open durable/live transport, mutate trusted Pi state, or certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task288 does not add Pi consumer wiring for the new certificate route, durable long-lived operator transport, production GA execution, production OS-isolation helper binaries, broad proof breadth, or GA certification.
+
 # Goal 3 Task 287 / Pi Terminal Completion Certificate Design Consumer Bridge
 
 Scope: expose the Task286 terminal completion certificate design gate through the Pi thin client and read-only interactive planner without creating or certifying terminal unattended completion.
