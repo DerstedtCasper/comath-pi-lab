@@ -1,3 +1,34 @@
+# Goal 3 Task 266 / Pi Goal-Mode Ready Attempt LeanRunner Blocker
+
+Scope: connect Task265 re-ingested ready attempts to the service-owned LeanRunner, while routing all rejected attempts to replayable blocker evidence. This is not final clean replay, proof promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task266-pi-goal-mode-ready-attempt-leanrunner-blocker.test.mjs`.
+- Added `executeLeanCandidateAttemptLeanRunner()` in `proof-kernel/ensemble/lean-candidate-attempt-leanrunner-execution.ts`.
+- `candidate_verification` now records ready-for-LeanRunner preflight first, then a later tick runs `comathd.LeanRunner` over each ready `LeanCandidate.lean`.
+- LeanRunner execution writes append-only LeanRunManifest evidence, updates candidate manifests and the stored candidate index, and emits `.comath/campaign/<campaign_id>/lean_candidate_attempt_leanrunner_execution.json`.
+- If every ready attempt is rejected, CoMath writes `lean_candidate_attempt_leanrunner_blocker.json` and terminates with a replayable blocker instead of entering proof arbitration.
+- Placeholder-bearing drafts remain non-authoritative even if a runner shim reports exit 0.
+- Task266 Lean/Lake version probes and the default `runServiceOwnedLeanCommandV3()` command path now reuse the existing Windows-safe `lean-host-tools` resolver instead of direct `spawnSync("lean"|"lake")`, so `.cmd` shims and fixed argv handling stay on the maintained path.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task266 service test: `node services/comathd/tests/unit/goal3-task266-pi-goal-mode-ready-attempt-leanrunner-blocker.test.mjs` failed because ready repaired attempts still advanced directly from `candidate_verification` to `candidate_arbitration`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task266 exited 0, including the product command path with fake PATH-provided Lean/Lake `.cmd` tools and no injected `run` callback.
+- Adjacent Task265, Task264, Task263, and Phase63 regressions exited 0; Task265 was updated to assert the new ready-for-LeanRunner preflight boundary instead of direct arbitration.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task266 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task266, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task266 writes service-owned LeanRunner attempt evidence and blocker artifacts only. Failed LeanRunManifests remain repair input with `proof_authority="none"` and cannot promote claims. Successful placeholder-free candidates may proceed only to ordinary candidate arbitration; final authority still requires clean replay and downstream gates. The Lean host-tool resolver improves real command execution hygiene, but it is still tool invocation provenance, not proof authority.
+
+Residual risk: Goal 3 remains incomplete. Task266 does not synthesize real repairs from Lean stderr/stdout, integrate live theorem-search/literature hints into repair, run final hermetic clean replay for a promoted artifact, provide terminal proof success, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 265 / Pi Goal-Mode Repair Stage Re-Ingestion
 
 Scope: make the Task264 `repair` state executable and resumable by consuming service-owned repair work orders, materializing repaired candidate drafts, and returning to `candidate_verification`. This is not Lean replay, proof authority, promotion, or GA certification.

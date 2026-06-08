@@ -170,7 +170,12 @@ try {
   }
 
   const verifiedAgain = await tickCampaign(campaignId);
-  assert.equal(verifiedAgain.campaign.current_stage, "candidate_arbitration");
+  assert.equal(verifiedAgain.campaign.status, "running");
+  assert.equal(verifiedAgain.campaign.current_stage, "candidate_verification");
+  assert.equal(
+    verifiedAgain.campaign.next_actions.includes("run service-owned LeanRunner over ready repaired attempts"),
+    true
+  );
   const reportRel = `.comath/campaign/${campaignId}/lean_candidate_attempt_check_report.json`;
   const report = readJson(reportRel);
   assert.equal(report.candidates_ready_for_lean_runner, 8);

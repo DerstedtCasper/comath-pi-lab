@@ -68,7 +68,8 @@ export function runLeanToolCommand(
   command: string,
   args: string[],
   cwd: string,
-  leanToolchain: string
+  leanToolchain: string,
+  extraEnv?: Record<string, string | undefined>
 ): LeanHostCommandResult {
   const executable =
     command === "lean" || command === "lake"
@@ -87,14 +88,16 @@ export function runLeanToolCommand(
       };
     }
   }
+  const env = extraEnv ? { ...process.env, ...extraEnv } : process.env;
   const result = windowsCommandScript
     ? spawnSync("cmd.exe", ["/d", "/s", "/c", commandLine ?? ""], {
         cwd,
+        env,
         encoding: "utf8",
         timeout: 30_000,
         windowsVerbatimArguments: true
       })
-    : spawnSync(executable, args, { cwd, encoding: "utf8", timeout: 30_000 });
+    : spawnSync(executable, args, { cwd, env, encoding: "utf8", timeout: 30_000 });
   return {
     exit_code: result.status ?? 1,
     stdout: result.stdout ?? "",

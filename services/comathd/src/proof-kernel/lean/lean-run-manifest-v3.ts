@@ -1,9 +1,9 @@
-import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { appendAuditEvent } from "../../audit/jsonl-writer.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { leanRunManifestV3Schema, type LeanRunManifestV3 } from "../../types/schemas.js";
+import { runLeanToolCommand } from "./lean-host-tools.js";
 import { sha256Buffer, sha256FileSync } from "./lean-project.js";
 
 export type LeanRunPurpose = LeanRunManifestV3["purpose"];
@@ -339,16 +339,13 @@ export function runServiceOwnedLeanCommandV3(input: {
     ? input.run(input.command, input.cwd)
     : (() => {
         const [command, ...args] = input.command;
-        const spawned = spawnSync(command, args, {
-          cwd: input.cwd,
-          encoding: "utf8",
-          timeout: 30_000,
-          env: { ...process.env, COMATH_RUNNER_NETWORK: input.network_policy === "disabled" ? "disabled" : "unknown" }
+        const spawned = runLeanToolCommand(command, args, input.cwd, input.leanToolchain, {
+          COMATH_RUNNER_NETWORK: input.network_policy === "disabled" ? "disabled" : "unknown"
         });
         return {
-          exit_code: spawned.status ?? 1,
-          stdout: spawned.stdout ?? "",
-          stderr: spawned.stderr ?? (spawned.error ? String(spawned.error) : "")
+          exit_code: spawned.exit_code,
+          stdout: spawned.stdout,
+          stderr: spawned.stderr
         };
       })();
   const endedAt = new Date().toISOString();

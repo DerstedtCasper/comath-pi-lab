@@ -19,6 +19,11 @@ import { summarizeCandidateProofGradeEvidence } from "../ensemble/candidate-proo
 import { runGaAgentStageCandidates, type GaAgentStagePlanningContext } from "../ensemble/ga-agent-stage-runner.js";
 import { createLeanCandidateAttemptCheckReport, type LeanCandidateAttemptCheckReport } from "../ensemble/lean-candidate-attempt-check.js";
 import {
+  executeLeanCandidateAttemptLeanRunner,
+  type LeanCandidateAttemptLeanRunnerExecution,
+  type LeanCandidateAttemptRunnerConfig
+} from "../ensemble/lean-candidate-attempt-leanrunner-execution.js";
+import {
   hasRepairableLeanCandidateAttempts,
   writeLeanCandidateAttemptRepairBatch,
   type LeanCandidateAttemptRepairBatch
@@ -82,6 +87,7 @@ export type CampaignTickInput = {
   project_root: string;
   campaign_id: string;
   actor?: string;
+  lean_candidate_attempt_runner?: LeanCandidateAttemptRunnerConfig;
 };
 
 export type StageGateRepairResumeInput = CampaignTickInput & {
@@ -109,6 +115,7 @@ export type CampaignTickResult = {
   final_replay?: CleanReplayResult["final_replay"];
   static_audit?: CleanReplayResult["static_audit"];
   repair_execution?: LeanCandidateAttemptRepairExecution;
+  lean_candidate_attempt_leanrunner_execution?: LeanCandidateAttemptLeanRunnerExecution;
   counterexample?: {
     counterexample_id: string;
     assignment: Record<string, number>;
@@ -5390,6 +5397,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       campaign,
       candidates
     });
+    const previousAttemptCheckReport = readLeanCandidateAttemptCheckReportForCampaign(input.project_root, campaign);
     const attemptCheckReport = createLeanCandidateAttemptCheckReport({
       projectRoot: input.project_root,
       campaign,
@@ -5450,6 +5458,161 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         stage: "candidate_verification",
         reason: `native candidate verification failed: see ${verificationRel}`
       });
+    }
+    const readyForLeanRunner =
+      attemptCheckReport.candidates_ready_for_lean_runner > 0 &&
+      attemptCheckReport.candidates_requiring_repair === 0 &&
+      attemptCheckReport.candidates_blocked === 0;
+    if (readyForLeanRunner) {
+      const readyPreflightAlreadyRecorded =
+        previousAttemptCheckReport?.report.candidates_ready_for_lean_runner === attemptCheckReport.candidates_ready_for_lean_runner &&
+        previousAttemptCheckReport.report.candidates_requiring_repair === 0 &&
+        previousAttemptCheckReport.report.candidates_blocked === 0;
+      if (!readyPreflightAlreadyRecorded) {
+        const next = writeCampaign(
+          input.project_root,
+          researchCampaignSchema.parse({
+            ...campaign,
+            current_stage: "candidate_verification",
+            status: "running",
+            open_obligations: [{ ...obligation, status: "candidate_search" }],
+            stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "candidate_verification", [verificationRel, attemptCheckReportRel])],
+            next_actions: [
+              "run service-owned LeanRunner over ready repaired attempts",
+              "record LeanRunManifest evidence for every candidate attempt",
+              "route rejected Lean attempts to replayable blocker or repair input"
+            ]
+          }),
+          actor
+        );
+        return { campaign: next, obligation };
+      }
+
+      let leanRunnerExecution: ReturnType<typeof executeLeanCandidateAttemptLeanRunner>;
+      try {
+        leanRunnerExecution = executeLeanCandidateAttemptLeanRunner({
+          projectRoot: input.project_root,
+          campaign,
+          obligation,
+          candidates,
+          sourceCandidateIndexPath: candidatesRel,
+          checkReportPath: attemptCheckReportRel,
+          checkReport: attemptCheckReport,
+          runner: input.lean_candidate_attempt_runner
+        });
+      } catch (error) {
+        return blockCampaignAtFinalReplay({
+          projectRoot: input.project_root,
+          campaign,
+          obligation,
+          actor,
+          stage: "candidate_verification",
+          reason: `service-owned LeanRunner attempt execution failed: ${error instanceof Error ? error.message : "unknown_error"}`
+        });
+      }
+
+      if (leanRunnerExecution.blocker_required) {
+        const blockerRel = writeSimpleStageArtifact(input.project_root, campaign, "lean_candidate_attempt_leanrunner_blocker.json", {
+          schema_version: "comath.pi_goal_mode_lean_candidate_attempt_leanrunner_blocker.v1",
+          campaign_id: campaign.campaign_id,
+          project_id: campaign.project_id,
+          claim_id: campaign.root_claim_id,
+          obligation_id: obligation.obligation_id,
+          locked_statement_hash: obligation.statement_hash,
+          execution_path: leanRunnerExecution.execution_path,
+          execution_result: leanRunnerExecution.execution.execution_result,
+          lean_run_manifest_paths: leanRunnerExecution.execution.lean_run_manifest_paths,
+          rejected_candidate_count: leanRunnerExecution.execution.rejected_candidate_count,
+          reason: "service-owned LeanRunner rejected all repaired candidate attempts",
+          proof_authority: "none",
+          can_promote_claim: false,
+          can_certify_ga: false,
+          result_can_be_used_as_proof: false,
+          next_actions: [
+            "feed Lean stderr/stdout into the repair loop",
+            "keep all candidates unpromoted until a service-owned LeanRunner pass exists",
+            "resume from candidate repair with the same FormalSpecLock boundary"
+          ],
+          created_at: now()
+        });
+        const next = writeCampaign(
+          input.project_root,
+          researchCampaignSchema.parse({
+            ...campaign,
+            current_stage: "blocked",
+            status: "terminal",
+            terminal_state: "blocked_with_replayable_reason",
+            open_obligations: [{ ...obligation, status: "blocked" }],
+            blockers: [
+              ...campaign.blockers,
+              {
+                reason: "service-owned LeanRunner rejected all repaired candidate attempts",
+                obligation_id: obligation.obligation_id,
+                artifact_path: blockerRel,
+                execution_path: leanRunnerExecution.execution_path,
+                lean_run_manifest_paths: leanRunnerExecution.execution.lean_run_manifest_paths,
+                proof_authority: "none",
+                can_promote_claim: false
+              }
+            ],
+            stage_runs: [
+              ...campaign.stage_runs,
+              stageRun(campaign, "candidate_verification", "blocked", [
+                verificationRel,
+                attemptCheckReportRel,
+                leanRunnerExecution.execution_path,
+                blockerRel
+              ])
+            ],
+            next_actions: [
+              "repair rejected Lean attempts using service-owned Lean stderr/stdout evidence",
+              "rerun candidate verification before any future LeanRunner attempt"
+            ]
+          }),
+          actor
+        );
+        return {
+          campaign: next,
+          obligation: { ...obligation, status: "blocked" },
+          lean_candidate_attempt_leanrunner_execution: leanRunnerExecution.execution
+        };
+      }
+
+      const next = writeCampaign(
+        input.project_root,
+        researchCampaignSchema.parse({
+          ...campaign,
+          current_stage: "candidate_arbitration",
+          status: "running",
+          open_obligations: [{ ...obligation, status: "candidate_search" }],
+          stage_runs: [
+            ...campaign.stage_runs,
+            completedStageRun(campaign, "candidate_verification", [
+              verificationRel,
+              attemptCheckReportRel,
+              leanRunnerExecution.execution_path
+            ])
+          ],
+          next_actions: ["select candidate by evidence-weighted arbitration over service-owned LeanRunner manifests"]
+        }),
+        actor
+      );
+      return {
+        campaign: next,
+        obligation,
+        ensemble: {
+          candidates: leanRunnerExecution.candidates,
+          decision: {
+            selected_candidate_id: null,
+            selection_mode: "recovery_required",
+            proof_authority: "none",
+            rejected_candidates: [],
+            hard_vetoes: [],
+            recovery_plan: ["candidate arbitration must run after LeanRunner attempt evidence is stored"]
+          }
+        },
+        lean_candidate_attempt_leanrunner_execution: leanRunnerExecution.execution
+      };
     }
     const next = writeCampaign(
       input.project_root,
