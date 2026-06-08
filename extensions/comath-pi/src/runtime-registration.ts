@@ -216,6 +216,7 @@ function commandMetadata(command: string): Pick<
         "lifecycle-unattended-real-host-execution-attempt",
         "lifecycle-unattended-real-host-execution-attempt-review",
         "lifecycle-unattended-real-host-completion-certification-prerequisite",
+        "lifecycle-unattended-real-host-terminal-completion-certificate-design",
         "lifecycle-interactive-real-pi",
         "agent-adapter-os-isolation-probe",
         "agent-adapter-os-isolation-sandbox-execution",

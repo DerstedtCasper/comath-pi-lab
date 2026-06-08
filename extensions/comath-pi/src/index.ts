@@ -166,6 +166,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttempt",
   "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttemptReview",
   "comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite",
+  "comath.release.piCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
   "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",
@@ -570,6 +571,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttempt" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostExecutionAttemptReview" ||
     name === "comath.release.piCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite" ||
+    name === "comath.release.piCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
     name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe" ||
@@ -621,6 +623,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "lifecycle-unattended-real-host-execution-attempt",
   "lifecycle-unattended-real-host-execution-attempt-review",
   "lifecycle-unattended-real-host-completion-certification-prerequisite",
+  "lifecycle-unattended-real-host-terminal-completion-certificate-design",
   "run-codex-api-probe",
   "review"
 ] as const;
@@ -706,6 +709,26 @@ function piLifecycleAttemptReviewArtifactPathText(value: string, attemptReviewId
   if (match[1] !== attemptReviewId || match[2] !== "unattended-real-host-execution-attempt-review.json") {
     throw new Error(
       "attempt_review_path must reference service-owned-pi-lifecycle/<attempt_review_id>/unattended-real-host-execution-attempt-review.json"
+    );
+  }
+  return `${trustedRuntimeRootName}/release/pi-codex-lifecycle/${match[1]}/${match[2]}`;
+}
+
+function piLifecycleCompletionCertificationPrerequisiteArtifactPathText(
+  value: string,
+  completionCertificationPrerequisiteId: string
+): string {
+  const sanitized = serviceArtifactPathText(value).trim();
+  const match = sanitized.match(publicPiLifecycleArtifactPathPattern);
+  if (!match) {
+    return sanitized;
+  }
+  if (
+    match[1] !== completionCertificationPrerequisiteId ||
+    match[2] !== "unattended-real-host-completion-certification-prerequisite.json"
+  ) {
+    throw new Error(
+      "completion_certification_prerequisite_path must reference service-owned-pi-lifecycle/<completion_certification_prerequisite_id>/unattended-real-host-completion-certification-prerequisite.json"
     );
   }
   return `${trustedRuntimeRootName}/release/pi-codex-lifecycle/${match[1]}/${match[2]}`;
@@ -1336,6 +1359,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     "completion_certification_prerequisite_id",
     `${sessionId}-COMPLETION-CERTIFICATION-PREREQ`
   );
+  const terminalCompletionCertificateDesignId = optionalPublicPlannerToken(
+    input,
+    "terminal_completion_certificate_design_id",
+    `${sessionId}-TERMINAL-COMPLETION-CERT-DESIGN`
+  );
   const continuityId = optionalPublicPlannerToken(
     input,
     "continuity_id",
@@ -1419,6 +1447,16 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     input,
     "attempt_review_sha256",
     "ATTEMPT-REVIEW-SHA256"
+  );
+  const completionCertificationPrerequisitePath = optionalPublicPlannerPath(
+    input,
+    "completion_certification_prerequisite_path",
+    `service-owned-pi-lifecycle/${completionCertificationPrerequisiteId}/unattended-real-host-completion-certification-prerequisite.json`
+  );
+  const completionCertificationPrerequisiteSha256 = optionalPublicPlannerToken(
+    input,
+    "completion_certification_prerequisite_sha256",
+    "COMPLETION-CERTIFICATION-PREREQ-SHA256"
   );
   const sessionManifestPath = optionalPublicPlannerPath(
     input,
@@ -1541,6 +1579,12 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `--completion-certification-prerequisite-id ${completionCertificationPrerequisiteId} ` +
       `--attempt-review-id ${attemptReviewId} --attempt-review-path ${attemptReviewPath} ` +
       `--attempt-review-sha256 ${attemptReviewSha256}`,
+    "lifecycle-unattended-real-host-terminal-completion-certificate-design":
+      `/cm:release lifecycle-unattended-real-host-terminal-completion-certificate-design --project-id ${projectId} ` +
+      `--terminal-completion-certificate-design-id ${terminalCompletionCertificateDesignId} ` +
+      `--completion-certification-prerequisite-id ${completionCertificationPrerequisiteId} ` +
+      `--completion-certification-prerequisite-path ${completionCertificationPrerequisitePath} ` +
+      `--completion-certification-prerequisite-sha256 ${completionCertificationPrerequisiteSha256}`,
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -1612,8 +1656,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       attempt_path: attemptPath,
       attempt_sha256: attemptSha256,
       completion_certification_prerequisite_id: completionCertificationPrerequisiteId,
+      terminal_completion_certificate_design_id: terminalCompletionCertificateDesignId,
       attempt_review_path: attemptReviewPath,
       attempt_review_sha256: attemptReviewSha256,
+      completion_certification_prerequisite_path: completionCertificationPrerequisitePath,
+      completion_certification_prerequisite_sha256: completionCertificationPrerequisiteSha256,
       pi_install_transcript_path: piInstallTranscriptPath,
       runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath
     },
@@ -2840,6 +2887,41 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
         ...(requestedCompletionMode === "production_unattended_real_host_completion"
           ? {}
           : { requested_completion_mode: requestedCompletionMode })
+      })
+    );
+  }
+
+  if (name === "comath.release.piCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign") {
+    const terminalCompletionCertificateDesignId = readString(input, "terminal_completion_certificate_design_id", {
+      optional: true
+    });
+    const completionCertificationPrerequisiteId = readString(input, "completion_certification_prerequisite_id");
+    const requestedCertificateMode =
+      readString(input, "requested_certificate_mode", { optional: true }) ??
+      "production_unattended_real_host_completion_certificate_design";
+    return publicToolResult(
+      name,
+      client.post("/release/pi-codex-lifecycle/unattended-real-host-terminal-completion-certificate-design", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        ...(terminalCompletionCertificateDesignId === undefined
+          ? {}
+          : {
+              terminal_completion_certificate_design_id: publicOperatorText(
+                terminalCompletionCertificateDesignId
+              )
+            }),
+        completion_certification_prerequisite_id: completionCertificationPrerequisiteId,
+        completion_certification_prerequisite_path: piLifecycleCompletionCertificationPrerequisiteArtifactPathText(
+          readString(input, "completion_certification_prerequisite_path"),
+          completionCertificationPrerequisiteId
+        ),
+        completion_certification_prerequisite_sha256: readString(
+          input,
+          "completion_certification_prerequisite_sha256"
+        ),
+        requested_certificate_mode: requestedCertificateMode
       })
     );
   }
@@ -4367,6 +4449,37 @@ export function createComathTools(): ToolDescriptor[] {
       )
     },
     {
+      name: "comath.release.piCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign",
+      description:
+        "Record a host-confirmed service-owned unattended real-host terminal completion certificate design through comathd using completion-prerequisite id/path/hash, without exposing executor commands, caller attempt results, completion certificates, terminal completion, proof authority, GA certification, direct Pi mutation, or durable/live transport claims.",
+      mutates: true,
+      input_schema: requireConfirmationSchema(
+        objectSchema(
+          [
+            "project_root",
+            "project_id",
+            "actor",
+            "completion_certification_prerequisite_id",
+            "completion_certification_prerequisite_path",
+            "completion_certification_prerequisite_sha256"
+          ],
+          {
+            project_root: stringProp,
+            project_id: stringProp,
+            actor: stringProp,
+            terminal_completion_certificate_design_id: stringProp,
+            completion_certification_prerequisite_id: stringProp,
+            completion_certification_prerequisite_path: stringProp,
+            completion_certification_prerequisite_sha256: stringProp,
+            requested_certificate_mode: {
+              type: "string",
+              enum: ["production_unattended_real_host_completion_certificate_design"]
+            }
+          }
+        )
+      )
+    },
+    {
       name: "comath.release.piCodexLifecycleGuidedRealPiExecution",
       description:
         "Record service-owned guided real-Pi execution evidence through comathd without Pi direct writes, proof authority, GA certification, or long-lived transport claims.",
@@ -4467,6 +4580,10 @@ export function createComathTools(): ToolDescriptor[] {
         transport_continuity_sha256: stringProp,
         readiness_id: stringProp,
         attempt_review_id: stringProp,
+        terminal_completion_certificate_design_id: stringProp,
+        completion_certification_prerequisite_id: stringProp,
+        completion_certification_prerequisite_path: stringProp,
+        completion_certification_prerequisite_sha256: stringProp,
         attempt_path: stringProp,
         attempt_sha256: stringProp,
         handoff_review_path: stringProp,
@@ -6696,6 +6813,51 @@ async function handleReleaseCommand(
           requested_completion_mode:
             optionValue(parsed.args, "--requested-completion-mode") ??
             "production_unattended_real_host_completion"
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "lifecycle-unattended-real-host-terminal-completion-certificate-design") {
+    const tool = createComathTools().find(
+      (descriptor) =>
+        descriptor.name ===
+        "comath.release.piCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign"
+    );
+    if (!tool) {
+      throw new Error(
+        "Pi/Codex lifecycle unattended real-host terminal completion certificate design tool is not registered"
+      );
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          terminal_completion_certificate_design_id: optionValue(
+            parsed.args,
+            "--terminal-completion-certificate-design-id"
+          ),
+          completion_certification_prerequisite_id: requiredOption(
+            optionValue(parsed.args, "--completion-certification-prerequisite-id"),
+            "completion_certification_prerequisite_id"
+          ),
+          completion_certification_prerequisite_path: requiredOption(
+            optionValue(parsed.args, "--completion-certification-prerequisite-path"),
+            "completion_certification_prerequisite_path"
+          ),
+          completion_certification_prerequisite_sha256: requiredOption(
+            optionValue(parsed.args, "--completion-certification-prerequisite-sha256"),
+            "completion_certification_prerequisite_sha256"
+          ),
+          requested_certificate_mode:
+            optionValue(parsed.args, "--requested-certificate-mode") ??
+            "production_unattended_real_host_completion_certificate_design"
         },
         ctx
       )

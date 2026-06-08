@@ -1,3 +1,24 @@
+# Goal 3 Task 287 / Pi Terminal Completion Certificate Design Consumer Bridge
+
+Scope: expose the Task286 terminal completion certificate design gate through the Pi thin client and read-only interactive planner without creating or certifying terminal unattended completion.
+
+Implementation notes:
+- Added `goal3-task287-pi-unattended-real-host-terminal-completion-certificate-design-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign` to the Pi executable tool set, default runtime registration, and `@comath/pi-extension` package test chain.
+- Added `/cm:release lifecycle-unattended-real-host-terminal-completion-certificate-design` as a host-confirmed command that calls only `POST /release/pi-codex-lifecycle/unattended-real-host-terminal-completion-certificate-design`.
+- Added the read-only interactive real-Pi planner checkpoint after `lifecycle-unattended-real-host-completion-certification-prerequisite`.
+- The Pi bridge strips model-supplied confirmation ids, forwards only prerequisite id/path/hash plus optional design id/mode, translates only the completion-prerequisite public alias to the service-canonical path, rejects wrong alias material before POST, and omits executor/result/certificate fields from public schema and request bodies.
+- Public direct tool results, planner output, confirmation prompts, and notifications remain sanitized for proof-success wording, host roots, `.comath` paths, secrets, terminal-completion claims, executor material, completion-certificate overclaims, durable/live transport claims, and GA claims.
+- Synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed before implementation: focused Task287 failed because `comath.release.piCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign` was not registered.
+- Current verification in this continuation: `corepack pnpm --filter @comath/pi-extension build` exited 0; focused Task287, adjacent Task254, Task285, Task223, and Phase26 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/pi-extension typecheck` exited 0; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task287 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task287 is Pi consumer wiring only. It does not create terminal completion certificates, certify unattended completion, expose executor output, open durable/live transport, mutate trusted Pi state, run Lean, promote claims, or certify GA. The Task286 service route remains responsible for re-reading and validating canonical prerequisite artifacts.
+
+Residual risk: Goal 3 remains incomplete. Task287 does not implement a real terminal completion certificate, durable long-lived operator transport, production GA execution, production OS-isolation helper binaries, broad proof breadth, or GA certification.
+
 # Goal 3 Task 286 / Service-Owned Terminal Completion Certificate Design Gate
 
 Scope: define a service-owned terminal completion certificate design gate that consumes the current Task253 prerequisite and records the future evidence contract without creating or certifying terminal unattended completion.
