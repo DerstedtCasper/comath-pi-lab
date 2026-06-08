@@ -69,7 +69,7 @@ export type LeanCandidateAttemptRepairExecution = {
     hint_guided_revision_applied?: boolean;
     hint_execution_guided_revision_applied?: boolean;
     placeholder_free_repair_materialized: boolean;
-    placeholder_free_repair_strategy: "locked_true_theorem_trivial" | null;
+    placeholder_free_repair_strategy: PlaceholderFreeRepairStrategy | null;
     original_had_sorry: boolean;
     repaired_has_sorry: false;
     repair_placeholder_present: boolean;
@@ -86,6 +86,8 @@ export type LeanCandidateAttemptRepairExecution = {
   result_can_be_used_as_proof: false;
   created_at: string;
 };
+
+type PlaceholderFreeRepairStrategy = "locked_true_theorem_trivial" | "locked_reflexive_equality_rfl";
 
 export type ExecuteLeanCandidateAttemptRepairBatchResult = {
   execution: LeanCandidateAttemptRepairExecution;
@@ -145,6 +147,116 @@ function hasLockedTrueTheoremWithSorry(text: string): boolean {
   );
 }
 
+function theoremStatementsWithSorry(text: string): string[] {
+  const code = stripLeanLineComments(text);
+  const matches = code.matchAll(
+    /\b(?:theorem|lemma)\s+[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_'.]*)*(?<signature>[\s\S]*?)\s*:=\s*by[\s\S]*?\bsorry\b/gu
+  );
+  const statements: string[] = [];
+  for (const match of matches) {
+    const signature = match.groups?.signature;
+    if (!signature) {
+      continue;
+    }
+    const statementColon = signature.lastIndexOf(":");
+    if (statementColon < 0) {
+      continue;
+    }
+    const statement = signature.slice(statementColon + 1).trim();
+    if (statement.length > 0) {
+      statements.push(statement);
+    }
+  }
+  return statements;
+}
+
+function topLevelLeanEquality(statement: string): { lhs: string; rhs: string } | undefined {
+  let parenDepth = 0;
+  let squareDepth = 0;
+  let braceDepth = 0;
+  const equalityIndexes: number[] = [];
+  for (let index = 0; index < statement.length; index += 1) {
+    const char = statement[index];
+    if (char === "(") {
+      parenDepth += 1;
+      continue;
+    }
+    if (char === ")") {
+      parenDepth = Math.max(0, parenDepth - 1);
+      continue;
+    }
+    if (char === "[") {
+      squareDepth += 1;
+      continue;
+    }
+    if (char === "]") {
+      squareDepth = Math.max(0, squareDepth - 1);
+      continue;
+    }
+    if (char === "{") {
+      braceDepth += 1;
+      continue;
+    }
+    if (char === "}") {
+      braceDepth = Math.max(0, braceDepth - 1);
+      continue;
+    }
+    if (char !== "=" || parenDepth !== 0 || squareDepth !== 0 || braceDepth !== 0) {
+      continue;
+    }
+    const previous = statement[index - 1] ?? "";
+    const next = statement[index + 1] ?? "";
+    if (previous === ":" || previous === "<" || previous === ">" || previous === "=" || next === ">" || next === "=") {
+      continue;
+    }
+    equalityIndexes.push(index);
+  }
+  if (equalityIndexes.length !== 1) {
+    return undefined;
+  }
+  const [equalityIndex] = equalityIndexes;
+  const lhs = statement.slice(0, equalityIndex).trim();
+  const rhs = statement.slice(equalityIndex + 1).trim();
+  return lhs.length > 0 && rhs.length > 0 ? { lhs, rhs } : undefined;
+}
+
+function normalizeReflexiveEqualitySide(side: string): string {
+  return side.trim().replace(/\s+/gu, " ");
+}
+
+function hasLockedReflexiveEqualityTheoremWithSorry(text: string): boolean {
+  for (const statement of theoremStatementsWithSorry(text)) {
+    const equality = topLevelLeanEquality(statement);
+    if (!equality) {
+      continue;
+    }
+    if (normalizeReflexiveEqualitySide(equality.lhs) === normalizeReflexiveEqualitySide(equality.rhs)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function placeholderFreeRepairStrategy(text: string): PlaceholderFreeRepairStrategy | null {
+  if (hasLockedTrueTheoremWithSorry(text)) {
+    return "locked_true_theorem_trivial";
+  }
+  if (hasLockedReflexiveEqualityTheoremWithSorry(text)) {
+    return "locked_reflexive_equality_rfl";
+  }
+  return null;
+}
+
+function placeholderFreeRepairReplacement(strategy: PlaceholderFreeRepairStrategy | null): string | undefined {
+  if (strategy === "locked_true_theorem_trivial") {
+    return "trivial";
+  }
+  if (strategy === "locked_reflexive_equality_rfl") {
+    return "rfl";
+  }
+  return undefined;
+}
+
 function replaceLeanSorryTokens(text: string, replacement: string): string {
   return text
     .split(/(\r?\n)/)
@@ -169,15 +281,15 @@ function repairLeanDraft(
   hintGuidedRevisionApplied: boolean;
   hintExecutionGuidedRevisionApplied: boolean;
   placeholderFreeRepairMaterialized: boolean;
-  placeholderFreeRepairStrategy: "locked_true_theorem_trivial" | null;
+  placeholderFreeRepairStrategy: PlaceholderFreeRepairStrategy | null;
 } {
   const placeholder = [
     "by",
     "  -- comath_repair_placeholder: non-authoritative draft for LeanRunner.",
     "  exact ?comath_repair_placeholder"
   ].join("\n");
-  const canMaterializeTrivial = hasLockedTrueTheoremWithSorry(text);
-  const replaced = replaceLeanSorryTokens(text, canMaterializeTrivial ? "trivial" : placeholder);
+  const repairStrategy = placeholderFreeRepairStrategy(text);
+  const replaced = replaceLeanSorryTokens(text, placeholderFreeRepairReplacement(repairStrategy) ?? placeholder);
   const markers: string[] = [];
   const sourceFeedback =
     task.source_feedback && typeof task.source_feedback === "object" && !Array.isArray(task.source_feedback)
@@ -214,8 +326,8 @@ function repairLeanDraft(
       feedbackGuidedRevisionApplied: false,
       hintGuidedRevisionApplied: false,
       hintExecutionGuidedRevisionApplied: false,
-      placeholderFreeRepairMaterialized: canMaterializeTrivial,
-      placeholderFreeRepairStrategy: canMaterializeTrivial ? "locked_true_theorem_trivial" : null
+      placeholderFreeRepairMaterialized: repairStrategy !== null,
+      placeholderFreeRepairStrategy: repairStrategy
     };
   }
   return {
@@ -223,8 +335,8 @@ function repairLeanDraft(
     feedbackGuidedRevisionApplied: Boolean(sourceFeedback),
     hintGuidedRevisionApplied: Boolean(sourceHintBundle),
     hintExecutionGuidedRevisionApplied: Boolean(sourceHintExecution),
-    placeholderFreeRepairMaterialized: canMaterializeTrivial,
-    placeholderFreeRepairStrategy: canMaterializeTrivial ? "locked_true_theorem_trivial" : null
+    placeholderFreeRepairMaterialized: repairStrategy !== null,
+    placeholderFreeRepairStrategy: repairStrategy
   };
 }
 

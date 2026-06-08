@@ -1,3 +1,24 @@
+# Goal 3 Task 272 / Pi Goal-Mode Rfl Final Replay Terminal
+
+Scope: broaden the bounded Pi goal-mode terminal chain from `True` to exact reflexive equality repair. This lets locked theorem/lemma goals such as `goal3_task272 : 1 = 1` materialize a placeholder-free `by rfl` candidate, then still require LeanRunner, final clean replay, FinalReplayManifest v3 packaging, ordinary promotion, and export readiness.
+
+Implementation notes:
+- Added `goal3-task272-pi-goal-mode-rfl-final-replay-terminal.test.mjs`.
+- Added a conservative repair strategy `locked_reflexive_equality_rfl` in `lean-candidate-attempt-repair-execution.ts`.
+- The detector strips Lean line comments, extracts locked theorem/lemma statements with actual `sorry`, accepts only one top-level equality, and requires both equality sides to be syntactically identical after whitespace normalization.
+- Non-reflexive, ambiguous, missing-theorem, placeholder, or hole-bearing drafts remain on the existing repair/blocker path.
+- Added `pi_goal_mode_rfl_final_replay_terminal` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding the focused Task272 service test: `node services/comathd/tests/unit/goal3-task272-pi-goal-mode-rfl-final-replay-terminal.test.mjs` failed because the campaign stayed in `repair` for `1 = 1`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task272 exited 0.
+- Adjacent Task270 initially exposed that its historical fallback used `1 = 1` only as a non-`True` sentinel; Task272 intentionally makes that a valid `rfl` target, so the fallback fixture now uses non-reflexive `1 = 2` to preserve repair-routing coverage.
+- Current verification in this continuation: focused Task272 exited 0; adjacent Task271 and updated Task270 exited 0; adjacent Task269 and Task266 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task272 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task272 is a conservative definitional-equality candidate synthesis slice. It is not general equality solving, expression normalization, theorem search, live provider proof authority, broad mathlib proof breadth, real-Pi completion, or GA certification. Final proof authority still requires service-owned Lean clean replay plus ordinary promotion gates.
+
+Residual risk: Goal 3 remains incomplete. Task272 does not execute live theorem-search/literature/CAS providers, synthesize repairs for non-reflexive goals, close real Pi/operator execution, provide production OS-isolation helper binaries, run release-candidate proof breadth, or certify GA.
+
 # Goal 3 Task 271 / Pi Goal-Mode Final Replay Terminal
 
 Scope: carry the bounded Pi goal-mode placeholder-free `True` candidate through the existing product authority chain: arbitration, red-team, integration, final static audit, final global clean replay, FinalReplayManifest v3 packaging, ordinary promotion, and `completed_formal_proof`. This is not broad theorem synthesis, live provider proof authority, mathlib breadth, real-Pi completion, or GA certification.

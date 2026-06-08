@@ -240,7 +240,7 @@ try {
     project_root: root,
     project_name: "Goal 3 Task 270 Placeholder Repair Routing",
     user_goal:
-      "Prove theorem goal3_task270_fallback : 1 = 1 := by sorry while preserving the exact theorem boundary and keeping placeholders out of LeanRunner.",
+      "Prove theorem goal3_task270_fallback : 1 = 2 := by sorry while preserving the exact theorem boundary and keeping placeholders out of LeanRunner.",
     domain: "formalization",
     mode: "goal",
     paper_paths: ["papers/source.md"],

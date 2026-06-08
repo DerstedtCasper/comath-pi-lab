@@ -156,7 +156,8 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_goal_mode_repair_hint_bundle",
       "pi_goal_mode_repair_hint_execution",
       "pi_goal_mode_placeholder_free_repair_candidate",
-      "pi_goal_mode_final_replay_terminal"
+      "pi_goal_mode_final_replay_terminal",
+      "pi_goal_mode_rfl_final_replay_terminal"
     ],
     residualRisks: [
       "generic_proof_planning_deferred",
