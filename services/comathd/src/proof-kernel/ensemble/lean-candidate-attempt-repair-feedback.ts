@@ -6,7 +6,9 @@ import {
   getExternalWheelAdapter,
   listExternalWheelAdapters,
   type ExternalWheelAdapterDescriptor,
-  type ExternalWheelKind
+  type ExternalWheelKind,
+  type PromptInjectionScan,
+  type RetrievalResult
 } from "../../adapters/external-wheel-registry.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import type { LeanRunManifestV3, ProofObligation, ResearchCampaign } from "../../types/schemas.js";
@@ -138,10 +140,13 @@ export type LeanCandidateAttemptRepairHintExecution = {
     proof_authority: "none";
   };
   service_owned_adapter_execution: true;
-  execution_status: "stubbed_provider_results_recorded";
-  network_execution_performed: false;
-  live_provider_execution_performed: false;
-  stubbed_adapter_execution_performed: true;
+  execution_status:
+    | "stubbed_provider_results_recorded"
+    | "live_provider_results_recorded"
+    | "mixed_live_and_stubbed_provider_results_recorded";
+  network_execution_performed: boolean;
+  live_provider_execution_performed: boolean;
+  stubbed_adapter_execution_performed: boolean;
   adapter_result_count: number;
   adapter_results: Array<{
     adapter_result_id: string;
@@ -157,19 +162,19 @@ export type LeanCandidateAttemptRepairHintExecution = {
     request_sha256: string;
     result_payload_sha256: string;
     result_payload_summary: Record<string, unknown>;
-    adapter_execution_state: "stubbed_provider_result_recorded";
+    adapter_execution_state: "stubbed_provider_result_recorded" | "live_provider_result_recorded";
     capability_metadata: {
       adapter_id: string;
       kind: ExternalWheelKind;
       capabilities: string[];
     };
     terms: ExternalWheelAdapterDescriptor["terms"];
-    network_execution_performed: false;
-    live_provider_execution_performed: false;
+    network_execution_performed: boolean;
+    live_provider_execution_performed: boolean;
     proof_authority: "none";
     can_promote_claim: false;
     result_can_be_used_as_proof: false;
-    promotion_vetoes: ["external_adapter_result_has_no_proof_authority"];
+    promotion_vetoes: string[];
   }>;
   per_candidate_execution_refs: Array<{
     candidate_id: string;
@@ -241,6 +246,65 @@ function canonicalHash(value: unknown): string {
   return sha256Text(`${JSON.stringify(sortJson(value))}\n`);
 }
 
+function adapterCapabilityMetadata(
+  adapter: ExternalWheelAdapterDescriptor
+): RetrievalResult["capability_metadata"] {
+  return {
+    adapter_id: adapter.id,
+    kind: adapter.kind,
+    capabilities: [...adapter.capabilities],
+    credential_policy: {
+      ...adapter.credential_policy,
+      missing_credentials: [...adapter.credential_policy.missing_credentials]
+    },
+    rate_limit_policy: { ...adapter.rate_limit_policy }
+  };
+}
+
+function truthyEnv(value: string | undefined): boolean {
+  return value === "1" || value?.toLowerCase() === "true" || value?.toLowerCase() === "yes" || value?.toLowerCase() === "on";
+}
+
+function liveRepairHintExecutionEnabled(): boolean {
+  return truthyEnv(process.env.COMATH_ENABLE_GOAL_MODE_LIVE_REPAIR_HINT_EXECUTION);
+}
+
+function liveRepairHintProviderEnabled(kind: ExternalWheelKind, provider: string): boolean {
+  const configured = process.env.COMATH_LIVE_REPAIR_HINT_PROVIDERS;
+  if (!configured) {
+    return false;
+  }
+  const wanted = new Set(
+    configured
+      .split(/[\s,;]+/u)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+  );
+  return wanted.has("*") || wanted.has(provider) || wanted.has(`${kind}:${provider}`);
+}
+
+function goalModeTextPromptInjectionScan(text: string): PromptInjectionScan {
+  const patterns: Array<{ code: string; pattern: RegExp }> = [
+    { code: "ignore_previous_instructions", pattern: /\bignore\s+(all\s+)?(previous|system|developer)\s+instructions?\b/iu },
+    { code: "skip_lean_authority", pattern: /\b(skip|bypass|avoid).{0,40}\bLean\b/iu },
+    { code: "mark_proven_without_lean", pattern: /\b(mark|declare|label).{0,40}\b(proven|proved).{0,60}\bwithout\s+Lean\b/iu },
+    { code: "credential_exfiltration", pattern: /\b(secret|credential|token|api[_ -]?key|password)\b/iu },
+    { code: "tool_misuse_instruction", pattern: /\b(run|execute|call)\s+(shell|powershell|cmd|tool)\b/iu }
+  ];
+  const findings: string[] = [];
+  text.split(/\r?\n/u).forEach((line, index) => {
+    for (const entry of patterns) {
+      if (entry.pattern.test(line)) {
+        findings.push(`${entry.code}:${index + 1}-${index + 1}`);
+      }
+    }
+  });
+  return {
+    status: findings.length > 0 ? "fail" : "pass",
+    findings
+  };
+}
+
 function optionalArtifactRef(projectRoot: string, relativePath: string): { path: string; sha256: string; proof_authority: "none" } | null {
   try {
     const path = assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true });
@@ -287,6 +351,7 @@ function writeRepairHintBundle(input: {
   const selectedAdapters = [
     adapters.find((adapter) => adapter.kind === "theorem_search" && adapter.provider === "loogle"),
     adapters.find((adapter) => adapter.kind === "retrieval" && adapter.provider === "local_markdown"),
+    adapters.find((adapter) => adapter.kind === "retrieval" && adapter.provider === "jina_search"),
     adapters.find((adapter) => adapter.kind === "computation" && adapter.provider === "sympy"),
     adapters.find((adapter) => adapter.kind === "proof_search_backend" && adapter.provider === "aesop"),
     adapters.find((adapter) => adapter.kind === "external_lean_repo" && adapter.provider === "mathlib4")
@@ -450,6 +515,160 @@ async function stubbedResultPayloadSummary(input: {
   };
 }
 
+type RepairHintAdapterExecution = {
+  requestForHash: Record<string, unknown>;
+  resultPayloadSummary: Record<string, unknown>;
+  adapterExecutionState: LeanCandidateAttemptRepairHintExecution["adapter_results"][number]["adapter_execution_state"];
+  networkExecutionPerformed: boolean;
+  liveProviderExecutionPerformed: boolean;
+};
+
+function jinaSearchBaseUrl(): string | undefined {
+  const value = process.env.COMATH_JINA_SEARCH_BASE_URL?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
+function shouldExecuteLiveJinaSearch(hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number]): boolean {
+  return (
+    hint.kind === "retrieval" &&
+    hint.provider === "jina_search" &&
+    liveRepairHintExecutionEnabled() &&
+    liveRepairHintProviderEnabled(hint.kind, hint.provider) &&
+    Boolean(jinaSearchBaseUrl())
+  );
+}
+
+async function liveJinaSearchResultPayloadSummary(input: {
+  adapter: ExternalWheelAdapterDescriptor;
+  hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number];
+  createdAt: string;
+}): Promise<RepairHintAdapterExecution> {
+  const baseUrl = jinaSearchBaseUrl();
+  if (!baseUrl) {
+    throw new Error("comath_live_jina_search_base_url_missing");
+  }
+  const requestUrl = new URL(baseUrl);
+  requestUrl.searchParams.set("q", input.hint.query_text);
+  requestUrl.searchParams.set("limit", "3");
+  const apiKey = process.env.COMATH_JINA_API_KEY;
+  const headers: Record<string, string> = {
+    accept: "text/plain, text/markdown, application/json"
+  };
+  if (apiKey) {
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  let response: Response;
+  let bodyText: string;
+  try {
+    response = await fetch(requestUrl, {
+      method: "GET",
+      headers,
+      signal: controller.signal
+    });
+    bodyText = await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+  const responseBodySha256 = sha256Text(bodyText);
+  const promptInjectionScan = goalModeTextPromptInjectionScan(bodyText);
+  const queryHash = canonicalHash({
+    provider: input.adapter.provider,
+    kind: input.adapter.kind,
+    input: {
+      query: input.hint.query_text,
+      limit: 3,
+      request_url: requestUrl.toString()
+    }
+  });
+  const result: RetrievalResult = {
+    evidence_id: `LITLIVE-${queryHash.slice(0, 12)}`,
+    adapter_id: input.adapter.id,
+    provider: input.adapter.provider,
+    source_kind: "html",
+    query_hash: queryHash,
+    title: `${input.adapter.provider} live repair hint response`,
+    source_ref: requestUrl.toString(),
+    source_url: requestUrl.toString(),
+    retrieved_at: input.createdAt,
+    content_sha256: responseBodySha256,
+    anchors: [
+      {
+        kind: "live_response_body",
+        line_range: `1-${Math.max(1, bodyText.split(/\r?\n/u).length)}`,
+        content_sha256: responseBodySha256
+      }
+    ],
+    prompt_injection_scan: promptInjectionScan,
+    capability_metadata: adapterCapabilityMetadata(input.adapter),
+    terms: { ...input.adapter.terms },
+    proof_authority: "none",
+    can_promote_claim: false,
+    promotion_vetoes: ["external_adapter_result_has_no_proof_authority"]
+  };
+  const requestForHash = {
+    adapter_id: input.adapter.id,
+    kind: input.adapter.kind,
+    provider: input.adapter.provider,
+    query_hash: input.hint.query_hash,
+    request_url: requestUrl.toString(),
+    auth_header_present: Boolean(apiKey)
+  };
+  return {
+    requestForHash,
+    resultPayloadSummary: {
+      result_kind: "retrieval_results",
+      result_count: 1,
+      live_provider: {
+        provider: input.adapter.provider,
+        request_url: requestUrl.toString(),
+        request_sha256: canonicalHash(requestForHash),
+        response_status: response.status,
+        response_content_type: response.headers.get("content-type") ?? null,
+        response_body_sha256: responseBodySha256,
+        network_execution_performed: true,
+        live_provider_execution_performed: true,
+        prompt_injection_scan: promptInjectionScan
+      },
+      results: [result]
+    },
+    adapterExecutionState: "live_provider_result_recorded",
+    networkExecutionPerformed: true,
+    liveProviderExecutionPerformed: true
+  };
+}
+
+async function repairHintAdapterExecution(input: {
+  registry: ReturnType<typeof createDefaultExternalWheelRegistry>;
+  adapter: ExternalWheelAdapterDescriptor;
+  hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number];
+  obligation: ProofObligation;
+  createdAt: string;
+  defaultRequestForHash: Record<string, unknown>;
+}): Promise<RepairHintAdapterExecution> {
+  if (shouldExecuteLiveJinaSearch(input.hint)) {
+    return liveJinaSearchResultPayloadSummary({
+      adapter: input.adapter,
+      hint: input.hint,
+      createdAt: input.createdAt
+    });
+  }
+  return {
+    requestForHash: input.defaultRequestForHash,
+    resultPayloadSummary: await stubbedResultPayloadSummary({
+      registry: input.registry,
+      adapter: input.adapter,
+      hint: input.hint,
+      obligation: input.obligation,
+      createdAt: input.createdAt
+    }),
+    adapterExecutionState: "stubbed_provider_result_recorded",
+    networkExecutionPerformed: false,
+    liveProviderExecutionPerformed: false
+  };
+}
+
 async function writeRepairHintExecution(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
@@ -484,12 +703,13 @@ async function writeRepairHintExecution(input: {
         target_candidate_ids: hint.target_candidate_ids,
         source_feedback_stderr_sha256_values: hint.source_feedback_stderr_sha256_values
       };
-      const resultPayloadSummary = await stubbedResultPayloadSummary({
+      const adapterExecution = await repairHintAdapterExecution({
         registry,
         adapter,
         hint,
         obligation: input.obligation,
-        createdAt: input.createdAt
+        createdAt: input.createdAt,
+        defaultRequestForHash: request
       });
       return {
         adapter_result_id: `RHINTEXEC-${String(index + 1).padStart(4, "0")}`,
@@ -502,18 +722,18 @@ async function writeRepairHintExecution(input: {
           repair_hint_bundle_path: input.hintBundlePath,
           repair_hint_bundle_sha256: input.hintBundleSha256
         },
-        request_sha256: canonicalHash(request),
-        result_payload_sha256: canonicalHash(resultPayloadSummary),
-        result_payload_summary: resultPayloadSummary,
-        adapter_execution_state: "stubbed_provider_result_recorded",
+        request_sha256: canonicalHash(adapterExecution.requestForHash),
+        result_payload_sha256: canonicalHash(adapterExecution.resultPayloadSummary),
+        result_payload_summary: adapterExecution.resultPayloadSummary,
+        adapter_execution_state: adapterExecution.adapterExecutionState,
         capability_metadata: {
           adapter_id: adapter.id,
           kind: adapter.kind,
           capabilities: [...adapter.capabilities]
         },
         terms: { ...adapter.terms },
-        network_execution_performed: false,
-        live_provider_execution_performed: false,
+        network_execution_performed: adapterExecution.networkExecutionPerformed,
+        live_provider_execution_performed: adapterExecution.liveProviderExecutionPerformed,
         proof_authority: "none",
         can_promote_claim: false,
         result_can_be_used_as_proof: false,
@@ -522,6 +742,17 @@ async function writeRepairHintExecution(input: {
     })
   );
   const adapterResultIds = adapterResults.map((result) => result.adapter_result_id);
+  const liveProviderExecutionPerformed = adapterResults.some((result) => result.live_provider_execution_performed);
+  const networkExecutionPerformed = adapterResults.some((result) => result.network_execution_performed);
+  const stubbedAdapterExecutionPerformed = adapterResults.some(
+    (result) => result.adapter_execution_state === "stubbed_provider_result_recorded"
+  );
+  const executionStatus =
+    liveProviderExecutionPerformed && stubbedAdapterExecutionPerformed
+      ? "mixed_live_and_stubbed_provider_results_recorded"
+      : liveProviderExecutionPerformed
+        ? "live_provider_results_recorded"
+        : "stubbed_provider_results_recorded";
   const execution: LeanCandidateAttemptRepairHintExecution = {
     schema_version: "comath.pi_goal_mode_lean_candidate_attempt_repair_hint_execution.v1",
     campaign_id: input.campaign.campaign_id,
@@ -540,10 +771,10 @@ async function writeRepairHintExecution(input: {
       proof_authority: "none"
     },
     service_owned_adapter_execution: true,
-    execution_status: "stubbed_provider_results_recorded",
-    network_execution_performed: false,
-    live_provider_execution_performed: false,
-    stubbed_adapter_execution_performed: true,
+    execution_status: executionStatus,
+    network_execution_performed: networkExecutionPerformed,
+    live_provider_execution_performed: liveProviderExecutionPerformed,
+    stubbed_adapter_execution_performed: stubbedAdapterExecutionPerformed,
     adapter_result_count: adapterResults.length,
     adapter_results: adapterResults,
     per_candidate_execution_refs: input.feedbackRows.map((row) => ({

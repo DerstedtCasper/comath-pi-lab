@@ -1,3 +1,24 @@
+# Goal 3 Task 273 / Pi Goal-Mode Live Retrieval Repair Hint Execution
+
+Scope: add the first opt-in live retrieval provider execution path to Pi goal-mode repair hints. This extends Task269 from stub-only result capture to a configured Jina Search-compatible `retrieval:jina_search` call while keeping adapter output non-authoritative and default runs offline/stubbed.
+
+Implementation notes:
+- Added `goal3-task273-pi-goal-mode-live-retrieval-repair-hint-execution.test.mjs`.
+- Added `jina_search` to the selected repair-hint adapter set while preserving default stub execution for offline runs.
+- Added opt-in live execution gates: `COMATH_ENABLE_GOAL_MODE_LIVE_REPAIR_HINT_EXECUTION=1`, `COMATH_LIVE_REPAIR_HINT_PROVIDERS` including `retrieval:jina_search`, and `COMATH_JINA_SEARCH_BASE_URL`.
+- `COMATH_JINA_API_KEY` is sent only as an in-memory bearer header; persisted artifacts store sanitized request/response hashes, provider status, content hash, prompt-injection scan, and no-authority vetoes, but no bearer token or host root.
+- Repair execution now accepts `live_provider_result_recorded` hint results only when proof authority, promotion, proof-use flags, and no-authority vetoes remain fail-closed.
+- Added `pi_goal_mode_live_retrieval_repair_hint_execution` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding the focused Task273 service test: `node services/comathd/tests/unit/goal3-task273-pi-goal-mode-live-retrieval-repair-hint-execution.test.mjs` failed because the local live retrieval fixture received 0 requests.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task273 exited 0.
+- Current verification in this continuation: focused Task273 exited 0; adjacent Task269, Task270, Task271, and Task272 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task273 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task273 records live retrieval output as repair context only. It does not make Jina, retrieval text, prompt-injection scans, or adapter summaries proof authority; it emits no LeanRunManifest/FinalReplayManifest, cannot promote claims, and cannot certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task273 does not implement live theorem-search/CAS execution, mathematically meaningful repair synthesis from retrieved text, real Pi/operator closure, production OS-isolation helper binaries, release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 272 / Pi Goal-Mode Rfl Final Replay Terminal
 
 Scope: broaden the bounded Pi goal-mode terminal chain from `True` to exact reflexive equality repair. This lets locked theorem/lemma goals such as `goal3_task272 : 1 = 1` materialize a placeholder-free `by rfl` candidate, then still require LeanRunner, final clean replay, FinalReplayManifest v3 packaging, ordinary promotion, and export readiness.

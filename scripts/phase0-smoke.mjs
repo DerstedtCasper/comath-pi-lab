@@ -435,6 +435,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task270-pi-goal-mode-placeholder-free-repair-candidate.test.mjs",
   "goal3-task271-pi-goal-mode-final-replay-terminal.test.mjs",
   "goal3-task272-pi-goal-mode-rfl-final-replay-terminal.test.mjs",
+  "goal3-task273-pi-goal-mode-live-retrieval-repair-hint-execution.test.mjs",
   "goal3-task232-agent-adapter-os-isolation-nix-production-helper-profile-contract.test.mjs",
   "goal3-task233-pi-operator-service-transport-check-debug.test.mjs",
   "goal3-task234-agent-adapter-os-isolation-firejail-production-helper-profile-contract.test.mjs",

@@ -315,7 +315,7 @@ function repairLeanDraft(
   const sourceHintExecution = repairHintExecutionFromTask(task);
   if (sourceHintExecution) {
     markers.push(
-      "-- comath_repair_hint_execution: service-owned non-authoritative external wheel stub results were bound for this repair pass.",
+      "-- comath_repair_hint_execution: service-owned non-authoritative external wheel execution results were bound for this repair pass.",
       `-- repair_hint_execution: ${sourceHintExecution.path}`,
       `-- repair_hint_execution_sha256: ${sourceHintExecution.sha256}`
     );
@@ -486,11 +486,18 @@ function validateRepairTaskAgainstBatch(input: {
   const hintResults = sourceRepairHintResultsFromTask(input.task);
   if (hintResults) {
     for (const result of hintResults) {
+      const vetoes = Array.isArray(result.promotion_vetoes) ? result.promotion_vetoes : [];
+      const adapterExecutionState = result.adapter_execution_state;
+      const isStubbedResult = adapterExecutionState === "stubbed_provider_result_recorded";
+      const isLiveResult = adapterExecutionState === "live_provider_result_recorded";
       if (
         result.proof_authority !== "none" ||
         result.can_promote_claim !== false ||
         result.result_can_be_used_as_proof !== false ||
-        result.network_execution_performed !== false
+        !vetoes.includes("external_adapter_result_has_no_proof_authority") ||
+        (!isStubbedResult && !isLiveResult) ||
+        (isStubbedResult && (result.network_execution_performed !== false || result.live_provider_execution_performed !== false)) ||
+        (isLiveResult && (result.network_execution_performed !== true || result.live_provider_execution_performed !== true))
       ) {
         throw new Error("lean_candidate_repair_hint_execution_authority_flags_invalid");
       }
