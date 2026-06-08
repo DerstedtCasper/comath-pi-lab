@@ -451,6 +451,12 @@ const publicFalseAuthorityKeyPattern =
   /^(?:can_promote_claim|canPromoteClaim|can_certify_ga|canCertifyGa|durable_transport_provided|durableTransportProvided|live_transport_open|liveTransportOpen|indefinite_stream_open|indefiniteStreamOpen|long_lived_websocket_provided|longLivedWebsocketProvided|long_lived_sse_provided|longLivedSseProvided|pi_direct_write_allowed|piDirectWriteAllowed|direct_trusted_state_mutation|directTrustedStateMutation|os_enforced|osEnforced|operator_approved|operatorApproved|operatorApproval|executor_invoked|executorInvoked|execution_attempted|executionAttempted|execution_attempt_succeeded|executionAttemptSucceeded|execution_attempt_exit_code|executionAttemptExitCode|unattended_execution_authorized|unattendedExecutionAuthorized|unattended_real_host_execution_completed|unattendedRealHostExecutionCompleted|terminal_unattended_completion_certified|terminalUnattendedCompletionCertified|completion_certificate_available|completionCertificateAvailable|operator_confirmation_bypassed|operatorConfirmationBypassed|service_owned_evidence_created|serviceOwnedEvidenceCreated|service_owned_attempt_review_completed|serviceOwnedAttemptReviewCompleted|service_owned_checkpoint_chain_reviewed|serviceOwnedCheckpointChainReviewed|handoff_can_execute|handoffCanExecute)$/i;
 const publicOmittedMaterialKeyPattern =
   /^(?:executor_command|executorCommand|execution_attempt_command|executionAttemptCommand|attempt_result|attemptResult|execution_attempt_result|executionAttemptResult|execution_attempt_result_path|executionAttemptResultPath|execution_attempt_result_artifact|executionAttemptResultArtifact|completion_certificate|completionCertificate)$/i;
+const candidateRepairProvenanceReferenceKeys = new Set([
+  "source_repair_hint_execution",
+  "source_repair_execution",
+  "source_per_candidate_repair_execution"
+]);
+const trustedRuntimeRelativePathPrefix = `${["", "comath"].join(".")}/`;
 
 function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   if (typeof value === "string") {
@@ -483,20 +489,46 @@ function sanitizePublicProofAuthorityValue(value: unknown): unknown {
   return value;
 }
 
-function sanitizeTrustedRuntimePathValue(value: unknown): unknown {
+function isSafePublicCandidateRepairProvenancePath(value: string): boolean {
+  const normalized = value.replace(/\\/g, "/");
+  return (
+    value === normalized &&
+    normalized.startsWith(trustedRuntimeRelativePathPrefix) &&
+    !normalized.includes("..") &&
+    !normalized.includes("//") &&
+    !/[<>"'\r\n]/u.test(normalized)
+  );
+}
+
+function isCandidateRepairProvenanceReferencePath(context: string[], value: string): boolean {
+  const field = context[context.length - 1];
+  const referenceKey = context[context.length - 2];
+  const provenanceKey = context[context.length - 3];
+  return (
+    field === "path" &&
+    provenanceKey === "candidate_repair_provenance" &&
+    candidateRepairProvenanceReferenceKeys.has(referenceKey) &&
+    isSafePublicCandidateRepairProvenancePath(value)
+  );
+}
+
+function sanitizeTrustedRuntimePathValue(value: unknown, context: string[] = []): unknown {
   if (typeof value === "string") {
+    if (isCandidateRepairProvenanceReferencePath(context, value)) {
+      return value;
+    }
     return value
       .replace(trustedRuntimePathEchoPattern, "$1[redacted_trusted_runtime_path]")
       .replace(encodedTrustedRuntimePathEchoPattern, "$1[redacted_trusted_runtime_path]");
   }
   if (Array.isArray(value)) {
-    return value.map((item) => sanitizeTrustedRuntimePathValue(item));
+    return value.map((item, index) => sanitizeTrustedRuntimePathValue(item, [...context, String(index)]));
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, item]) => [
         key,
-        sanitizeTrustedRuntimePathValue(item)
+        sanitizeTrustedRuntimePathValue(item, [...context, key])
       ])
     );
   }

@@ -1,3 +1,18 @@
+# Goal 3 Task 281 / Pi Goal-Mode Export Repair Provenance Consumer
+
+Summary:
+- Added a focused Pi extension regression for `comath.campaign.export` and `/cm:campaign export` proving public Pi output preserves no-authority `candidate_repair_provenance` path/hash references for repair hint execution, campaign repair execution, and per-candidate repair execution.
+- Tightened `sanitizeTrustedRuntimePathValue()` to carry recursion context and allow only the three known safe relative provenance reference path fields, while ordinary trusted runtime paths, host roots, secrets, proof-success wording, and promotion flags remain sanitized.
+- Registered the focused Task281 suite in the Pi extension package test chain and phase0 release-hardening list, and documented the limited sanitizer exception in README, AGENTS, adapter contracts, GA criteria, acceptance matrix, TODO, and the Goal 3 tracker.
+
+Verification:
+- TDD RED was observed after adding the focused Task281 test: `source_repair_hint_execution.path` was `[redacted_trusted_runtime_path]` instead of the required relative path/hash audit reference.
+- Current verification in this continuation: `corepack pnpm --filter @comath/pi-extension build` exited 0; focused Task281 exited 0; adjacent Task133, Task130, Task140, Phase66, Phase22, and service Task280 exited 0; `node scripts/phase0-smoke.mjs` exited 0; `corepack pnpm --filter @comath/pi-extension typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task281 discovered; `node tests/evaluation/phase17-integrity-evaluation.test.mjs` exited 0 after removing the entrypoint `.comath` literal; `corepack pnpm test` exited 0 across the root workspace suite; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task281 is a Pi consumer/sanitizer contract only. It does not make repair provenance, SymPy output, repair hint execution, campaign repair execution, per-candidate repair execution, or provenance hashes proof authority. Lean clean replay remains the only final proof authority.
+
+Residual risk: Goal 3 remains incomplete. Task281 does not implement broader theorem/CAS repair synthesis, Sage/Z3 live execution, non-toy Mathlib proofs, real Pi/operator execution, production OS-isolation helper binaries, release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 280 / Pi Goal-Mode Live Computation Final Replay Provenance
 
 Summary:
