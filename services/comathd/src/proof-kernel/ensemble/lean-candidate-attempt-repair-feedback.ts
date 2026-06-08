@@ -7,6 +7,7 @@ import {
   listExternalWheelAdapters,
   type ExternalWheelAdapterDescriptor,
   type ExternalWheelKind,
+  type ComputationAdapterReport,
   type PromptInjectionScan,
   type RetrievalResult,
   type TheoremSearchResult
@@ -618,6 +619,11 @@ function loogleSearchBaseUrl(): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
+function sympyComputeBaseUrl(): string | undefined {
+  const value = process.env.COMATH_SYMPY_COMPUTE_BASE_URL?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
 function shouldExecuteLiveJinaSearch(hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number]): boolean {
   return (
     hint.kind === "retrieval" &&
@@ -635,6 +641,16 @@ function shouldExecuteLiveLoogleSearch(hint: LeanCandidateAttemptRepairHintBundl
     liveRepairHintExecutionEnabled() &&
     liveRepairHintProviderEnabled(hint.kind, hint.provider) &&
     Boolean(loogleSearchBaseUrl())
+  );
+}
+
+function shouldExecuteLiveSympyCompute(hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number]): boolean {
+  return (
+    hint.kind === "computation" &&
+    hint.provider === "sympy" &&
+    liveRepairHintExecutionEnabled() &&
+    liveRepairHintProviderEnabled(hint.kind, hint.provider) &&
+    Boolean(sympyComputeBaseUrl())
   );
 }
 
@@ -770,6 +786,176 @@ function stringField(record: Record<string, unknown>, keys: string[]): string | 
     }
   }
   return undefined;
+}
+
+function stringArrayField(record: Record<string, unknown>, keys: string[]): string[] {
+  for (const key of keys) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      return value
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item) => item.trim())
+        .slice(0, 5);
+    }
+  }
+  return [];
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function liveComputationProviderPayloadSummary(
+  parsedBody: Record<string, unknown> | null,
+  promptInjectionScan: PromptInjectionScan
+): Record<string, unknown> {
+  if (!parsedBody) {
+    return {
+      provider_status: "non_json_response",
+      prompt_injection_scan_status: promptInjectionScan.status
+    };
+  }
+  if (promptInjectionScan.status !== "pass") {
+    return {
+      provider_status: "prompt_injection_scan_failed",
+      prompt_injection_scan_status: promptInjectionScan.status
+    };
+  }
+  const summary: Record<string, unknown> = {
+    provider_status: stringField(parsedBody, ["status", "state", "result_status"]) ?? "unknown",
+    prompt_injection_scan_status: promptInjectionScan.status
+  };
+  const providerExactness = stringField(parsedBody, ["exactness", "precision", "mode"]);
+  const normalizedExpression = stringField(parsedBody, ["normalized_expression", "simplified", "normal_form"]);
+  const witness = stringField(parsedBody, ["witness", "certificate_ref", "computation_ref"]);
+  const notes = stringArrayField(parsedBody, ["notes", "messages"]);
+  const warnings = stringArrayField(parsedBody, ["warnings"]);
+  if (providerExactness) {
+    summary.provider_exactness = providerExactness;
+  }
+  if (normalizedExpression) {
+    summary.normalized_expression = normalizedExpression;
+  }
+  if (witness) {
+    summary.witness = witness;
+  }
+  if (notes.length > 0) {
+    summary.notes = notes;
+  }
+  if (warnings.length > 0) {
+    summary.warnings = warnings;
+  }
+  return summary;
+}
+
+async function liveSympyComputeResultPayloadSummary(input: {
+  adapter: ExternalWheelAdapterDescriptor;
+  hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number];
+  obligation: ProofObligation;
+  createdAt: string;
+}): Promise<RepairHintAdapterExecution> {
+  const baseUrl = sympyComputeBaseUrl();
+  if (!baseUrl) {
+    throw new Error("comath_live_sympy_compute_base_url_missing");
+  }
+  const requestUrl = new URL(baseUrl);
+  const apiKey = process.env.COMATH_SYMPY_API_KEY;
+  const requestBody = {
+    task: "repair_hint_context",
+    kind: input.adapter.kind,
+    provider: input.adapter.provider,
+    adapter_id: input.adapter.id,
+    query_text: input.hint.query_text,
+    input: {
+      query_hash: input.hint.query_hash,
+      locked_statement_hash: input.obligation.statement_hash,
+      source_feedback_stderr_sha256_values: input.hint.source_feedback_stderr_sha256_values
+    }
+  };
+  const headers: Record<string, string> = {
+    accept: "application/json, text/plain",
+    "content-type": "application/json"
+  };
+  if (apiKey) {
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  let response: Response;
+  let bodyText: string;
+  try {
+    response = await fetch(requestUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+    bodyText = await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+  const responseBodySha256 = sha256Text(bodyText);
+  const promptInjectionScan = goalModeTextPromptInjectionScan(bodyText);
+  const parsedBody = parseJsonObject(bodyText);
+  const requestForHash = {
+    adapter_id: input.adapter.id,
+    kind: input.adapter.kind,
+    provider: input.adapter.provider,
+    query_hash: input.hint.query_hash,
+    request_url: requestUrl.toString(),
+    request_body_sha256: canonicalHash(requestBody),
+    auth_header_present: Boolean(apiKey)
+  };
+  const requestHash = canonicalHash({
+    provider: input.adapter.provider,
+    kind: input.adapter.kind,
+    input: requestBody
+  });
+  const report: ComputationAdapterReport = {
+    report_id: `CMPLIVE-${requestHash.slice(0, 12)}`,
+    adapter_id: input.adapter.id,
+    provider: input.adapter.provider,
+    request_hash: requestHash,
+    exactness: "exact_symbolic",
+    result: {
+      status: "live_provider_response_recorded",
+      response_body_sha256: responseBodySha256,
+      response_json_sha256: parsedBody ? canonicalHash(parsedBody) : null,
+      ...liveComputationProviderPayloadSummary(parsedBody, promptInjectionScan)
+    },
+    generated_at: input.createdAt,
+    capability_metadata: adapterCapabilityMetadata(input.adapter),
+    terms: { ...input.adapter.terms },
+    proof_authority: "none",
+    can_promote_claim: false,
+    promotion_vetoes: ["external_adapter_result_has_no_proof_authority"]
+  };
+  return {
+    requestForHash,
+    resultPayloadSummary: {
+      result_kind: "computation_report",
+      live_provider: {
+        provider: input.adapter.provider,
+        request_url: requestUrl.toString(),
+        request_sha256: canonicalHash(requestForHash),
+        response_status: response.status,
+        response_content_type: response.headers.get("content-type") ?? null,
+        response_body_sha256: responseBodySha256,
+        network_execution_performed: true,
+        live_provider_execution_performed: true,
+        prompt_injection_scan: promptInjectionScan
+      },
+      report
+    },
+    adapterExecutionState: "live_provider_result_recorded",
+    networkExecutionPerformed: true,
+    liveProviderExecutionPerformed: true
+  };
 }
 
 function liveTheoremSearchResults(input: {
@@ -913,6 +1099,14 @@ async function repairHintAdapterExecution(input: {
     return liveLoogleSearchResultPayloadSummary({
       adapter: input.adapter,
       hint: input.hint,
+      createdAt: input.createdAt
+    });
+  }
+  if (shouldExecuteLiveSympyCompute(input.hint)) {
+    return liveSympyComputeResultPayloadSummary({
+      adapter: input.adapter,
+      hint: input.hint,
+      obligation: input.obligation,
       createdAt: input.createdAt
     });
   }

@@ -1,3 +1,23 @@
+# Goal 3 Task 278 / Pi Goal-Mode Live Computation Repair Hint Execution
+
+Scope: add the maintained live computation repair-context path that Task277 left open, without changing proof authority. Opt-in `computation:sympy` execution should call only a configured SymPy-compatible endpoint, keep credentials in memory, persist sanitized provenance and bounded report summaries, and thread computation results through repair tasks/execution as non-authoritative hints.
+
+Implementation notes:
+- Added `goal3-task278-pi-goal-mode-live-computation-repair-hint-execution.test.mjs`.
+- Added `COMATH_SYMPY_COMPUTE_BASE_URL` and optional in-memory `COMATH_SYMPY_API_KEY` handling for explicitly enabled `computation:sympy` repair-hint execution.
+- Live computation execution POSTs a structured repair-context request, records sanitized request/response hashes, response status/content type/body hash, prompt-injection scan, bounded allowlisted computation report summaries, capability metadata, terms, and no-authority vetoes without persisting bearer tokens or host roots.
+- The live result is threaded through repair tasks and repair execution with `adapter_execution_state="live_provider_result_recorded"`, while all default/offline executions remain stubbed.
+- Added `pi_goal_mode_live_computation_repair_hint_execution` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding the focused Task278 service test: the local SymPy-compatible fixture received 0 requests because computation repair hints were still stubbed.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task278 exited 0.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task278 exited 0; adjacent Task269, Task273, Task276, and Task277 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task278 discovered by the default runner; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task278 records SymPy-compatible computation reports as repair context only. It does not make provider status, exact symbolic summaries, prompt-injection scans, request/response hashes, or repair execution proof authority. Final proof status still requires service-owned Lean clean replay plus ordinary promotion gates.
+
+Residual risk: Goal 3 remains incomplete. Task278 does not synthesize mathematically meaningful repairs from computation reports, implement Sage/Z3 live execution, close real Pi/operator workflow, provide production OS-isolation helper binaries, run release-candidate proof breadth, or certify GA.
+
 # Goal 3 Task 277 / Pi Goal-Mode Live Theorem-Search Conjunction Repair
 
 Scope: turn the Task276 live theorem-search result from passive repair context into the first narrow theorem-search-guided candidate repair. The only accepted shape is a locked `True /\\ True` / `True ∧ True` theorem/lemma with a live non-authoritative `And.intro` result; proof authority still comes only from LeanRunner and downstream clean replay.
