@@ -1,3 +1,19 @@
+# Goal 3 Task 279 / Pi Goal-Mode Live Computation Decide Repair
+
+Summary:
+- Added a focused Task279 service regression proving a live non-authoritative `computation:sympy` exact-symbolic `True` report can repair only a same-name/same-statement closed decidable arithmetic equality candidate by materializing `by decide`, while preserving secret/root redaction and no-authority flags.
+- Extended Lean candidate repair execution with top-level colon parsing for typed Lean statements such as `(2 : Int) + 2 = 4`, a conservative closed arithmetic syntax gate, live SymPy `True` report validation, and `placeholder_free_repair_strategy="live_computation_sympy_true_decide_repair"`.
+- Added `pi_goal_mode_live_computation_decide_repair` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding the focused Task279 service test: repair execution produced 0 live-computation repaired candidates because Task278 only recorded live computation hints.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task279 exited 0.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task279 exited 0; adjacent Task272, Task274, Task277, and Task278 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task279 discovered by the default runner; `corepack pnpm test` exited 0 across the root workspace suite after rerunning with a longer timeout; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task279 does not make SymPy output proof authority. It only uses a live, prompt-injection-scanned, exact-symbolic, non-authoritative `True` report to generate candidate Lean code for a syntactically closed decidable arithmetic equality. LeanRunner and final clean replay remain required before any proof claim.
+
+Residual risk: Goal 3 remains incomplete. Task279 does not implement arbitrary CAS-guided repair, Sage/Z3 live execution, non-toy Mathlib proofs, real Pi/operator execution, production OS-isolation helper binaries, release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 278 / Pi Goal-Mode Live Computation Repair Hint Execution
 
 Scope: add the maintained live computation repair-context path that Task277 left open, without changing proof authority. Opt-in `computation:sympy` execution should call only a configured SymPy-compatible endpoint, keep credentials in memory, persist sanitized provenance and bounded report summaries, and thread computation results through repair tasks/execution as non-authoritative hints.

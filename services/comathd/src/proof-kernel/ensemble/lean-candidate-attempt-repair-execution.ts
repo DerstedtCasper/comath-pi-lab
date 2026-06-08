@@ -91,7 +91,8 @@ type PlaceholderFreeRepairStrategy =
   | "locked_true_theorem_trivial"
   | "locked_reflexive_equality_rfl"
   | "live_retrieval_exact_statement_lean_suggestion"
-  | "live_theorem_search_and_intro_conjunction_repair";
+  | "live_theorem_search_and_intro_conjunction_repair"
+  | "live_computation_sympy_true_decide_repair";
 
 export type ExecuteLeanCandidateAttemptRepairBatchResult = {
   execution: LeanCandidateAttemptRepairExecution;
@@ -177,7 +178,7 @@ function theoremStatementsWithSorry(text: string): string[] {
     if (!signature) {
       continue;
     }
-    const statementColon = signature.lastIndexOf(":");
+    const statementColon = topLevelColonIndex(signature);
     if (statementColon < 0) {
       continue;
     }
@@ -247,6 +248,44 @@ function normalizeLeanStatementText(text: string): string {
   return text.trim().replace(/\s+/gu, " ");
 }
 
+function topLevelColonIndex(signature: string): number {
+  let parenDepth = 0;
+  let squareDepth = 0;
+  let braceDepth = 0;
+  let colonIndex = -1;
+  for (let index = 0; index < signature.length; index += 1) {
+    const char = signature[index];
+    if (char === "(") {
+      parenDepth += 1;
+      continue;
+    }
+    if (char === ")") {
+      parenDepth = Math.max(0, parenDepth - 1);
+      continue;
+    }
+    if (char === "[") {
+      squareDepth += 1;
+      continue;
+    }
+    if (char === "]") {
+      squareDepth = Math.max(0, squareDepth - 1);
+      continue;
+    }
+    if (char === "{") {
+      braceDepth += 1;
+      continue;
+    }
+    if (char === "}") {
+      braceDepth = Math.max(0, braceDepth - 1);
+      continue;
+    }
+    if (char === ":" && parenDepth === 0 && squareDepth === 0 && braceDepth === 0) {
+      colonIndex = index;
+    }
+  }
+  return colonIndex;
+}
+
 type ParsedLeanDeclaration = {
   declarationKind: "theorem" | "lemma";
   declarationName: string;
@@ -265,7 +304,7 @@ function parseFirstLeanDeclaration(text: string): ParsedLeanDeclaration | null {
     return null;
   }
   const signature = match.groups.signature ?? "";
-  const statementColon = signature.lastIndexOf(":");
+  const statementColon = topLevelColonIndex(signature);
   if (statementColon < 0) {
     return null;
   }
@@ -463,6 +502,69 @@ function liveTheoremSearchConjunctionRepair(
   };
 }
 
+function isClosedDecidableArithmeticStatement(statement: string): boolean {
+  const normalized = normalizeLeanStatementText(statement);
+  if (!/\d/u.test(normalized) || !topLevelLeanEquality(normalized)) {
+    return false;
+  }
+  if (/[∀∃λ]|->|→|↔|∧|∨|\b(?:forall|exists|fun|let|match|if|then|else|by|sorry|axiom|unsafe|opaque|admit)\b/u.test(normalized)) {
+    return false;
+  }
+  const identifiers = normalized.match(/[A-Za-z_][A-Za-z0-9_'.]*/gu) ?? [];
+  const allowedIdentifiers = new Set(["Nat", "Int", "Bool", "True", "False"]);
+  return identifiers.every((identifier) => allowedIdentifiers.has(identifier));
+}
+
+function hasLiveSympyTrueComputationHint(task: Record<string, unknown>): boolean {
+  for (const result of sourceRepairHintResultsFromUnknownTask(task)) {
+    if (
+      result.kind !== "computation" ||
+      result.provider !== "sympy" ||
+      result.adapter_execution_state !== "live_provider_result_recorded" ||
+      result.proof_authority !== "none" ||
+      result.can_promote_claim !== false ||
+      result.result_can_be_used_as_proof !== false
+    ) {
+      continue;
+    }
+    const summary = objectRecord(result.result_payload_summary);
+    const liveProvider = objectRecord(summary?.live_provider);
+    const promptInjectionScan = objectRecord(liveProvider?.prompt_injection_scan);
+    if (promptInjectionScan?.status !== "pass") {
+      continue;
+    }
+    const report = objectRecord(summary?.report);
+    const reportResult = objectRecord(report?.result);
+    if (
+      report?.proof_authority === "none" &&
+      report.can_promote_claim === false &&
+      report.exactness === "exact_symbolic" &&
+      reportResult?.status === "live_provider_response_recorded" &&
+      reportResult.provider_status === "ok" &&
+      reportResult.normalized_expression === "True" &&
+      (reportResult.prompt_injection_scan_status === undefined || reportResult.prompt_injection_scan_status === "pass")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function liveComputationSympyTrueDecideRepair(
+  text: string,
+  task: Record<string, unknown>
+): { text: string; strategy: PlaceholderFreeRepairStrategy } | null {
+  const current = parseFirstLeanDeclaration(text);
+  if (!current || !isClosedDecidableArithmeticStatement(current.normalizedStatement) || !hasLiveSympyTrueComputationHint(task)) {
+    return null;
+  }
+  const repaired = [`${current.declarationKind} ${current.declarationName} : ${current.normalizedStatement} := by`, "  decide"].join("\n");
+  return {
+    text: `${text.slice(0, current.start)}${repaired}${text.slice(current.end)}`,
+    strategy: "live_computation_sympy_true_decide_repair"
+  };
+}
+
 function repairLeanDraft(
   text: string,
   task: Record<string, unknown>
@@ -483,10 +585,16 @@ function repairLeanDraft(
   const liveSuggestionRepair = localRepairStrategy === null ? liveRetrievalSuggestionRepair(text, task) : null;
   const liveTheoremSearchRepair =
     localRepairStrategy === null && liveSuggestionRepair === null ? liveTheoremSearchConjunctionRepair(text, task) : null;
-  const repairStrategy = localRepairStrategy ?? liveSuggestionRepair?.strategy ?? liveTheoremSearchRepair?.strategy ?? null;
+  const liveComputationRepair =
+    localRepairStrategy === null && liveSuggestionRepair === null && liveTheoremSearchRepair === null
+      ? liveComputationSympyTrueDecideRepair(text, task)
+      : null;
+  const repairStrategy =
+    localRepairStrategy ?? liveSuggestionRepair?.strategy ?? liveTheoremSearchRepair?.strategy ?? liveComputationRepair?.strategy ?? null;
   const replaced =
     liveSuggestionRepair?.text ??
     liveTheoremSearchRepair?.text ??
+    liveComputationRepair?.text ??
     replaceLeanSorryTokens(text, placeholderFreeRepairReplacement(repairStrategy) ?? placeholder);
   const markers: string[] = [];
   const sourceFeedback =
