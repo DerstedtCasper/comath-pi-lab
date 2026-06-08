@@ -8,7 +8,8 @@ import {
   type ExternalWheelAdapterDescriptor,
   type ExternalWheelKind,
   type PromptInjectionScan,
-  type RetrievalResult
+  type RetrievalResult,
+  type TheoremSearchResult
 } from "../../adapters/external-wheel-registry.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import type { LeanRunManifestV3, ProofObligation, ResearchCampaign } from "../../types/schemas.js";
@@ -612,6 +613,11 @@ function jinaSearchBaseUrl(): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
+function loogleSearchBaseUrl(): string | undefined {
+  const value = process.env.COMATH_LOOGLE_SEARCH_BASE_URL?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
 function shouldExecuteLiveJinaSearch(hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number]): boolean {
   return (
     hint.kind === "retrieval" &&
@@ -619,6 +625,16 @@ function shouldExecuteLiveJinaSearch(hint: LeanCandidateAttemptRepairHintBundle[
     liveRepairHintExecutionEnabled() &&
     liveRepairHintProviderEnabled(hint.kind, hint.provider) &&
     Boolean(jinaSearchBaseUrl())
+  );
+}
+
+function shouldExecuteLiveLoogleSearch(hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number]): boolean {
+  return (
+    hint.kind === "theorem_search" &&
+    hint.provider === "loogle" &&
+    liveRepairHintExecutionEnabled() &&
+    liveRepairHintProviderEnabled(hint.kind, hint.provider) &&
+    Boolean(loogleSearchBaseUrl())
   );
 }
 
@@ -725,6 +741,159 @@ async function liveJinaSearchResultPayloadSummary(input: {
   };
 }
 
+function liveTheoremSearchResponseItems(bodyText: string): Record<string, unknown>[] {
+  try {
+    const parsed = JSON.parse(bodyText) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+    }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const record = parsed as Record<string, unknown>;
+      for (const key of ["results", "items", "hits", "data"]) {
+        const value = record[key];
+        if (Array.isArray(value)) {
+          return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+        }
+      }
+    }
+  } catch {
+    return [];
+  }
+  return [];
+}
+
+function stringField(record: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function liveTheoremSearchResults(input: {
+  adapter: ExternalWheelAdapterDescriptor;
+  bodyText: string;
+  queryHash: string;
+  createdAt: string;
+}): TheoremSearchResult[] {
+  const items = liveTheoremSearchResponseItems(input.bodyText).slice(0, 3);
+  const sourceItems = items.length > 0 ? items : [{ declaration_name: `${input.adapter.provider}_live_response` }];
+  return sourceItems.map((item, index) => {
+    const declarationName =
+      stringField(item, ["declaration_name", "name", "declaration", "constant", "full_name"]) ?? `${input.adapter.provider}_result_${index + 1}`;
+    const resultHash = canonicalHash({
+      provider: input.adapter.provider,
+      query_hash: input.queryHash,
+      index,
+      declaration_name: declarationName,
+      item
+    });
+    return {
+      result_id: `TSLIVE-${resultHash.slice(0, 12)}`,
+      adapter_id: input.adapter.id,
+      provider: input.adapter.provider,
+      query_hash: input.queryHash,
+      declaration_name: declarationName,
+      declaration_type: stringField(item, ["declaration_type", "type", "signature"]),
+      module: stringField(item, ["module", "import", "namespace"]),
+      import_hint: stringField(item, ["import_hint", "import", "module"]),
+      source_url: stringField(item, ["source_url", "url"]),
+      mathlib_revision: stringField(item, ["mathlib_revision", "revision", "commit"]),
+      score: typeof item.score === "number" ? item.score : undefined,
+      retrieved_at: input.createdAt,
+      capability_metadata: adapterCapabilityMetadata(input.adapter),
+      terms: { ...input.adapter.terms },
+      proof_authority: "none",
+      can_promote_claim: false,
+      promotion_vetoes: ["external_adapter_result_has_no_proof_authority"]
+    };
+  });
+}
+
+async function liveLoogleSearchResultPayloadSummary(input: {
+  adapter: ExternalWheelAdapterDescriptor;
+  hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number];
+  createdAt: string;
+}): Promise<RepairHintAdapterExecution> {
+  const baseUrl = loogleSearchBaseUrl();
+  if (!baseUrl) {
+    throw new Error("comath_live_loogle_search_base_url_missing");
+  }
+  const requestUrl = new URL(baseUrl);
+  requestUrl.searchParams.set("q", input.hint.query_text);
+  requestUrl.searchParams.set("limit", "3");
+  const apiKey = process.env.COMATH_LOOGLE_API_KEY;
+  const headers: Record<string, string> = {
+    accept: "application/json, text/plain, text/markdown"
+  };
+  if (apiKey) {
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  let response: Response;
+  let bodyText: string;
+  try {
+    response = await fetch(requestUrl, {
+      method: "GET",
+      headers,
+      signal: controller.signal
+    });
+    bodyText = await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+  const responseBodySha256 = sha256Text(bodyText);
+  const promptInjectionScan = goalModeTextPromptInjectionScan(bodyText);
+  const queryHash = canonicalHash({
+    provider: input.adapter.provider,
+    kind: input.adapter.kind,
+    input: {
+      query: input.hint.query_text,
+      limit: 3,
+      request_url: requestUrl.toString()
+    }
+  });
+  const results = liveTheoremSearchResults({
+    adapter: input.adapter,
+    bodyText,
+    queryHash,
+    createdAt: input.createdAt
+  });
+  const requestForHash = {
+    adapter_id: input.adapter.id,
+    kind: input.adapter.kind,
+    provider: input.adapter.provider,
+    query_hash: input.hint.query_hash,
+    request_url: requestUrl.toString(),
+    auth_header_present: Boolean(apiKey)
+  };
+  return {
+    requestForHash,
+    resultPayloadSummary: {
+      result_kind: "theorem_search_results",
+      result_count: results.length,
+      live_provider: {
+        provider: input.adapter.provider,
+        request_url: requestUrl.toString(),
+        request_sha256: canonicalHash(requestForHash),
+        response_status: response.status,
+        response_content_type: response.headers.get("content-type") ?? null,
+        response_body_sha256: responseBodySha256,
+        network_execution_performed: true,
+        live_provider_execution_performed: true,
+        prompt_injection_scan: promptInjectionScan
+      },
+      results
+    },
+    adapterExecutionState: "live_provider_result_recorded",
+    networkExecutionPerformed: true,
+    liveProviderExecutionPerformed: true
+  };
+}
+
 async function repairHintAdapterExecution(input: {
   registry: ReturnType<typeof createDefaultExternalWheelRegistry>;
   adapter: ExternalWheelAdapterDescriptor;
@@ -735,6 +904,13 @@ async function repairHintAdapterExecution(input: {
 }): Promise<RepairHintAdapterExecution> {
   if (shouldExecuteLiveJinaSearch(input.hint)) {
     return liveJinaSearchResultPayloadSummary({
+      adapter: input.adapter,
+      hint: input.hint,
+      createdAt: input.createdAt
+    });
+  }
+  if (shouldExecuteLiveLoogleSearch(input.hint)) {
+    return liveLoogleSearchResultPayloadSummary({
       adapter: input.adapter,
       hint: input.hint,
       createdAt: input.createdAt

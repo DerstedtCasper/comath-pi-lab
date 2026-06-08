@@ -1,3 +1,23 @@
+# Goal 3 Task 276 / Pi Goal-Mode Live Theorem-Search Repair Hint Execution
+
+Scope: add the maintained live theorem-search repair-context path that Task275 left open, without changing proof authority. Opt-in `theorem_search:loogle` execution should call only a configured Loogle-compatible endpoint, keep credentials in memory, persist sanitized provenance, and thread declaration results through repair tasks/execution as non-authoritative hints.
+
+Implementation notes:
+- Added `goal3-task276-pi-goal-mode-live-theorem-search-repair-hint-execution.test.mjs`.
+- Added `COMATH_LOOGLE_SEARCH_BASE_URL` and optional in-memory `COMATH_LOOGLE_API_KEY` handling for explicitly enabled `theorem_search:loogle` repair-hint execution.
+- Live theorem-search execution records sanitized request/response hashes, response status/content type, response body hash, prompt-injection scan, bounded declaration result summaries, capability metadata, terms, and no-authority vetoes without persisting bearer tokens or host roots.
+- The live result is threaded through repair tasks and repair execution with `adapter_execution_state="live_provider_result_recorded"`, while all default/offline executions remain stubbed.
+- Added `pi_goal_mode_live_theorem_search_repair_hint_execution` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding the focused Task276 service test: the local Loogle-compatible fixture received 0 requests because theorem-search repair hints were still stubbed.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task276 exited 0.
+- Current verification in this continuation: focused Task276 exited 0; adjacent Task269, Task273, and Task275 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task276 discovered by the default runner; `corepack pnpm test` exited 0 across the root workspace suite.
+
+Boundary notes: Task276 records theorem-search declarations as repair context only. It does not make declaration results, prompt-injection scans, provider status, request/response hashes, or repair execution proof authority. Final proof status still requires service-owned Lean clean replay plus ordinary promotion gates.
+
+Residual risk: Goal 3 remains incomplete. Task276 does not synthesize mathematically meaningful repairs from theorem-search results, implement CAS live execution, close real Pi/operator workflow, provide production OS-isolation helper binaries, run release-candidate proof breadth, or certify GA.
+
 # Goal 3 Task 275 / Pi Goal-Mode Live Retrieval Final Replay Provenance
 
 Scope: close the Task274 live-retrieval suggestion path into terminal final replay material while keeping provider output non-authoritative. A repaired candidate that reruns through LeanRunner must not remain blocked by its previous failed-run veto, and the final replay package must bind the live repair provenance by path/hash.
