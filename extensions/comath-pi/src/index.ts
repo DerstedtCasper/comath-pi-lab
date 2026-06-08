@@ -2311,6 +2311,15 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
   }
 
   if (name === "comath.release.piCodexLifecycleReview") {
+    const completionCertificationPrerequisiteId = readString(input, "completion_certification_prerequisite_id", {
+      optional: true
+    });
+    const completionCertificationPrerequisitePath = readString(input, "completion_certification_prerequisite_path", {
+      optional: true
+    });
+    const completionCertificationPrerequisiteSha256 = readString(input, "completion_certification_prerequisite_sha256", {
+      optional: true
+    });
     return publicToolResult(
       name,
       client.post("/release/pi-codex-lifecycle/review", {
@@ -2321,7 +2330,16 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
           ? {}
           : { review_id: readString(input, "review_id", { optional: true }) }),
         install_session_evidence: readRecord(input, "install_session_evidence"),
-        codex_evidence: readRecord(input, "codex_evidence")
+        codex_evidence: readRecord(input, "codex_evidence"),
+        ...(completionCertificationPrerequisiteId === undefined
+          ? {}
+          : { completion_certification_prerequisite_id: completionCertificationPrerequisiteId }),
+        ...(completionCertificationPrerequisitePath === undefined
+          ? {}
+          : { completion_certification_prerequisite_path: completionCertificationPrerequisitePath }),
+        ...(completionCertificationPrerequisiteSha256 === undefined
+          ? {}
+          : { completion_certification_prerequisite_sha256: completionCertificationPrerequisiteSha256 })
       })
     );
   }
@@ -3742,7 +3760,10 @@ export function createComathTools(): ToolDescriptor[] {
               enum: ["passed", "not_run", "injected_fake", "blocked_missing_credentials"]
             }
           }
-        }
+        },
+        completion_certification_prerequisite_id: stringProp,
+        completion_certification_prerequisite_path: stringProp,
+        completion_certification_prerequisite_sha256: stringProp
       })
     },
     {
@@ -5820,7 +5841,19 @@ async function handleReleaseCommand(
           actor: actorFrom(options, parsed.args),
           review_id: optionValue(parsed.args, "--review-id"),
           install_session_evidence: parsePiCodexLifecycleInstallSessionEvidence(parsed.args),
-          codex_evidence: parsePiCodexLifecycleCodexEvidence(parsed.args)
+          codex_evidence: parsePiCodexLifecycleCodexEvidence(parsed.args),
+          completion_certification_prerequisite_id: optionValue(
+            parsed.args,
+            "--completion-certification-prerequisite-id"
+          ),
+          completion_certification_prerequisite_path: optionValue(
+            parsed.args,
+            "--completion-certification-prerequisite-path"
+          ),
+          completion_certification_prerequisite_sha256: optionValue(
+            parsed.args,
+            "--completion-certification-prerequisite-sha256"
+          )
         },
         ctx
       )

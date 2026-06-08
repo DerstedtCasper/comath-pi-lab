@@ -1,3 +1,22 @@
+# Goal 3 Task 285 / Pi Lifecycle Readiness Prerequisite Consumer Bridge
+
+Scope: expose Task284 prerequisite-bound lifecycle readiness review through the Pi thin client without changing readiness authority or creating terminal completion certificates.
+
+Implementation notes:
+- Added `goal3-task285-pi-lifecycle-readiness-prerequisite-consumer.test.mjs`.
+- Extended `comath.release.piCodexLifecycleReview` schema with optional `completion_certification_prerequisite_id`, `completion_certification_prerequisite_path`, and `completion_certification_prerequisite_sha256`.
+- Forwarded those fields through direct Pi tool execution and `/cm:release pi-codex-lifecycle` host-confirmed command execution to `POST /release/pi-codex-lifecycle/review`.
+- Kept public output sanitization for secrets, host paths, proof-success vocabulary, terminal-completion wording, completion-certificate claims, and GA claims.
+- Wired the focused Pi test into the default `@comath/pi-extension` test chain and synchronized README, TODO, AGENTS, GA release criteria, threat model, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed before implementation: focused Task285 failed because the Pi lifecycle review tool did not expose the prerequisite id field.
+- Current verification in this continuation: `corepack pnpm --filter @comath/pi-extension build` exited 0; focused Task285 exited 0; adjacent Task147, Task254, and service Task284 regressions exited 0; `corepack pnpm --filter @comath/pi-extension typecheck` exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task285 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 after a transient unrelated root-run Task249 failure was narrowed by a focused Task249 rerun; final `corepack pnpm test` exited 0 across the root workspace suite.
+
+Boundary notes: Task285 is Pi consumer wiring only. It does not create completion certificates, certify unattended completion, re-read prerequisite artifacts itself, open durable/live transport, mutate trusted Pi state, run Lean, promote claims, or certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task285 does not close terminal completion certification, durable long-lived operator transport, production GA execution, service-side certificate design, production OS-isolation helper binaries, broad proof breadth, or GA certification.
+
 # Goal 3 Task 284 / Pi Lifecycle Readiness Completion-Prerequisite Binding
 
 Scope: close a real Pi/operator product aggregation gap by binding Task253 completion-certification prerequisite evidence into the older lifecycle readiness review without treating that blocker as release completion.
