@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import {
@@ -18,6 +18,29 @@ export type LeanCandidateAttemptCommandRunner = (
   command: string[],
   cwd: string
 ) => { exit_code: number; stdout: string; stderr: string };
+
+type CandidateRepairProvenance = {
+  schema_version: "comath.candidate_repair_provenance.v1";
+  repair_stage: string;
+  source_repair_hint_execution?: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
+  source_repair_execution: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
+  source_per_candidate_repair_execution: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
+  proof_authority: "none";
+  can_promote_claim: false;
+  result_can_be_used_as_proof: false;
+};
 
 export type LeanCandidateAttemptRunnerConfig = {
   leanVersionOutput?: string;
@@ -107,6 +130,18 @@ function readText(projectRoot: string, relativePath: string): string {
 function sha256RuntimeFile(projectRoot: string, relativePath: string): string {
   const path = assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true });
   return sha256FileSync(path).sha256;
+}
+
+function runtimeFileExists(projectRoot: string, relativePath: string): boolean {
+  try {
+    return existsSync(assertPathAllowed(projectRoot, relativePath, { purpose: "read" }));
+  } catch {
+    return false;
+  }
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }
 
 function stableRunId(input: { campaignId: string; obligationId: string; candidateId: string; leanFileSha256: string }): string {
@@ -306,6 +341,11 @@ function writeCandidateReplayDescriptor(input: {
   writeText(input.projectRoot, replayToolchainRel, readText(input.projectRoot, input.toolchainRel));
   writeJson(input.projectRoot, lakeManifestRel, { version: 7, packages: [] });
   const descriptorRel = normalizedRel(join(replayRootRel, "candidate_replay_project_descriptor.json"));
+  const repairProvenance = candidateRepairProvenance({
+    projectRoot: input.projectRoot,
+    campaign: input.campaign,
+    candidate: input.candidate
+  });
   writeJson(input.projectRoot, descriptorRel, {
     schema_version: "comath.candidate_replay_project_descriptor.v1",
     campaign_id: input.campaign.campaign_id,
@@ -315,6 +355,7 @@ function writeCandidateReplayDescriptor(input: {
     artifact_role: "candidate_replay_project_descriptor",
     proof_authority: "none",
     can_promote_claim: false,
+    ...(repairProvenance ? { candidate_repair_provenance: repairProvenance } : {}),
     lean_project: {
       lean_root: replayRootRel,
       theorem_file_rel: "MathResearch/Target.lean",
@@ -359,6 +400,69 @@ function writeLeanCandidateLakeProject(input: {
 
 function appendUnique<T>(items: T[], extra: T[]): T[] {
   return Array.from(new Set([...items, ...extra]));
+}
+
+function clearTransientLeanRunnerRejectionVetoes(items: string[]): string[] {
+  return items.filter((item) => item !== "service_owned_lean_runner_rejected_candidate_attempt");
+}
+
+function candidateRepairProvenance(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  candidate: CandidateRun;
+}): CandidateRepairProvenance | undefined {
+  const repairExecutionRel = campaignRel(input.campaign, "lean_candidate_attempt_repair_execution.json");
+  if (!runtimeFileExists(input.projectRoot, repairExecutionRel)) {
+    return undefined;
+  }
+  const repairExecution = objectRecord(JSON.parse(readText(input.projectRoot, repairExecutionRel)));
+  if (repairExecution?.proof_authority !== "none") {
+    return undefined;
+  }
+  const perCandidateExecutions = Array.isArray(repairExecution.per_candidate_executions)
+    ? repairExecution.per_candidate_executions
+    : [];
+  const perCandidate = perCandidateExecutions
+    .map((value) => objectRecord(value))
+    .find((value) => value?.candidate_id === input.candidate.candidate_id);
+  if (!perCandidate || perCandidate.proof_authority !== "none" || perCandidate.can_promote_claim !== false) {
+    return undefined;
+  }
+  const repairStage = typeof perCandidate.placeholder_free_repair_strategy === "string" ? perCandidate.placeholder_free_repair_strategy : null;
+  const perCandidateRepairExecutionPath = typeof perCandidate.repair_execution_path === "string" ? perCandidate.repair_execution_path : null;
+  if (!repairStage || !perCandidateRepairExecutionPath || !runtimeFileExists(input.projectRoot, perCandidateRepairExecutionPath)) {
+    return undefined;
+  }
+  const sourceRepairHintExecution = objectRecord(perCandidate.source_repair_hint_execution);
+  const provenance: CandidateRepairProvenance = {
+    schema_version: "comath.candidate_repair_provenance.v1",
+    repair_stage: repairStage,
+    source_repair_execution: {
+      path: repairExecutionRel,
+      sha256: sha256RuntimeFile(input.projectRoot, repairExecutionRel),
+      proof_authority: "none"
+    },
+    source_per_candidate_repair_execution: {
+      path: perCandidateRepairExecutionPath,
+      sha256: sha256RuntimeFile(input.projectRoot, perCandidateRepairExecutionPath),
+      proof_authority: "none"
+    },
+    proof_authority: "none",
+    can_promote_claim: false,
+    result_can_be_used_as_proof: false
+  };
+  if (
+    sourceRepairHintExecution?.proof_authority === "none" &&
+    typeof sourceRepairHintExecution.path === "string" &&
+    typeof sourceRepairHintExecution.sha256 === "string"
+  ) {
+    provenance.source_repair_hint_execution = {
+      path: sourceRepairHintExecution.path,
+      sha256: sourceRepairHintExecution.sha256,
+      proof_authority: "none"
+    };
+  }
+  return provenance;
 }
 
 export function executeLeanCandidateAttemptLeanRunner(input: {
@@ -438,7 +542,9 @@ export function executeLeanCandidateAttemptLeanRunner(input: {
     const manifestRel = normalizedRel(join(".comath", "evidence", input.campaign.root_claim_id, "lean", `${runId}.manifest.json`));
     manifestPaths.push(manifestRel);
     const accepted = run.manifest.exit_code === 0 && !placeholderPresent;
-    const hardVetoes = accepted ? manifest.hard_vetoes : appendUnique(manifest.hard_vetoes, ["service_owned_lean_runner_rejected_candidate_attempt"]);
+    const hardVetoes = accepted
+      ? clearTransientLeanRunnerRejectionVetoes(manifest.hard_vetoes)
+      : appendUnique(manifest.hard_vetoes, ["service_owned_lean_runner_rejected_candidate_attempt"]);
     const evidence = appendUnique(manifest.evidence, [`lean_run_manifest:${manifestRel}`]);
     let artifacts = manifest.artifacts;
     if (accepted) {

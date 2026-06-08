@@ -4637,6 +4637,18 @@ async function produceCandidateFinalReplayMaterialSourceFromSelectedDescriptor(i
   if (descriptor.proof_authority !== "none" || descriptor.can_promote_claim !== false) {
     throw new Error("candidate_replay_material_authority_forgery");
   }
+  const candidateRepairProvenance =
+    descriptor.candidate_repair_provenance &&
+    typeof descriptor.candidate_repair_provenance === "object" &&
+    !Array.isArray(descriptor.candidate_repair_provenance)
+      ? (descriptor.candidate_repair_provenance as Record<string, unknown>)
+      : undefined;
+  if (
+    candidateRepairProvenance &&
+    (candidateRepairProvenance.proof_authority !== "none" || candidateRepairProvenance.can_promote_claim !== false)
+  ) {
+    throw new Error("candidate_replay_material_repair_provenance_authority_forgery");
+  }
 
   const replayRequest = {
     schema_version: "comath.campaign_final_global_replay_request.v1",
@@ -4676,6 +4688,7 @@ async function produceCandidateFinalReplayMaterialSourceFromSelectedDescriptor(i
         produced_by: "comathd.candidate_replay_material_source_producer",
         proof_authority: "none",
         can_promote_claim: false,
+        ...(candidateRepairProvenance ? { candidate_repair_provenance: candidateRepairProvenance } : {}),
         lean_project: replayRequest.lean_project,
         created_at: now()
       },

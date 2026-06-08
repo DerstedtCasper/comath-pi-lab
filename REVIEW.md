@@ -1,3 +1,24 @@
+# Goal 3 Task 275 / Pi Goal-Mode Live Retrieval Final Replay Provenance
+
+Scope: close the Task274 live-retrieval suggestion path into terminal final replay material while keeping provider output non-authoritative. A repaired candidate that reruns through LeanRunner must not remain blocked by its previous failed-run veto, and the final replay package must bind the live repair provenance by path/hash.
+
+Implementation notes:
+- Added `goal3-task275-pi-goal-mode-live-retrieval-final-replay-provenance.test.mjs`.
+- LeanRunner execution now clears only the transient `service_owned_lean_runner_rejected_candidate_attempt` hard veto when the current repaired Lean file passes a later content-hash-specific run; other hard vetoes remain intact.
+- Candidate replay descriptors now include optional `candidate_repair_provenance` when the selected candidate has a repair execution history, binding the campaign repair execution, per-candidate repair execution, and live repair-hint execution by path/hash with `proof_authority=none`.
+- Final replay material source production copies that provenance into `candidate_final_replay_material_source.json` and rejects forged provenance that claims promotion/proof authority.
+- Added `pi_goal_mode_live_retrieval_final_replay_provenance` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding the focused Task275 service test: the campaign blocked at candidate arbitration because the repaired candidate still carried the previous `service_owned_lean_runner_rejected_candidate_attempt` veto.
+- After clearing only that transient veto on a passing repaired rerun, the focused Task275 service test failed at the intended provenance assertion because `candidate_replay_project_descriptor.json` did not bind repair provenance.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task275 exited 0.
+- Current verification in this continuation: focused Task275 exited 0; adjacent Task266, Task271, Task272, Task273, and Task274 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task275 discovered by the default runner; `corepack pnpm test` exited 0 across the root workspace suite.
+
+Boundary notes: Task275 records how non-authoritative retrieval text shaped the selected candidate; it does not make retrieval, prompt-injection scans, repair execution, or repair provenance proof authority. Final proof status still requires service-owned Lean clean replay plus ordinary promotion gates.
+
+Residual risk: Goal 3 remains incomplete. Task275 does not implement live theorem-search/CAS providers, broad mathematical repair synthesis, real Pi/operator closure, production OS-isolation helper binaries, release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 274 / Pi Goal-Mode Live Retrieval Suggestion Repair
 
 Scope: turn opt-in live retrieval output from Task273 into bounded candidate repair material. This extracts fenced Lean suggestions from a live `retrieval:jina_search` response, accepts them only for exact locked theorem/lemma matches with no proof-authority flags, and reruns the repaired candidate through LeanRunner instead of treating provider text as proof.
