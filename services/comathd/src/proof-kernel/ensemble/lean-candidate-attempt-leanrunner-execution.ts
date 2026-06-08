@@ -149,6 +149,83 @@ function propositionFromObligation(obligation: ProofObligation): string {
   return obligation.locked_statement_nl;
 }
 
+function stripProofBody(header: string): string {
+  return header.replace(/\s*:=\s*by[\s\S]*$/u, "").trim();
+}
+
+function replayTheoremHeader(input: {
+  obligation: ProofObligation;
+  shortTheoremName: string;
+  proposition: string;
+}): string {
+  const structured = input.obligation.locked_statement_structured as Record<string, unknown>;
+  const rawHeader = typeof structured.theorem_header === "string" ? stripProofBody(structured.theorem_header) : "";
+  return rawHeader || `theorem ${input.shortTheoremName} : ${input.proposition}`;
+}
+
+function theoremSignature(input: { theoremName: string; proposition: string }): string {
+  return `${input.theoremName} : ${input.proposition}`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripLeanComments(text: string): string {
+  return text
+    .replace(/\/-[\s\S]*?-\//gu, "")
+    .split(/\r?\n/)
+    .map((line) => {
+      const index = line.indexOf("--");
+      return index >= 0 ? line.slice(0, index) : line;
+    })
+    .join("\n");
+}
+
+function materializeReplayTargetLean(input: {
+  projectRoot: string;
+  candidate: CandidateRun;
+  namespace: string;
+  shortTheoremName: string;
+  theoremName: string;
+  proposition: string;
+}): string {
+  const candidateLeanRel = normalizedRel(join(input.candidate.workspace_path, "LeanCandidate.lean"));
+  const source = stripLeanComments(readText(input.projectRoot, candidateLeanRel));
+  const theoremNames = [input.shortTheoremName, input.theoremName].map(escapeRegExp);
+  const declarationPattern = new RegExp(`\\b(theorem|lemma)\\s+(?:${theoremNames.join("|")})\\b`, "u");
+  if (!declarationPattern.test(source)) {
+    throw new Error("candidate_replay_project_theorem_declaration_missing");
+  }
+
+  const normalizedSource = source.replace(declarationPattern, `$1 ${input.shortTheoremName}`);
+  const lines = normalizedSource.split(/\r?\n/);
+  const importLines: string[] = [];
+  const bodyLines: string[] = [];
+  for (const line of lines) {
+    if (/^\s*import\s+/.test(line)) {
+      importLines.push(line);
+    } else {
+      bodyLines.push(line);
+    }
+  }
+  const body = bodyLines.join("\n").trim();
+  const namespacePattern = new RegExp(`\\bnamespace\\s+${escapeRegExp(input.namespace)}\\b`, "u");
+  if (namespacePattern.test(body)) {
+    return [...importLines, ...(importLines.length > 0 ? [""] : []), body, ""].join("\n");
+  }
+  return [
+    ...importLines,
+    ...(importLines.length > 0 ? [""] : []),
+    `namespace ${input.namespace}`,
+    "",
+    body,
+    "",
+    `end ${input.namespace}`,
+    ""
+  ].join("\n");
+}
+
 function writeCandidateReplayDescriptor(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
@@ -162,25 +239,43 @@ function writeCandidateReplayDescriptor(input: {
   const theoremNameParts = theoremName.split(".");
   const shortTheoremName = theoremNameParts.at(-1) ?? theoremName;
   const namespace = theoremNameParts.length > 1 ? theoremNameParts.slice(0, -1).join(".") : "MathResearch";
-  const formalSpecRel = normalizedRel(join(input.candidate.workspace_path, "FormalSpec", "formal_spec_lock.json"));
-  const ledgerRel = normalizedRel(join(input.candidate.workspace_path, "FormalSpec", "assumption_ledger.json"));
-  const auditRel = normalizedRel(join(input.candidate.workspace_path, "Audit", "LeanCandidateAudit.lean"));
+  const proposition = propositionFromObligation(input.obligation);
+  const signature = theoremSignature({ theoremName, proposition });
+  const replayRootRel = normalizedRel(join(input.candidate.workspace_path, "final_replay_project"));
+  const formalSpecRel = normalizedRel(join(replayRootRel, "FormalSpec", "formal_spec_lock.json"));
+  const ledgerRel = normalizedRel(join(replayRootRel, "FormalSpec", "assumption_ledger.json"));
+  const targetRel = normalizedRel(join(replayRootRel, "MathResearch", "Target.lean"));
+  const auditRel = normalizedRel(join(replayRootRel, "Audit", "LeanCandidateAudit.lean"));
+  const lakefileRel = normalizedRel(join(replayRootRel, "lakefile.lean"));
+  const replayToolchainRel = normalizedRel(join(replayRootRel, "lean-toolchain"));
+  const lakeManifestRel = normalizedRel(join(replayRootRel, "lake-manifest.json"));
+  writeText(
+    input.projectRoot,
+    targetRel,
+    materializeReplayTargetLean({
+      projectRoot: input.projectRoot,
+      candidate: input.candidate,
+      namespace,
+      shortTheoremName,
+      theoremName,
+      proposition
+    })
+  );
   writeJson(input.projectRoot, formalSpecRel, {
     schema_version: "comath.formal_spec_lock.v2",
+    binding_scope: "campaign",
+    campaign_id: input.campaign.campaign_id,
     claim_id: input.campaign.root_claim_id,
     original_goal_text: input.obligation.locked_statement_nl,
     original_goal_sha256: input.obligation.statement_hash,
-    normalized_nl_statement: input.obligation.locked_statement_nl,
+    normalized_nl_statement: signature,
     theorem_name: shortTheoremName,
     namespace,
-    theorem_header:
-      typeof input.obligation.locked_statement_structured.theorem_header === "string"
-        ? input.obligation.locked_statement_structured.theorem_header
-        : theoremName,
-    theorem_type_pretty: propositionFromObligation(input.obligation),
+    theorem_header: replayTheoremHeader({ obligation: input.obligation, shortTheoremName, proposition }),
+    theorem_type_pretty: proposition,
     variables: [],
     assumptions: [],
-    conclusion: propositionFromObligation(input.obligation),
+    conclusion: proposition,
     notation_conventions: [],
     imports_allowed: [],
     external_dependencies_allowed: [],
@@ -193,6 +288,8 @@ function writeCandidateReplayDescriptor(input: {
   });
   writeJson(input.projectRoot, ledgerRel, {
     schema_version: "comath.assumption_ledger.v1",
+    binding_scope: "campaign",
+    campaign_id: input.campaign.campaign_id,
     claim_id: input.campaign.root_claim_id,
     formal_spec_lock_hash: input.obligation.statement_hash,
     entries: [],
@@ -200,8 +297,15 @@ function writeCandidateReplayDescriptor(input: {
     updated_at: new Date().toISOString(),
     proof_authority: "none"
   });
-  writeText(input.projectRoot, auditRel, [`import LeanCandidate`, `#check ${theoremName}`, `#print axioms ${theoremName}`, ""].join("\n"));
-  const descriptorRel = normalizedRel(join(input.candidate.workspace_path, "candidate_replay_project_descriptor.json"));
+  writeText(input.projectRoot, auditRel, [`import MathResearch.Target`, `#check ${theoremName}`, `#print axioms ${theoremName}`, ""].join("\n"));
+  writeText(
+    input.projectRoot,
+    lakefileRel,
+    ["import Lake", "open Lake DSL", "package MathResearch where", "lean_lib MathResearch where", "  roots := #[`MathResearch.Target]", ""].join("\n")
+  );
+  writeText(input.projectRoot, replayToolchainRel, readText(input.projectRoot, input.toolchainRel));
+  writeJson(input.projectRoot, lakeManifestRel, { version: 7, packages: [] });
+  const descriptorRel = normalizedRel(join(replayRootRel, "candidate_replay_project_descriptor.json"));
   writeJson(input.projectRoot, descriptorRel, {
     schema_version: "comath.candidate_replay_project_descriptor.v1",
     campaign_id: input.campaign.campaign_id,
@@ -212,8 +316,8 @@ function writeCandidateReplayDescriptor(input: {
     proof_authority: "none",
     can_promote_claim: false,
     lean_project: {
-      lean_root: input.candidate.workspace_path,
-      theorem_file_rel: "LeanCandidate.lean",
+      lean_root: replayRootRel,
+      theorem_file_rel: "MathResearch/Target.lean",
       formal_spec_file: "FormalSpec/formal_spec_lock.json",
       assumption_ledger_file: "FormalSpec/assumption_ledger.json",
       audit_file_rel: "Audit/LeanCandidateAudit.lean",
@@ -221,15 +325,15 @@ function writeCandidateReplayDescriptor(input: {
       toolchain_file: "lean-toolchain",
       theorem_name: theoremName,
       theorem_family_id: input.campaign.campaign_id,
-      canonical_proposition: propositionFromObligation(input.obligation),
-      build_targets: ["LeanCandidate"],
-      replay_command: "lake build LeanCandidate",
+      canonical_proposition: proposition,
+      build_targets: ["MathResearch"],
+      replay_command: "lake build MathResearch",
       primary_dependency: "Lean4",
       formal_spec: {
         claim_id: input.campaign.root_claim_id,
         theorem_name: shortTheoremName,
         namespace,
-        normalized_statement: input.obligation.locked_statement_nl,
+        normalized_statement: signature,
         locked_statement_hash: input.obligation.statement_hash
       }
     }
@@ -347,7 +451,7 @@ export function executeLeanCandidateAttemptLeanRunner(input: {
       });
       artifacts = appendUnique(artifacts, [
         {
-          path: "candidate_replay_project_descriptor.json",
+          path: "final_replay_project/candidate_replay_project_descriptor.json",
           kind: "candidate_replay_project_descriptor",
           required_for: ["candidate_replay_material_source"]
         }

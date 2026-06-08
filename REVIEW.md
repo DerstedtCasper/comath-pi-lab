@@ -1,26 +1,23 @@
-# Goal 3 Task 270 / Pi Goal-Mode Placeholder-Free Repair Candidate
+# Goal 3 Task 271 / Pi Goal-Mode Final Replay Terminal
 
-Scope: make the first bounded Pi goal-mode repair candidate genuinely placeholder-free, then carry a LeanRunner-passing attempt into the existing arbitration/red-team path. This is not final clean replay, proof promotion, or GA certification.
+Scope: carry the bounded Pi goal-mode placeholder-free `True` candidate through the existing product authority chain: arbitration, red-team, integration, final static audit, final global clean replay, FinalReplayManifest v3 packaging, ordinary promotion, and `completed_formal_proof`. This is not broad theorem synthesis, live provider proof authority, mathlib breadth, real-Pi completion, or GA certification.
 
 Implementation notes:
-- Added `goal3-task270-pi-goal-mode-placeholder-free-repair-candidate.test.mjs`.
-- Inline Lean theorem goals such as `theorem goal3_task270 : True := by sorry` now seed a FormalSpecLock-derived theorem target instead of producing comment-only skeleton material.
-- Incomplete inline theorem headers with `:= by sorry` are blocked from the live-candidate native adapter solved path, so they must go through repair and LeanRunner evidence.
-- Candidate static preflight now ignores line-comment `sorry`, requires a theorem/lemma declaration, detects repair placeholders and Lean holes, and permits LeanRunner only when those blockers are absent.
-- Repair execution can rewrite locked `True` theorem `sorry` bodies to `trivial`, records placeholder-free repair metadata, and keeps fallback repairs explicitly non-authoritative.
-- Repair batch routing now treats `sorry`, repair placeholders, and Lean holes as repair-required signals, so placeholder fallback drafts continue through repair instead of being sent to LeanRunner or misclassified as ordinary arbitration blockers.
-- Added `pi_goal_mode_placeholder_free_repair_candidate` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+- Added `goal3-task271-pi-goal-mode-final-replay-terminal.test.mjs`.
+- Accepted Pi goal-mode candidates now preserve the original LeanRunner-checked `LeanCandidate` project and materialize a separate `final_replay_project` under the selected candidate workspace.
+- The final replay project contains comment-stripped `MathResearch/Target.lean`, `Audit/LeanCandidateAudit.lean`, campaign-bound FormalSpecLock/AssumptionLedger records, `lakefile.lean`, `lean-toolchain`, `lake-manifest.json`, and `candidate_replay_project_descriptor.json`.
+- The replay descriptor now points downstream integration/final replay to `MathResearch/Target.lean`, `lake build MathResearch`, and the canonical theorem signature such as `MathResearch.goal3_task271 : True`.
+- Added `pi_goal_mode_final_replay_terminal` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
 
 Verification:
-- TDD RED was observed after adding the focused Task270 service test: `node services/comathd/tests/unit/goal3-task270-pi-goal-mode-placeholder-free-repair-candidate.test.mjs` failed because the static check did not report a Lean theorem declaration.
-- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; focused Task270 exited 0; adjacent Task263, Task264, Task265, Task266, Task267, Task268, and Task269 regressions exited 0. The focused Task270 regression also covers a fallback non-`True` theorem repair where `?comath_repair_placeholder` and Lean holes are routed back to repair without LeanRunner invocation.
-- During grouped verification, `corepack pnpm --filter @comath/comathd test` initially exposed a Phase18 historical-fixture regression where the new candidate-attempt target gate blocked non-goal-mode campaigns too early; after root-cause analysis, the verification blocker was scoped to explicit Pi goal-mode attempt repair paths while legacy campaigns still proceed to the existing arbitration blocker.
-- Fresh verification after that fix: `node services/comathd/tests/integration/phase18-ga-campaign-vertical-slice.test.mjs` exited 0; focused Task270 exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task270 discovered by the default runner; `corepack pnpm typecheck` exited 0 across workspaces; `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests, comathd package tests with Task270, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
-- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+- TDD RED was observed after adding the focused Task271 service test: it reached `final_global_replay` and terminal-blocked because clean replay tried to copy a missing `MathResearch` directory from the candidate draft workspace.
+- After the replay-project materialization fix, focused Task271 initially reached clean replay but failed static audit because candidate draft comments still contained `sorry`; final replay target materialization now strips Lean comments before packaging.
+- Focused Task271 then reached final authority packaging and exposed missing campaign FormalSpecLock/AssumptionLedger bindings; the replay project now writes campaign-scoped lock/ledger metadata.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task271 exited 0; adjacent Task270, Task269, Task266, and Task106 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd test` exited 0 with Task271 discovered by the default runner after one timeout-only rerun; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
 
-Boundary notes: Task270 materializes bounded candidate drafts only. `trivial` repairs for locked `True` targets are useful product plumbing for the repair/LeanRunner loop, but they do not emit FinalReplayManifest evidence, promote claims, broaden theorem synthesis, or certify GA. Lean/mathlib clean replay remains the only final proof authority.
+Boundary notes: Task271 closes a bounded product-terminal chain for tiny `True` smoke targets only. The final proof authority still comes from service-owned clean replay, FinalReplayManifest v3 verification, derived bindings, and ordinary promotion gates; candidate drafts, repair hints, adapter stubs, and LeanRunner checks alone remain non-final.
 
-Residual risk: Goal 3 remains incomplete. Task270 does not synthesize mathematically meaningful repairs for general targets, integrate live provider hints, carry a candidate through integration/final clean replay/promotion, provide terminal proof success, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+Residual risk: Goal 3 remains incomplete. Task271 does not synthesize mathematically meaningful repairs for general targets, execute live theorem-search/literature/CAS providers, close real Pi/operator execution, provide production OS-isolation helper binaries, run broad final release-candidate proof breadth, or certify GA.
 
 # Goal 3 Task 269 / Pi Goal-Mode Repair Hint Execution
 
