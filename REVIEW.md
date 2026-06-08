@@ -1,3 +1,25 @@
+# Goal 3 Task 286 / Service-Owned Terminal Completion Certificate Design Gate
+
+Scope: define a service-owned terminal completion certificate design gate that consumes the current Task253 prerequisite and records the future evidence contract without creating or certifying terminal unattended completion.
+
+Implementation notes:
+- Added `goal3-task286-service-owned-terminal-completion-certificate-design.test.mjs`.
+- Added `recordPiCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign()` and `POST /release/pi-codex-lifecycle/unattended-real-host-terminal-completion-certificate-design`.
+- The gate re-reads the canonical Task253 prerequisite artifact by id/path/hash, rejects stale hashes, non-canonical paths, and promotional prerequisite material, and writes append-only `comath.pi_codex_unattended_real_host_terminal_completion_certificate_design.v1` evidence.
+- The design artifact records required future terminal-certificate evidence while keeping `completion_certificate_available=false`, `terminal_unattended_completion_certified=false`, `proof_authority=none`, and `can_certify_ga=false`.
+- Hardened prerequisite blocker validation so caller-injected or hand-written unknown blocker semantics cannot flow into the terminal certificate design artifact.
+- Extended lifecycle actor sanitization to scrub completion-certificate availability overclaims.
+- Registered the service capability and synchronized README, TODO, AGENTS, GA release criteria, threat model, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed before implementation: focused Task286 failed because the service-owned terminal completion certificate design gate export was undefined.
+- Follow-up RED was observed during self-review: a prerequisite artifact with caller-injected `caller_supplied_completion_certificate_available` blocker semantics was incorrectly accepted before the blocker allowlist hardening.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task286 exited 0; adjacent Task253, Task284, and Task285 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task286 discovered by the default runner; `corepack pnpm typecheck` exited 0; final `corepack pnpm test` exited 0 across the root workspace suite.
+
+Boundary notes: Task286 is design evidence only. It does not create terminal completion certificates, certify unattended completion, expose executor output, open durable/live transport, mutate trusted Pi state, run Lean, promote claims, or certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task286 does not implement a real terminal completion certificate, durable long-lived operator transport, production GA execution, Pi consumer wiring for the new route, production OS-isolation helper binaries, broad proof breadth, or GA certification.
+
 # Goal 3 Task 285 / Pi Lifecycle Readiness Prerequisite Consumer Bridge
 
 Scope: expose Task284 prerequisite-bound lifecycle readiness review through the Pi thin client without changing readiness authority or creating terminal completion certificates.

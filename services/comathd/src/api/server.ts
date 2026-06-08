@@ -65,6 +65,7 @@ import {
   recordPiCodexLifecycleOperatorServiceTransportContract,
   recordPiCodexLifecycleUnattendedRealHostDurableTransportContract,
   recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite,
+  recordPiCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign,
   recordPiCodexLifecycleUnattendedRealHostExecutionAttempt,
   recordPiCodexLifecycleUnattendedRealHostExecutionReadiness,
   recordPiCodexLifecycleUnattendedRealHostExecutorContract,
@@ -577,6 +578,20 @@ async function route(method: string, path: string, body: unknown, context: Route
         return {
           completion_certification_prerequisite:
             recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/unattended-real-host-terminal-completion-certificate-design",
+      (payload) => {
+        const body = payload as Parameters<
+          typeof recordPiCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign
+        >[1] & {
+          project_root: string;
+        };
+        return {
+          terminal_completion_certificate_design:
+            recordPiCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign(body.project_root, body)
         };
       }
     ],
