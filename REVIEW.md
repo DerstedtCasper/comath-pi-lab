@@ -1,3 +1,32 @@
+# Goal 3 Task 264 / Pi Goal-Mode Lean Attempt Repair Routing
+
+Scope: connect Task263's service-owned candidate-attempt preflight to the Pi goal-mode repair loop. This materializes repair work orders and keeps the campaign resumable; it is not Lean replay, proof authority, promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task264-pi-goal-mode-lean-attempt-repair-routing.test.mjs`.
+- Added `writeLeanCandidateAttemptRepairBatch()` in `proof-kernel/ensemble/lean-candidate-attempt-repair.ts`.
+- `candidate_arbitration` now routes explicit Pi goal-mode campaigns with external refs and `repair_required` `sorry` attempts to `current_stage="repair"` / `status="repairing"` instead of terminal-blocking.
+- The route writes `.comath/campaign/<campaign_id>/lean_candidate_attempt_repair_batch.json` and one `lean_candidate_repair_task.json` per candidate workspace.
+- Repair batches/tasks bind the Task263 check report by path/hash, preserve locked-statement boundaries, assign A0/A5/A8 roles, forbid proof-claim/replay-manifest outputs, and keep LeanRunner disabled until repaired no-sorry attempts exist.
+- Updated README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task264 service test: `node services/comathd/tests/unit/goal3-task264-pi-goal-mode-lean-attempt-repair-routing.test.mjs` failed because `candidate_arbitration` still returned terminal status instead of `repairing`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0.
+- Focused Task264 exited 0.
+- Adjacent Task263, Task262, Task110, Task109, and Phase63 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task264 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests through Task254, comathd package tests with Task264, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task264 writes service-owned repair work orders only. It does not execute repair agents, does not invoke LeanRunner, does not write LeanRunManifest evidence, does not mark candidates as proof-grade, and cannot promote claims or certify GA. The next product step is executing and re-verifying repaired no-sorry attempts before any LeanRunner authority can start.
+
+Residual risk: Goal 3 remains incomplete. Task264 does not perform automatic proof repair, materialize repaired no-sorry attempts, run LeanRunner on repaired candidates, integrate live theorem-search/literature hints into proof scripts, implement maintained PDF parsing or external Lean repo inspection, complete per-candidate clean replay promotion, provide terminal proof/refutation/blocker completion, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 263 / Pi Goal-Mode Lean Attempt Check Report
 
 Scope: turn Task262's draft Lean candidate workspaces into service-owned preflight and repair-routing evidence during `candidate_verification`. This is not Lean replay, proof authority, promotion, or GA certification.

@@ -17,7 +17,11 @@ import { decideCandidate, type EnsembleDecision } from "../ensemble/decision-for
 import { recordFailedRoutes, retrieveSimilarFailedRoutes } from "../ensemble/failure-aggregator.js";
 import { summarizeCandidateProofGradeEvidence } from "../ensemble/candidate-proof-grade-summary.js";
 import { runGaAgentStageCandidates, type GaAgentStagePlanningContext } from "../ensemble/ga-agent-stage-runner.js";
-import { createLeanCandidateAttemptCheckReport } from "../ensemble/lean-candidate-attempt-check.js";
+import { createLeanCandidateAttemptCheckReport, type LeanCandidateAttemptCheckReport } from "../ensemble/lean-candidate-attempt-check.js";
+import {
+  hasRepairableLeanCandidateAttempts,
+  writeLeanCandidateAttemptRepairBatch
+} from "../ensemble/lean-candidate-attempt-repair.js";
 import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-candidate-lean-check.js";
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
 import { defaultVariants } from "../ensemble/variant-registry.js";
@@ -2470,6 +2474,41 @@ function readCandidateManifestForCampaign(projectRoot: string, candidate: Candid
     throw new Error(`selected_candidate_manifest_mismatch:${mismatches.join(",")}`);
   }
   return manifest;
+}
+
+function isGoalModeCampaign(projectRoot: string, campaign: ResearchCampaign): boolean {
+  const intakeRel = campaignRel(campaign, "goal_mode_intake_manifest.json");
+  if (!artifactExists(projectRoot, intakeRel)) {
+    return false;
+  }
+  try {
+    const intake = objectRecord(readJsonArtifact(projectRoot, intakeRel), "goal_mode_intake_manifest");
+    const policy = intake.goal_mode_policy && typeof intake.goal_mode_policy === "object" && !Array.isArray(intake.goal_mode_policy)
+      ? (intake.goal_mode_policy as Record<string, unknown>)
+      : {};
+    const refCount =
+      (Array.isArray(intake.paper_refs) ? intake.paper_refs.length : 0) +
+      (Array.isArray(intake.attachment_refs) ? intake.attachment_refs.length : 0) +
+      (Array.isArray(intake.workspace_refs) ? intake.workspace_refs.length : 0);
+    return (intake.mode === "goal" || policy.mode === "goal") && refCount > 0;
+  } catch {
+    return false;
+  }
+}
+
+function readLeanCandidateAttemptCheckReportForCampaign(
+  projectRoot: string,
+  campaign: ResearchCampaign
+): { path: string; report: LeanCandidateAttemptCheckReport } | undefined {
+  const reportRel = campaignRel(campaign, "lean_candidate_attempt_check_report.json");
+  if (!artifactExists(projectRoot, reportRel)) {
+    return undefined;
+  }
+  const report = objectRecord(readJsonArtifact(projectRoot, reportRel), "lean_candidate_attempt_check_report");
+  if (report.schema_version !== "comath.pi_goal_mode_lean_candidate_attempt_check_report.v1") {
+    return undefined;
+  }
+  return { path: reportRel, report: report as unknown as LeanCandidateAttemptCheckReport };
 }
 
 function writeSimpleStageArtifact(projectRoot: string, campaign: ResearchCampaign, filename: string, payload: unknown): string {
@@ -5430,6 +5469,66 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       }
     }
     if (gate.result !== "pass") {
+      const attemptCheckReport = readLeanCandidateAttemptCheckReportForCampaign(input.project_root, campaign);
+      if (
+        gate.result === "blocked" &&
+        isGoalModeCampaign(input.project_root, campaign) &&
+        attemptCheckReport &&
+        hasRepairableLeanCandidateAttempts(attemptCheckReport.report)
+      ) {
+        const repairBatch = writeLeanCandidateAttemptRepairBatch({
+          projectRoot: input.project_root,
+          campaign,
+          obligation,
+          checkReportPath: attemptCheckReport.path,
+          checkReport: attemptCheckReport.report
+        });
+        const repairReason = "goal-mode candidate attempts require repair before proof-grade arbitration";
+        const next = writeCampaign(
+          input.project_root,
+          researchCampaignSchema.parse({
+            ...campaign,
+            current_stage: "repair",
+            status: "repairing",
+            open_obligations: [{ ...obligation, status: "blocked" }],
+            blockers: [
+              ...campaign.blockers,
+              {
+                code: "LEAN_CANDIDATE_ATTEMPT_REPAIR_REQUIRED",
+                reason: repairReason,
+                obligation_id: obligation.obligation_id,
+                artifact_path: repairBatch.batch_path,
+                check_report_path: attemptCheckReport.path,
+                decision_path: decisionRel,
+                repair_task_count: repairBatch.batch.repair_task_count,
+                proof_authority: "none",
+                can_promote_claim: false
+              }
+            ],
+            stage_runs: [
+              ...campaign.stage_runs,
+              completedStageRun(campaign, "candidate_arbitration", [
+                decisionRel,
+                repairBatch.batch_path,
+                ...repairBatch.task_paths
+              ])
+            ],
+            next_actions: [
+              "run A5/A8 candidate repair tasks without changing the locked statement",
+              "re-run candidate verification before any LeanRunner attempt",
+              "run service-owned LeanRunner only after repaired attempts contain no sorry placeholders"
+            ]
+          }),
+          actor
+        );
+        return {
+          campaign: next,
+          obligation: { ...obligation, status: "blocked" },
+          ensemble: { candidates, decision },
+          gate,
+          blocker: "goal_mode_candidate_attempt_repair_required"
+        };
+      }
       const blockerRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_arbitration_blocker.json", {
         schema_version: "comath.native_candidate_arbitration_blocker.v1",
         campaign_id: campaign.campaign_id,
