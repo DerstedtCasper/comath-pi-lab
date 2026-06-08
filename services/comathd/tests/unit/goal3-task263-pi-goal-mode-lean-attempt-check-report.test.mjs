@@ -66,7 +66,8 @@ async function startCampaign() {
     body: {
       project_root: root,
       project_name: "Goal 3 Task 263 Lean Attempt Check Report",
-      user_goal: "Prove the attached sources can be turned into checked Lean repair attempts without changing the theorem boundary.",
+      user_goal:
+        "Prove theorem goal3_task263 : True := by sorry while preserving the exact theorem boundary through repair attempts.",
       domain: "formalization",
       mode: "goal",
       paper_paths: ["papers/source.md", "papers/source.pdf"],

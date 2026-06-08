@@ -620,6 +620,9 @@ function createRepairTask(input: {
     source_check: {
       result: "repair_required",
       has_sorry: false,
+      has_repair_placeholder: false,
+      has_lean_hole: false,
+      has_lean_theorem_declaration: true,
       plan_path: input.feedback.plan_path,
       plan_sha256: input.feedback.plan_sha256,
       lean_file_path: input.feedback.lean_file_path,

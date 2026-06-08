@@ -81,6 +81,10 @@ function stripProofBody(header: string): string {
   return header.replace(/\s*:=\s*by[\s\S]*$/u, "").trim();
 }
 
+function headerContainsSorryBody(header: string): boolean {
+  return /\s*:=\s*by[\s\S]*\bsorry\b/u.test(header);
+}
+
 function findTopLevelColon(text: string): number {
   let round = 0;
   let square = 0;
@@ -193,6 +197,9 @@ function parseFormalSpecLeanHeader(input: {
   const namespace = stringField(structured, "namespace");
   const lockedTheoremName = stringField(structured, "theorem_name");
   if (!header || !namespace || !lockedTheoremName) {
+    return undefined;
+  }
+  if (headerContainsSorryBody(header)) {
     return undefined;
   }
   const declaration = parseTheoremDeclaration(header);

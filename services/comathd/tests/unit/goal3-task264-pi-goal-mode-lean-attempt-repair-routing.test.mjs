@@ -66,7 +66,8 @@ async function startCampaign() {
     body: {
       project_root: root,
       project_name: "Goal 3 Task 264 Lean Attempt Repair Routing",
-      user_goal: "Prove the attached sources can be repaired into Lean attempts without changing the theorem boundary.",
+      user_goal:
+        "Prove theorem goal3_task264 : True := by sorry while preserving the exact theorem boundary through repair routing.",
       domain: "formalization",
       mode: "goal",
       paper_paths: ["papers/source.md", "papers/source.pdf"],

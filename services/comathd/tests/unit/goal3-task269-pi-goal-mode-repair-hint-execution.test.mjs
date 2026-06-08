@@ -123,7 +123,7 @@ try {
     project_root: root,
     project_name: "Goal 3 Task 269 Repair Hint Execution",
     user_goal:
-      "Prove that failed Lean diagnostics can use service-owned theorem-search, literature, and CAS repair hint executions without changing theorem boundaries.",
+      "Prove theorem goal3_task269 : True := by sorry while preserving the exact theorem boundary through service-owned repair hint executions.",
     domain: "formalization",
     mode: "goal",
     paper_paths: ["papers/source.md"],

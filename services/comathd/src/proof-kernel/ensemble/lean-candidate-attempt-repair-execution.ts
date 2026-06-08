@@ -37,6 +37,7 @@ export type LeanCandidateAttemptRepairExecution = {
   repaired_candidate_count: number;
   repaired_attempts_materialized: true;
   repaired_attempts_ready_for_preflight: number;
+  repaired_placeholder_free_candidate_count: number;
   per_candidate_executions: Array<{
     candidate_id: string;
     variant_id: string;
@@ -67,9 +68,11 @@ export type LeanCandidateAttemptRepairExecution = {
     feedback_guided_revision_applied?: boolean;
     hint_guided_revision_applied?: boolean;
     hint_execution_guided_revision_applied?: boolean;
+    placeholder_free_repair_materialized: boolean;
+    placeholder_free_repair_strategy: "locked_true_theorem_trivial" | null;
     original_had_sorry: boolean;
     repaired_has_sorry: false;
-    repair_placeholder_present: true;
+    repair_placeholder_present: boolean;
     proof_authority: "none";
     can_promote_claim: false;
     result_can_be_used_as_proof: false;
@@ -121,8 +124,40 @@ function sha256RuntimeFile(projectRoot: string, relativePath: string): string {
   return sha256FileSync(path).sha256;
 }
 
+function stripLeanLineComments(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => {
+      const index = line.indexOf("--");
+      return index >= 0 ? line.slice(0, index) : line;
+    })
+    .join("\n");
+}
+
 function hasSorry(text: string): boolean {
-  return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(text);
+  return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(stripLeanLineComments(text));
+}
+
+function hasLockedTrueTheoremWithSorry(text: string): boolean {
+  const code = stripLeanLineComments(text);
+  return /\b(?:theorem|lemma)\s+[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_'.]*)*[\s\S]*?:\s*True\s*:=\s*by[\s\S]*\bsorry\b/u.test(
+    code
+  );
+}
+
+function replaceLeanSorryTokens(text: string, replacement: string): string {
+  return text
+    .split(/(\r?\n)/)
+    .map((part) => {
+      if (part === "\n" || part === "\r\n") {
+        return part;
+      }
+      const commentIndex = part.indexOf("--");
+      const code = commentIndex >= 0 ? part.slice(0, commentIndex) : part;
+      const comment = commentIndex >= 0 ? part.slice(commentIndex) : "";
+      return `${code.replace(/(^|[^A-Za-z0-9_'])sorry([^A-Za-z0-9_']|$)/gu, `$1${replacement}$2`)}${comment}`;
+    })
+    .join("");
 }
 
 function repairLeanDraft(
@@ -133,13 +168,16 @@ function repairLeanDraft(
   feedbackGuidedRevisionApplied: boolean;
   hintGuidedRevisionApplied: boolean;
   hintExecutionGuidedRevisionApplied: boolean;
+  placeholderFreeRepairMaterialized: boolean;
+  placeholderFreeRepairStrategy: "locked_true_theorem_trivial" | null;
 } {
   const placeholder = [
     "by",
     "  -- comath_repair_placeholder: non-authoritative draft for LeanRunner.",
     "  exact ?comath_repair_placeholder"
   ].join("\n");
-  const replaced = text.replace(/(^|[^A-Za-z0-9_'])sorry([^A-Za-z0-9_']|$)/gu, `$1${placeholder}$2`);
+  const canMaterializeTrivial = hasLockedTrueTheoremWithSorry(text);
+  const replaced = replaceLeanSorryTokens(text, canMaterializeTrivial ? "trivial" : placeholder);
   const markers: string[] = [];
   const sourceFeedback =
     task.source_feedback && typeof task.source_feedback === "object" && !Array.isArray(task.source_feedback)
@@ -175,14 +213,18 @@ function repairLeanDraft(
       text: replaced,
       feedbackGuidedRevisionApplied: false,
       hintGuidedRevisionApplied: false,
-      hintExecutionGuidedRevisionApplied: false
+      hintExecutionGuidedRevisionApplied: false,
+      placeholderFreeRepairMaterialized: canMaterializeTrivial,
+      placeholderFreeRepairStrategy: canMaterializeTrivial ? "locked_true_theorem_trivial" : null
     };
   }
   return {
     text: `${replaced.trimEnd()}\n\n${markers.join("\n")}\n`,
     feedbackGuidedRevisionApplied: Boolean(sourceFeedback),
     hintGuidedRevisionApplied: Boolean(sourceHintBundle),
-    hintExecutionGuidedRevisionApplied: Boolean(sourceHintExecution)
+    hintExecutionGuidedRevisionApplied: Boolean(sourceHintExecution),
+    placeholderFreeRepairMaterialized: canMaterializeTrivial,
+    placeholderFreeRepairStrategy: canMaterializeTrivial ? "locked_true_theorem_trivial" : null
   };
 }
 
@@ -409,6 +451,8 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
       feedback_guided_revision_applied: repaired.feedbackGuidedRevisionApplied,
       hint_guided_revision_applied: repaired.hintGuidedRevisionApplied,
       hint_execution_guided_revision_applied: repaired.hintExecutionGuidedRevisionApplied,
+      placeholder_free_repair_materialized: repaired.placeholderFreeRepairMaterialized,
+      placeholder_free_repair_strategy: repaired.placeholderFreeRepairStrategy,
       original_had_sorry: originalHadSorry,
       repaired_has_sorry: false,
       repair_placeholder_present: repairedLean.includes("comath_repair_placeholder"),
@@ -439,9 +483,11 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
       feedback_guided_revision_applied: repaired.feedbackGuidedRevisionApplied,
       hint_guided_revision_applied: repaired.hintGuidedRevisionApplied,
       hint_execution_guided_revision_applied: repaired.hintExecutionGuidedRevisionApplied,
+      placeholder_free_repair_materialized: repaired.placeholderFreeRepairMaterialized,
+      placeholder_free_repair_strategy: repaired.placeholderFreeRepairStrategy,
       original_had_sorry: originalHadSorry,
       repaired_has_sorry: false,
-      repair_placeholder_present: true,
+      repair_placeholder_present: repairedLean.includes("comath_repair_placeholder"),
       proof_authority: "none",
       can_promote_claim: false,
       result_can_be_used_as_proof: false
@@ -468,6 +514,7 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
     repaired_candidate_count: perCandidateExecutions.length,
     repaired_attempts_materialized: true,
     repaired_attempts_ready_for_preflight: perCandidateExecutions.length,
+    repaired_placeholder_free_candidate_count: perCandidateExecutions.filter((item) => item.placeholder_free_repair_materialized).length,
     per_candidate_executions: perCandidateExecutions,
     next_stage: "candidate_verification",
     lean_runner_invocations: 0,

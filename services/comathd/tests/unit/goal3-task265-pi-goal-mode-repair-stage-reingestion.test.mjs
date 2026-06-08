@@ -17,7 +17,15 @@ function readJson(relativePath) {
 }
 
 function hasSorry(text) {
-  return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(text);
+  return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(
+    text
+      .split(/\r?\n/)
+      .map((line) => {
+        const index = line.indexOf("--");
+        return index >= 0 ? line.slice(0, index) : line;
+      })
+      .join("\n")
+  );
 }
 
 function writeFixtures(projectRoot) {
@@ -69,7 +77,8 @@ async function startCampaign() {
     body: {
       project_root: root,
       project_name: "Goal 3 Task 265 Lean Attempt Repair Reingestion",
-      user_goal: "Prove the attached sources can be repaired into Lean attempts without changing the theorem boundary.",
+      user_goal:
+        "Prove theorem goal3_task265 : True := by sorry while preserving the exact theorem boundary through repair execution.",
       domain: "formalization",
       mode: "goal",
       paper_paths: ["papers/source.md", "papers/source.pdf"],
@@ -159,14 +168,17 @@ try {
   for (const item of execution.per_candidate_executions) {
     assert.equal(item.original_had_sorry, true);
     assert.equal(item.repaired_has_sorry, false);
-    assert.equal(item.repair_placeholder_present, true);
+    assert.equal(item.repair_placeholder_present, false);
+    assert.equal(item.placeholder_free_repair_materialized, true);
+    assert.equal(item.placeholder_free_repair_strategy, "locked_true_theorem_trivial");
     assert.equal(item.proof_authority, "none");
     assert.match(item.repaired_lean_file_sha256, /^[0-9a-f]{64}$/);
     assert.equal(existsSync(join(root, item.repair_input_snapshot_path)), true);
     assert.equal(existsSync(join(root, item.repair_execution_path)), true);
     const repairedText = readFileSync(join(root, item.repaired_lean_file_path), "utf8");
     assert.equal(hasSorry(repairedText), false);
-    assert.equal(repairedText.includes("comath_repair_placeholder"), true);
+    assert.equal(repairedText.includes("?comath_repair_placeholder"), false);
+    assert.match(repairedText, /theorem goal3_task265\s*:\s*True\s*:=\s*by[\s\S]*\btrivial\b/u);
   }
 
   const verifiedAgain = await tickCampaign(campaignId);

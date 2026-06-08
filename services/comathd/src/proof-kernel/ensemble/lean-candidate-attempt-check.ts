@@ -22,6 +22,9 @@ export type LeanCandidateAttemptCheck = {
   service_owned_check_kind: "candidate_attempt_static_preflight";
   result: "ready_for_lean_runner" | "repair_required" | "blocked";
   has_sorry: boolean;
+  has_repair_placeholder: boolean;
+  has_lean_hole: boolean;
+  has_lean_theorem_declaration: boolean;
   manifest_binds_attempt_artifacts: boolean;
   plan_binds_candidate: boolean;
   statement_boundary_hash_matches: boolean;
@@ -135,8 +138,37 @@ function pathExists(projectRoot: string, relativePath: string): boolean {
   }
 }
 
+function stripLeanLineComments(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => {
+      const index = line.indexOf("--");
+      return index >= 0 ? line.slice(0, index) : line;
+    })
+    .join("\n");
+}
+
+function leanCode(text: string | undefined): string {
+  return text === undefined ? "" : stripLeanLineComments(text);
+}
+
 function hasSorry(text: string | undefined): boolean {
-  return text !== undefined && /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(text);
+  return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(leanCode(text));
+}
+
+function hasRepairPlaceholder(text: string | undefined): boolean {
+  return text !== undefined && text.includes("?comath_repair_placeholder");
+}
+
+function hasLeanHole(text: string | undefined): boolean {
+  return /(?:^|[^A-Za-z0-9_'])\?[A-Za-z_][A-Za-z0-9_']*/u.test(leanCode(text));
+}
+
+function hasLeanTheoremDeclaration(text: string | undefined): boolean {
+  const code = leanCode(text);
+  return /\b(?:theorem|lemma)\s+[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_'.]*)*[\s\S]*?:[\s\S]*?:=\s*by\b/u.test(
+    code
+  );
 }
 
 function unique(values: string[]): string[] {
@@ -191,11 +223,15 @@ function checkCandidateAttempt(input: {
     blueprintActualSha256 !== null &&
     blueprintSha256 === blueprintActualSha256;
   const sorryPresent = hasSorry(leanText);
+  const repairPlaceholderPresent = hasRepairPlaceholder(leanText);
+  const leanHolePresent = hasLeanHole(leanText);
+  const theoremDeclarationPresent = hasLeanTheoremDeclaration(leanText);
 
   const blockers = unique([
     ...(manifest ? [] : ["candidate_manifest_unreadable"]),
     ...(pathExists(input.projectRoot, planPath) ? [] : ["lean_candidate_attempt_plan_missing"]),
     ...(pathExists(input.projectRoot, leanFilePath) ? [] : ["lean_candidate_attempt_file_missing"]),
+    ...(theoremDeclarationPresent ? [] : ["lean_candidate_attempt_theorem_declaration_missing"]),
     ...(manifestBindsAttemptArtifacts ? [] : ["candidate_manifest_does_not_bind_attempt_artifacts"]),
     ...(planBindsCandidate ? [] : ["lean_candidate_attempt_plan_candidate_binding_invalid"]),
     ...(statementBoundaryHashMatches ? [] : ["lean_candidate_attempt_statement_boundary_mismatch"]),
@@ -204,12 +240,19 @@ function checkCandidateAttempt(input: {
   ]);
   const repairActions = unique([
     ...(sorryPresent ? ["replace_sorry_with_kernel_checked_proof_term"] : []),
+    ...(repairPlaceholderPresent || leanHolePresent ? ["replace_placeholder_with_kernel_checked_proof_term"] : []),
+    ...(!theoremDeclarationPresent ? ["lock_or_restore_lean_theorem_target"] : []),
     ...(!sourceSkeletonHashMatches || !blueprintHashMatches ? ["regenerate_attempt_from_current_blueprint_and_skeleton"] : []),
     ...(!statementBoundaryHashMatches ? ["restore_formal_spec_lock_statement_boundary"] : []),
     ...(blockers.length > 0 ? ["regenerate_candidate_attempt_artifacts"] : []),
-    ...(blockers.length === 0 && !sorryPresent ? ["run_service_owned_lean_runner"] : [])
+    ...(blockers.length === 0 && !sorryPresent && !repairPlaceholderPresent && !leanHolePresent ? ["run_service_owned_lean_runner"] : [])
   ]);
-  const result = blockers.length > 0 ? "blocked" : sorryPresent ? "repair_required" : "ready_for_lean_runner";
+  const result =
+    blockers.length > 0
+      ? "blocked"
+      : sorryPresent || repairPlaceholderPresent || leanHolePresent
+        ? "repair_required"
+        : "ready_for_lean_runner";
 
   return {
     candidate_id: input.candidate.candidate_id,
@@ -223,6 +266,9 @@ function checkCandidateAttempt(input: {
     service_owned_check_kind: "candidate_attempt_static_preflight",
     result,
     has_sorry: sorryPresent,
+    has_repair_placeholder: repairPlaceholderPresent,
+    has_lean_hole: leanHolePresent,
+    has_lean_theorem_declaration: theoremDeclarationPresent,
     manifest_binds_attempt_artifacts: manifestBindsAttemptArtifacts,
     plan_binds_candidate: planBindsCandidate,
     statement_boundary_hash_matches: statementBoundaryHashMatches,

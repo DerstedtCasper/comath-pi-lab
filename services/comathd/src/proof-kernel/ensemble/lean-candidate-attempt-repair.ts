@@ -36,6 +36,9 @@ export type LeanCandidateAttemptRepairTask = {
   source_check: {
     result: "repair_required";
     has_sorry: boolean;
+    has_repair_placeholder: boolean;
+    has_lean_hole: boolean;
+    has_lean_theorem_declaration: boolean;
     plan_path: string;
     plan_sha256: string | null;
     lean_file_path: string;
@@ -147,10 +150,11 @@ function readTaskHash(projectRoot: string, relativePath: string): string {
 
 function repairableChecks(
   report: LeanCandidateAttemptCheckReport
-): Array<LeanCandidateAttemptCheck & { result: "repair_required"; has_sorry: true }> {
+): Array<LeanCandidateAttemptCheck & { result: "repair_required" }> {
   return report.per_candidate_checks.filter(
-    (check): check is LeanCandidateAttemptCheck & { result: "repair_required"; has_sorry: true } =>
-      check.result === "repair_required" && check.has_sorry === true
+    (check): check is LeanCandidateAttemptCheck & { result: "repair_required" } =>
+      check.result === "repair_required" &&
+      (check.has_sorry === true || check.has_repair_placeholder === true || check.has_lean_hole === true)
   );
 }
 
@@ -159,7 +163,7 @@ function createRepairTask(input: {
   obligation: ProofObligation;
   checkReportPath: string;
   checkReportSha256: string;
-  check: LeanCandidateAttemptCheck & { result: "repair_required"; has_sorry: true };
+  check: LeanCandidateAttemptCheck & { result: "repair_required" };
   createdAt: string;
 }): LeanCandidateAttemptRepairTask {
   return {
@@ -180,7 +184,10 @@ function createRepairTask(input: {
     },
     source_check: {
       result: "repair_required",
-      has_sorry: true,
+      has_sorry: input.check.has_sorry,
+      has_repair_placeholder: input.check.has_repair_placeholder,
+      has_lean_hole: input.check.has_lean_hole,
+      has_lean_theorem_declaration: input.check.has_lean_theorem_declaration,
       plan_path: input.check.plan_path,
       plan_sha256: input.check.plan_sha256,
       lean_file_path: input.check.lean_file_path,

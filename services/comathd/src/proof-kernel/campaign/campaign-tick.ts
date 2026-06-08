@@ -536,7 +536,97 @@ type LockedProblem = {
   notation_lines: string[];
 };
 
+function findTopLevelColon(text: string): number {
+  let round = 0;
+  let square = 0;
+  let curly = 0;
+  for (let index = text.length - 1; index >= 0; index -= 1) {
+    const char = text[index];
+    if (char === ")") {
+      round += 1;
+    } else if (char === "(") {
+      round -= 1;
+    } else if (char === "]") {
+      square += 1;
+    } else if (char === "[") {
+      square -= 1;
+    } else if (char === "}") {
+      curly += 1;
+    } else if (char === "{") {
+      curly -= 1;
+    } else if (char === ":" && round === 0 && square === 0 && curly === 0) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function parseInlineLeanTheoremHeader(goal: string):
+  | {
+      theorem_name: string;
+      namespace: string;
+      lean_target: string;
+      theorem_header: string;
+      theorem_type_pretty: string;
+    }
+  | undefined {
+  const normalized = goal.replace(/\s+/g, " ").trim();
+  const match = /\b(theorem|lemma)\s+([A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_'.]*)*)([\s\S]*?)\s*:=\s*by\s+sorry\b/u.exec(
+    normalized
+  );
+  if (!match) {
+    return undefined;
+  }
+  const declarationTail = match[3]?.trim() ?? "";
+  const colon = findTopLevelColon(declarationTail);
+  if (colon < 0) {
+    return undefined;
+  }
+  const proposition = declarationTail.slice(colon + 1).trim();
+  if (!proposition) {
+    return undefined;
+  }
+  const fullName = match[2]!;
+  const parts = fullName.split(".");
+  const theoremName = parts.at(-1)!;
+  const namespace = parts.length > 1 ? parts.slice(0, -1).join(".") : "MathResearch";
+  const localNameHeader = fullName.includes(".") ? fullName : theoremName;
+  const theoremHeader = `${match[1]!} ${localNameHeader}${declarationTail} := by sorry`;
+  return {
+    theorem_name: theoremName,
+    namespace,
+    lean_target: `${namespace}.${theoremName}`,
+    theorem_header: theoremHeader,
+    theorem_type_pretty: proposition
+  };
+}
+
 function classifyLockedProblem(goal: string): LockedProblem {
+  const inlineHeader = parseInlineLeanTheoremHeader(goal);
+  if (inlineHeader) {
+    return {
+      statement: goal.trim(),
+      structured: {
+        theorem_name: inlineHeader.theorem_name,
+        namespace: inlineHeader.namespace,
+        theorem_header: inlineHeader.theorem_header,
+        theorem_type_pretty: inlineHeader.theorem_type_pretty,
+        conclusion: inlineHeader.theorem_type_pretty,
+        variables: [],
+        assumptions: [],
+        notation_conventions: [],
+        imports_allowed: [],
+        external_dependencies_allowed: [],
+        trust_profile_id: "lean4_mathlib_default",
+        locked_by: "comathd.goal-inline-lean-header",
+        user_approval_required: false,
+        proof_authority: "none"
+      },
+      lean_target: inlineHeader.lean_target,
+      theorem_name: inlineHeader.theorem_name,
+      notation_lines: []
+    };
+  }
   return {
     statement: goal.trim(),
     structured: {},
@@ -587,7 +677,19 @@ function createObligation(claimId: string, statementHash: string, goal: string):
     obligation_id: "PO-0001",
     claim_id: claimId,
     locked_statement_nl: problem.statement,
-    locked_statement_structured: problem.structured,
+    locked_statement_structured:
+      Object.keys(problem.structured).length > 0
+        ? {
+            ...problem.structured,
+            schema_version: "comath.formal_spec_lock.v2",
+            claim_id: claimId,
+            original_goal_text: problem.statement,
+            original_goal_sha256: statementHash,
+            normalized_nl_statement: problem.statement,
+            statement_hash: statementHash,
+            locked_at: now()
+          }
+        : problem.structured,
     lean_target: problem.lean_target,
     statement_hash: statementHash,
     dependencies: [],
@@ -5526,8 +5628,9 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     const attemptBindingsValid =
       attemptCheckReport.all_attempt_plans_bound &&
       attemptCheckReport.all_source_skeleton_hashes_match &&
-      attemptCheckReport.all_blueprint_hashes_match &&
-      attemptCheckReport.candidates_blocked === 0;
+      attemptCheckReport.all_blueprint_hashes_match;
+    const attemptBlocksVerification =
+      isGoalModeCampaign(input.project_root, campaign) && attemptCheckReport.candidates_blocked > 0;
     const verificationRel = writeSimpleStageArtifact(input.project_root, campaign, "candidate_verification.json", {
       campaign_id: campaign.campaign_id,
       obligation_id: obligation.obligation_id,
@@ -5560,7 +5663,8 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       !allManifestPathsPresent ||
       !allStatementHashesMatch ||
       !manifestBindingsValid ||
-      !attemptBindingsValid
+      !attemptBindingsValid ||
+      attemptBlocksVerification
     ) {
       return blockCampaignAtFinalReplay({
         projectRoot: input.project_root,

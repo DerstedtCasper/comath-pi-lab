@@ -11,7 +11,15 @@ function readJson(relativePath) {
 }
 
 function hasSorry(text) {
-  return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(text);
+  return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(
+    text
+      .split(/\r?\n/)
+      .map((line) => {
+        const index = line.indexOf("--");
+        return index >= 0 ? line.slice(0, index) : line;
+      })
+      .join("\n")
+  );
 }
 
 function writeFixtures(projectRoot) {
@@ -80,7 +88,7 @@ function installFakeLeanLakeCommands(projectRoot, leanVersion = "9.99.9") {
         "echo %CD%^|%*>>\"%COMATH_TASK266_RUN_LOG%\"",
         "if not exist LeanCandidate.lean exit /b 3",
         "if not exist lean-toolchain exit /b 4",
-        "findstr /C:\"sorry\" LeanCandidate.lean >nul && exit /b 5",
+        "findstr /C:\"?comath_repair_placeholder\" LeanCandidate.lean >nul && exit /b 5",
         "echo unsolved goals 1>&2",
         "exit /b 1",
         ""
@@ -101,7 +109,7 @@ function installFakeLeanLakeCommands(projectRoot, leanVersion = "9.99.9") {
         "printf '%s|%s\\n' \"$PWD\" \"$*\" >> \"$COMATH_TASK266_RUN_LOG\"",
         "[ -f LeanCandidate.lean ] || exit 3",
         "[ -f lean-toolchain ] || exit 4",
-        "grep -q 'sorry' LeanCandidate.lean && exit 5",
+        "grep -q '?comath_repair_placeholder' LeanCandidate.lean && exit 5",
         "echo 'unsolved goals' >&2",
         "exit 1",
         ""
@@ -149,7 +157,8 @@ try {
   const started = startCampaign({
     project_root: root,
     project_name: "Goal 3 Task 266 Ready Attempt LeanRunner Blocker",
-    user_goal: "Prove the attached sources can be checked by LeanRunner after repair without changing the theorem boundary.",
+    user_goal:
+      "Prove theorem goal3_task266 : True := by sorry while preserving the exact theorem boundary through LeanRunner repair checking.",
     domain: "formalization",
     mode: "goal",
     paper_paths: ["papers/source.md", "papers/source.pdf"],

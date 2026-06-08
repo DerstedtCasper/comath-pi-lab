@@ -143,7 +143,8 @@ try {
   const started = startCampaign({
     project_root: root,
     project_name: "Goal 3 Task 267 LeanRunner Feedback Repair Loop",
-    user_goal: "Prove the attached sources can use LeanRunner failure output as repair feedback without changing theorem boundaries.",
+    user_goal:
+      "Prove theorem goal3_task267 : True := by sorry while preserving the exact theorem boundary through LeanRunner feedback repair.",
     domain: "formalization",
     mode: "goal",
     paper_paths: ["papers/source.md", "papers/source.pdf"],

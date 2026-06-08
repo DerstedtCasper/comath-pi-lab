@@ -117,7 +117,8 @@ try {
   const started = startCampaign({
     project_root: root,
     project_name: "Goal 3 Task 268 Repair Hint Bundle",
-    user_goal: "Prove that failed Lean diagnostics can use non-authoritative theorem-search, literature, and CAS repair hints without changing theorem boundaries.",
+    user_goal:
+      "Prove theorem goal3_task268 : True := by sorry while preserving the exact theorem boundary through non-authoritative repair hints.",
     domain: "formalization",
     mode: "goal",
     paper_paths: ["papers/source.md"],
