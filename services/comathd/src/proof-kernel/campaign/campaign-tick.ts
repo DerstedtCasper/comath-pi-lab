@@ -3093,6 +3093,7 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
       can_promote_claim: false;
       can_certify_ga: false;
     };
+    candidate_repair_provenance?: Record<string, unknown>;
   };
 } {
   const campaign = getCampaign(input.project_root, input.campaign_id);
@@ -3117,6 +3118,12 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
           can_certify_ga: false as const
         }
       : undefined;
+  const candidateRepairProvenance = finalReplayAuthorityPassed
+    ? readSelectedCandidateRepairProvenanceForExport({
+        projectRoot: input.project_root,
+        campaign
+      })
+    : undefined;
   return {
     export_manifest: {
       schema_version: "comath.pi_goal_export.v1",
@@ -3133,9 +3140,110 @@ export function exportCampaignGoalModeEvidence(input: CampaignTickInput): {
       evidence_pack_ready: finalReplayAuthorityPassed,
       proof_authority: finalReplayAuthorityPassed ? "lean_kernel_clean_replay" : "none",
       can_promote_claim: false,
+      ...(candidateRepairProvenance ? { candidate_repair_provenance: candidateRepairProvenance } : {}),
       ...(intakeManifest ? { goal_mode_intake_manifest: intakeManifest } : {})
     }
   };
+}
+
+function readSelectedCandidateRepairProvenanceForExport(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+}): Record<string, unknown> | undefined {
+  const obligation = input.campaign.open_obligations[0];
+  if (!obligation) {
+    return undefined;
+  }
+  const decisionRel = ensembleDecisionRel(input.campaign, obligation.obligation_id);
+  const candidatesRel = ensembleCandidatesRel(input.campaign, obligation.obligation_id);
+  if (!artifactExists(input.projectRoot, decisionRel) || !artifactExists(input.projectRoot, candidatesRel)) {
+    return undefined;
+  }
+  const decision = objectRecord(readJsonArtifact(input.projectRoot, decisionRel), "export_selected_candidate_decision");
+  const selectedCandidateId = typeof decision.selected_candidate_id === "string" ? decision.selected_candidate_id : null;
+  if (!selectedCandidateId) {
+    return undefined;
+  }
+  const candidates = readJsonArtifact(input.projectRoot, candidatesRel);
+  if (!Array.isArray(candidates)) {
+    return undefined;
+  }
+  const selected = candidates
+    .map((candidate) => (candidate && typeof candidate === "object" && !Array.isArray(candidate) ? (candidate as Record<string, unknown>) : null))
+    .find((candidate) => candidate?.candidate_id === selectedCandidateId);
+  if (!selected || typeof selected.manifest_path !== "string") {
+    return undefined;
+  }
+  const manifest = objectRecord(readJsonArtifact(input.projectRoot, selected.manifest_path), "export_selected_candidate_manifest");
+  const workspaceRel = typeof manifest.workspace_path === "string" ? manifest.workspace_path : selected.workspace_path;
+  if (typeof workspaceRel !== "string") {
+    return undefined;
+  }
+  const artifacts = Array.isArray(manifest.artifacts) ? manifest.artifacts : [];
+  const sourceArtifact = artifacts
+    .map((artifact) => (artifact && typeof artifact === "object" && !Array.isArray(artifact) ? (artifact as Record<string, unknown>) : null))
+    .find((artifact) => artifact?.kind === "final_replay_material_source" && typeof artifact.path === "string");
+  if (!sourceArtifact || typeof sourceArtifact.path !== "string") {
+    return undefined;
+  }
+  const sourceRel = normalizeRelPath(join(workspaceRel, sourceArtifact.path));
+  if (!artifactExists(input.projectRoot, sourceRel)) {
+    return undefined;
+  }
+  const source = objectRecord(readJsonArtifact(input.projectRoot, sourceRel), "export_final_replay_material_source");
+  const provenance =
+    source.candidate_repair_provenance &&
+    typeof source.candidate_repair_provenance === "object" &&
+    !Array.isArray(source.candidate_repair_provenance)
+      ? JSON.parse(JSON.stringify(source.candidate_repair_provenance)) as Record<string, unknown>
+      : undefined;
+  if (!provenance) {
+    return undefined;
+  }
+  assertPublicNoAuthorityCandidateRepairProvenance({
+    projectRoot: input.projectRoot,
+    provenance
+  });
+  return provenance;
+}
+
+function assertPublicNoAuthorityCandidateRepairProvenance(input: {
+  projectRoot: string;
+  provenance: Record<string, unknown>;
+}): void {
+  if (
+    input.provenance.schema_version !== "comath.candidate_repair_provenance.v1" ||
+    input.provenance.proof_authority !== "none" ||
+    input.provenance.can_promote_claim !== false ||
+    input.provenance.result_can_be_used_as_proof !== false
+  ) {
+    throw new Error("export_candidate_repair_provenance_authority_flags_invalid");
+  }
+  const serialized = JSON.stringify(input.provenance);
+  if (serialized.includes(input.projectRoot) || serialized.includes(normalizeRelPath(input.projectRoot))) {
+    throw new Error("export_candidate_repair_provenance_must_not_leak_host_root");
+  }
+  for (const field of ["source_repair_hint_execution", "source_repair_execution", "source_per_candidate_repair_execution"]) {
+    const reference = input.provenance[field];
+    if (reference === undefined) {
+      continue;
+    }
+    if (!reference || typeof reference !== "object" || Array.isArray(reference)) {
+      throw new Error(`export_candidate_repair_provenance_${field}_invalid`);
+    }
+    const record = reference as Record<string, unknown>;
+    if (
+      typeof record.path !== "string" ||
+      isAbsolute(record.path) ||
+      normalizeRelPath(record.path).startsWith("../") ||
+      normalizeRelPath(record.path).includes("/../") ||
+      typeof record.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/u.test(record.sha256) ||
+      record.proof_authority !== "none"
+    ) {
+      throw new Error(`export_candidate_repair_provenance_${field}_invalid`);
+    }
+  }
 }
 
 function blockCampaignAtFinalReplay(input: {

@@ -1,3 +1,19 @@
+# Goal 3 Task 280 / Pi Goal-Mode Live Computation Final Replay Provenance
+
+Summary:
+- Added a focused Task280 service regression proving a live-computation-`by decide` repaired candidate can reach terminal final clean replay while binding repair provenance into the selected candidate descriptor, final replay material source, and public goal-mode export manifest.
+- Extended `exportCampaignGoalModeEvidence()` to expose sanitized selected-candidate `candidate_repair_provenance` only after final Lean clean replay authority has passed, validating no-authority flags and relative path/hash references before export.
+- Added `pi_goal_mode_live_computation_final_replay_provenance` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding the public-export provenance assertion to the focused Task280 service test: `export_manifest.candidate_repair_provenance` was `undefined` even though internal final replay material already contained the live computation repair provenance.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task280 exited 0.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task280 exited 0; adjacent Task275, Task279, and Task127 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task280 discovered by the default runner after rerunning with a longer timeout; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task280 does not make SymPy output or repair provenance proof authority. Export readiness remains based on Lean clean replay; the exported repair provenance remains `proof_authority=none`, cannot promote claims, and contains only sanitized relative path/hash audit references.
+
+Residual risk: Goal 3 remains incomplete. Task280 does not implement arbitrary CAS-guided repair, Sage/Z3 live execution, non-toy Mathlib proofs, real Pi/operator execution, production OS-isolation helper binaries, release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 279 / Pi Goal-Mode Live Computation Decide Repair
 
 Summary:
