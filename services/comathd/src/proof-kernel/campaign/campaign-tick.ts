@@ -34,7 +34,8 @@ import {
 } from "../ensemble/lean-candidate-attempt-repair-execution.js";
 import {
   writeLeanCandidateAttemptRepairFeedbackBatch,
-  type LeanCandidateAttemptRepairFeedbackBatch
+  type LeanCandidateAttemptRepairFeedbackBatch,
+  type LeanCandidateAttemptRepairHintBundle
 } from "../ensemble/lean-candidate-attempt-repair-feedback.js";
 import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-candidate-lean-check.js";
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
@@ -120,6 +121,7 @@ export type CampaignTickResult = {
   static_audit?: CleanReplayResult["static_audit"];
   repair_execution?: LeanCandidateAttemptRepairExecution;
   lean_candidate_attempt_repair_feedback?: LeanCandidateAttemptRepairFeedbackBatch;
+  lean_candidate_attempt_repair_hint_bundle?: LeanCandidateAttemptRepairHintBundle;
   lean_candidate_attempt_leanrunner_execution?: LeanCandidateAttemptLeanRunnerExecution;
   counterexample?: {
     counterexample_id: string;
@@ -3126,6 +3128,7 @@ function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
     new Set([
       leanRunnerExecution.path,
       feedback.feedback_batch_path,
+      feedback.hint_bundle_path,
       feedback.repair_batch_path,
       ...feedback.task_paths
     ])
@@ -3151,6 +3154,7 @@ function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
     campaign: next,
     obligation: nextObligation,
     lean_candidate_attempt_repair_feedback: feedback.feedback_batch,
+    lean_candidate_attempt_repair_hint_bundle: feedback.hint_bundle,
     lean_candidate_attempt_leanrunner_execution: leanRunnerExecution.execution
   };
 }

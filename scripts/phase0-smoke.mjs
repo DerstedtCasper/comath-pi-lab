@@ -430,6 +430,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task265-pi-goal-mode-repair-stage-reingestion.test.mjs",
   "goal3-task266-pi-goal-mode-ready-attempt-leanrunner-blocker.test.mjs",
   "goal3-task267-pi-goal-mode-leanrunner-feedback-repair-loop.test.mjs",
+  "goal3-task268-pi-goal-mode-repair-hint-bundle.test.mjs",
   "goal3-task232-agent-adapter-os-isolation-nix-production-helper-profile-contract.test.mjs",
   "goal3-task233-pi-operator-service-transport-check-debug.test.mjs",
   "goal3-task234-agent-adapter-os-isolation-firejail-production-helper-profile-contract.test.mjs",

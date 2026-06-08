@@ -1,3 +1,34 @@
+# Goal 3 Task 268 / Pi Goal-Mode Repair Hint Bundle
+
+Scope: bind non-authoritative theorem-search/literature/CAS/proof-search/external-Lean-repo repair context into the Task267 all-rejected LeanRunner feedback loop. This is not live adapter execution, Lean authority, final clean replay, proof promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task268-pi-goal-mode-repair-hint-bundle.test.mjs`.
+- Extended `writeLeanCandidateAttemptRepairFeedbackBatch()` to write `lean_candidate_attempt_repair_hint_bundle.json`.
+- The hint bundle binds the repair feedback batch, goal-mode research plan, adapter execution manifest, and local ingestion evidence by path/hash.
+- Hint rows are descriptor-derived from the maintained external wheel registry and cover theorem search, retrieval, computation, proof-search backend, and external Lean repo contexts with `proof_authority="none"` and `network_execution_performed=false`.
+- The replacement repair batch and per-candidate repair tasks now carry `source_repair_hint_bundle`, `repair_hint_bundle_paths`, and `source_repair_hints`.
+- Repair execution re-hashes the repair task, source Lean draft, feedback batch binding, and hint bundle before overwriting candidate drafts; stale hint bundle hashes fail closed.
+- Repaired drafts may add `comath_repair_hints` markers, but repair still emits no LeanRunManifest, no FinalReplayManifest, no proof claim, no promotion, and no GA authority.
+- Added `pi_goal_mode_repair_hint_bundle` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task268 service test: `node services/comathd/tests/unit/goal3-task268-pi-goal-mode-repair-hint-bundle.test.mjs` failed because the repair hint bundle did not yet exist.
+- Focused Task268 exited 0 after implementation, including a tamper check proving a stale hint bundle hash fails closed without overwriting the existing repair execution or candidate Lean draft.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Adjacent Task267, Task266, Task265, Task264, and Task263 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task268 discovered by the default runner. The first 120s run timed out, then the same command exited 0 with a longer timeout.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests, comathd package tests with Task268, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task268 uses registry descriptors and existing goal-mode artifacts as repair context only. The hints are not theorem-search results, not citation condition matches, not CAS proof reports, not LeanRunManifest evidence, and not final replay material. Lean/mathlib clean replay remains the only final proof authority.
+
+Residual risk: Goal 3 remains incomplete. Task268 does not execute live theorem-search/literature/CAS adapters, synthesize mathematically meaningful Lean repairs, carry a LeanRunner-passing candidate through arbitration/red-team/integration, run final hermetic clean replay for a promoted artifact, provide terminal proof success, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 267 / Pi Goal-Mode LeanRunner Feedback Repair Loop
 
 Scope: turn an explicit Pi goal-mode all-rejected LeanRunner terminal blocker into a service-owned feedback repair loop. This is not final clean replay, proof promotion, or GA certification.
