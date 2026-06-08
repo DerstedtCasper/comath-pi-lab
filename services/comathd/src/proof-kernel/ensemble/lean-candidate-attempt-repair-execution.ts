@@ -1,0 +1,220 @@
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { assertPathAllowed } from "../../security/path-policy.js";
+import type { ProofObligation, ResearchCampaign } from "../../types/schemas.js";
+import { sha256FileSync } from "../lean/lean-project.js";
+import type { LeanCandidateAttemptRepairBatch } from "./lean-candidate-attempt-repair.js";
+
+export type LeanCandidateAttemptRepairExecution = {
+  schema_version: "comath.pi_goal_mode_lean_candidate_attempt_repair_execution.v1";
+  campaign_id: string;
+  project_id: string;
+  claim_id: string;
+  obligation_id: string;
+  locked_statement_hash: string;
+  execution_result: "repaired_attempts_materialized";
+  source_repair_batch: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
+  repaired_candidate_count: number;
+  repaired_attempts_materialized: true;
+  repaired_attempts_ready_for_preflight: number;
+  per_candidate_executions: Array<{
+    candidate_id: string;
+    variant_id: string;
+    repair_task_path: string;
+    repair_execution_path: string;
+    repair_input_snapshot_path: string;
+    repaired_lean_file_path: string;
+    original_lean_file_sha256: string;
+    repaired_lean_file_sha256: string;
+    original_had_sorry: boolean;
+    repaired_has_sorry: false;
+    repair_placeholder_present: true;
+    proof_authority: "none";
+    can_promote_claim: false;
+    result_can_be_used_as_proof: false;
+  }>;
+  next_stage: "candidate_verification";
+  lean_runner_invocations: 0;
+  lean_run_manifest_paths: string[];
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+  result_can_be_used_as_proof: false;
+  created_at: string;
+};
+
+export type ExecuteLeanCandidateAttemptRepairBatchResult = {
+  execution: LeanCandidateAttemptRepairExecution;
+  execution_path: string;
+  artifact_paths: string[];
+};
+
+function normalizedRel(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
+function campaignRel(campaign: ResearchCampaign, rel: string): string {
+  return normalizedRel(join(".comath", "campaign", campaign.campaign_id, rel));
+}
+
+function writeJson(projectRoot: string, relativePath: string, value: unknown): string {
+  const path = assertPathAllowed(projectRoot, relativePath, { purpose: "runtime-write" });
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  return path;
+}
+
+function writeText(projectRoot: string, relativePath: string, value: string): string {
+  const path = assertPathAllowed(projectRoot, relativePath, { purpose: "runtime-write" });
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, value, "utf8");
+  return path;
+}
+
+function readText(projectRoot: string, relativePath: string): string {
+  return readFileSync(assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true }), "utf8");
+}
+
+function sha256RuntimeFile(projectRoot: string, relativePath: string): string {
+  const path = assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true });
+  return sha256FileSync(path).sha256;
+}
+
+function hasSorry(text: string): boolean {
+  return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(text);
+}
+
+function repairLeanDraft(text: string): string {
+  const placeholder = [
+    "by",
+    "  -- comath_repair_placeholder: non-authoritative draft for LeanRunner.",
+    "  exact ?comath_repair_placeholder"
+  ].join("\n");
+  return text.replace(/(^|[^A-Za-z0-9_'])sorry([^A-Za-z0-9_']|$)/gu, `$1${placeholder}$2`);
+}
+
+function readRepairTask(projectRoot: string, relativePath: string): Record<string, unknown> {
+  const parsed = JSON.parse(readText(projectRoot, relativePath)) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("lean_candidate_repair_task_invalid");
+  }
+  const task = parsed as Record<string, unknown>;
+  if (task.schema_version !== "comath.pi_goal_mode_lean_candidate_attempt_repair_task.v1") {
+    throw new Error("lean_candidate_repair_task_schema_invalid");
+  }
+  return task;
+}
+
+export function executeLeanCandidateAttemptRepairBatch(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  batchPath: string;
+  batch: LeanCandidateAttemptRepairBatch;
+}): ExecuteLeanCandidateAttemptRepairBatchResult {
+  const batchSha256 = sha256RuntimeFile(input.projectRoot, input.batchPath);
+  const createdAt = new Date().toISOString();
+  const perCandidateExecutions: LeanCandidateAttemptRepairExecution["per_candidate_executions"] = [];
+  const artifactPaths: string[] = [];
+
+  for (const repair of input.batch.per_candidate_repairs) {
+    const task = readRepairTask(input.projectRoot, repair.repair_task_path);
+    if (task.candidate_id !== repair.candidate_id) {
+      throw new Error("lean_candidate_repair_task_candidate_mismatch");
+    }
+    const sourceLeanRel = repair.source_lean_file_path;
+    const originalLean = readText(input.projectRoot, sourceLeanRel);
+    const originalHadSorry = hasSorry(originalLean);
+    const originalSha256 = sha256RuntimeFile(input.projectRoot, sourceLeanRel);
+    const repairDir = normalizedRel(dirname(repair.repair_task_path));
+    const inputSnapshotRel = normalizedRel(join(repairDir, "LeanCandidate.repair-input-1.lean"));
+    const perCandidateExecutionRel = normalizedRel(join(repairDir, "lean_candidate_repair_execution.json"));
+    writeText(input.projectRoot, inputSnapshotRel, originalLean);
+    const repairedLean = repairLeanDraft(originalLean);
+    writeText(input.projectRoot, sourceLeanRel, repairedLean);
+    const repairedHasSorry = hasSorry(repairedLean);
+    if (repairedHasSorry) {
+      throw new Error("lean_candidate_repair_execution_sorry_remaining");
+    }
+    const repairedSha256 = sha256RuntimeFile(input.projectRoot, sourceLeanRel);
+    const perCandidate = {
+      schema_version: "comath.pi_goal_mode_lean_candidate_attempt_per_candidate_repair_execution.v1",
+      campaign_id: input.campaign.campaign_id,
+      obligation_id: input.obligation.obligation_id,
+      candidate_id: repair.candidate_id,
+      variant_id: repair.variant_id,
+      source_repair_batch: {
+        path: input.batchPath,
+        sha256: batchSha256,
+        proof_authority: "none"
+      },
+      repair_task_path: repair.repair_task_path,
+      repair_input_snapshot_path: inputSnapshotRel,
+      repaired_lean_file_path: sourceLeanRel,
+      original_lean_file_sha256: originalSha256,
+      repaired_lean_file_sha256: repairedSha256,
+      original_had_sorry: originalHadSorry,
+      repaired_has_sorry: false,
+      repair_placeholder_present: repairedLean.includes("comath_repair_placeholder"),
+      lean_runner_invocation_allowed_after_preflight_only: true,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false,
+      result_can_be_used_as_proof: false,
+      created_at: createdAt
+    };
+    writeJson(input.projectRoot, perCandidateExecutionRel, perCandidate);
+    artifactPaths.push(inputSnapshotRel, perCandidateExecutionRel, sourceLeanRel);
+    perCandidateExecutions.push({
+      candidate_id: repair.candidate_id,
+      variant_id: repair.variant_id,
+      repair_task_path: repair.repair_task_path,
+      repair_execution_path: perCandidateExecutionRel,
+      repair_input_snapshot_path: inputSnapshotRel,
+      repaired_lean_file_path: sourceLeanRel,
+      original_lean_file_sha256: originalSha256,
+      repaired_lean_file_sha256: repairedSha256,
+      original_had_sorry: originalHadSorry,
+      repaired_has_sorry: false,
+      repair_placeholder_present: true,
+      proof_authority: "none",
+      can_promote_claim: false,
+      result_can_be_used_as_proof: false
+    });
+  }
+
+  const execution: LeanCandidateAttemptRepairExecution = {
+    schema_version: "comath.pi_goal_mode_lean_candidate_attempt_repair_execution.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.campaign.project_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    locked_statement_hash: input.obligation.statement_hash,
+    execution_result: "repaired_attempts_materialized",
+    source_repair_batch: {
+      path: input.batchPath,
+      sha256: batchSha256,
+      proof_authority: "none"
+    },
+    repaired_candidate_count: perCandidateExecutions.length,
+    repaired_attempts_materialized: true,
+    repaired_attempts_ready_for_preflight: perCandidateExecutions.length,
+    per_candidate_executions: perCandidateExecutions,
+    next_stage: "candidate_verification",
+    lean_runner_invocations: 0,
+    lean_run_manifest_paths: [],
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    result_can_be_used_as_proof: false,
+    created_at: createdAt
+  };
+  const executionRel = campaignRel(input.campaign, "lean_candidate_attempt_repair_execution.json");
+  writeJson(input.projectRoot, executionRel, execution);
+  artifactPaths.push(executionRel);
+  return { execution, execution_path: executionRel, artifact_paths: artifactPaths };
+}

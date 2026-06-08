@@ -20,8 +20,13 @@ import { runGaAgentStageCandidates, type GaAgentStagePlanningContext } from "../
 import { createLeanCandidateAttemptCheckReport, type LeanCandidateAttemptCheckReport } from "../ensemble/lean-candidate-attempt-check.js";
 import {
   hasRepairableLeanCandidateAttempts,
-  writeLeanCandidateAttemptRepairBatch
+  writeLeanCandidateAttemptRepairBatch,
+  type LeanCandidateAttemptRepairBatch
 } from "../ensemble/lean-candidate-attempt-repair.js";
+import {
+  executeLeanCandidateAttemptRepairBatch,
+  type LeanCandidateAttemptRepairExecution
+} from "../ensemble/lean-candidate-attempt-repair-execution.js";
 import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-candidate-lean-check.js";
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
 import { defaultVariants } from "../ensemble/variant-registry.js";
@@ -103,6 +108,7 @@ export type CampaignTickResult = {
   gate?: GateDecision;
   final_replay?: CleanReplayResult["final_replay"];
   static_audit?: CleanReplayResult["static_audit"];
+  repair_execution?: LeanCandidateAttemptRepairExecution;
   counterexample?: {
     counterexample_id: string;
     assignment: Record<string, number>;
@@ -2509,6 +2515,21 @@ function readLeanCandidateAttemptCheckReportForCampaign(
     return undefined;
   }
   return { path: reportRel, report: report as unknown as LeanCandidateAttemptCheckReport };
+}
+
+function readLeanCandidateAttemptRepairBatchForCampaign(
+  projectRoot: string,
+  campaign: ResearchCampaign
+): { path: string; batch: LeanCandidateAttemptRepairBatch } | undefined {
+  const batchRel = campaignRel(campaign, "lean_candidate_attempt_repair_batch.json");
+  if (!artifactExists(projectRoot, batchRel)) {
+    return undefined;
+  }
+  const batch = objectRecord(readJsonArtifact(projectRoot, batchRel), "lean_candidate_attempt_repair_batch");
+  if (batch.schema_version !== "comath.pi_goal_mode_lean_candidate_attempt_repair_batch.v1") {
+    return undefined;
+  }
+  return { path: batchRel, batch: batch as unknown as LeanCandidateAttemptRepairBatch };
 }
 
 function writeSimpleStageArtifact(projectRoot: string, campaign: ResearchCampaign, filename: string, payload: unknown): string {
@@ -5594,6 +5615,55 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       actor
     );
     return { campaign: next, obligation, ensemble: { candidates, decision }, gate };
+  }
+
+  if (campaign.current_stage === "repair") {
+    const repairBatch = readLeanCandidateAttemptRepairBatchForCampaign(input.project_root, campaign);
+    if (!repairBatch) {
+      return blockCampaignAtFinalReplay({
+        projectRoot: input.project_root,
+        campaign,
+        obligation,
+        actor,
+        stage: "repair",
+        reason: "goal-mode repair stage requires a service-owned repair batch"
+      });
+    }
+    const repairExecution = executeLeanCandidateAttemptRepairBatch({
+      projectRoot: input.project_root,
+      campaign,
+      obligation,
+      batchPath: repairBatch.path,
+      batch: repairBatch.batch
+    });
+    const repairStageArtifacts = Array.from(
+      new Set([repairExecution.execution_path, ...repairExecution.artifact_paths])
+    );
+    const nextObligation = { ...obligation, status: "candidate_search" as const };
+    const next = writeCampaign(
+      input.project_root,
+      researchCampaignSchema.parse({
+        ...campaign,
+        status: "running",
+        current_stage: "candidate_verification",
+        open_obligations: [nextObligation],
+        stage_runs: [
+          ...campaign.stage_runs,
+          completedStageRun(campaign, "repair", repairStageArtifacts)
+        ],
+        next_actions: [
+          "re-run candidate verification on repaired no-sorry attempts",
+          "run service-owned LeanRunner only after candidate preflight reports ready_for_lean_runner",
+          "treat repair outputs as candidates until Lean Authority gates pass"
+        ]
+      }),
+      actor
+    );
+    return {
+      campaign: next,
+      obligation: nextObligation,
+      repair_execution: repairExecution.execution
+    };
   }
 
   if (campaign.current_stage === "refutation_red_team" || campaign.current_stage === "adversarial_review") {
