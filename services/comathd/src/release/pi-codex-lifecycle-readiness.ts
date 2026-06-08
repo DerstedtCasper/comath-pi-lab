@@ -42,6 +42,9 @@ export type PiCodexLifecycleReadinessInput = {
   actor: string;
   install_session_evidence?: PiCodexLifecycleInstallSessionEvidence;
   codex_evidence?: PiCodexLifecycleCodexEvidence;
+  completion_certification_prerequisite_id?: string;
+  completion_certification_prerequisite_path?: string;
+  completion_certification_prerequisite_sha256?: string;
 };
 
 export type PiCodexLifecycleReadinessCheck = {
@@ -55,6 +58,18 @@ export type PiCodexLifecycleReadinessVeto = {
   message: string;
 };
 
+export type PiCodexLifecycleCompletionCertificationPrerequisiteBinding = {
+  completion_certification_prerequisite_id: string;
+  completion_certification_prerequisite_status: "blocked_terminal_unattended_completion_certification_required";
+  terminal_goal_state: "blocked_with_replayable_certificate";
+  artifact: PiCodexUnattendedRealHostCompletionCertificationPrerequisiteArtifact;
+  completion_certificate_available: false;
+  terminal_unattended_completion_certified: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+};
+
 export type PiCodexLifecycleReadinessReview = {
   schema_version: "comath.pi_codex_lifecycle_readiness.v1";
   review_id: string;
@@ -66,11 +81,13 @@ export type PiCodexLifecycleReadinessReview = {
   inputs: {
     install_session_evidence: PiCodexLifecycleInstallSessionEvidence;
     codex_evidence: PiCodexLifecycleCodexEvidence;
+    completion_certification_prerequisite?: PiCodexLifecycleCompletionCertificationPrerequisiteBinding;
   };
   checks: {
     real_pi_host_runtime: PiCodexLifecycleReadinessCheck;
     durable_comathd_service_lifecycle: PiCodexLifecycleReadinessCheck;
     production_codex_validation: PiCodexLifecycleReadinessCheck;
+    terminal_unattended_completion_certification?: PiCodexLifecycleReadinessCheck;
   };
   vetoes: PiCodexLifecycleReadinessVeto[];
   proof_authority: "none";
@@ -10133,7 +10150,8 @@ function pushVeto(vetoes: PiCodexLifecycleReadinessVeto[], code: string, message
 
 function buildChecks(
   installSession: PiCodexLifecycleInstallSessionEvidence,
-  codex: PiCodexLifecycleCodexEvidence
+  codex: PiCodexLifecycleCodexEvidence,
+  completionPrerequisite?: PiCodexLifecycleCompletionCertificationPrerequisiteBinding
 ): PiCodexLifecycleReadinessReview["checks"] {
   const realPiHostRuntime =
     installSession.pi_host_kind === "real_pi_host" &&
@@ -10150,7 +10168,7 @@ function buildChecks(
     codex.installed_cli_probe_source === "service_owned_process" &&
     codex.codex_api_account_network_validation === "passed";
 
-  return {
+  const checks: PiCodexLifecycleReadinessReview["checks"] = {
     real_pi_host_runtime: {
       ok: realPiHostRuntime,
       required: true,
@@ -10167,11 +10185,20 @@ function buildChecks(
       observed: codex.codex_api_account_network_validation
     }
   };
+  if (completionPrerequisite) {
+    checks.terminal_unattended_completion_certification = {
+      ok: false,
+      required: true,
+      observed: completionPrerequisite.completion_certification_prerequisite_status
+    };
+  }
+  return checks;
 }
 
 function buildVetoes(
   checks: PiCodexLifecycleReadinessReview["checks"],
-  codex: PiCodexLifecycleCodexEvidence
+  codex: PiCodexLifecycleCodexEvidence,
+  completionPrerequisite?: PiCodexLifecycleCompletionCertificationPrerequisiteBinding
 ): PiCodexLifecycleReadinessVeto[] {
   const vetoes: PiCodexLifecycleReadinessVeto[] = [];
   if (!checks.real_pi_host_runtime.ok) {
@@ -10200,6 +10227,13 @@ function buildVetoes(
       vetoes,
       "production_codex_account_network_validation_missing",
       "Production Codex account and network validation has not passed."
+    );
+  }
+  if (completionPrerequisite) {
+    pushVeto(
+      vetoes,
+      "terminal_unattended_completion_certification_required",
+      "Task253 records that production unattended real-host completion still requires a terminal completion certificate."
     );
   }
   return vetoes;
@@ -10265,6 +10299,150 @@ export function collectPiCodexLifecycleEvidence(
   return bundle;
 }
 
+function throwLifecycleReadinessCompletionPrerequisiteInvalid(message: string): never {
+  throw new ComathError(message, {
+    statusCode: 400,
+    code: "PI_CODEX_LIFECYCLE_READINESS_COMPLETION_CERTIFICATION_PREREQUISITE_INVALID"
+  });
+}
+
+function assertLifecycleReadinessCompletionPrerequisiteSha256(value: string | undefined): string {
+  const sha256 = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!/^[a-f0-9]{64}$/u.test(sha256)) {
+    throw new ComathError("Pi/Codex lifecycle readiness completion certification prerequisite hash is stale", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_READINESS_COMPLETION_CERTIFICATION_PREREQUISITE_STALE"
+    });
+  }
+  return sha256;
+}
+
+function completionCertificationPrerequisiteBindingFromInput(
+  projectRoot: string,
+  projectId: string,
+  input: PiCodexLifecycleReadinessInput
+): PiCodexLifecycleCompletionCertificationPrerequisiteBinding | undefined {
+  const providedValues = [
+    input.completion_certification_prerequisite_id,
+    input.completion_certification_prerequisite_path,
+    input.completion_certification_prerequisite_sha256
+  ].filter((value) => value !== undefined);
+  if (providedValues.length === 0) {
+    return undefined;
+  }
+  if (
+    input.completion_certification_prerequisite_id === undefined ||
+    input.completion_certification_prerequisite_path === undefined ||
+    input.completion_certification_prerequisite_sha256 === undefined
+  ) {
+    throwLifecycleReadinessCompletionPrerequisiteInvalid(
+      "Pi/Codex lifecycle readiness completion certification prerequisite binding is incomplete"
+    );
+  }
+  const prerequisiteId = assertReviewId(input.completion_certification_prerequisite_id);
+  const canonicalPrerequisitePath = unattendedRealHostCompletionCertificationPrerequisitePath(prerequisiteId);
+  const normalizedInputPath = projectRelativePath(
+    projectRoot,
+    assertPathAllowed(projectRoot, input.completion_certification_prerequisite_path, {
+      purpose: "read",
+      resolveRealpath: true
+    })
+  );
+  if (normalizedInputPath !== canonicalPrerequisitePath) {
+    throwLifecycleReadinessCompletionPrerequisiteInvalid(
+      "Pi/Codex lifecycle readiness completion certification prerequisite path is not canonical"
+    );
+  }
+  const absolutePath = assertPathAllowed(projectRoot, canonicalPrerequisitePath, {
+    purpose: "read",
+    resolveRealpath: true
+  });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    throw new ComathError("Pi/Codex lifecycle readiness completion certification prerequisite artifact is stale", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_READINESS_COMPLETION_CERTIFICATION_PREREQUISITE_STALE"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  const actualSha256 = sha256Bytes(content);
+  if (assertLifecycleReadinessCompletionPrerequisiteSha256(input.completion_certification_prerequisite_sha256) !== actualSha256) {
+    throw new ComathError("Pi/Codex lifecycle readiness completion certification prerequisite hash is stale", {
+      statusCode: 400,
+      code: "PI_CODEX_LIFECYCLE_READINESS_COMPLETION_CERTIFICATION_PREREQUISITE_STALE"
+    });
+  }
+  let parsed: PiCodexUnattendedRealHostCompletionCertificationPrerequisiteBody & {
+    completion_certification_prerequisite_artifact?: unknown;
+  };
+  try {
+    parsed = JSON.parse(content.toString("utf8")) as PiCodexUnattendedRealHostCompletionCertificationPrerequisiteBody & {
+      completion_certification_prerequisite_artifact?: unknown;
+    };
+  } catch {
+    throwLifecycleReadinessCompletionPrerequisiteInvalid(
+      "Pi/Codex lifecycle readiness completion certification prerequisite JSON is invalid"
+    );
+  }
+  if (
+    parsed.schema_version !== "comath.pi_codex_unattended_real_host_completion_certification_prerequisite.v1" ||
+    parsed.completion_certification_prerequisite_id !== prerequisiteId ||
+    parsed.project_id !== projectId ||
+    parsed.completion_certification_prerequisite_path !== canonicalPrerequisitePath ||
+    parsed.completion_certification_prerequisite_artifact !== undefined ||
+    parsed.completion_certification_prerequisite_status !==
+      "blocked_terminal_unattended_completion_certification_required" ||
+    parsed.terminal_goal_state !== "blocked_with_replayable_certificate" ||
+    parsed.requested_completion_mode !== "production_unattended_real_host_completion" ||
+    !Array.isArray(parsed.blocker_reasons) ||
+    !parsed.blocker_reasons.includes("terminal_unattended_completion_certificate_missing") ||
+    parsed.completion_certificate_available !== false ||
+    parsed.terminal_unattended_completion_certified !== false ||
+    parsed.unattended_real_host_execution_completed !== false ||
+    parsed.operator_confirmation_bypassed !== false ||
+    parsed.durable_transport_provided !== false ||
+    parsed.live_transport_open !== false ||
+    parsed.attempt_review_current !== true ||
+    parsed.attempt_current !== true ||
+    parsed.readiness_current !== true ||
+    parsed.handoff_review_current !== true ||
+    parsed.operator_approval_artifact_current !== true ||
+    parsed.unattended_executor_contract_current !== true ||
+    parsed.durable_transport_contract_current !== true ||
+    parsed.service_owned_checkpoint_chain_reviewed !== true ||
+    parsed.service_owned_attempt_review_completed !== true ||
+    parsed.proof_authority !== "none" ||
+    parsed.can_promote_claim !== false ||
+    parsed.can_certify_ga !== false ||
+    !hasLifecycleArtifactReference(parsed.attempt_review_artifact, "unattended_real_host_execution_attempt_review") ||
+    !hasLifecycleArtifactReference(parsed.attempt_artifact, "unattended_real_host_execution_attempt") ||
+    !hasLifecycleArtifactReference(parsed.readiness_artifact, "unattended_real_host_execution_readiness") ||
+    !hasLifecycleArtifactReference(parsed.handoff_review_artifact, "unattended_real_host_handoff_review") ||
+    !hasLifecycleArtifactReference(parsed.operator_approval_artifact, "unattended_real_host_operator_approval") ||
+    !hasLifecycleArtifactReference(parsed.unattended_executor_contract_artifact, "unattended_real_host_executor_contract") ||
+    !hasLifecycleArtifactReference(parsed.durable_transport_contract_artifact, "unattended_real_host_durable_transport_contract")
+  ) {
+    throwLifecycleReadinessCompletionPrerequisiteInvalid(
+      "Pi/Codex lifecycle readiness completion certification prerequisite violates boundaries"
+    );
+  }
+  return {
+    completion_certification_prerequisite_id: prerequisiteId,
+    completion_certification_prerequisite_status: parsed.completion_certification_prerequisite_status,
+    terminal_goal_state: parsed.terminal_goal_state,
+    artifact: {
+      kind: "unattended_real_host_completion_certification_prerequisite",
+      path: canonicalPrerequisitePath,
+      sha256: actualSha256,
+      size_bytes: content.byteLength
+    },
+    completion_certificate_available: false,
+    terminal_unattended_completion_certified: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false
+  };
+}
+
 export function reviewPiCodexLifecycleReadiness(
   projectRoot: string,
   input: PiCodexLifecycleReadinessInput
@@ -10278,8 +10456,13 @@ export function reviewPiCodexLifecycleReadiness(
     ...defaultCodexEvidence,
     ...(input.codex_evidence ?? {})
   };
-  const checks = buildChecks(installSession, codex);
-  const vetoes = buildVetoes(checks, codex);
+  const completionCertificationPrerequisite = completionCertificationPrerequisiteBindingFromInput(
+    projectRoot,
+    input.project_id,
+    input
+  );
+  const checks = buildChecks(installSession, codex, completionCertificationPrerequisite);
+  const vetoes = buildVetoes(checks, codex, completionCertificationPrerequisite);
   const ok = vetoes.length === 0;
   const reviewPath = normalizeRelativePath(join(".comath", "release", "pi-codex-lifecycle", reviewId, "review.json"));
   const review: PiCodexLifecycleReadinessReview = {
@@ -10294,7 +10477,10 @@ export function reviewPiCodexLifecycleReadiness(
     review_path: reviewPath,
     inputs: {
       install_session_evidence: installSession,
-      codex_evidence: codex
+      codex_evidence: codex,
+      ...(completionCertificationPrerequisite
+        ? { completion_certification_prerequisite: completionCertificationPrerequisite }
+        : {})
     },
     checks,
     vetoes,
@@ -10309,7 +10495,7 @@ export function reviewPiCodexLifecycleReadiness(
   appendAuditEvent(projectRoot, {
     project_id: input.project_id,
     event_type: "release.pi_codex_lifecycle_readiness_reviewed",
-    actor: input.actor,
+    actor: sanitizeOperatorTransportText(input.actor),
     target_id: input.project_id,
     payload: {
       review_id: reviewId,
@@ -10317,6 +10503,16 @@ export function reviewPiCodexLifecycleReadiness(
       readiness_status: review.readiness_status,
       veto_codes: vetoes.map((veto) => veto.code),
       review_path: reviewPath,
+      ...(completionCertificationPrerequisite
+        ? {
+            completion_certification_prerequisite_id:
+              completionCertificationPrerequisite.completion_certification_prerequisite_id,
+            completion_certification_prerequisite_artifact_sha256:
+              completionCertificationPrerequisite.artifact.sha256,
+            terminal_unattended_completion_certified:
+              completionCertificationPrerequisite.terminal_unattended_completion_certified
+          }
+        : {}),
       proof_authority: "none",
       can_promote_claim: false,
       can_certify_ga: false

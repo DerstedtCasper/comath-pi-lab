@@ -152,6 +152,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_codex_unattended_real_host_execution_attempt_gate",
       "pi_codex_unattended_real_host_execution_attempt_review_gate",
       "pi_codex_unattended_real_host_completion_certification_prerequisite_gate",
+      "pi_codex_lifecycle_readiness_completion_prerequisite_binding",
       "pi_goal_mode_leanrunner_feedback_repair_loop",
       "pi_goal_mode_repair_hint_bundle",
       "pi_goal_mode_repair_hint_execution",

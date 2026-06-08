@@ -1,3 +1,22 @@
+# Goal 3 Task 284 / Pi Lifecycle Readiness Completion-Prerequisite Binding
+
+Scope: close a real Pi/operator product aggregation gap by binding Task253 completion-certification prerequisite evidence into the older lifecycle readiness review without treating that blocker as release completion.
+
+Implementation notes:
+- Added `goal3-task284-pi-lifecycle-readiness-completion-prerequisite-binding.test.mjs`.
+- Extended `reviewPiCodexLifecycleReadiness()` and `POST /release/pi-codex-lifecycle/review` to accept optional completion-prerequisite id/path/hash material.
+- The review now re-reads the canonical Task253 prerequisite artifact, rejects stale hashes, non-canonical paths, and promotional prerequisite material, and binds a sanitized artifact path/hash into `inputs.completion_certification_prerequisite`.
+- Added a `terminal_unattended_completion_certification` check and `terminal_unattended_completion_certification_required` veto when the prerequisite is supplied, while preserving `proof_authority=none`, `can_promote_claim=false`, and `can_certify_ga=false`.
+- Added `pi_codex_lifecycle_readiness_completion_prerequisite_binding` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed before implementation: focused Task284 failed because old lifecycle readiness returned `ok=true` even when a Task253 prerequisite showed terminal completion certification was still missing.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task284 exited 0; adjacent Task146, Task148, Task253, and Task254 consumer regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task284 discovered by the default runner; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task284 is a readiness aggregation bridge only. It does not create terminal completion certificates, certify unattended completion, open durable/live transport, mutate Pi trusted state, run Lean, promote claims, or certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task284 does not close production GA execution, durable long-lived operator transport, terminal completion certification, production OS-isolation helper binaries, broad proof breadth, or GA certification.
+
 # Goal 3 Task 283 / Pi Goal-Mode Live Theorem-Search Iff Repair
 
 Scope: add the next narrow theorem-search-guided candidate repair without changing proof authority. The only accepted shape is a locked `True <-> True` theorem/lemma with a live non-authoritative `Iff.intro` result; proof authority still comes only from LeanRunner and downstream clean replay.
