@@ -1,3 +1,33 @@
+# Goal 3 Task 269 / Pi Goal-Mode Repair Hint Execution
+
+Scope: execute the Task268 repair hint bundle through maintained external wheel registry stub adapters and bind the resulting non-authoritative repair context into the Task267 all-rejected LeanRunner feedback loop. This is not live network/provider execution, Lean authority, final clean replay, proof promotion, or GA certification.
+
+Implementation notes:
+- Added `goal3-task269-pi-goal-mode-repair-hint-execution.test.mjs`.
+- Extended `writeLeanCandidateAttemptRepairFeedbackBatch()` to await service-owned registry stub adapter methods and write `lean_candidate_attempt_repair_hint_execution.json`.
+- The hint execution artifact binds the repair feedback batch and Task268 hint bundle by path/hash, records adapter request/result hashes, provider terms, capability metadata, and `external_adapter_result_has_no_proof_authority` vetoes.
+- The replacement repair batch and per-candidate repair tasks now carry `source_repair_hint_execution`, `repair_hint_execution_paths`, and `source_repair_hint_results`.
+- Repair execution re-hashes the repair task, source Lean draft, feedback batch, hint bundle, and hint execution artifact before overwriting candidate drafts; stale hint execution hashes fail closed.
+- Repaired drafts may add `comath_repair_hint_execution` markers, but repair still emits no LeanRunManifest, no FinalReplayManifest, no proof claim, no promotion, and no GA authority.
+- Added `pi_goal_mode_repair_hint_execution` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this tracker wording.
+
+Verification:
+- TDD RED was observed after adding the focused Task269 service test: `node services/comathd/tests/unit/goal3-task269-pi-goal-mode-repair-hint-execution.test.mjs` failed because the repair hint execution artifact did not yet exist.
+- Focused Task269 exited 0 after implementation, including adapter-return-shape checks and a tamper check proving stale hint execution hashes fail closed without overwriting existing repair execution or candidate Lean drafts.
+- `corepack pnpm --filter @comath/comathd build` exited 0.
+- Adjacent Task268, Task267, Task266, Task265, Task264, and Task263 regressions exited 0.
+- `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants.
+- `corepack pnpm --filter @comath/comathd typecheck` exited 0.
+- `corepack pnpm --filter @comath/comathd test` exited 0 with Task269 discovered by the default runner.
+- `corepack pnpm typecheck` exited 0 across workspaces.
+- `corepack pnpm test` exited 0 across phase0 smoke, Pi workspace tests, comathd package tests with Task269, Phase45 install-session e2e, Goal 3 Task125 public UX authority e2e, and Phase17 integrity evaluation.
+- `git diff --check` exited 0 with Windows LF-to-CRLF warnings only.
+- `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task269 records service-owned stub adapter outputs as repair context only. The results are not theorem-search proof evidence, not citation condition matches, not CAS proof reports, not LeanRunManifest evidence, and not final replay material. Lean/mathlib clean replay remains the only final proof authority.
+
+Residual risk: Goal 3 remains incomplete. Task269 does not execute live network/provider theorem-search/literature/CAS adapters, synthesize mathematically meaningful Lean repairs, carry a LeanRunner-passing candidate through arbitration/red-team/integration, run final hermetic clean replay for a promoted artifact, provide terminal proof success, durable long-lived operator transport, production real-Pi completion, production OS-isolation helper binaries, broad final release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 268 / Pi Goal-Mode Repair Hint Bundle
 
 Scope: bind non-authoritative theorem-search/literature/CAS/proof-search/external-Lean-repo repair context into the Task267 all-rejected LeanRunner feedback loop. This is not live adapter execution, Lean authority, final clean replay, proof promotion, or GA certification.

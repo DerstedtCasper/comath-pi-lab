@@ -28,6 +28,11 @@ export type LeanCandidateAttemptRepairExecution = {
     sha256: string;
     proof_authority: "none";
   };
+  source_repair_hint_execution?: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
   repair_iteration: number;
   repaired_candidate_count: number;
   repaired_attempts_materialized: true;
@@ -53,8 +58,15 @@ export type LeanCandidateAttemptRepairExecution = {
       proof_authority: "none";
     };
     source_repair_hints?: Record<string, unknown>[];
+    source_repair_hint_execution?: {
+      path: string;
+      sha256: string;
+      proof_authority: "none";
+    };
+    source_repair_hint_results?: Record<string, unknown>[];
     feedback_guided_revision_applied?: boolean;
     hint_guided_revision_applied?: boolean;
+    hint_execution_guided_revision_applied?: boolean;
     original_had_sorry: boolean;
     repaired_has_sorry: false;
     repair_placeholder_present: true;
@@ -116,7 +128,12 @@ function hasSorry(text: string): boolean {
 function repairLeanDraft(
   text: string,
   task: Record<string, unknown>
-): { text: string; feedbackGuidedRevisionApplied: boolean; hintGuidedRevisionApplied: boolean } {
+): {
+  text: string;
+  feedbackGuidedRevisionApplied: boolean;
+  hintGuidedRevisionApplied: boolean;
+  hintExecutionGuidedRevisionApplied: boolean;
+} {
   const placeholder = [
     "by",
     "  -- comath_repair_placeholder: non-authoritative draft for LeanRunner.",
@@ -145,13 +162,27 @@ function repairLeanDraft(
       `-- repair_hint_bundle_sha256: ${sourceHintBundle.sha256}`
     );
   }
+  const sourceHintExecution = repairHintExecutionFromTask(task);
+  if (sourceHintExecution) {
+    markers.push(
+      "-- comath_repair_hint_execution: service-owned non-authoritative external wheel stub results were bound for this repair pass.",
+      `-- repair_hint_execution: ${sourceHintExecution.path}`,
+      `-- repair_hint_execution_sha256: ${sourceHintExecution.sha256}`
+    );
+  }
   if (markers.length === 0) {
-    return { text: replaced, feedbackGuidedRevisionApplied: false, hintGuidedRevisionApplied: false };
+    return {
+      text: replaced,
+      feedbackGuidedRevisionApplied: false,
+      hintGuidedRevisionApplied: false,
+      hintExecutionGuidedRevisionApplied: false
+    };
   }
   return {
     text: `${replaced.trimEnd()}\n\n${markers.join("\n")}\n`,
     feedbackGuidedRevisionApplied: Boolean(sourceFeedback),
-    hintGuidedRevisionApplied: Boolean(sourceHintBundle)
+    hintGuidedRevisionApplied: Boolean(sourceHintBundle),
+    hintExecutionGuidedRevisionApplied: Boolean(sourceHintExecution)
   };
 }
 
@@ -191,6 +222,20 @@ function repairHintBundleFromTask(task: Record<string, unknown>): LeanCandidateA
   return { path: record.path, sha256: record.sha256, proof_authority: "none" };
 }
 
+function repairHintExecutionFromTask(
+  task: Record<string, unknown>
+): LeanCandidateAttemptRepairExecution["source_repair_hint_execution"] | undefined {
+  const source = task.source_repair_hint_execution;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return undefined;
+  }
+  const record = source as Record<string, unknown>;
+  if (typeof record.path !== "string" || typeof record.sha256 !== "string" || record.proof_authority !== "none") {
+    return undefined;
+  }
+  return { path: record.path, sha256: record.sha256, proof_authority: "none" };
+}
+
 function sourceFeedbackFromTask(task: Record<string, unknown>): Record<string, unknown> | undefined {
   const source = task.source_feedback;
   if (!source || typeof source !== "object" || Array.isArray(source)) {
@@ -206,6 +251,17 @@ function sourceRepairHintsFromTask(task: Record<string, unknown>): Record<string
   }
   const hints = source.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item));
   return hints.length > 0 ? hints : undefined;
+}
+
+function sourceRepairHintResultsFromTask(task: Record<string, unknown>): Record<string, unknown>[] | undefined {
+  const source = task.source_repair_hint_results;
+  if (!Array.isArray(source)) {
+    return undefined;
+  }
+  const results = source.filter(
+    (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)
+  );
+  return results.length > 0 ? results : undefined;
 }
 
 function validateRepairTaskAgainstBatch(input: {
@@ -260,6 +316,32 @@ function validateRepairTaskAgainstBatch(input: {
       }
     }
   }
+  const hintExecution = repairHintExecutionFromTask(input.task);
+  if (hintExecution && input.batch.source_repair_hint_execution) {
+    if (
+      hintExecution.path !== input.batch.source_repair_hint_execution.path ||
+      hintExecution.sha256 !== input.batch.source_repair_hint_execution.sha256
+    ) {
+      throw new Error("lean_candidate_repair_task_hint_execution_mismatch");
+    }
+    const currentHintExecutionSha256 = sha256RuntimeFile(input.projectRoot, hintExecution.path);
+    if (currentHintExecutionSha256 !== hintExecution.sha256) {
+      throw new Error("lean_candidate_repair_hint_execution_hash_mismatch");
+    }
+  }
+  const hintResults = sourceRepairHintResultsFromTask(input.task);
+  if (hintResults) {
+    for (const result of hintResults) {
+      if (
+        result.proof_authority !== "none" ||
+        result.can_promote_claim !== false ||
+        result.result_can_be_used_as_proof !== false ||
+        result.network_execution_performed !== false
+      ) {
+        throw new Error("lean_candidate_repair_hint_execution_authority_flags_invalid");
+      }
+    }
+  }
 }
 
 export function executeLeanCandidateAttemptRepairBatch(input: {
@@ -292,6 +374,8 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
     const sourceFeedback = sourceFeedbackFromTask(task);
     const repairHintBundle = repairHintBundleFromTask(task);
     const sourceRepairHints = sourceRepairHintsFromTask(task);
+    const repairHintExecution = repairHintExecutionFromTask(task);
+    const sourceRepairHintResults = sourceRepairHintResultsFromTask(task);
     const repaired = repairLeanDraft(originalLean, task);
     const repairedLean = repaired.text;
     writeText(input.projectRoot, sourceLeanRel, repairedLean);
@@ -315,6 +399,8 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
       source_feedback: sourceFeedback,
       source_repair_hint_bundle: repairHintBundle,
       source_repair_hints: sourceRepairHints,
+      source_repair_hint_execution: repairHintExecution,
+      source_repair_hint_results: sourceRepairHintResults,
       repair_task_path: repair.repair_task_path,
       repair_input_snapshot_path: inputSnapshotRel,
       repaired_lean_file_path: sourceLeanRel,
@@ -322,6 +408,7 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
       repaired_lean_file_sha256: repairedSha256,
       feedback_guided_revision_applied: repaired.feedbackGuidedRevisionApplied,
       hint_guided_revision_applied: repaired.hintGuidedRevisionApplied,
+      hint_execution_guided_revision_applied: repaired.hintExecutionGuidedRevisionApplied,
       original_had_sorry: originalHadSorry,
       repaired_has_sorry: false,
       repair_placeholder_present: repairedLean.includes("comath_repair_placeholder"),
@@ -347,8 +434,11 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
       source_feedback: sourceFeedback,
       source_repair_hint_bundle: repairHintBundle,
       source_repair_hints: sourceRepairHints,
+      source_repair_hint_execution: repairHintExecution,
+      source_repair_hint_results: sourceRepairHintResults,
       feedback_guided_revision_applied: repaired.feedbackGuidedRevisionApplied,
       hint_guided_revision_applied: repaired.hintGuidedRevisionApplied,
+      hint_execution_guided_revision_applied: repaired.hintExecutionGuidedRevisionApplied,
       original_had_sorry: originalHadSorry,
       repaired_has_sorry: false,
       repair_placeholder_present: true,
@@ -373,6 +463,7 @@ export function executeLeanCandidateAttemptRepairBatch(input: {
     },
     source_feedback_batch: input.batch.source_feedback_batch,
     source_repair_hint_bundle: input.batch.source_repair_hint_bundle,
+    source_repair_hint_execution: input.batch.source_repair_hint_execution,
     repair_iteration: input.batch.repair_iteration,
     repaired_candidate_count: perCandidateExecutions.length,
     repaired_attempts_materialized: true,

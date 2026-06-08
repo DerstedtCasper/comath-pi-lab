@@ -3,7 +3,9 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   createDefaultExternalWheelRegistry,
+  getExternalWheelAdapter,
   listExternalWheelAdapters,
+  type ExternalWheelAdapterDescriptor,
   type ExternalWheelKind
 } from "../../adapters/external-wheel-registry.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
@@ -118,11 +120,79 @@ export type LeanCandidateAttemptRepairHintBundle = {
   created_at: string;
 };
 
+export type LeanCandidateAttemptRepairHintExecution = {
+  schema_version: "comath.pi_goal_mode_lean_candidate_attempt_repair_hint_execution.v1";
+  campaign_id: string;
+  project_id: string;
+  claim_id: string;
+  obligation_id: string;
+  locked_statement_hash: string;
+  source_repair_feedback_batch: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
+  source_repair_hint_bundle: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
+  service_owned_adapter_execution: true;
+  execution_status: "stubbed_provider_results_recorded";
+  network_execution_performed: false;
+  live_provider_execution_performed: false;
+  stubbed_adapter_execution_performed: true;
+  adapter_result_count: number;
+  adapter_results: Array<{
+    adapter_result_id: string;
+    kind: ExternalWheelKind;
+    adapter_id: string;
+    provider: string;
+    source_repair_hint: {
+      hint_id: string;
+      query_hash: string;
+      repair_hint_bundle_path: string;
+      repair_hint_bundle_sha256: string;
+    };
+    request_sha256: string;
+    result_payload_sha256: string;
+    result_payload_summary: Record<string, unknown>;
+    adapter_execution_state: "stubbed_provider_result_recorded";
+    capability_metadata: {
+      adapter_id: string;
+      kind: ExternalWheelKind;
+      capabilities: string[];
+    };
+    terms: ExternalWheelAdapterDescriptor["terms"];
+    network_execution_performed: false;
+    live_provider_execution_performed: false;
+    proof_authority: "none";
+    can_promote_claim: false;
+    result_can_be_used_as_proof: false;
+    promotion_vetoes: ["external_adapter_result_has_no_proof_authority"];
+  }>;
+  per_candidate_execution_refs: Array<{
+    candidate_id: string;
+    variant_id: LeanCandidateAttemptLeanRunnerExecution["per_candidate_results"][number]["variant_id"];
+    repair_hint_execution_path: string;
+    adapter_result_ids: string[];
+    required_actions: string[];
+    proof_authority: "none";
+  }>;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+  result_can_be_used_as_proof: false;
+  created_at: string;
+};
+
 export type WriteLeanCandidateAttemptRepairFeedbackResult = {
   feedback_batch: LeanCandidateAttemptRepairFeedbackBatch;
   feedback_batch_path: string;
   hint_bundle: LeanCandidateAttemptRepairHintBundle;
   hint_bundle_path: string;
+  hint_execution: LeanCandidateAttemptRepairHintExecution;
+  hint_execution_path: string;
   repair_batch: LeanCandidateAttemptRepairBatch;
   repair_batch_path: string;
   task_paths: string[];
@@ -306,6 +376,198 @@ function writeRepairHintBundle(input: {
   };
 }
 
+async function stubbedResultPayloadSummary(input: {
+  registry: ReturnType<typeof createDefaultExternalWheelRegistry>;
+  adapter: ExternalWheelAdapterDescriptor;
+  hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number];
+  obligation: ProofObligation;
+  createdAt: string;
+}): Promise<Record<string, unknown>> {
+  if (input.adapter.kind === "theorem_search") {
+    const adapter = getExternalWheelAdapter(input.registry, "theorem_search", input.adapter.provider);
+    const results = await adapter.query({
+      query: input.hint.query_text,
+      theorem_type: input.obligation.locked_statement_nl,
+      limit: 3
+    });
+    return {
+      result_kind: "theorem_search_results",
+      result_count: results.length,
+      results
+    };
+  }
+  if (input.adapter.kind === "retrieval") {
+    const adapter = getExternalWheelAdapter(input.registry, "retrieval", input.adapter.provider);
+    const results = await adapter.search({
+      query: input.hint.query_text,
+      limit: 3
+    });
+    return {
+      result_kind: "retrieval_results",
+      result_count: results.length,
+      results
+    };
+  }
+  if (input.adapter.kind === "computation") {
+    const adapter = getExternalWheelAdapter(input.registry, "computation", input.adapter.provider);
+    const report = await adapter.run({
+      task: "repair_hint_context",
+      input: {
+        query_hash: input.hint.query_hash,
+        locked_statement_hash: input.obligation.statement_hash,
+        source_feedback_stderr_sha256_values: input.hint.source_feedback_stderr_sha256_values
+      }
+    });
+    return {
+      result_kind: "computation_report",
+      report
+    };
+  }
+  if (input.adapter.kind === "proof_search_backend") {
+    const adapter = getExternalWheelAdapter(input.registry, "proof_search_backend", input.adapter.provider);
+    const candidate = await adapter.propose({
+      locked_statement_hash: input.obligation.statement_hash,
+      prompt: input.hint.query_text,
+      context: {
+        query_hash: input.hint.query_hash,
+        target_candidate_ids: input.hint.target_candidate_ids,
+        source_feedback_stderr_sha256_values: input.hint.source_feedback_stderr_sha256_values
+      }
+    });
+    return {
+      result_kind: "proof_search_candidate_pack",
+      candidate
+    };
+  }
+  const adapter = getExternalWheelAdapter(input.registry, "external_lean_repo", input.adapter.provider);
+  const candidate = await adapter.inspect({
+    ref: input.adapter.provider,
+    requested_imports: []
+  });
+  return {
+    result_kind: "external_lean_repo_candidate",
+    candidate
+  };
+}
+
+async function writeRepairHintExecution(input: {
+  projectRoot: string;
+  campaign: ResearchCampaign;
+  obligation: ProofObligation;
+  feedbackBatchPath: string;
+  feedbackBatchSha256: string;
+  hintBundle: LeanCandidateAttemptRepairHintBundle;
+  hintBundlePath: string;
+  hintBundleSha256: string;
+  feedbackRows: LeanCandidateAttemptRepairFeedbackBatch["per_candidate_feedback"];
+  createdAt: string;
+}): Promise<{
+  execution: LeanCandidateAttemptRepairHintExecution;
+  execution_path: string;
+  execution_sha256: string;
+}> {
+  const registry = createDefaultExternalWheelRegistry({ now: () => input.createdAt });
+  const adapterDescriptors = new Map(listExternalWheelAdapters(registry).map((adapter) => [adapter.id, adapter]));
+  const executionRel = campaignRel(input.campaign, "lean_candidate_attempt_repair_hint_execution.json");
+  const adapterResults: LeanCandidateAttemptRepairHintExecution["adapter_results"] = await Promise.all(
+    input.hintBundle.adapter_repair_hints.map(async (hint, index) => {
+      const adapter = adapterDescriptors.get(hint.adapter_id);
+      if (!adapter) {
+        throw new Error("lean_candidate_repair_hint_adapter_missing");
+      }
+      const request = {
+        adapter_id: hint.adapter_id,
+        kind: hint.kind,
+        provider: hint.provider,
+        query_hash: hint.query_hash,
+        query_text: hint.query_text,
+        target_candidate_ids: hint.target_candidate_ids,
+        source_feedback_stderr_sha256_values: hint.source_feedback_stderr_sha256_values
+      };
+      const resultPayloadSummary = await stubbedResultPayloadSummary({
+        registry,
+        adapter,
+        hint,
+        obligation: input.obligation,
+        createdAt: input.createdAt
+      });
+      return {
+        adapter_result_id: `RHINTEXEC-${String(index + 1).padStart(4, "0")}`,
+        kind: hint.kind,
+        adapter_id: hint.adapter_id,
+        provider: hint.provider,
+        source_repair_hint: {
+          hint_id: hint.hint_id,
+          query_hash: hint.query_hash,
+          repair_hint_bundle_path: input.hintBundlePath,
+          repair_hint_bundle_sha256: input.hintBundleSha256
+        },
+        request_sha256: canonicalHash(request),
+        result_payload_sha256: canonicalHash(resultPayloadSummary),
+        result_payload_summary: resultPayloadSummary,
+        adapter_execution_state: "stubbed_provider_result_recorded",
+        capability_metadata: {
+          adapter_id: adapter.id,
+          kind: adapter.kind,
+          capabilities: [...adapter.capabilities]
+        },
+        terms: { ...adapter.terms },
+        network_execution_performed: false,
+        live_provider_execution_performed: false,
+        proof_authority: "none",
+        can_promote_claim: false,
+        result_can_be_used_as_proof: false,
+        promotion_vetoes: ["external_adapter_result_has_no_proof_authority"]
+      };
+    })
+  );
+  const adapterResultIds = adapterResults.map((result) => result.adapter_result_id);
+  const execution: LeanCandidateAttemptRepairHintExecution = {
+    schema_version: "comath.pi_goal_mode_lean_candidate_attempt_repair_hint_execution.v1",
+    campaign_id: input.campaign.campaign_id,
+    project_id: input.campaign.project_id,
+    claim_id: input.campaign.root_claim_id,
+    obligation_id: input.obligation.obligation_id,
+    locked_statement_hash: input.obligation.statement_hash,
+    source_repair_feedback_batch: {
+      path: input.feedbackBatchPath,
+      sha256: input.feedbackBatchSha256,
+      proof_authority: "none"
+    },
+    source_repair_hint_bundle: {
+      path: input.hintBundlePath,
+      sha256: input.hintBundleSha256,
+      proof_authority: "none"
+    },
+    service_owned_adapter_execution: true,
+    execution_status: "stubbed_provider_results_recorded",
+    network_execution_performed: false,
+    live_provider_execution_performed: false,
+    stubbed_adapter_execution_performed: true,
+    adapter_result_count: adapterResults.length,
+    adapter_results: adapterResults,
+    per_candidate_execution_refs: input.feedbackRows.map((row) => ({
+      candidate_id: row.candidate_id,
+      variant_id: row.variant_id,
+      repair_hint_execution_path: executionRel,
+      adapter_result_ids: adapterResultIds,
+      required_actions: ["apply_service_owned_non_authoritative_repair_hint_results"],
+      proof_authority: "none"
+    })),
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    result_can_be_used_as_proof: false,
+    created_at: input.createdAt
+  };
+  writeJson(input.projectRoot, executionRel, execution);
+  return {
+    execution,
+    execution_path: executionRel,
+    execution_sha256: sha256RuntimeFile(input.projectRoot, executionRel)
+  };
+}
+
 function createRepairTask(input: {
   campaign: ResearchCampaign;
   obligation: ProofObligation;
@@ -315,12 +577,17 @@ function createRepairTask(input: {
   hintBundlePath: string;
   hintBundleSha256: string;
   sourceRepairHints: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"];
+  hintExecutionPath: string;
+  hintExecutionSha256: string;
+  sourceRepairHintResults: LeanCandidateAttemptRepairHintExecution["adapter_results"];
   createdAt: string;
 }): LeanCandidateAttemptRepairTask & {
   source_feedback_batch: { path: string; sha256: string; proof_authority: "none" };
   source_feedback: LeanCandidateAttemptRepairFeedbackBatch["per_candidate_feedback"][number];
   source_repair_hint_bundle: { path: string; sha256: string; proof_authority: "none" };
   source_repair_hints: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"];
+  source_repair_hint_execution: { path: string; sha256: string; proof_authority: "none" };
+  source_repair_hint_results: LeanCandidateAttemptRepairHintExecution["adapter_results"];
 } {
   return {
     schema_version: "comath.pi_goal_mode_lean_candidate_attempt_repair_task.v1",
@@ -344,6 +611,12 @@ function createRepairTask(input: {
       proof_authority: "none"
     },
     source_repair_hints: input.sourceRepairHints,
+    source_repair_hint_execution: {
+      path: input.hintExecutionPath,
+      sha256: input.hintExecutionSha256,
+      proof_authority: "none"
+    },
+    source_repair_hint_results: input.sourceRepairHintResults,
     source_check: {
       result: "repair_required",
       has_sorry: false,
@@ -361,14 +634,17 @@ function createRepairTask(input: {
       proof_authority: "none"
     },
     source_feedback: input.feedback,
-    required_actions: [...input.feedback.repair_actions],
+    required_actions: Array.from(
+      new Set([...input.feedback.repair_actions, "apply_service_owned_non_authoritative_repair_hint_results"])
+    ),
     allowed_inputs: [
       input.feedback.lean_file_path,
       input.feedback.plan_path,
       input.feedback.lean_run_manifest_path,
       input.feedback.stdout_path,
       input.feedback.stderr_path,
-      input.hintBundlePath
+      input.hintBundlePath,
+      input.hintExecutionPath
     ],
     forbidden_outputs: [
       "proof_claim",
@@ -388,13 +664,13 @@ function createRepairTask(input: {
   };
 }
 
-export function writeLeanCandidateAttemptRepairFeedbackBatch(input: {
+export async function writeLeanCandidateAttemptRepairFeedbackBatch(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
   obligation: ProofObligation;
   executionPath: string;
   execution: LeanCandidateAttemptLeanRunnerExecution;
-}): WriteLeanCandidateAttemptRepairFeedbackResult {
+}): Promise<WriteLeanCandidateAttemptRepairFeedbackResult> {
   if (input.execution.execution_result !== "all_attempts_rejected") {
     throw new Error("lean_candidate_repair_feedback_requires_all_rejected_execution");
   }
@@ -464,6 +740,18 @@ export function writeLeanCandidateAttemptRepairFeedbackBatch(input: {
     feedbackRows,
     createdAt
   });
+  const hintExecution = await writeRepairHintExecution({
+    projectRoot: input.projectRoot,
+    campaign: input.campaign,
+    obligation: input.obligation,
+    feedbackBatchPath: feedbackRel,
+    feedbackBatchSha256: feedbackSha256,
+    hintBundle: hintBundle.bundle,
+    hintBundlePath: hintBundle.bundle_path,
+    hintBundleSha256: hintBundle.bundle_sha256,
+    feedbackRows,
+    createdAt
+  });
 
   const taskPaths: string[] = [];
   const perCandidateRepairs: LeanCandidateAttemptRepairBatch["per_candidate_repairs"] = [];
@@ -478,6 +766,9 @@ export function writeLeanCandidateAttemptRepairFeedbackBatch(input: {
       hintBundlePath: hintBundle.bundle_path,
       hintBundleSha256: hintBundle.bundle_sha256,
       sourceRepairHints: hintBundle.bundle.adapter_repair_hints,
+      hintExecutionPath: hintExecution.execution_path,
+      hintExecutionSha256: hintExecution.execution_sha256,
+      sourceRepairHintResults: hintExecution.execution.adapter_results,
       createdAt
     });
     writeJson(input.projectRoot, taskRel, task);
@@ -517,6 +808,11 @@ export function writeLeanCandidateAttemptRepairFeedbackBatch(input: {
       sha256: hintBundle.bundle_sha256,
       proof_authority: "none" as const
     },
+    source_repair_hint_execution: {
+      path: hintExecution.execution_path,
+      sha256: hintExecution.execution_sha256,
+      proof_authority: "none" as const
+    },
     repair_iteration: 2,
     repair_required_candidate_count: perCandidateRepairs.length,
     blocked_candidate_count: 0,
@@ -529,6 +825,7 @@ export function writeLeanCandidateAttemptRepairFeedbackBatch(input: {
     lean_runner_invocations: 0 as const,
     lean_run_manifest_paths: feedbackBatch.lean_run_manifest_paths,
     repair_hint_bundle_paths: [hintBundle.bundle_path],
+    repair_hint_execution_paths: [hintExecution.execution_path],
     proof_authority: "none" as const,
     can_promote_claim: false,
     can_certify_ga: false,
@@ -542,6 +839,8 @@ export function writeLeanCandidateAttemptRepairFeedbackBatch(input: {
     feedback_batch_path: feedbackRel,
     hint_bundle: hintBundle.bundle,
     hint_bundle_path: hintBundle.bundle_path,
+    hint_execution: hintExecution.execution,
+    hint_execution_path: hintExecution.execution_path,
     repair_batch: repairBatch as LeanCandidateAttemptRepairBatch,
     repair_batch_path: repairRel,
     task_paths: taskPaths

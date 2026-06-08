@@ -35,7 +35,8 @@ import {
 import {
   writeLeanCandidateAttemptRepairFeedbackBatch,
   type LeanCandidateAttemptRepairFeedbackBatch,
-  type LeanCandidateAttemptRepairHintBundle
+  type LeanCandidateAttemptRepairHintBundle,
+  type LeanCandidateAttemptRepairHintExecution
 } from "../ensemble/lean-candidate-attempt-repair-feedback.js";
 import { createServiceOwnedNativeCandidateLeanAdapter } from "../ensemble/live-candidate-lean-check.js";
 import { hasVerifiedServiceOwnedLeanManifestEvidence } from "../ensemble/service-owned-lean-evidence.js";
@@ -122,6 +123,7 @@ export type CampaignTickResult = {
   repair_execution?: LeanCandidateAttemptRepairExecution;
   lean_candidate_attempt_repair_feedback?: LeanCandidateAttemptRepairFeedbackBatch;
   lean_candidate_attempt_repair_hint_bundle?: LeanCandidateAttemptRepairHintBundle;
+  lean_candidate_attempt_repair_hint_execution?: LeanCandidateAttemptRepairHintExecution;
   lean_candidate_attempt_leanrunner_execution?: LeanCandidateAttemptLeanRunnerExecution;
   counterexample?: {
     counterexample_id: string;
@@ -3081,11 +3083,11 @@ function blockCampaignAtFinalReplay(input: {
   };
 }
 
-function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
+async function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
   actor: string;
-}): CampaignTickResult | undefined {
+}): Promise<CampaignTickResult | undefined> {
   if (
     input.campaign.status !== "terminal" ||
     input.campaign.terminal_state !== "blocked_with_replayable_reason" ||
@@ -3116,7 +3118,7 @@ function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
   if (!currentBlockerMatchesExecution) {
     return undefined;
   }
-  const feedback = writeLeanCandidateAttemptRepairFeedbackBatch({
+  const feedback = await writeLeanCandidateAttemptRepairFeedbackBatch({
     projectRoot: input.projectRoot,
     campaign: input.campaign,
     obligation,
@@ -3129,6 +3131,7 @@ function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
       leanRunnerExecution.path,
       feedback.feedback_batch_path,
       feedback.hint_bundle_path,
+      feedback.hint_execution_path,
       feedback.repair_batch_path,
       ...feedback.task_paths
     ])
@@ -3155,6 +3158,7 @@ function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
     obligation: nextObligation,
     lean_candidate_attempt_repair_feedback: feedback.feedback_batch,
     lean_candidate_attempt_repair_hint_bundle: feedback.hint_bundle,
+    lean_candidate_attempt_repair_hint_execution: feedback.hint_execution,
     lean_candidate_attempt_leanrunner_execution: leanRunnerExecution.execution
   };
 }
@@ -4942,7 +4946,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
   }
   if (campaign.status === "terminal") {
-    const resumed = resumeLeanRunnerRejectedAttemptsFromTerminal({
+    const resumed = await resumeLeanRunnerRejectedAttemptsFromTerminal({
       projectRoot: input.project_root,
       campaign,
       actor

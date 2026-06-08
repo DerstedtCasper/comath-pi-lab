@@ -27,6 +27,12 @@ export type LeanCandidateAttemptRepairTask = {
     proof_authority: "none";
   };
   source_repair_hints?: Array<Record<string, unknown>>;
+  source_repair_hint_execution?: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
+  source_repair_hint_results?: Array<Record<string, unknown>>;
   source_check: {
     result: "repair_required";
     has_sorry: boolean;
@@ -74,6 +80,11 @@ export type LeanCandidateAttemptRepairBatch = {
     sha256: string;
     proof_authority: "none";
   };
+  source_repair_hint_execution?: {
+    path: string;
+    sha256: string;
+    proof_authority: "none";
+  };
   repair_iteration: number;
   repair_required_candidate_count: number;
   blocked_candidate_count: number;
@@ -94,6 +105,7 @@ export type LeanCandidateAttemptRepairBatch = {
   lean_runner_invocations: 0;
   lean_run_manifest_paths: string[];
   repair_hint_bundle_paths?: string[];
+  repair_hint_execution_paths?: string[];
   proof_authority: "none";
   can_promote_claim: false;
   can_certify_ga: false;
