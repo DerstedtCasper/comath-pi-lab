@@ -78,7 +78,14 @@ export type ResearchCampaignLoopResult = {
   next_actions: string[];
   blocker_certificate?: Record<string, unknown>;
   resume_state?: Record<string, unknown>;
-  export_descriptor?: { route: string; proof_authority: "none"; can_promote_claim: false };
+  export_descriptor?: {
+    route: string;
+    proof_authority: "none";
+    can_promote_claim: false;
+    evidence_pack_ready?: boolean;
+    lean_clean_replay_authority_verified?: boolean;
+    candidate_repair_provenance?: Record<string, unknown>;
+  };
   terminal: boolean;
   stopped_reason: "terminal" | "tick_budget_exhausted" | "budget_exhausted_with_resume_state" | "blocked" | "running";
 };
@@ -297,22 +304,104 @@ function mapGoalTerminalState(campaign: any, proofAuthorityVerified = false): Go
   return undefined;
 }
 
-async function readCampaignExportProofAuthority(
+const candidateRepairProvenanceReferenceKeys = [
+  "source_repair_hint_execution",
+  "source_repair_execution",
+  "source_per_candidate_repair_execution"
+];
+const trustedRuntimeRelativePathPrefix = `${["", "comath"].join(".")}/`;
+
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function isSafePublicCandidateRepairProvenancePath(value: string): boolean {
+  const normalized = value.replace(/\\/g, "/");
+  return (
+    value === normalized &&
+    normalized.startsWith(trustedRuntimeRelativePathPrefix) &&
+    !normalized.includes("..") &&
+    !normalized.includes("//") &&
+    !/[<>"'\r\n]/u.test(normalized)
+  );
+}
+
+function sanitizeCandidateRepairReference(value: unknown): Record<string, unknown> | undefined {
+  const record = objectRecord(value);
+  if (
+    !record ||
+    typeof record.path !== "string" ||
+    !isSafePublicCandidateRepairProvenancePath(record.path) ||
+    typeof record.sha256 !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(record.sha256) ||
+    record.proof_authority !== "none"
+  ) {
+    return undefined;
+  }
+  return {
+    path: record.path,
+    sha256: record.sha256,
+    proof_authority: "none"
+  };
+}
+
+function sanitizeCandidateRepairProvenance(value: unknown): Record<string, unknown> | undefined {
+  const provenance = objectRecord(value);
+  if (
+    !provenance ||
+    provenance.schema_version !== "comath.candidate_repair_provenance.v1" ||
+    typeof provenance.repair_stage !== "string" ||
+    provenance.proof_authority !== "none" ||
+    provenance.can_promote_claim !== false ||
+    provenance.result_can_be_used_as_proof !== false
+  ) {
+    return undefined;
+  }
+  const references = Object.fromEntries(
+    candidateRepairProvenanceReferenceKeys
+      .map((key) => [key, sanitizeCandidateRepairReference(provenance[key])] as const)
+      .filter((entry): entry is [string, Record<string, unknown>] => entry[1] !== undefined)
+  );
+  if (Object.keys(references).length === 0) {
+    return undefined;
+  }
+  return {
+    schema_version: "comath.candidate_repair_provenance.v1",
+    repair_stage: provenance.repair_stage,
+    ...references,
+    proof_authority: "none",
+    can_promote_claim: false,
+    result_can_be_used_as_proof: false
+  };
+}
+
+async function readCampaignExportAuthorityDescriptor(
   client: CampaignLoopClient,
   input: ResearchCampaignLoopInput,
   campaign: any
-): Promise<boolean> {
+): Promise<{
+  evidencePackReady: boolean;
+  proofAuthorityVerified: boolean;
+  candidateRepairProvenance?: Record<string, unknown>;
+}> {
   if (!campaign?.campaign_id || !hasFormalReplayAuthorityEvidenceShape(campaign)) {
-    return false;
+    return { evidencePackReady: false, proofAuthorityVerified: false };
   }
   try {
     const exportResult = await client.get(
       `/campaign/${encodeURIComponent(campaign.campaign_id)}/export?project_root=${encodeURIComponent(input.project_root)}&actor=${encodeURIComponent(input.actor)}`
     );
     const manifest = exportResult?.export_manifest;
-    return manifest?.evidence_pack_ready === true && manifest?.proof_authority === "lean_kernel_clean_replay";
+    const proofAuthorityVerified = manifest?.evidence_pack_ready === true && manifest?.proof_authority === "lean_kernel_clean_replay";
+    return {
+      evidencePackReady: manifest?.evidence_pack_ready === true,
+      proofAuthorityVerified,
+      candidateRepairProvenance: proofAuthorityVerified
+        ? sanitizeCandidateRepairProvenance(manifest?.candidate_repair_provenance)
+        : undefined
+    };
   } catch {
-    return false;
+    return { evidencePackReady: false, proofAuthorityVerified: false };
   }
 }
 
@@ -456,7 +545,8 @@ export async function runResearchCampaignLoop(
     project_id: campaign.project_id
   });
   const exhausted = !isTerminal(campaign, mode) && ticks.length >= maxTicks;
-  const proofAuthorityVerified = await readCampaignExportProofAuthority(client, input, campaign);
+  const exportAuthority = await readCampaignExportAuthorityDescriptor(client, input, campaign);
+  const proofAuthorityVerified = exportAuthority.proofAuthorityVerified;
   const mappedGoalTerminalState = mapGoalTerminalState(campaign, proofAuthorityVerified);
   const goalTerminalState =
     exhausted && mode === "goal" && !mappedGoalTerminalState
@@ -486,7 +576,12 @@ export async function runResearchCampaignLoop(
       ? {
           route: `/campaign/${encodeURIComponent(campaign.campaign_id)}/export`,
           proof_authority: "none",
-          can_promote_claim: false
+          can_promote_claim: false,
+          evidence_pack_ready: exportAuthority.evidencePackReady,
+          lean_clean_replay_authority_verified: proofAuthorityVerified,
+          ...(exportAuthority.candidateRepairProvenance
+            ? { candidate_repair_provenance: exportAuthority.candidateRepairProvenance }
+            : {})
         }
       : undefined,
     terminal: isTerminal(campaign, mode) || Boolean(goalTerminalState),

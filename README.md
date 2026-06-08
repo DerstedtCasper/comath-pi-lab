@@ -241,6 +241,8 @@ Task280 carries that live-computation-repaired candidate provenance into public 
 
 Task281 exposes that no-authority repair provenance safely through the Pi public campaign export consumer. `comath.campaign.export` and `/cm:campaign export` now preserve only the known `candidate_repair_provenance` path/hash references for repair hint execution, campaign repair execution, and per-candidate repair execution while continuing to redact ordinary `.comath` runtime paths, host roots, secrets, proof-success wording, and promotion flags from public Pi output. This is audit traceability only; Pi output still cannot promote claims or replace Lean clean replay authority.
 
+Task282 carries the same audit traceability into the `/cm:research` goal-mode loop result. After a terminal goal-mode proof has verified campaign export authority, the Pi research loop now returns an `export_descriptor` with `lean_clean_replay_authority_verified=true` and the sanitized no-authority `candidate_repair_provenance` path/hash references, while keeping the descriptor itself `proof_authority=none` and non-promotional. If export authority is missing or forged, the loop still degrades to `blocked_with_replayable_certificate` and withholds repair provenance from the research-loop result.
+
 Boundary unchanged: this provider-helper chain does not alter Lean clean replay authority, live Pi status, provider coverage, or certify/complete release readiness.
 
 Task180 revalidated the Task175-179 provider-helper chain, public route sanitization, current Pi probe/sandbox-execution consumers, and readiness boundary without adding a new authority surface or closing the remaining production-helper, durable-transport, broad OS-enforced execution, Lean replay, or real-Pi blockers.

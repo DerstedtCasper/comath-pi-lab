@@ -1,3 +1,18 @@
+# Goal 3 Task 282 / Pi Research Loop Export Repair Provenance
+
+Summary:
+- Added a focused Pi extension regression for `/cm:research` proving terminal goal-mode loop results carry verified campaign export traceability into `export_descriptor`.
+- Updated `runResearchCampaignLoop()` to retain the campaign export authority result as a non-promotional descriptor, including sanitized no-authority `candidate_repair_provenance` path/hash references only after Lean clean replay export authority is verified.
+- Registered the focused Task282 suite in the Pi extension package test chain and phase0 release-hardening list, and documented the research-loop export descriptor boundary in README, AGENTS, adapter contracts, GA criteria, acceptance matrix, TODO, and the Goal 3 tracker.
+
+Verification:
+- TDD RED was observed after adding the focused Task282 test: `export_descriptor.lean_clean_replay_authority_verified` was `undefined` and no repair provenance was available from `/cm:research` loop results.
+- Current verification in this continuation: `corepack pnpm --filter @comath/pi-extension build` exited 0; focused Task282 exited 0; adjacent Phase22, Task124, Task281, and Phase66 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/pi-extension typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task282 discovered by the default runner; `corepack pnpm test` exited 0 across the root workspace suite; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task282 does not make the Pi research-loop descriptor proof authority. `export_descriptor.proof_authority` remains `none`, `can_promote_claim=false`, and missing or forged export authority withholds provenance and degrades proof terminal state to a replayable blocker.
+
+Residual risk: Goal 3 remains incomplete. Task282 does not implement broader theorem/CAS repair synthesis, Sage/Z3 live execution, non-toy Mathlib proofs, real Pi/operator execution, production OS-isolation helper binaries, release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 281 / Pi Goal-Mode Export Repair Provenance Consumer
 
 Summary:
