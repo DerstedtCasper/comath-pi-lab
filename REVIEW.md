@@ -1,3 +1,23 @@
+# Goal 3 Task 289 / Pi Terminal Completion Certificate Consumer Bridge
+
+Scope: expose the Task288 terminal completion certificate gate through the Pi thin client and read-only interactive planner without creating Lean proof authority or GA certification.
+
+Implementation notes:
+- Added `goal3-task289-pi-unattended-real-host-terminal-completion-certificate-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleUnattendedRealHostTerminalCompletionCertificate` and `/cm:release lifecycle-unattended-real-host-terminal-completion-certificate`.
+- The Pi bridge calls only `POST /release/pi-codex-lifecycle/unattended-real-host-terminal-completion-certificate` under host confirmation, strips `confirmation_id`, forwards only terminal-certificate-design id/path/hash plus optional certificate id/mode, and translates only the terminal-certificate-design public alias to the service-canonical path.
+- Public Pi schema and request bodies omit executor commands, caller attempt results, and caller completion certificates.
+- Public result sanitization preserves service-returned Pi/Codex lifecycle certificate flags while keeping `proof_authority=none`, `can_promote_claim=false`, `can_certify_ga=false`, and `ga_certification_gate_separate=true`.
+- Registered the Pi runtime tool/subcommand and synchronized AGENTS guidance, README, TODO, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed before implementation: focused Task289 failed because `comath.release.piCodexLifecycleUnattendedRealHostTerminalCompletionCertificate` was not registered.
+- Current verification in this continuation: `corepack pnpm --filter @comath/pi-extension build` exited 0; focused Task289 exited 0; adjacent Task287 and Task223 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/pi-extension typecheck` exited 0; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task289 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task289 is Pi consumer wiring only. It does not re-read canonical service artifacts, expose executor output, accept caller certificates, open durable/live transport, mutate trusted Pi state, run Lean, promote mathematical claims, or certify GA. The Task288 service route remains responsible for artifact-chain authority.
+
+Residual risk: Goal 3 remains incomplete. Task289 does not add durable long-lived operator transport, production GA execution, production OS-isolation helper binaries, broad proof breadth, or GA certification.
+
 # Goal 3 Task 288 / Service-Owned Terminal Completion Certificate Evidence Gate
 
 Scope: create a service-owned terminal completion certificate evidence gate that consumes the current Task286 design and closes the Pi/Codex unattended lifecycle blocker without creating Lean proof authority or GA certification.

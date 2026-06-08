@@ -422,6 +422,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task286-service-owned-terminal-completion-certificate-design.test.mjs",
   "goal3-task287-pi-unattended-real-host-terminal-completion-certificate-design-consumer.test.mjs",
   "goal3-task288-service-owned-terminal-completion-certificate.test.mjs",
+  "goal3-task289-pi-unattended-real-host-terminal-completion-certificate-consumer.test.mjs",
   "goal3-task255-pi-goal-mode-intake-manifest.test.mjs",
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",
