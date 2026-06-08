@@ -109,8 +109,8 @@ function sha256RuntimeFile(projectRoot: string, relativePath: string): string {
   return sha256FileSync(path).sha256;
 }
 
-function stableRunId(input: { campaignId: string; obligationId: string; candidateId: string }): string {
-  const seed = `${input.campaignId}:${input.obligationId}:${input.candidateId}:pi-goal-attempt`;
+function stableRunId(input: { campaignId: string; obligationId: string; candidateId: string; leanFileSha256: string }): string {
+  const seed = `${input.campaignId}:${input.obligationId}:${input.candidateId}:${input.leanFileSha256}:pi-goal-attempt`;
   let hash = 2_166_136_261;
   for (const char of seed) {
     hash = Math.imul(hash ^ char.charCodeAt(0), 16_777_619) >>> 0;
@@ -396,6 +396,7 @@ export function executeLeanCandidateAttemptLeanRunner(input: {
     const manifest = readCandidateManifest(input.projectRoot, candidate);
     const leanText = readText(input.projectRoot, check.lean_file_path);
     const placeholderPresent = leanText.includes("comath_repair_placeholder");
+    const leanFileSha256 = sha256RuntimeFile(input.projectRoot, check.lean_file_path);
     const { lakefileRel, toolchainRel } = writeLeanCandidateLakeProject({
       projectRoot: input.projectRoot,
       workspacePath: candidate.workspace_path,
@@ -405,7 +406,8 @@ export function executeLeanCandidateAttemptLeanRunner(input: {
     const runId = stableRunId({
       campaignId: input.campaign.campaign_id,
       obligationId: input.obligation.obligation_id,
-      candidateId: candidate.candidate_id
+      candidateId: candidate.candidate_id,
+      leanFileSha256
     });
     const command = ["lake", "build", "LeanCandidate"];
     const run = runServiceOwnedLeanCommandV3({
@@ -492,7 +494,7 @@ export function executeLeanCandidateAttemptLeanRunner(input: {
       plan_path: check.plan_path,
       plan_sha256: check.plan_sha256,
       lean_file_path: check.lean_file_path,
-      lean_file_sha256: sha256RuntimeFile(input.projectRoot, check.lean_file_path),
+      lean_file_sha256: leanFileSha256,
       lakefile_path: lakefileRel,
       toolchain_file_path: toolchainRel,
       lean_run_manifest_path: manifestRel,

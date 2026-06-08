@@ -87,7 +87,10 @@ export type LeanCandidateAttemptRepairExecution = {
   created_at: string;
 };
 
-type PlaceholderFreeRepairStrategy = "locked_true_theorem_trivial" | "locked_reflexive_equality_rfl";
+type PlaceholderFreeRepairStrategy =
+  | "locked_true_theorem_trivial"
+  | "locked_reflexive_equality_rfl"
+  | "live_retrieval_exact_statement_lean_suggestion";
 
 export type ExecuteLeanCandidateAttemptRepairBatchResult = {
   execution: LeanCandidateAttemptRepairExecution;
@@ -138,6 +141,21 @@ function stripLeanLineComments(text: string): string {
 
 function hasSorry(text: string): boolean {
   return /(?:^|[^A-Za-z0-9_'])sorry(?:[^A-Za-z0-9_']|$)/u.test(stripLeanLineComments(text));
+}
+
+function hasLeanHole(text: string): boolean {
+  return /(?:^|[^A-Za-z0-9_'])\?[A-Za-z_][A-Za-z0-9_']*/u.test(stripLeanLineComments(text));
+}
+
+function hasForbiddenSuggestionCode(text: string): boolean {
+  const code = stripLeanLineComments(text);
+  return (
+    hasSorry(text) ||
+    hasLeanHole(text) ||
+    /\b(?:axiom|unsafe|opaque|admit|run_cmd|elab)\b/u.test(code) ||
+    /^\s*#eval\b/mu.test(code) ||
+    /^\s*set_option\b/mu.test(code)
+  );
 }
 
 function hasLockedTrueTheoremWithSorry(text: string): boolean {
@@ -224,6 +242,46 @@ function normalizeReflexiveEqualitySide(side: string): string {
   return side.trim().replace(/\s+/gu, " ");
 }
 
+function normalizeLeanStatementText(text: string): string {
+  return text.trim().replace(/\s+/gu, " ");
+}
+
+type ParsedLeanDeclaration = {
+  declarationKind: "theorem" | "lemma";
+  declarationName: string;
+  normalizedStatement: string;
+  start: number;
+  end: number;
+  fullText: string;
+};
+
+function parseFirstLeanDeclaration(text: string): ParsedLeanDeclaration | null {
+  const match =
+    /\b(?<kind>theorem|lemma)\s+(?<name>[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_'.]*)*)(?<signature>[\s\S]*?)\s*:=\s*by[\s\S]*$/u.exec(
+      text
+    );
+  if (!match?.groups || match.index === undefined) {
+    return null;
+  }
+  const signature = match.groups.signature ?? "";
+  const statementColon = signature.lastIndexOf(":");
+  if (statementColon < 0) {
+    return null;
+  }
+  const normalizedStatement = normalizeLeanStatementText(signature.slice(statementColon + 1));
+  if (normalizedStatement.length === 0) {
+    return null;
+  }
+  return {
+    declarationKind: match.groups.kind as "theorem" | "lemma",
+    declarationName: match.groups.name ?? "",
+    normalizedStatement,
+    start: match.index,
+    end: match.index + match[0].length,
+    fullText: match[0]
+  };
+}
+
 function hasLockedReflexiveEqualityTheoremWithSorry(text: string): boolean {
   for (const statement of theoremStatementsWithSorry(text)) {
     const equality = topLevelLeanEquality(statement);
@@ -272,6 +330,83 @@ function replaceLeanSorryTokens(text: string, replacement: string): string {
     .join("");
 }
 
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function sourceRepairHintResultsFromUnknownTask(task: Record<string, unknown>): Record<string, unknown>[] {
+  const source = task.source_repair_hint_results;
+  if (!Array.isArray(source)) {
+    return [];
+  }
+  return source.filter(
+    (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)
+  );
+}
+
+function liveRetrievalSuggestionRepair(
+  text: string,
+  task: Record<string, unknown>
+): { text: string; strategy: PlaceholderFreeRepairStrategy } | null {
+  const current = parseFirstLeanDeclaration(text);
+  if (!current) {
+    return null;
+  }
+  for (const result of sourceRepairHintResultsFromUnknownTask(task)) {
+    if (
+      result.kind !== "retrieval" ||
+      result.provider !== "jina_search" ||
+      result.adapter_execution_state !== "live_provider_result_recorded" ||
+      result.proof_authority !== "none" ||
+      result.can_promote_claim !== false ||
+      result.result_can_be_used_as_proof !== false
+    ) {
+      continue;
+    }
+    const summary = objectRecord(result.result_payload_summary);
+    const liveProvider = objectRecord(summary?.live_provider);
+    const promptInjectionScan = objectRecord(liveProvider?.prompt_injection_scan);
+    if (promptInjectionScan?.status !== "pass") {
+      continue;
+    }
+    const suggestions = Array.isArray(summary?.extracted_lean_suggestions) ? summary.extracted_lean_suggestions : [];
+    for (const suggestionValue of suggestions) {
+      const suggestion = objectRecord(suggestionValue);
+      if (
+        !suggestion ||
+        suggestion.proof_authority !== "none" ||
+        suggestion.can_promote_claim !== false ||
+        suggestion.result_can_be_used_as_proof !== false ||
+        typeof suggestion.lean_code !== "string" ||
+        typeof suggestion.declaration_name !== "string" ||
+        typeof suggestion.normalized_statement !== "string"
+      ) {
+        continue;
+      }
+      if (
+        suggestion.declaration_name !== current.declarationName ||
+        normalizeLeanStatementText(suggestion.normalized_statement) !== current.normalizedStatement ||
+        hasForbiddenSuggestionCode(suggestion.lean_code)
+      ) {
+        continue;
+      }
+      const parsedSuggestion = parseFirstLeanDeclaration(suggestion.lean_code);
+      if (
+        !parsedSuggestion ||
+        parsedSuggestion.declarationName !== current.declarationName ||
+        parsedSuggestion.normalizedStatement !== current.normalizedStatement
+      ) {
+        continue;
+      }
+      return {
+        text: `${text.slice(0, current.start)}${suggestion.lean_code.trimEnd()}${text.slice(current.end)}`,
+        strategy: "live_retrieval_exact_statement_lean_suggestion"
+      };
+    }
+  }
+  return null;
+}
+
 function repairLeanDraft(
   text: string,
   task: Record<string, unknown>
@@ -288,8 +423,11 @@ function repairLeanDraft(
     "  -- comath_repair_placeholder: non-authoritative draft for LeanRunner.",
     "  exact ?comath_repair_placeholder"
   ].join("\n");
-  const repairStrategy = placeholderFreeRepairStrategy(text);
-  const replaced = replaceLeanSorryTokens(text, placeholderFreeRepairReplacement(repairStrategy) ?? placeholder);
+  const localRepairStrategy = placeholderFreeRepairStrategy(text);
+  const liveSuggestionRepair = localRepairStrategy === null ? liveRetrievalSuggestionRepair(text, task) : null;
+  const repairStrategy = localRepairStrategy ?? liveSuggestionRepair?.strategy ?? null;
+  const replaced =
+    liveSuggestionRepair?.text ?? replaceLeanSorryTokens(text, placeholderFreeRepairReplacement(repairStrategy) ?? placeholder);
   const markers: string[] = [];
   const sourceFeedback =
     task.source_feedback && typeof task.source_feedback === "object" && !Array.isArray(task.source_feedback)

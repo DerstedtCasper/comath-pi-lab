@@ -305,6 +305,90 @@ function goalModeTextPromptInjectionScan(text: string): PromptInjectionScan {
   };
 }
 
+function normalizeLeanStatementText(text: string): string {
+  return text.trim().replace(/\s+/gu, " ");
+}
+
+function parseLeanDeclarationSummary(leanCode: string): {
+  declaration_kind: "theorem" | "lemma";
+  declaration_name: string;
+  normalized_statement: string;
+} | null {
+  const match =
+    /\b(?<kind>theorem|lemma)\s+(?<name>[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_'.]*)*)(?<signature>[\s\S]*?)\s*:=\s*by[\s\S]*$/u.exec(
+      leanCode
+    );
+  if (!match?.groups) {
+    return null;
+  }
+  const signature = match.groups.signature ?? "";
+  const statementColon = signature.lastIndexOf(":");
+  if (statementColon < 0) {
+    return null;
+  }
+  const statement = normalizeLeanStatementText(signature.slice(statementColon + 1));
+  if (statement.length === 0) {
+    return null;
+  }
+  return {
+    declaration_kind: match.groups.kind as "theorem" | "lemma",
+    declaration_name: match.groups.name ?? "",
+    normalized_statement: statement
+  };
+}
+
+function extractLeanCodeFences(text: string): Array<{ lean_code: string; line_range: string }> {
+  const lines = text.split(/\r?\n/u);
+  const snippets: Array<{ lean_code: string; line_range: string }> = [];
+  for (let index = 0; index < lines.length && snippets.length < 3; index += 1) {
+    if (!/^```\s*(?:lean|lean4)\s*$/iu.test(lines[index]?.trim() ?? "")) {
+      continue;
+    }
+    const start = index + 1;
+    const body: string[] = [];
+    index += 1;
+    while (index < lines.length && !/^```\s*$/u.test(lines[index]?.trim() ?? "")) {
+      body.push(lines[index] ?? "");
+      index += 1;
+    }
+    const leanCode = body.join("\n").trim();
+    if (leanCode.length > 0 && leanCode.length <= 4_000) {
+      snippets.push({
+        lean_code: leanCode,
+        line_range: `${start + 1}-${Math.max(start + 1, index)}`
+      });
+    }
+  }
+  return snippets;
+}
+
+function extractLiveLeanRepairSuggestions(text: string, promptInjectionScan: PromptInjectionScan): Record<string, unknown>[] {
+  if (promptInjectionScan.status !== "pass") {
+    return [];
+  }
+  const suggestions: Record<string, unknown>[] = [];
+  for (const snippet of extractLeanCodeFences(text)) {
+    const summary = parseLeanDeclarationSummary(snippet.lean_code);
+    if (!summary) {
+      continue;
+    }
+    const leanCodeSha256 = sha256Text(snippet.lean_code);
+    suggestions.push({
+      suggestion_id: `LRSUG-${String(suggestions.length + 1).padStart(4, "0")}`,
+      source: "live_provider_response_fenced_lean",
+      line_range: snippet.line_range,
+      lean_code: snippet.lean_code,
+      lean_code_sha256: leanCodeSha256,
+      ...summary,
+      proof_authority: "none",
+      can_promote_claim: false,
+      result_can_be_used_as_proof: false,
+      promotion_vetoes: ["external_adapter_result_has_no_proof_authority"]
+    });
+  }
+  return suggestions;
+}
+
 function optionalArtifactRef(projectRoot: string, relativePath: string): { path: string; sha256: string; proof_authority: "none" } | null {
   try {
     const path = assertPathAllowed(projectRoot, relativePath, { purpose: "read", resolveRealpath: true });
@@ -573,6 +657,7 @@ async function liveJinaSearchResultPayloadSummary(input: {
   }
   const responseBodySha256 = sha256Text(bodyText);
   const promptInjectionScan = goalModeTextPromptInjectionScan(bodyText);
+  const extractedLeanSuggestions = extractLiveLeanRepairSuggestions(bodyText, promptInjectionScan);
   const queryHash = canonicalHash({
     provider: input.adapter.provider,
     kind: input.adapter.kind,
@@ -620,6 +705,7 @@ async function liveJinaSearchResultPayloadSummary(input: {
     resultPayloadSummary: {
       result_kind: "retrieval_results",
       result_count: 1,
+      extracted_lean_suggestions: extractedLeanSuggestions,
       live_provider: {
         provider: input.adapter.provider,
         request_url: requestUrl.toString(),

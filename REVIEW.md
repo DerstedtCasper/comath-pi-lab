@@ -1,3 +1,24 @@
+# Goal 3 Task 274 / Pi Goal-Mode Live Retrieval Suggestion Repair
+
+Scope: turn opt-in live retrieval output from Task273 into bounded candidate repair material. This extracts fenced Lean suggestions from a live `retrieval:jina_search` response, accepts them only for exact locked theorem/lemma matches with no proof-authority flags, and reruns the repaired candidate through LeanRunner instead of treating provider text as proof.
+
+Implementation notes:
+- Added `goal3-task274-pi-goal-mode-live-retrieval-suggestion-repair.test.mjs`.
+- Added bounded extraction of fenced `lean`/`lean4` snippets from live provider responses after a passing prompt-injection scan, storing snippet hashes and no-authority suggestion metadata in `lean_candidate_attempt_repair_hint_execution.json`.
+- Repair execution now has a `live_retrieval_exact_statement_lean_suggestion` strategy that requires the suggestion declaration name and normalized statement to exactly match the rejected locked candidate.
+- The strategy rejects `sorry`, Lean holes, `axiom`, `unsafe`, `opaque`, `admit`, `run_cmd`, `elab`, `#eval`, and `set_option`, and keeps retrieval output as candidate material only.
+- LeanRunner run ids for candidate attempts now include the current Lean file SHA-256 so an all-rejected run and a repaired rerun write separate append-only LeanRunManifest evidence.
+- Added `pi_goal_mode_live_retrieval_suggestion_repair` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding the focused Task274 service test: `node services/comathd/tests/unit/goal3-task274-pi-goal-mode-live-retrieval-suggestion-repair.test.mjs` failed because the live retrieval artifact did not expose extracted Lean suggestions.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task274 exited 0.
+- Current verification in this continuation: focused Task274 exited 0; adjacent Task266, Task267, Task268, Task269, Task270, Task271, Task272, and Task273 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task274 discovered by the default runner; `corepack pnpm test` exited 0 across the root workspace suite.
+
+Boundary notes: Task274 consumes live retrieval suggestions as repair context only. Jina output, prompt-injection scans, suggestion hashes, and adapter summaries remain `proof_authority=none`; they cannot promote claims, certify GA, change the locked statement, emit FinalReplayManifest authority, or replace LeanRunner/final clean replay.
+
+Residual risk: Goal 3 remains incomplete. Task274 does not implement theorem-search/CAS live providers, broad mathematical repair synthesis, non-toy Mathlib proof breadth, real Pi/operator closure, production OS-isolation helper binaries, release-candidate proof breadth, or GA certification.
+
 # Goal 3 Task 273 / Pi Goal-Mode Live Retrieval Repair Hint Execution
 
 Scope: add the first opt-in live retrieval provider execution path to Pi goal-mode repair hints. This extends Task269 from stub-only result capture to a configured Jina Search-compatible `retrieval:jina_search` call while keeping adapter output non-authoritative and default runs offline/stubbed.
