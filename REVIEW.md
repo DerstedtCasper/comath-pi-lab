@@ -1,3 +1,23 @@
+# Goal 3 Task 277 / Pi Goal-Mode Live Theorem-Search Conjunction Repair
+
+Scope: turn the Task276 live theorem-search result from passive repair context into the first narrow theorem-search-guided candidate repair. The only accepted shape is a locked `True /\\ True` / `True ∧ True` theorem/lemma with a live non-authoritative `And.intro` result; proof authority still comes only from LeanRunner and downstream clean replay.
+
+Implementation notes:
+- Added `goal3-task277-pi-goal-mode-live-theorem-search-conjunction-repair.test.mjs`.
+- Added `live_theorem_search_and_intro_conjunction_repair` as a placeholder-free repair strategy in `lean-candidate-attempt-repair-execution.ts`.
+- The strategy requires live `theorem_search:loogle`, `adapter_execution_state="live_provider_result_recorded"`, passing prompt-injection scan, `And.intro`, and no-authority flags before materializing `exact And.intro trivial trivial`.
+- The repair does not infer imports or generalize from provider declaration types; it only materializes same-name locked conjunction candidates and then returns to candidate verification for service-owned LeanRunner.
+- Added `pi_goal_mode_live_theorem_search_conjunction_repair` to service status capabilities and synchronized README, TODO, AGENTS, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed after adding the focused Task277 service test: `repaired_placeholder_free_candidate_count` was `0` instead of `8` because live theorem-search hints were recorded but not consumed as candidate repair material.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task277 exited 0.
+- Current verification in this continuation: focused Task277 exited 0; adjacent Task269, Task270, Task272, Task273, Task274, Task275, and Task276 exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task277 discovered by the default runner; `corepack pnpm test` exited 0 across the root workspace suite.
+
+Boundary notes: Task277 uses `And.intro` only as candidate context. It does not make theorem-search declarations, provider status, request/response hashes, or repair execution proof authority. Final proof status still requires service-owned Lean clean replay plus ordinary promotion gates.
+
+Residual risk: Goal 3 remains incomplete. Task277 does not synthesize general conjunction proofs, use arbitrary theorem-search declarations, implement CAS live execution, close real Pi/operator workflow, provide production OS-isolation helper binaries, run release-candidate proof breadth, or certify GA.
+
 # Goal 3 Task 276 / Pi Goal-Mode Live Theorem-Search Repair Hint Execution
 
 Scope: add the maintained live theorem-search repair-context path that Task275 left open, without changing proof authority. Opt-in `theorem_search:loogle` execution should call only a configured Loogle-compatible endpoint, keep credentials in memory, persist sanitized provenance, and thread declaration results through repair tasks/execution as non-authoritative hints.

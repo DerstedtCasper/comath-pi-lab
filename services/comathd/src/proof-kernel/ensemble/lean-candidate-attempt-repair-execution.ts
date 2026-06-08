@@ -90,7 +90,8 @@ export type LeanCandidateAttemptRepairExecution = {
 type PlaceholderFreeRepairStrategy =
   | "locked_true_theorem_trivial"
   | "locked_reflexive_equality_rfl"
-  | "live_retrieval_exact_statement_lean_suggestion";
+  | "live_retrieval_exact_statement_lean_suggestion"
+  | "live_theorem_search_and_intro_conjunction_repair";
 
 export type ExecuteLeanCandidateAttemptRepairBatchResult = {
   execution: LeanCandidateAttemptRepairExecution;
@@ -407,6 +408,61 @@ function liveRetrievalSuggestionRepair(
   return null;
 }
 
+function isLockedTrueConjunctionStatement(statement: string): boolean {
+  return /^(?:True\s*\/\\\s*True|True\s*∧\s*True)$/u.test(normalizeLeanStatementText(statement));
+}
+
+function hasLiveLoogleAndIntroHint(task: Record<string, unknown>): boolean {
+  for (const result of sourceRepairHintResultsFromUnknownTask(task)) {
+    if (
+      result.kind !== "theorem_search" ||
+      result.provider !== "loogle" ||
+      result.adapter_execution_state !== "live_provider_result_recorded" ||
+      result.proof_authority !== "none" ||
+      result.can_promote_claim !== false ||
+      result.result_can_be_used_as_proof !== false
+    ) {
+      continue;
+    }
+    const summary = objectRecord(result.result_payload_summary);
+    const liveProvider = objectRecord(summary?.live_provider);
+    const promptInjectionScan = objectRecord(liveProvider?.prompt_injection_scan);
+    if (promptInjectionScan?.status !== "pass") {
+      continue;
+    }
+    const theoremResults = Array.isArray(summary?.results) ? summary.results : [];
+    for (const theoremResultValue of theoremResults) {
+      const theoremResult = objectRecord(theoremResultValue);
+      if (
+        theoremResult?.declaration_name === "And.intro" &&
+        theoremResult.proof_authority === "none" &&
+        theoremResult.can_promote_claim === false
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function liveTheoremSearchConjunctionRepair(
+  text: string,
+  task: Record<string, unknown>
+): { text: string; strategy: PlaceholderFreeRepairStrategy } | null {
+  const current = parseFirstLeanDeclaration(text);
+  if (!current || !isLockedTrueConjunctionStatement(current.normalizedStatement) || !hasLiveLoogleAndIntroHint(task)) {
+    return null;
+  }
+  const repaired = [
+    `${current.declarationKind} ${current.declarationName} : ${current.normalizedStatement} := by`,
+    "  exact And.intro trivial trivial"
+  ].join("\n");
+  return {
+    text: `${text.slice(0, current.start)}${repaired}${text.slice(current.end)}`,
+    strategy: "live_theorem_search_and_intro_conjunction_repair"
+  };
+}
+
 function repairLeanDraft(
   text: string,
   task: Record<string, unknown>
@@ -425,9 +481,13 @@ function repairLeanDraft(
   ].join("\n");
   const localRepairStrategy = placeholderFreeRepairStrategy(text);
   const liveSuggestionRepair = localRepairStrategy === null ? liveRetrievalSuggestionRepair(text, task) : null;
-  const repairStrategy = localRepairStrategy ?? liveSuggestionRepair?.strategy ?? null;
+  const liveTheoremSearchRepair =
+    localRepairStrategy === null && liveSuggestionRepair === null ? liveTheoremSearchConjunctionRepair(text, task) : null;
+  const repairStrategy = localRepairStrategy ?? liveSuggestionRepair?.strategy ?? liveTheoremSearchRepair?.strategy ?? null;
   const replaced =
-    liveSuggestionRepair?.text ?? replaceLeanSorryTokens(text, placeholderFreeRepairReplacement(repairStrategy) ?? placeholder);
+    liveSuggestionRepair?.text ??
+    liveTheoremSearchRepair?.text ??
+    replaceLeanSorryTokens(text, placeholderFreeRepairReplacement(repairStrategy) ?? placeholder);
   const markers: string[] = [];
   const sourceFeedback =
     task.source_feedback && typeof task.source_feedback === "object" && !Array.isArray(task.source_feedback)
