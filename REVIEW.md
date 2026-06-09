@@ -1,3 +1,22 @@
+# Goal 3 Task 300 / Proof Breadth Closure Verifier
+
+Scope: add a service-owned proof-breadth closure verifier that can actually mark the 100-task release-candidate proof breadth complete only when every canonical positive-matrix final-authority packaging report is already verified by Lean Authority v3.
+
+Implementation notes:
+- Added `goal3-task300-proof-breadth-closure-verifier.test.mjs`.
+- Added `recordGoal3ReleaseCandidateProofBreadthClosure()` and `POST /release/goal3/proof-breadth-closure`.
+- Added append-only `comath.goal3_release_candidate_proof_breadth_closure.v1` closure artifacts and `release.goal3_proof_breadth_closure_recorded` provenance audit events.
+- Added the `goal3_release_candidate_proof_breadth_closure_gate` status capability.
+
+Verification:
+- TDD RED was observed before implementation: focused Task300 failed because `recordGoal3ReleaseCandidateProofBreadthClosure` was not exported.
+- After implementation, focused Task300 exited 0, covering empty-project blocking, all-100 verified closure, tampered single-task downgrade, route wiring, capability exposure, path redaction, non-certifying output, and audit event emission.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task300 exited 0; adjacent Task299, Task298, and Task296 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task300 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across smoke, Pi workspace tests, comathd package tests, Phase45 e2e, Task125 e2e, and Phase17 integrity evaluation; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task300 does not run Lean, synthesize proofs, accept caller proof-breadth matrices, promote claims, certify GA, or replace final GA audit. It only aggregates canonical task-local final-authority packaging reports; complete proof breadth can set `final_ga_audit_unblocked=true`, but `can_promote_claim=false`, `can_certify_ga=false`, and `ga_certification_gate_separate=true` remain forced.
+
+Residual risk: Goal 3 remains incomplete. Task300 adds the proof-breadth closure artifact, but final GA audit/certification still needs to consume that closure, and production OS helper closure remains open.
+
 # Goal 3 Task 299 / PM-001 Task-Local Final Authority Packaging
 
 Scope: remove the artificial PM-001 final-authority packaging dead end so future 100-task proof-breadth closure can account for every positive-matrix manifest task, while preserving the rule that PM-001 cannot inherit the historical representative fixture's authority.

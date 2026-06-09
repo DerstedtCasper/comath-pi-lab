@@ -53,6 +53,7 @@ import { assembleSourceReviewPublicArchive } from "../release/source-review-publ
 import { reviewGoal3PublicArchiveSurfaces } from "../release/public-archive-review.js";
 import { recordGoal3GaOperationalReadinessReview } from "../release/goal3-ga-operational-readiness.js";
 import { recordGoal3ReleaseCandidateProofBreadthReview } from "../release/goal3-proof-breadth-review.js";
+import { recordGoal3ReleaseCandidateProofBreadthClosure } from "../release/goal3-proof-breadth-closure.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
 import { recordGoal3FinalGaAudit } from "../release/goal3-final-ga-audit.js";
 import {
@@ -523,6 +524,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           proof_breadth_review: recordGoal3ReleaseCandidateProofBreadthReview(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/proof-breadth-closure",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3ReleaseCandidateProofBreadthClosure>[1] & {
+          project_root: string;
+        };
+        return {
+          proof_breadth_closure: recordGoal3ReleaseCandidateProofBreadthClosure(body.project_root, body)
         };
       }
     ],

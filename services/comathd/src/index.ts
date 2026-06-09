@@ -72,5 +72,6 @@ export * from "./release/public-archive-review.js";
 export * from "./release/pi-codex-lifecycle-readiness.js";
 export * from "./release/goal3-ga-operational-readiness.js";
 export * from "./release/goal3-proof-breadth-review.js";
+export * from "./release/goal3-proof-breadth-closure.js";
 export * from "./release/goal3-ga-certification.js";
 export * from "./release/goal3-final-ga-audit.js";

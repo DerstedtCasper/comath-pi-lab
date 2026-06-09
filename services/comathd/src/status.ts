@@ -157,6 +157,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "pi_codex_operator_service_transport_closure_review_gate",
       "goal3_ga_operational_readiness_review_gate",
       "goal3_release_candidate_proof_breadth_review_gate",
+      "goal3_release_candidate_proof_breadth_closure_gate",
       "goal3_ga_certification_review_gate",
       "goal3_final_ga_audit_gate",
       "pi_codex_lifecycle_readiness_completion_prerequisite_binding",
