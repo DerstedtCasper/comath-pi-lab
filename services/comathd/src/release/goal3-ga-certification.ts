@@ -37,6 +37,29 @@ type OperationalReadinessReviewBody = {
   ga_certification_gate_separate?: unknown;
 };
 
+type FinalGaAuditBody = {
+  schema_version?: unknown;
+  final_ga_audit_id?: unknown;
+  project_id?: unknown;
+  ok?: unknown;
+  final_ga_audit_status?: unknown;
+  final_ga_audit_path?: unknown;
+  final_ga_audit_artifact?: unknown;
+  requested_audit_mode?: unknown;
+  blocker_reasons?: unknown;
+  proof_breadth_status?: unknown;
+  proof_breadth_blocker_code?: unknown;
+  proof_breadth_closure_current?: unknown;
+  proof_breadth_closure_artifact?: unknown;
+  final_ga_audit_available?: unknown;
+  final_ga_audit_passed?: unknown;
+  ga_certificate_available?: unknown;
+  proof_authority?: unknown;
+  can_promote_claim?: unknown;
+  can_certify_ga?: unknown;
+  ga_certification_gate_separate?: unknown;
+};
+
 export type Goal3GaCertificationReviewInput = {
   project_id: string;
   ga_certification_review_id?: string;
@@ -44,6 +67,9 @@ export type Goal3GaCertificationReviewInput = {
   operational_readiness_review_id: string;
   operational_readiness_review_path: string;
   operational_readiness_review_sha256: string;
+  final_ga_audit_id?: string;
+  final_ga_audit_path?: string;
+  final_ga_audit_sha256?: string;
   requested_review_mode?: "open_formal_workbench_ga_certification";
 };
 
@@ -53,8 +79,10 @@ export type Goal3GaCertificationReview = {
   project_id: string;
   actor: string;
   created_at: string;
-  ok: false;
-  ga_certification_status: "blocked_release_candidate_ga_certification_prerequisites";
+  ok: boolean;
+  ga_certification_status:
+    | "blocked_release_candidate_ga_certification_prerequisites"
+    | "ready_for_ga_certificate_gate";
   ga_certification_review_path: string;
   requested_review_mode: "open_formal_workbench_ga_certification";
   blocker_reasons: string[];
@@ -73,8 +101,14 @@ export type Goal3GaCertificationReview = {
   positive_matrix_total_required_tasks: number;
   positive_matrix_remaining_blocker_status: "replayable_blocker";
   positive_matrix_remaining_blocker_code: "ga_positive_100_task_matrix_not_fully_executed";
-  final_ga_audit_available: false;
-  proof_authority: "none";
+  final_ga_audit_available: boolean;
+  final_ga_audit_id?: string;
+  final_ga_audit_path?: string;
+  final_ga_audit_artifact?: ArtifactReference;
+  final_ga_audit_current?: true;
+  final_ga_audit_passed: boolean;
+  ga_certificate_available: false;
+  proof_authority: "none" | "lean_kernel_clean_replay";
   can_promote_claim: false;
   can_certify_ga: false;
   ga_certification_gate_separate: true;
@@ -91,6 +125,10 @@ function gaCertificationReviewPath(reviewId: string): string {
 
 function gaCertificationAcceptanceReportPath(reviewId: string): string {
   return normalizeRelativePath(join(".comath", "release", "goal3-ga-certification", reviewId, "acceptance-report.json"));
+}
+
+function finalGaAuditPath(auditId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "goal3-final-ga-audit", auditId, "audit.json"));
 }
 
 function operationalReadinessReviewPath(reviewId: string): string {
@@ -184,6 +222,59 @@ function readOperationalReadinessReview(
   }
 }
 
+function readFinalGaAudit(
+  projectRoot: string,
+  input: Goal3GaCertificationReviewInput
+): { body: FinalGaAuditBody; artifact: ArtifactReference; auditId: string } | null {
+  const hasAnyFinalAuditInput =
+    input.final_ga_audit_id !== undefined ||
+    input.final_ga_audit_path !== undefined ||
+    input.final_ga_audit_sha256 !== undefined;
+  if (!hasAnyFinalAuditInput) {
+    return null;
+  }
+  const auditId = assertSafeId(input.final_ga_audit_id, "final_ga_audit_id");
+  const canonicalPath = finalGaAuditPath(auditId);
+  if (normalizeRelativePath(input.final_ga_audit_path ?? "") !== canonicalPath) {
+    throw new ComathError("Goal 3 GA certification final audit path is not canonical", {
+      statusCode: 400,
+      code: "GOAL3_GA_CERTIFICATION_REVIEW_INVALID"
+    });
+  }
+  const absolutePath = assertPathAllowed(projectRoot, canonicalPath, { purpose: "read", resolveRealpath: true });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    throw new ComathError("Goal 3 GA certification final audit artifact is stale", {
+      statusCode: 400,
+      code: "GOAL3_GA_CERTIFICATION_REVIEW_STALE"
+    });
+  }
+  const content = readFileSync(absolutePath);
+  const actualSha256 = sha256Bytes(content);
+  if (actualSha256 !== assertSha256(input.final_ga_audit_sha256 ?? "")) {
+    throw new ComathError("Goal 3 GA certification final audit artifact hash is stale", {
+      statusCode: 400,
+      code: "GOAL3_GA_CERTIFICATION_REVIEW_STALE"
+    });
+  }
+  try {
+    return {
+      body: JSON.parse(content.toString("utf8")) as FinalGaAuditBody,
+      artifact: {
+        kind: "goal3_final_ga_audit",
+        path: canonicalPath,
+        sha256: actualSha256,
+        size_bytes: content.byteLength
+      },
+      auditId
+    };
+  } catch {
+    throw new ComathError("Goal 3 GA certification final audit JSON is invalid", {
+      statusCode: 400,
+      code: "GOAL3_GA_CERTIFICATION_REVIEW_INVALID"
+    });
+  }
+}
+
 function assertOperationalReadinessReview(
   body: OperationalReadinessReviewBody,
   projectId: string,
@@ -237,6 +328,59 @@ function acceptanceReportIsCurrent(report: Goal3GaAcceptanceReport): boolean {
     report.positive_matrix.remaining_matrix_blocker.status === "replayable_blocker" &&
     report.positive_matrix.remaining_matrix_blocker.can_promote_claim === false
   );
+}
+
+function assertFinalGaAudit(body: FinalGaAuditBody, projectId: string, auditId: string, canonicalPath: string): boolean {
+  const blockers = Array.isArray(body.blocker_reasons) ? body.blocker_reasons : [];
+  const commonValid =
+    body.schema_version === "comath.goal3_final_ga_audit.v1" &&
+    body.final_ga_audit_id === auditId &&
+    body.project_id === projectId &&
+    body.final_ga_audit_path === canonicalPath &&
+    body.final_ga_audit_artifact === undefined &&
+    body.requested_audit_mode === "open_formal_workbench_final_ga_audit" &&
+    body.final_ga_audit_available === true &&
+    body.ga_certificate_available === false &&
+    body.can_promote_claim === false &&
+    body.can_certify_ga === false &&
+    body.ga_certification_gate_separate === true;
+  if (!commonValid) {
+    throw new ComathError("Goal 3 GA certification final audit violates boundaries", {
+      statusCode: 400,
+      code: "GOAL3_GA_CERTIFICATION_REVIEW_INVALID"
+    });
+  }
+
+  const passed =
+    body.ok === true &&
+    body.final_ga_audit_status === "passed_release_candidate_final_ga_audit" &&
+    blockers.length === 0 &&
+    body.final_ga_audit_passed === true &&
+    body.proof_breadth_status === "complete_release_candidate_proof_breadth" &&
+    body.proof_breadth_blocker_code === "" &&
+    body.proof_breadth_closure_current === true &&
+    body.proof_breadth_closure_artifact !== undefined &&
+    body.proof_authority === "lean_kernel_clean_replay";
+  if (passed) {
+    return true;
+  }
+
+  const blocked =
+    body.ok === false &&
+    body.final_ga_audit_status === "blocked_release_candidate_proof_breadth_incomplete" &&
+    blockers.includes("positive_matrix_release_candidate_proof_breadth_incomplete") &&
+    body.final_ga_audit_passed === false &&
+    body.proof_breadth_status === "blocked_positive_matrix_release_candidate_proof_breadth_incomplete" &&
+    body.proof_breadth_blocker_code === "ga_positive_100_task_matrix_not_fully_executed" &&
+    body.proof_authority === "none";
+  if (blocked) {
+    return false;
+  }
+
+  throw new ComathError("Goal 3 GA certification final audit violates boundaries", {
+    statusCode: 400,
+    code: "GOAL3_GA_CERTIFICATION_REVIEW_INVALID"
+  });
 }
 
 function scrubNoAuthoritySupportFlags(value: unknown): unknown {
@@ -316,19 +460,32 @@ export function recordGoal3GaCertificationReview(
   };
 
   const operationalReady = operational.body.ok === true;
-  const blockerReasons = [
-    ...(operationalReady ? [] : ["operational_readiness_review_not_ready"]),
-    "positive_matrix_release_candidate_proof_breadth_incomplete",
-    "final_ga_certification_audit_not_available"
-  ];
+  const finalGaAudit = readFinalGaAudit(projectRoot, input);
+  const finalGaAuditPassed =
+    finalGaAudit !== null
+      ? assertFinalGaAudit(finalGaAudit.body, projectId, finalGaAudit.auditId, finalGaAudit.artifact.path)
+      : false;
+  const readyForCertificateGate = operationalReady && finalGaAuditPassed;
+  const blockerReasons = readyForCertificateGate
+    ? []
+    : [
+        ...(operationalReady ? [] : ["operational_readiness_review_not_ready"]),
+        ...(finalGaAudit === null
+          ? ["positive_matrix_release_candidate_proof_breadth_incomplete", "final_ga_certification_audit_not_available"]
+          : finalGaAuditPassed
+            ? []
+            : ["final_ga_certification_audit_not_passed"])
+      ];
   const body = {
     schema_version: "comath.goal3_ga_certification_review.v1",
     ga_certification_review_id: reviewId,
     project_id: projectId,
     actor,
     created_at: new Date().toISOString(),
-    ok: false,
-    ga_certification_status: "blocked_release_candidate_ga_certification_prerequisites",
+    ok: readyForCertificateGate,
+    ga_certification_status: readyForCertificateGate
+      ? "ready_for_ga_certificate_gate"
+      : "blocked_release_candidate_ga_certification_prerequisites",
     ga_certification_review_path: reviewPath,
     requested_review_mode: "open_formal_workbench_ga_certification",
     blocker_reasons: blockerReasons,
@@ -347,8 +504,18 @@ export function recordGoal3GaCertificationReview(
     positive_matrix_total_required_tasks: acceptanceReport.positive_matrix.total_required_tasks,
     positive_matrix_remaining_blocker_status: acceptanceReport.positive_matrix.remaining_matrix_blocker.status,
     positive_matrix_remaining_blocker_code: acceptanceReport.positive_matrix.remaining_matrix_blocker.blocker_code,
-    final_ga_audit_available: false,
-    proof_authority: "none",
+    final_ga_audit_available: finalGaAudit !== null,
+    ...(finalGaAudit !== null
+      ? {
+          final_ga_audit_id: finalGaAudit.auditId,
+          final_ga_audit_path: finalGaAudit.artifact.path,
+          final_ga_audit_artifact: finalGaAudit.artifact,
+          final_ga_audit_current: true as const
+        }
+      : {}),
+    final_ga_audit_passed: finalGaAuditPassed,
+    ga_certificate_available: false,
+    proof_authority: finalGaAuditPassed ? "lean_kernel_clean_replay" : "none",
     can_promote_claim: false,
     can_certify_ga: false,
     ga_certification_gate_separate: true
@@ -380,8 +547,15 @@ export function recordGoal3GaCertificationReview(
       operational_readiness_review_id: operationalReadinessReviewId,
       operational_readiness_review_artifact_sha256: operational.artifact.sha256,
       acceptance_report_artifact_sha256: acceptanceArtifact.sha256,
+      ...(finalGaAudit !== null
+        ? {
+            final_ga_audit_id: finalGaAudit.auditId,
+            final_ga_audit_artifact_sha256: finalGaAudit.artifact.sha256,
+            final_ga_audit_passed: finalGaAuditPassed
+          }
+        : {}),
       blocker_reasons: blockerReasons,
-      proof_authority: "none",
+      proof_authority: result.proof_authority,
       can_promote_claim: false,
       can_certify_ga: false
     }

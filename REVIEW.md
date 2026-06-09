@@ -1,3 +1,21 @@
+# Goal 3 Task 302 / GA Certification Final-Audit Binding
+
+Scope: bind passed Task301 final GA audit into the Task294 GA certification review path so certification review can become ready for a separate certificate gate without issuing a GA certificate.
+
+Implementation notes:
+- Added `goal3-task302-ga-certification-final-audit-binding.test.mjs`.
+- Extended `recordGoal3GaCertificationReview()` and `POST /release/goal3/ga-certification-review` to accept canonical final-audit id/path/hash material.
+- Added final-audit artifact re-read/hash binding, passed-vs-blocked audit validation, `ready_for_ga_certificate_gate` output, and final-audit SHA provenance in `release.goal3_ga_certification_review_recorded`.
+
+Verification:
+- TDD RED was observed before implementation: focused Task302 failed because certification review ignored passed final audit input and remained `ok=false`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task302 exited 0, covering no-final-audit blocking, passed-final-audit readiness, blocked-final-audit blocking, stale final-audit hash rejection, route wiring, public redaction, non-certifying output, and audit event binding.
+- Current verification in this continuation: `node scripts/phase0-smoke.mjs` exited 0; focused Task302 exited 0; adjacent Task301 and Task294 regressions exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task302 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across smoke, Pi workspace tests, comathd package tests, Phase45 e2e, Task125 e2e, and Phase17 integrity evaluation; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task302 does not run Lean, synthesize proofs, promote claims, certify GA, create a GA certificate, or replace the certificate gate. A passed final audit may make the certification review `ready_for_ga_certificate_gate` with `proof_authority=lean_kernel_clean_replay`, but `can_promote_claim=false`, `can_certify_ga=false`, `ga_certificate_available=false`, and `ga_certification_gate_separate=true` remain forced.
+
+Residual risk: Goal 3 remains incomplete. Task302 prepares the certification review for a separate certificate gate, but that actual certificate gate and production OS helper closure remain open.
+
 # Goal 3 Task 301 / Final GA Audit Proof-Breadth Closure Binding
 
 Scope: bind Task300 proof-breadth closure into the Task296 final GA audit path so final audit can distinguish missing/incomplete proof breadth from complete release-candidate proof breadth, without certifying GA.
