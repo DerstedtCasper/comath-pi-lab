@@ -1,3 +1,21 @@
+# Goal 3 Task 301 / Final GA Audit Proof-Breadth Closure Binding
+
+Scope: bind Task300 proof-breadth closure into the Task296 final GA audit path so final audit can distinguish missing/incomplete proof breadth from complete release-candidate proof breadth, without certifying GA.
+
+Implementation notes:
+- Added `goal3-task301-final-ga-audit-proof-breadth-closure-binding.test.mjs`.
+- Extended `recordGoal3FinalGaAudit()` and `POST /release/goal3/final-ga-audit` to accept canonical proof-breadth closure id/path/hash material.
+- Added closure artifact re-read/hash binding, complete-vs-blocked closure validation, closure-bound audit output, and closure SHA provenance in `release.goal3_final_ga_audit_recorded`.
+
+Verification:
+- TDD RED was observed before implementation: focused Task301 failed because final GA audit ignored closure input and returned no `proof_breadth_closure_current`.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task301 exited 0, covering no-closure blocking, incomplete-closure blocking, complete-closure final-audit pass, stale closure hash rejection, route wiring, public redaction, non-certifying output, and audit event binding.
+- Current verification in this continuation: `node scripts/phase0-smoke.mjs` exited 0; focused Task301 exited 0; adjacent Task300 and Task296 regressions exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task301 discovered by the default runner; `corepack pnpm typecheck` exited 0; and `corepack pnpm test` exited 0 across smoke, Pi workspace tests, comathd package tests, Phase45 e2e, Task125 e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task301 does not run Lean, synthesize proofs, promote claims, certify GA, create a GA certificate, or replace the certification gate. A complete closure may make `final_ga_audit_passed=true` and `proof_authority=lean_kernel_clean_replay`, but `can_promote_claim=false`, `can_certify_ga=false`, `ga_certificate_available=false`, and `ga_certification_gate_separate=true` remain forced.
+
+Residual risk: Goal 3 remains incomplete. Task301 passes final GA audit only when Task300 closure is complete; GA certification still needs to consume the passed final audit, and production OS helper closure remains open.
+
 # Goal 3 Task 300 / Proof Breadth Closure Verifier
 
 Scope: add a service-owned proof-breadth closure verifier that can actually mark the 100-task release-candidate proof breadth complete only when every canonical positive-matrix final-authority packaging report is already verified by Lean Authority v3.

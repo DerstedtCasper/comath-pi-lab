@@ -5129,3 +5129,21 @@ Completion record:
 - Residual risk: Goal 3 remains incomplete. Task300 does not bind proof-breadth closure into final GA audit/certification, implement production OS sandbox helper completion, provide durable long-lived transport, or add any new proof authority beyond aggregating already verified Lean clean replay task reports.
 - Next recommended step: bind Task300 proof-breadth closure into the Task296 final GA audit path so final audit can move from generic proof-breadth blocker to closure-aware pass/block semantics.
 - Commit: `f6d47cb` (`Add goal3 task300 proof breadth closure verifier`)
+
+## Task301: Final GA Audit Proof-Breadth Closure Binding
+
+- [x] Continue from Task300 by binding proof-breadth closure into final GA audit instead of adding another standalone review layer.
+- [x] Add a focused RED regression proving final GA audit still ignored Task300 closure input and could not record closure-aware pass/block semantics.
+- [x] Implement canonical closure id/path/hash intake for `recordGoal3FinalGaAudit()` and `POST /release/goal3/final-ga-audit`.
+- [x] Keep missing/incomplete closure blocked; allow `final_ga_audit_passed=true` only for complete 100-task Lean-authority closure.
+- [x] Preserve gate separation: passed final audit still cannot promote claims, certify GA, produce a GA certificate, run Lean, or synthesize proofs.
+- [x] Sync phase0 smoke discovery, README, TODO, AGENTS, adapter contracts, GA release criteria, threat model, acceptance matrix, REVIEW, and this tracker; run focused, adjacent, package, smoke, typecheck, root, runtime-cleanliness, and diff-hygiene verification; then commit Task301 and record the commit id.
+
+Completion record:
+
+- Work done: selected the final GA audit closure-binding frontier because Task300 produced the proof-breadth closure artifact, but Task296 final audit still hard-coded proof breadth as incomplete. Added `goal3-task301-final-ga-audit-proof-breadth-closure-binding.test.mjs`; extended `recordGoal3FinalGaAudit()` and `POST /release/goal3/final-ga-audit` with optional canonical Task300 closure id/path/hash inputs; added closure artifact hash binding and boundary validation; kept missing or incomplete closure blocked; allowed complete closure to set `final_ga_audit_passed=true`; and synchronized release-hardening docs and tracker entries.
+- Boundary hardening: Task301 accepts proof-breadth closure only from canonical service-owned Task300 artifacts and rejects stale/tampered hashes or boundary-violating closure bodies. Complete proof breadth may pass final audit with `proof_authority=lean_kernel_clean_replay`, but it still cannot promote claims, certify GA, produce a GA certificate, mutate trusted Pi state, run Lean, or replace the separate GA certification gate.
+- Verification evidence: TDD RED was observed before implementation when focused Task301 failed because final GA audit returned no `proof_breadth_closure_current` for closure input. After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task301 exited 0, covering no-closure blocking, incomplete-closure blocking, complete-closure final-audit pass, stale closure hash rejection, route wiring, public redaction, non-certifying output, and closure-bound audit event emission. After documentation synchronization, `node scripts/phase0-smoke.mjs`, focused Task301, adjacent Task300 and Task296 regressions, `corepack pnpm --filter @comath/comathd typecheck`, `corepack pnpm --filter @comath/comathd test`, `corepack pnpm typecheck`, and `corepack pnpm test` all exited 0.
+- Residual risk: Goal 3 remains incomplete. Task301 does not bind passed final audit into GA certification, implement production OS sandbox helper completion, provide durable long-lived transport, or add any proof authority beyond consuming already verified Task300 closure.
+- Next recommended step: bind Task301 passed final audit into the Task294/GA certification path so GA certification can move from `final_ga_certification_audit_not_available` to closure-aware pass/block semantics while preserving certificate gate separation.
+- Commit: pending

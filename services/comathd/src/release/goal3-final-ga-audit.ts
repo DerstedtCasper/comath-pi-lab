@@ -79,6 +79,32 @@ type OperationalReadinessReviewBody = {
   ga_certification_gate_separate?: unknown;
 };
 
+type ProofBreadthClosureBody = {
+  schema_version?: unknown;
+  proof_breadth_closure_id?: unknown;
+  project_id?: unknown;
+  ok?: unknown;
+  proof_breadth_status?: unknown;
+  proof_breadth_closure_path?: unknown;
+  proof_breadth_closure_artifact?: unknown;
+  requested_closure_mode?: unknown;
+  blocker_reasons?: unknown;
+  total_required_tasks?: unknown;
+  task_manifest_count?: unknown;
+  verified_task_count?: unknown;
+  missing_task_count?: unknown;
+  blocked_task_count?: unknown;
+  missing_task_ids?: unknown;
+  blocked_task_ids?: unknown;
+  packaging_report_artifacts?: unknown;
+  proof_breadth_complete?: unknown;
+  final_ga_audit_unblocked?: unknown;
+  proof_authority?: unknown;
+  can_promote_claim?: unknown;
+  can_certify_ga?: unknown;
+  ga_certification_gate_separate?: unknown;
+};
+
 export type Goal3FinalGaAuditInput = {
   project_id: string;
   final_ga_audit_id?: string;
@@ -86,6 +112,9 @@ export type Goal3FinalGaAuditInput = {
   ga_certification_review_id: string;
   ga_certification_review_path: string;
   ga_certification_review_sha256: string;
+  proof_breadth_closure_id?: string;
+  proof_breadth_closure_path?: string;
+  proof_breadth_closure_sha256?: string;
   requested_audit_mode?: "open_formal_workbench_final_ga_audit";
 };
 
@@ -95,8 +124,10 @@ export type Goal3FinalGaAudit = {
   project_id: string;
   actor: string;
   created_at: string;
-  ok: false;
-  final_ga_audit_status: "blocked_release_candidate_proof_breadth_incomplete";
+  ok: boolean;
+  final_ga_audit_status:
+    | "blocked_release_candidate_proof_breadth_incomplete"
+    | "passed_release_candidate_final_ga_audit";
   final_ga_audit_path: string;
   requested_audit_mode: "open_formal_workbench_final_ga_audit";
   blocker_reasons: string[];
@@ -115,12 +146,18 @@ export type Goal3FinalGaAudit = {
   trust_core_negative_suite_fail_closed: true;
   positive_workflow_representative_verified: true;
   positive_matrix_total_required_tasks: 100;
-  proof_breadth_status: "blocked_positive_matrix_release_candidate_proof_breadth_incomplete";
-  proof_breadth_blocker_code: "ga_positive_100_task_matrix_not_fully_executed";
+  proof_breadth_status:
+    | "blocked_positive_matrix_release_candidate_proof_breadth_incomplete"
+    | "complete_release_candidate_proof_breadth";
+  proof_breadth_blocker_code: "ga_positive_100_task_matrix_not_fully_executed" | "";
+  proof_breadth_closure_id?: string;
+  proof_breadth_closure_path?: string;
+  proof_breadth_closure_artifact?: ArtifactReference;
+  proof_breadth_closure_current?: true;
   final_ga_audit_available: true;
-  final_ga_audit_passed: false;
+  final_ga_audit_passed: boolean;
   ga_certificate_available: false;
-  proof_authority: "none";
+  proof_authority: "none" | "lean_kernel_clean_replay";
   can_promote_claim: false;
   can_certify_ga: false;
   ga_certification_gate_separate: true;
@@ -137,6 +174,10 @@ function finalGaAuditPath(auditId: string): string {
 
 function gaCertificationReviewPath(reviewId: string): string {
   return normalizeRelativePath(join(".comath", "release", "goal3-ga-certification", reviewId, "review.json"));
+}
+
+function proofBreadthClosurePath(closureId: string): string {
+  return normalizeRelativePath(join(".comath", "release", "goal3-proof-breadth-closure", closureId, "closure.json"));
 }
 
 function sha256Bytes(bytes: Buffer): string {
@@ -305,6 +346,106 @@ function assertAcceptanceSupport(body: AcceptanceReportBody): void {
   }
 }
 
+function optionalProofBreadthClosure(
+  projectRoot: string,
+  input: Goal3FinalGaAuditInput
+): { body: ProofBreadthClosureBody; artifact: ArtifactReference; closureId: string } | null {
+  const hasAnyClosureInput =
+    input.proof_breadth_closure_id !== undefined ||
+    input.proof_breadth_closure_path !== undefined ||
+    input.proof_breadth_closure_sha256 !== undefined;
+  if (!hasAnyClosureInput) {
+    return null;
+  }
+  const closureId = assertSafeId(input.proof_breadth_closure_id, "proof_breadth_closure_id");
+  const canonicalPath = proofBreadthClosurePath(closureId);
+  if (normalizeRelativePath(input.proof_breadth_closure_path ?? "") !== canonicalPath) {
+    throw new ComathError("Goal 3 final GA audit proof-breadth closure path is not canonical", {
+      statusCode: 400,
+      code: "GOAL3_FINAL_GA_AUDIT_INVALID"
+    });
+  }
+  const closure = readJsonArtifact<ProofBreadthClosureBody>(
+    projectRoot,
+    canonicalPath,
+    input.proof_breadth_closure_sha256 ?? "",
+    "goal3_release_candidate_proof_breadth_closure"
+  );
+  return {
+    ...closure,
+    closureId
+  };
+}
+
+function assertProofBreadthClosure(
+  body: ProofBreadthClosureBody,
+  projectId: string,
+  closureId: string,
+  canonicalPath: string
+): boolean {
+  const missingTaskIds = Array.isArray(body.missing_task_ids) ? body.missing_task_ids : [];
+  const blockedTaskIds = Array.isArray(body.blocked_task_ids) ? body.blocked_task_ids : [];
+  const blockers = Array.isArray(body.blocker_reasons) ? body.blocker_reasons : [];
+  const packagingReports = Array.isArray(body.packaging_report_artifacts) ? body.packaging_report_artifacts : [];
+  const countSum =
+    (typeof body.verified_task_count === "number" ? body.verified_task_count : Number.NaN) +
+    (typeof body.missing_task_count === "number" ? body.missing_task_count : Number.NaN) +
+    (typeof body.blocked_task_count === "number" ? body.blocked_task_count : Number.NaN);
+
+  const commonValid =
+    body.schema_version === "comath.goal3_release_candidate_proof_breadth_closure.v1" &&
+    body.proof_breadth_closure_id === closureId &&
+    body.project_id === projectId &&
+    body.proof_breadth_closure_path === canonicalPath &&
+    body.proof_breadth_closure_artifact === undefined &&
+    body.requested_closure_mode === "open_formal_workbench_release_candidate_proof_breadth_closure" &&
+    body.total_required_tasks === 100 &&
+    body.task_manifest_count === 100 &&
+    countSum === 100 &&
+    missingTaskIds.length === body.missing_task_count &&
+    blockedTaskIds.length === body.blocked_task_count &&
+    body.can_promote_claim === false &&
+    body.can_certify_ga === false &&
+    body.ga_certification_gate_separate === true;
+  if (!commonValid) {
+    throw new ComathError("Goal 3 final GA audit proof-breadth closure violates boundaries", {
+      statusCode: 400,
+      code: "GOAL3_FINAL_GA_AUDIT_INVALID"
+    });
+  }
+
+  const complete =
+    body.ok === true &&
+    body.proof_breadth_status === "complete_release_candidate_proof_breadth" &&
+    blockers.length === 0 &&
+    body.verified_task_count === 100 &&
+    body.missing_task_count === 0 &&
+    body.blocked_task_count === 0 &&
+    packagingReports.length === 100 &&
+    body.proof_breadth_complete === true &&
+    body.final_ga_audit_unblocked === true &&
+    body.proof_authority === "lean_kernel_clean_replay";
+  if (complete) {
+    return true;
+  }
+
+  const blocked =
+    body.ok === false &&
+    body.proof_breadth_status === "blocked_positive_matrix_release_candidate_proof_breadth_incomplete" &&
+    blockers.includes("positive_matrix_release_candidate_proof_breadth_incomplete") &&
+    body.proof_breadth_complete === false &&
+    body.final_ga_audit_unblocked === false &&
+    body.proof_authority === "none";
+  if (blocked) {
+    return false;
+  }
+
+  throw new ComathError("Goal 3 final GA audit proof-breadth closure violates boundaries", {
+    statusCode: 400,
+    code: "GOAL3_FINAL_GA_AUDIT_INVALID"
+  });
+}
+
 function assertCertificationReview(
   body: CertificationReviewBody,
   projectId: string,
@@ -412,10 +553,19 @@ export function recordGoal3FinalGaAudit(projectRoot: string, input: Goal3FinalGa
   );
   assertAcceptanceSupport(acceptance.body);
 
-  const blockerReasons = [
-    "positive_matrix_release_candidate_proof_breadth_incomplete",
-    "ga_certification_review_not_ready_to_certify"
-  ];
+  const proofBreadthClosure = optionalProofBreadthClosure(projectRoot, input);
+  const proofBreadthClosureComplete =
+    proofBreadthClosure !== null
+      ? assertProofBreadthClosure(
+          proofBreadthClosure.body,
+          projectId,
+          proofBreadthClosure.closureId,
+          proofBreadthClosure.artifact.path
+        )
+      : false;
+  const blockerReasons = proofBreadthClosureComplete
+    ? []
+    : ["positive_matrix_release_candidate_proof_breadth_incomplete", "ga_certification_review_not_ready_to_certify"];
   const actor = sanitizeActor(input.actor);
   const body = {
     schema_version: "comath.goal3_final_ga_audit.v1",
@@ -423,8 +573,10 @@ export function recordGoal3FinalGaAudit(projectRoot: string, input: Goal3FinalGa
     project_id: projectId,
     actor,
     created_at: new Date().toISOString(),
-    ok: false,
-    final_ga_audit_status: "blocked_release_candidate_proof_breadth_incomplete",
+    ok: proofBreadthClosureComplete,
+    final_ga_audit_status: proofBreadthClosureComplete
+      ? "passed_release_candidate_final_ga_audit"
+      : "blocked_release_candidate_proof_breadth_incomplete",
     final_ga_audit_path: auditPath,
     requested_audit_mode: "open_formal_workbench_final_ga_audit",
     blocker_reasons: blockerReasons,
@@ -443,12 +595,24 @@ export function recordGoal3FinalGaAudit(projectRoot: string, input: Goal3FinalGa
     trust_core_negative_suite_fail_closed: true,
     positive_workflow_representative_verified: true,
     positive_matrix_total_required_tasks: 100,
-    proof_breadth_status: "blocked_positive_matrix_release_candidate_proof_breadth_incomplete",
-    proof_breadth_blocker_code: "ga_positive_100_task_matrix_not_fully_executed",
+    proof_breadth_status: proofBreadthClosureComplete
+      ? "complete_release_candidate_proof_breadth"
+      : "blocked_positive_matrix_release_candidate_proof_breadth_incomplete",
+    proof_breadth_blocker_code: proofBreadthClosureComplete
+      ? ""
+      : "ga_positive_100_task_matrix_not_fully_executed",
+    ...(proofBreadthClosure !== null
+      ? {
+          proof_breadth_closure_id: proofBreadthClosure.closureId,
+          proof_breadth_closure_path: proofBreadthClosure.artifact.path,
+          proof_breadth_closure_artifact: proofBreadthClosure.artifact,
+          proof_breadth_closure_current: true as const
+        }
+      : {}),
     final_ga_audit_available: true,
-    final_ga_audit_passed: false,
+    final_ga_audit_passed: proofBreadthClosureComplete,
     ga_certificate_available: false,
-    proof_authority: "none",
+    proof_authority: proofBreadthClosureComplete ? "lean_kernel_clean_replay" : "none",
     can_promote_claim: false,
     can_certify_ga: false,
     ga_certification_gate_separate: true
@@ -475,14 +639,21 @@ export function recordGoal3FinalGaAudit(projectRoot: string, input: Goal3FinalGa
     payload: {
       final_ga_audit_id: auditId,
       final_ga_audit_status: result.final_ga_audit_status,
+      final_ga_audit_passed: result.final_ga_audit_passed,
       final_ga_audit_path: auditPath,
       final_ga_audit_artifact_sha256: result.final_ga_audit_artifact.sha256,
       ga_certification_review_id: certificationReviewId,
       ga_certification_review_artifact_sha256: certification.artifact.sha256,
       operational_readiness_review_artifact_sha256: operational.artifact.sha256,
       acceptance_report_artifact_sha256: acceptance.artifact.sha256,
+      ...(proofBreadthClosure !== null
+        ? {
+            proof_breadth_closure_id: proofBreadthClosure.closureId,
+            proof_breadth_closure_artifact_sha256: proofBreadthClosure.artifact.sha256
+          }
+        : {}),
       blocker_reasons: blockerReasons,
-      proof_authority: "none",
+      proof_authority: result.proof_authority,
       can_promote_claim: false,
       can_certify_ga: false
     }
