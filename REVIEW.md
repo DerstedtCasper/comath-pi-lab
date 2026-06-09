@@ -1,3 +1,23 @@
+# Goal 3 Task 295 / Pi GA Certification Review Consumer Bridge
+
+Scope: expose the Task294 service-owned GA certification review precondition through Pi host-confirmed thin-client wiring and the read-only interactive real-Pi planner without certifying GA.
+
+Implementation notes:
+- Added `goal3-task295-pi-ga-certification-review-consumer.test.mjs`.
+- Added `comath.release.goal3GaCertificationReview` and `/cm:release goal3-ga-certification-review`.
+- Extended Pi runtime registration, tool execution, public sanitization, public alias translation, and the interactive planner checkpoint after Task293.
+- The bridge forwards only Task292 operational-readiness review id/path/hash plus optional certification-review id/mode, translating only maintained service-owned public aliases.
+
+Verification:
+- TDD RED was observed before implementation: focused Task295 failed because `comath.release.goal3GaCertificationReview` was not registered.
+- GREEN hardening caught and fixed caller-material public leakage for acceptance-report, proof-breadth, and final-GA-audit keys while preserving only service-returned certification-precondition flags.
+- Current verification in this continuation: `corepack pnpm --filter @comath/pi-extension typecheck` exited 0; focused Task295 exited 0; adjacent Task293 and Task294 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task295 discovered by the default Pi runner; `corepack pnpm typecheck` exited 0; initial `corepack pnpm test` hit the 5-minute command timeout before diagnostic output, then the same command exited 0 with a longer timeout across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+- Subagent review follow-up: Euler and Anscombe both flagged that public result sanitization omitted `lean_replay_manifest` and related Lean/final replay material variants. Follow-up hardening omits Lean replay/run/final replay manifest keys plus proof-claim, GA-certificate, final-audit, proof-breadth, acceptance-report, and durable-session JSON variants from public results, and adds hostile fixture coverage. Post-fix verification: `corepack pnpm --filter @comath/pi-extension build` exited 0; focused Task295 exited 0; adjacent Task293 and Task294 regressions exited 0.
+
+Boundary notes: Task295 is Pi consumer/planner wiring only. It does not re-read canonical service artifacts, accept caller acceptance reports, accept proof-breadth matrices, accept final GA audits, expose proof claims or GA certificates, open durable/live transport, mutate trusted Pi state, run Lean, promote mathematical claims, or certify GA. The Task294 service route remains responsible for artifact-chain validation, acceptance diagnostics, and fail-closed blockers.
+
+Residual risk: Goal 3 remains incomplete. Task295 does not close final GA audit, release-candidate proof breadth, production OS sandbox helper completion, durable long-lived transport, or any new proof authority.
+
 # Goal 3 Task 294 / Service-Owned GA Certification Review Precondition
 
 Scope: add a service-owned GA certification review precondition gate that consumes the Task292 operational readiness review, records no-authority GA acceptance diagnostic support evidence, and fails closed until proof breadth plus final GA audit are complete.

@@ -428,6 +428,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task292-service-owned-ga-operational-readiness-review.test.mjs",
   "goal3-task293-pi-ga-operational-readiness-review-consumer.test.mjs",
   "goal3-task294-service-owned-ga-certification-review.test.mjs",
+  "goal3-task295-pi-ga-certification-review-consumer.test.mjs",
   "goal3-task255-pi-goal-mode-intake-manifest.test.mjs",
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",
