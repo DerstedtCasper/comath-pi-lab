@@ -1,3 +1,23 @@
+# Goal 3 Task 290 / Service-Owned Operator Transport Closure Review
+
+Scope: add a service-owned closure review gate for the maintained operator/service transport chain after Task288 terminal completion certification, without opening durable/live transport or creating Lean proof authority.
+
+Implementation notes:
+- Added `goal3-task290-service-owned-operator-transport-closure-review.test.mjs`.
+- Added `recordPiCodexLifecycleOperatorServiceTransportClosureReview()` and `POST /release/pi-codex-lifecycle/operator-service-transport-closure-review`.
+- The gate consumes only terminal completion certificate id/path/hash material, derives the canonical certificate path, re-reads the Task288 certificate bytes, and then re-reads the bound Task247 durable-transport prerequisite, Task229 continuity checkpoint, and Task225 maintained transport contract bytes by canonical path/hash.
+- The gate rejects duplicate closure-review ids, stale hashes, non-canonical path aliases, tampered chain artifacts, and chain-mismatched maintained transport material before writing append-only evidence.
+- The persisted review and audit event expose only no-authority transport closure provenance: `durable_transport_provided=false`, `live_transport_open=false`, `proof_authority=none`, `can_promote_claim=false`, `can_certify_ga=false`, and `ga_certification_gate_separate=true`.
+- Registered the service capability, HTTP route, phase0 release-hardening discovery, AGENTS guidance, README, TODO, GA release criteria, threat model, adapter contracts, and this review.
+
+Verification:
+- TDD hardening RED was observed during self-review after adding the focused absolute-path alias assertion: Task290 accepted a project-confined absolute terminal-certificate path instead of rejecting non-canonical artifact input. After adding a Task290-local canonical string check, the focused test passed.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task290 exited 0; adjacent Task288, Task247, Task229, and Task225 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task290 discovered by the default runner; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task290 is service-owned operational provenance only. It does not create a Pi consumer, open or maintain durable/live transport, mutate trusted Pi state, run Lean, promote mathematical claims, or certify GA.
+
+Residual risk: Goal 3 remains incomplete. Task290 does not add Pi consumer/planner wiring for the closure-review route, production helper integration, broad proof breadth, durable long-lived transport, or GA certification.
+
 # Goal 3 Task 289 / Pi Terminal Completion Certificate Consumer Bridge
 
 Scope: expose the Task288 terminal completion certificate gate through the Pi thin client and read-only interactive planner without creating Lean proof authority or GA certification.

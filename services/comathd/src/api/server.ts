@@ -63,6 +63,7 @@ import {
   recordPiCodexLifecycleGuidedRealPiExecution,
   recordPiCodexLifecycleOperatorServiceTransportContinuity,
   recordPiCodexLifecycleOperatorServiceTransportContract,
+  recordPiCodexLifecycleOperatorServiceTransportClosureReview,
   recordPiCodexLifecycleUnattendedRealHostDurableTransportContract,
   recordPiCodexLifecycleUnattendedRealHostCompletionCertificationPrerequisite,
   recordPiCodexLifecycleUnattendedRealHostTerminalCompletionCertificateDesign,
@@ -607,6 +608,20 @@ async function route(method: string, path: string, body: unknown, context: Route
         return {
           terminal_completion_certificate:
             recordPiCodexLifecycleUnattendedRealHostTerminalCompletionCertificate(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/pi-codex-lifecycle/operator-service-transport-closure-review",
+      (payload) => {
+        const body = payload as Parameters<typeof recordPiCodexLifecycleOperatorServiceTransportClosureReview>[1] & {
+          project_root: string;
+        };
+        return {
+          transport_closure_review: recordPiCodexLifecycleOperatorServiceTransportClosureReview(
+            body.project_root,
+            body
+          )
         };
       }
     ],

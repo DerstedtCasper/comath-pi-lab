@@ -2124,6 +2124,93 @@ type PiCodexUnattendedRealHostTerminalCompletionCertificateBody = Omit<
   "terminal_completion_certificate_artifact"
 >;
 
+export type PiCodexOperatorServiceTransportClosureReviewInput = {
+  project_id: string;
+  transport_closure_review_id?: string;
+  actor: string;
+  terminal_completion_certificate_id: string;
+  terminal_completion_certificate_path: string;
+  terminal_completion_certificate_sha256: string;
+  requested_transport_closure_mode?: "maintained_operator_service_transport_closure_review";
+};
+
+export type PiCodexOperatorServiceTransportClosureReviewArtifact = {
+  kind: "operator_service_transport_closure_review";
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type PiCodexOperatorServiceTransportClosureReview = {
+  schema_version: "comath.pi_codex_operator_service_transport_closure_review.v1";
+  transport_closure_review_id: string;
+  project_id: string;
+  actor: string;
+  created_at: string;
+  transport_closure_review_status: "maintained_operator_service_transport_closure_reviewed";
+  durable_transport_closure_status: "maintained_operator_service_transport_closure_reviewed";
+  transport_closure_review_path: string;
+  transport_closure_review_artifact: PiCodexOperatorServiceTransportClosureReviewArtifact;
+  requested_transport_closure_mode: "maintained_operator_service_transport_closure_review";
+  terminal_goal_state: "terminal_unattended_completion_certified";
+  terminal_completion_certificate_id: string;
+  terminal_completion_certificate_status: "terminal_unattended_completion_certified";
+  terminal_completion_certificate_path: string;
+  terminal_completion_certificate_artifact: PiCodexUnattendedRealHostTerminalCompletionCertificateArtifact;
+  terminal_completion_certificate_current: true;
+  durable_transport_contract_id: string;
+  durable_transport_contract_status: "durable_transport_prerequisite_contract_recorded";
+  durable_transport_contract_path: string;
+  durable_transport_contract_artifact: PiCodexUnattendedRealHostDurableTransportContractArtifact;
+  durable_transport_contract_current: true;
+  transport_continuity_id: string;
+  transport_continuity_status: "maintained_bounded_transport_continuity_recorded";
+  transport_continuity_path: string;
+  transport_continuity_artifact: PiCodexOperatorServiceTransportContinuityArtifact;
+  transport_continuity_current: true;
+  transport_contract_id: string;
+  transport_contract_status: "maintained_bounded_transport_contract_recorded";
+  transport_contract_path: string;
+  transport_contract_artifact: PiCodexOperatorServiceTransportContractArtifact;
+  transport_contract_current: true;
+  completion_certificate_available: true;
+  terminal_unattended_completion_certified: true;
+  unattended_real_host_execution_completed: true;
+  service_owned_checkpoint_chain_reviewed: true;
+  service_owned_durable_transport_prerequisite_configured: true;
+  maintained_transport_primitive_bound: true;
+  service_route_bound: true;
+  client_fetch_contract_bound: true;
+  terminal_completion_certificate_bound: true;
+  durable_transport_contract_bound: true;
+  transport_continuity_bound: true;
+  transport_contract_bound: true;
+  agent_run_id: string;
+  service_route: string;
+  service_transport_primitive: PiCodexOperatorServiceTransportPrimitive;
+  client_transport_primitive: PiCodexOperatorClientTransportPrimitive;
+  operator_approved: false;
+  handoff_can_execute: false;
+  unattended_execution_authorized: false;
+  operator_confirmation_bypassed: false;
+  durable_transport_provided: false;
+  live_transport_open: false;
+  indefinite_stream_open: false;
+  long_lived_websocket_provided: false;
+  long_lived_sse_provided: false;
+  pi_direct_write_allowed: false;
+  direct_trusted_state_mutation: false;
+  proof_authority: "none";
+  can_promote_claim: false;
+  can_certify_ga: false;
+  ga_certification_gate_separate: true;
+};
+
+type PiCodexOperatorServiceTransportClosureReviewBody = Omit<
+  PiCodexOperatorServiceTransportClosureReview,
+  "transport_closure_review_artifact"
+>;
+
 export type PiCodexLifecycleAutomaticRealPiExecutionCheckpointStep =
   | "real_pi_runtime_probe"
   | "operator_session_manifest"
@@ -4367,6 +4454,18 @@ function unattendedRealHostTerminalCompletionCertificatePath(terminalCompletionC
       "pi-codex-lifecycle",
       terminalCompletionCertificateId,
       "terminal-completion-certificate.json"
+    )
+  );
+}
+
+function operatorServiceTransportClosureReviewPath(transportClosureReviewId: string): string {
+  return normalizeRelativePath(
+    join(
+      ".comath",
+      "release",
+      "pi-codex-lifecycle",
+      transportClosureReviewId,
+      "operator-service-transport-closure-review.json"
     )
   );
 }
@@ -10908,6 +11007,569 @@ export function recordPiCodexLifecycleUnattendedRealHostTerminalCompletionCertif
       handoff_can_execute: false,
       unattended_execution_authorized: false,
       operator_confirmation_bypassed: false,
+      durable_transport_provided: false,
+      live_transport_open: false,
+      indefinite_stream_open: false,
+      long_lived_websocket_provided: false,
+      long_lived_sse_provided: false,
+      pi_direct_write_allowed: false,
+      direct_trusted_state_mutation: false,
+      proof_authority: "none",
+      can_promote_claim: false,
+      can_certify_ga: false,
+      ga_certification_gate_separate: true
+    }
+  });
+  return result;
+}
+
+type OperatorServiceTransportClosureReviewErrorCode =
+  | "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID"
+  | "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID_MODE"
+  | "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_ALREADY_EXISTS"
+  | "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_TERMINAL_COMPLETION_CERTIFICATE_STALE"
+  | "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_DURABLE_TRANSPORT_CONTRACT_STALE"
+  | "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_TRANSPORT_CONTINUITY_STALE"
+  | "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_TRANSPORT_CONTRACT_STALE"
+  | "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_CHAIN_MISMATCH";
+
+function throwOperatorServiceTransportClosureReviewError(
+  message: string,
+  code: OperatorServiceTransportClosureReviewErrorCode,
+  statusCode = 400
+): never {
+  throw new ComathError(message, { statusCode, code });
+}
+
+function assertOperatorServiceTransportClosureReviewSha256(
+  value: string,
+  code: OperatorServiceTransportClosureReviewErrorCode
+): string {
+  const sha256 = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!/^[a-f0-9]{64}$/u.test(sha256)) {
+    throwOperatorServiceTransportClosureReviewError("Pi/Codex operator transport closure review hash is invalid", code);
+  }
+  return sha256;
+}
+
+function readOperatorServiceTransportClosureReviewJson<T>(input: {
+  projectRoot: string;
+  requestedPath: string;
+  canonicalPath: string;
+  expectedSha256: string;
+  staleCode: OperatorServiceTransportClosureReviewErrorCode;
+  invalidCode: OperatorServiceTransportClosureReviewErrorCode;
+  staleMessage: string;
+  invalidMessage: string;
+}): { parsed: T; actualSha256: string; sizeBytes: number } {
+  const requestedPath = typeof input.requestedPath === "string" ? normalizeRelativePath(input.requestedPath) : "";
+  if (requestedPath !== input.canonicalPath) {
+    throwOperatorServiceTransportClosureReviewError(input.invalidMessage, input.invalidCode);
+  }
+  let normalizedRequestedPath: string;
+  let absolutePath: string;
+  try {
+    absolutePath = assertPathAllowed(input.projectRoot, requestedPath, { purpose: "read" });
+    normalizedRequestedPath = projectRelativePath(input.projectRoot, absolutePath);
+  } catch {
+    throwOperatorServiceTransportClosureReviewError(input.invalidMessage, input.invalidCode);
+  }
+  if (normalizedRequestedPath !== input.canonicalPath) {
+    throwOperatorServiceTransportClosureReviewError(input.invalidMessage, input.invalidCode);
+  }
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    throwOperatorServiceTransportClosureReviewError(input.staleMessage, input.staleCode);
+  }
+  const content = readFileSync(absolutePath);
+  const actualSha256 = sha256Bytes(content);
+  if (assertOperatorServiceTransportClosureReviewSha256(input.expectedSha256, input.staleCode) !== actualSha256) {
+    throwOperatorServiceTransportClosureReviewError(input.staleMessage, input.staleCode);
+  }
+  try {
+    return {
+      parsed: JSON.parse(content.toString("utf8")) as T,
+      actualSha256,
+      sizeBytes: content.byteLength
+    };
+  } catch {
+    throwOperatorServiceTransportClosureReviewError(input.invalidMessage, input.invalidCode);
+  }
+}
+
+function assertTerminalCompletionCertificateClosureReviewBoundary(
+  certificate: PiCodexUnattendedRealHostTerminalCompletionCertificateBody
+): void {
+  const parsedLogSessionRoute =
+    typeof certificate.service_route === "string" ? parseAgentRunLogSessionRoute(certificate.service_route) : null;
+  if (
+    certificate.schema_version !== "comath.pi_codex_unattended_real_host_terminal_completion_certificate.v1" ||
+    certificate.terminal_completion_certificate_status !== "terminal_unattended_completion_certified" ||
+    certificate.terminal_goal_state !== "terminal_unattended_completion_certified" ||
+    certificate.requested_certificate_mode !== "production_unattended_real_host_terminal_completion_certificate" ||
+    certificate.completion_certificate_available !== true ||
+    certificate.terminal_unattended_completion_certified !== true ||
+    certificate.unattended_real_host_execution_completed !== true ||
+    certificate.terminal_completion_certificate_design_current !== true ||
+    certificate.completion_certification_prerequisite_current !== true ||
+    certificate.attempt_review_current !== true ||
+    certificate.attempt_result_evidence_current !== true ||
+    certificate.durable_transport_contract_current !== true ||
+    certificate.service_owned_checkpoint_chain_reviewed !== true ||
+    certificate.service_owned_attempt_review_completed !== true ||
+    certificate.service_owned_durable_transport_prerequisite_configured !== true ||
+    typeof certificate.durable_transport_contract_id !== "string" ||
+    !hasLifecycleArtifactReference(
+      certificate.durable_transport_contract_artifact,
+      "unattended_real_host_durable_transport_contract"
+    ) ||
+    typeof certificate.transport_continuity_id !== "string" ||
+    typeof certificate.transport_contract_id !== "string" ||
+    typeof certificate.agent_run_id !== "string" ||
+    parsedLogSessionRoute === null ||
+    parsedLogSessionRoute.route !== certificate.service_route ||
+    parsedLogSessionRoute.runId !== certificate.agent_run_id ||
+    certificate.service_transport_primitive !== "node_http_agent_run_log_session_route" ||
+    certificate.client_transport_primitive !== "pi_fetch_get_text" ||
+    certificate.operator_approved !== false ||
+    certificate.handoff_can_execute !== false ||
+    certificate.unattended_execution_authorized !== false ||
+    certificate.operator_confirmation_bypassed !== false ||
+    certificate.durable_transport_provided !== false ||
+    certificate.live_transport_open !== false ||
+    certificate.indefinite_stream_open !== false ||
+    certificate.long_lived_websocket_provided !== false ||
+    certificate.long_lived_sse_provided !== false ||
+    certificate.pi_direct_write_allowed !== false ||
+    certificate.direct_trusted_state_mutation !== false ||
+    certificate.proof_authority !== "none" ||
+    certificate.can_promote_claim !== false ||
+    certificate.can_certify_ga !== false ||
+    certificate.ga_certification_gate_separate !== true
+  ) {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review terminal completion certificate violates boundaries",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID"
+    );
+  }
+}
+
+function readTerminalCompletionCertificateForOperatorServiceTransportClosureReview(
+  projectRoot: string,
+  projectId: string,
+  certificateId: string,
+  certificatePath: string,
+  expectedSha256: string
+): {
+  certificate: PiCodexUnattendedRealHostTerminalCompletionCertificateBody;
+  artifact: PiCodexUnattendedRealHostTerminalCompletionCertificateArtifact;
+} {
+  const canonicalPath = unattendedRealHostTerminalCompletionCertificatePath(certificateId);
+  const { parsed, actualSha256, sizeBytes } = readOperatorServiceTransportClosureReviewJson<
+    PiCodexUnattendedRealHostTerminalCompletionCertificateBody
+  >({
+    projectRoot,
+    requestedPath: certificatePath,
+    canonicalPath,
+    expectedSha256,
+    staleCode: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_TERMINAL_COMPLETION_CERTIFICATE_STALE",
+    invalidCode: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID",
+    staleMessage: "Pi/Codex operator transport closure review terminal completion certificate changed",
+    invalidMessage: "Pi/Codex operator transport closure review terminal completion certificate is invalid"
+  });
+  if (
+    parsed.project_id !== projectId ||
+    parsed.terminal_completion_certificate_id !== certificateId ||
+    parsed.terminal_completion_certificate_path !== canonicalPath
+  ) {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review terminal completion certificate does not bind the request",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID"
+    );
+  }
+  assertTerminalCompletionCertificateClosureReviewBoundary(parsed);
+  return {
+    certificate: parsed,
+    artifact: {
+      kind: "unattended_real_host_terminal_completion_certificate",
+      path: canonicalPath,
+      sha256: actualSha256,
+      size_bytes: sizeBytes
+    }
+  };
+}
+
+function readDurableTransportContractForOperatorServiceTransportClosureReview(
+  projectRoot: string,
+  projectId: string,
+  durableTransportContractId: string,
+  durableTransportContractPath: string,
+  expectedSha256: string
+): {
+  contract: PiCodexUnattendedRealHostDurableTransportContractBody;
+  artifact: PiCodexUnattendedRealHostDurableTransportContractArtifact;
+} {
+  const canonicalPath = unattendedRealHostDurableTransportContractPath(durableTransportContractId);
+  const { parsed, actualSha256, sizeBytes } = readOperatorServiceTransportClosureReviewJson<
+    PiCodexUnattendedRealHostDurableTransportContractBody
+  >({
+    projectRoot,
+    requestedPath: durableTransportContractPath,
+    canonicalPath,
+    expectedSha256,
+    staleCode: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_DURABLE_TRANSPORT_CONTRACT_STALE",
+    invalidCode: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID",
+    staleMessage: "Pi/Codex operator transport closure review durable transport contract changed",
+    invalidMessage: "Pi/Codex operator transport closure review durable transport contract is invalid"
+  });
+  if (
+    parsed.project_id !== projectId ||
+    parsed.durable_transport_contract_id !== durableTransportContractId ||
+    parsed.durable_transport_contract_path !== canonicalPath
+  ) {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review durable transport contract does not bind the request",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID"
+    );
+  }
+  try {
+    assertUnattendedRealHostDurableTransportContractArtifactRefs(parsed);
+    assertUnattendedRealHostDurableTransportContractBoundary(parsed);
+  } catch {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review durable transport contract violates boundaries",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID"
+    );
+  }
+  return {
+    contract: parsed,
+    artifact: {
+      kind: "unattended_real_host_durable_transport_contract",
+      path: canonicalPath,
+      sha256: actualSha256,
+      size_bytes: sizeBytes
+    }
+  };
+}
+
+function readTransportContinuityForOperatorServiceTransportClosureReview(
+  projectRoot: string,
+  projectId: string,
+  continuityId: string,
+  continuityPath: string,
+  expectedSha256: string
+): {
+  continuity: PiCodexOperatorServiceTransportContinuityBody;
+  artifact: PiCodexOperatorServiceTransportContinuityArtifact;
+} {
+  const canonicalPath = operatorServiceTransportContinuityPath(continuityId);
+  const { parsed, actualSha256, sizeBytes } = readOperatorServiceTransportClosureReviewJson<
+    PiCodexOperatorServiceTransportContinuityBody
+  >({
+    projectRoot,
+    requestedPath: continuityPath,
+    canonicalPath,
+    expectedSha256,
+    staleCode: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_TRANSPORT_CONTINUITY_STALE",
+    invalidCode: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID",
+    staleMessage: "Pi/Codex operator transport closure review transport continuity changed",
+    invalidMessage: "Pi/Codex operator transport closure review transport continuity is invalid"
+  });
+  if (
+    parsed.project_id !== projectId ||
+    parsed.continuity_id !== continuityId ||
+    parsed.continuity_path !== canonicalPath
+  ) {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review transport continuity does not bind the request",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID"
+    );
+  }
+  try {
+    assertOperatorServiceTransportContinuityBoundary(parsed);
+  } catch {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review transport continuity violates boundaries",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID"
+    );
+  }
+  return {
+    continuity: parsed,
+    artifact: {
+      kind: "operator_service_transport_continuity",
+      path: canonicalPath,
+      sha256: actualSha256,
+      size_bytes: sizeBytes
+    }
+  };
+}
+
+function readTransportContractForOperatorServiceTransportClosureReview(
+  projectRoot: string,
+  projectId: string,
+  contractId: string,
+  contractPath: string,
+  expectedSha256: string
+): {
+  contract: PiCodexOperatorServiceTransportContractBody;
+  artifact: PiCodexOperatorServiceTransportContractArtifact;
+} {
+  const canonicalPath = operatorServiceTransportContractPath(contractId);
+  const { parsed, actualSha256, sizeBytes } = readOperatorServiceTransportClosureReviewJson<
+    PiCodexOperatorServiceTransportContractBody
+  >({
+    projectRoot,
+    requestedPath: contractPath,
+    canonicalPath,
+    expectedSha256,
+    staleCode: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_TRANSPORT_CONTRACT_STALE",
+    invalidCode: "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID",
+    staleMessage: "Pi/Codex operator transport closure review transport contract changed",
+    invalidMessage: "Pi/Codex operator transport closure review transport contract is invalid"
+  });
+  if (
+    parsed.project_id !== projectId ||
+    parsed.transport_contract_id !== contractId ||
+    parsed.transport_contract_path !== canonicalPath
+  ) {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review transport contract does not bind the request",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID"
+    );
+  }
+  try {
+    assertOperatorServiceTransportContractBoundary(parsed);
+  } catch {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review transport contract violates boundaries",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID"
+    );
+  }
+  return {
+    contract: parsed,
+    artifact: {
+      kind: "operator_service_transport_contract",
+      path: canonicalPath,
+      sha256: actualSha256,
+      size_bytes: sizeBytes
+    }
+  };
+}
+
+function assertOperatorServiceTransportClosureReviewChainMatches(input: {
+  certificate: PiCodexUnattendedRealHostTerminalCompletionCertificateBody;
+  durable: PiCodexUnattendedRealHostDurableTransportContractBody;
+  durableArtifact: PiCodexUnattendedRealHostDurableTransportContractArtifact;
+  continuity: PiCodexOperatorServiceTransportContinuityBody;
+  continuityArtifact: PiCodexOperatorServiceTransportContinuityArtifact;
+  contract: PiCodexOperatorServiceTransportContractBody;
+  contractArtifact: PiCodexOperatorServiceTransportContractArtifact;
+}): void {
+  const { certificate, durable, durableArtifact, continuity, continuityArtifact, contract, contractArtifact } = input;
+  if (
+    certificate.durable_transport_contract_id !== durable.durable_transport_contract_id ||
+    certificate.durable_transport_contract_path !== durable.durable_transport_contract_path ||
+    !lifecycleArtifactReferenceMatches(certificate.durable_transport_contract_artifact, durableArtifact) ||
+    certificate.transport_continuity_id !== durable.transport_continuity_id ||
+    certificate.transport_contract_id !== durable.transport_contract_id ||
+    certificate.agent_run_id !== durable.agent_run_id ||
+    certificate.service_route !== durable.service_route ||
+    certificate.service_transport_primitive !== durable.service_transport_primitive ||
+    certificate.client_transport_primitive !== durable.client_transport_primitive ||
+    durable.transport_continuity_id !== continuity.continuity_id ||
+    durable.transport_continuity_path !== continuity.continuity_path ||
+    !lifecycleArtifactReferenceMatches(durable.transport_continuity_artifact, continuityArtifact) ||
+    durable.transport_contract_id !== continuity.transport_contract_id ||
+    durable.agent_run_id !== continuity.agent_run_id ||
+    durable.service_route !== continuity.service_route ||
+    durable.service_transport_primitive !== continuity.service_transport_primitive ||
+    durable.client_transport_primitive !== continuity.client_transport_primitive ||
+    continuity.transport_contract_id !== contract.transport_contract_id ||
+    continuity.transport_contract_path !== contract.transport_contract_path ||
+    !lifecycleArtifactReferenceMatches(continuity.transport_contract_artifact, contractArtifact) ||
+    continuity.agent_run_id !== contract.agent_run_id ||
+    continuity.service_route !== contract.service_route ||
+    continuity.service_transport_primitive !== contract.service_transport_primitive ||
+    continuity.client_transport_primitive !== contract.client_transport_primitive
+  ) {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review chain does not bind the maintained transport artifacts",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_CHAIN_MISMATCH"
+    );
+  }
+}
+
+export function recordPiCodexLifecycleOperatorServiceTransportClosureReview(
+  projectRoot: string,
+  input: PiCodexOperatorServiceTransportClosureReviewInput
+): PiCodexOperatorServiceTransportClosureReview {
+  const projectId = assertOperatorSessionProjectId(input.project_id);
+  const closureReviewId = assertReviewId(input.transport_closure_review_id);
+  const certificateId = assertReviewId(input.terminal_completion_certificate_id);
+  const requestedMode = input.requested_transport_closure_mode ?? "maintained_operator_service_transport_closure_review";
+  if (requestedMode !== "maintained_operator_service_transport_closure_review") {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review mode is invalid",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_INVALID_MODE"
+    );
+  }
+  const closureReviewPath = operatorServiceTransportClosureReviewPath(closureReviewId);
+  const absoluteClosureReviewPath = assertPathAllowed(projectRoot, closureReviewPath, { purpose: "runtime-write" });
+  if (existsSync(absoluteClosureReviewPath)) {
+    throwOperatorServiceTransportClosureReviewError(
+      "Pi/Codex operator transport closure review already exists",
+      "PI_CODEX_OPERATOR_SERVICE_TRANSPORT_CLOSURE_REVIEW_ALREADY_EXISTS",
+      409
+    );
+  }
+
+  const { certificate, artifact: terminalCertificateArtifact } =
+    readTerminalCompletionCertificateForOperatorServiceTransportClosureReview(
+      projectRoot,
+      projectId,
+      certificateId,
+      input.terminal_completion_certificate_path,
+      input.terminal_completion_certificate_sha256
+    );
+  const { contract: durable, artifact: durableTransportContractArtifact } =
+    readDurableTransportContractForOperatorServiceTransportClosureReview(
+      projectRoot,
+      projectId,
+      certificate.durable_transport_contract_id,
+      certificate.durable_transport_contract_path,
+      certificate.durable_transport_contract_artifact.sha256
+    );
+  const { continuity, artifact: transportContinuityArtifact } =
+    readTransportContinuityForOperatorServiceTransportClosureReview(
+      projectRoot,
+      projectId,
+      durable.transport_continuity_id,
+      durable.transport_continuity_path,
+      durable.transport_continuity_artifact.sha256
+    );
+  const { contract: transportContract, artifact: transportContractArtifact } =
+    readTransportContractForOperatorServiceTransportClosureReview(
+      projectRoot,
+      projectId,
+      continuity.transport_contract_id,
+      continuity.transport_contract_path,
+      continuity.transport_contract_artifact.sha256
+    );
+  assertOperatorServiceTransportClosureReviewChainMatches({
+    certificate,
+    durable,
+    durableArtifact: durableTransportContractArtifact,
+    continuity,
+    continuityArtifact: transportContinuityArtifact,
+    contract: transportContract,
+    contractArtifact: transportContractArtifact
+  });
+
+  const actor = sanitizeTerminalCompletionCertificateText(input.actor);
+  const body: PiCodexOperatorServiceTransportClosureReviewBody = {
+    schema_version: "comath.pi_codex_operator_service_transport_closure_review.v1",
+    transport_closure_review_id: closureReviewId,
+    project_id: projectId,
+    actor,
+    created_at: new Date().toISOString(),
+    transport_closure_review_status: "maintained_operator_service_transport_closure_reviewed",
+    durable_transport_closure_status: "maintained_operator_service_transport_closure_reviewed",
+    transport_closure_review_path: closureReviewPath,
+    requested_transport_closure_mode: "maintained_operator_service_transport_closure_review",
+    terminal_goal_state: "terminal_unattended_completion_certified",
+    terminal_completion_certificate_id: certificate.terminal_completion_certificate_id,
+    terminal_completion_certificate_status: certificate.terminal_completion_certificate_status,
+    terminal_completion_certificate_path: certificate.terminal_completion_certificate_path,
+    terminal_completion_certificate_artifact: terminalCertificateArtifact,
+    terminal_completion_certificate_current: true,
+    durable_transport_contract_id: durable.durable_transport_contract_id,
+    durable_transport_contract_status: durable.durable_transport_contract_status,
+    durable_transport_contract_path: durable.durable_transport_contract_path,
+    durable_transport_contract_artifact: durableTransportContractArtifact,
+    durable_transport_contract_current: true,
+    transport_continuity_id: continuity.continuity_id,
+    transport_continuity_status: continuity.continuity_status,
+    transport_continuity_path: continuity.continuity_path,
+    transport_continuity_artifact: transportContinuityArtifact,
+    transport_continuity_current: true,
+    transport_contract_id: transportContract.transport_contract_id,
+    transport_contract_status: transportContract.contract_status,
+    transport_contract_path: transportContract.transport_contract_path,
+    transport_contract_artifact: transportContractArtifact,
+    transport_contract_current: true,
+    completion_certificate_available: true,
+    terminal_unattended_completion_certified: true,
+    unattended_real_host_execution_completed: true,
+    service_owned_checkpoint_chain_reviewed: true,
+    service_owned_durable_transport_prerequisite_configured: true,
+    maintained_transport_primitive_bound: true,
+    service_route_bound: true,
+    client_fetch_contract_bound: true,
+    terminal_completion_certificate_bound: true,
+    durable_transport_contract_bound: true,
+    transport_continuity_bound: true,
+    transport_contract_bound: true,
+    agent_run_id: transportContract.agent_run_id,
+    service_route: transportContract.service_route,
+    service_transport_primitive: "node_http_agent_run_log_session_route",
+    client_transport_primitive: "pi_fetch_get_text",
+    operator_approved: false,
+    handoff_can_execute: false,
+    unattended_execution_authorized: false,
+    operator_confirmation_bypassed: false,
+    durable_transport_provided: false,
+    live_transport_open: false,
+    indefinite_stream_open: false,
+    long_lived_websocket_provided: false,
+    long_lived_sse_provided: false,
+    pi_direct_write_allowed: false,
+    direct_trusted_state_mutation: false,
+    proof_authority: "none",
+    can_promote_claim: false,
+    can_certify_ga: false,
+    ga_certification_gate_separate: true
+  };
+  const artifactText = canonicalJson(body);
+  mkdirSync(dirname(absoluteClosureReviewPath), { recursive: true });
+  writeFileSync(absoluteClosureReviewPath, artifactText, "utf8");
+  const result: PiCodexOperatorServiceTransportClosureReview = {
+    ...body,
+    transport_closure_review_artifact: {
+      kind: "operator_service_transport_closure_review",
+      path: closureReviewPath,
+      sha256: sha256Text(artifactText),
+      size_bytes: Buffer.byteLength(artifactText, "utf8")
+    }
+  };
+  appendAuditEvent(projectRoot, {
+    project_id: projectId,
+    event_type: "release.pi_codex_operator_service_transport_closure_review_recorded",
+    actor,
+    target_id: projectId,
+    payload: {
+      transport_closure_review_id: result.transport_closure_review_id,
+      transport_closure_review_status: result.transport_closure_review_status,
+      durable_transport_closure_status: result.durable_transport_closure_status,
+      transport_closure_review_path: closureReviewPath,
+      transport_closure_review_artifact_sha256: result.transport_closure_review_artifact.sha256,
+      terminal_completion_certificate_id: result.terminal_completion_certificate_id,
+      terminal_completion_certificate_artifact_sha256: result.terminal_completion_certificate_artifact.sha256,
+      durable_transport_contract_id: result.durable_transport_contract_id,
+      durable_transport_contract_artifact_sha256: result.durable_transport_contract_artifact.sha256,
+      transport_continuity_id: result.transport_continuity_id,
+      transport_continuity_artifact_sha256: result.transport_continuity_artifact.sha256,
+      transport_contract_id: result.transport_contract_id,
+      transport_contract_artifact_sha256: result.transport_contract_artifact.sha256,
+      agent_run_id: result.agent_run_id,
+      service_route: result.service_route,
+      service_transport_primitive: result.service_transport_primitive,
+      client_transport_primitive: result.client_transport_primitive,
+      completion_certificate_available: true,
+      terminal_unattended_completion_certified: true,
+      unattended_real_host_execution_completed: true,
+      terminal_completion_certificate_current: true,
+      durable_transport_contract_current: true,
+      transport_continuity_current: true,
+      transport_contract_current: true,
       durable_transport_provided: false,
       live_transport_open: false,
       indefinite_stream_open: false,
