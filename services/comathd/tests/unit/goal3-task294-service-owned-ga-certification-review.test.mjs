@@ -218,7 +218,27 @@ try {
   const acceptance = readJson(review.acceptance_report_artifact.path);
   assert.equal(acceptance.schema_version, "comath.goal3_ga_acceptance.v1");
   assert.equal(acceptance.proof_authority, "none");
+  assert.equal(
+    acceptance.positive_workflow.can_promote_claim,
+    false,
+    "Task294 support artifact must not carry nested claim-promotion authority"
+  );
+  assert.doesNotMatch(JSON.stringify(acceptance), /"can_promote_claim"\s*:\s*true/);
+  assert.doesNotMatch(JSON.stringify(acceptance), /"can_certify_ga"\s*:\s*true/);
   assert.equal(acceptance.positive_matrix.remaining_matrix_blocker.status, "replayable_blocker");
+
+  assert.throws(
+    () =>
+      recordGoal3GaCertificationReview(projectRoot, {
+        project_id: projectId,
+        ga_certification_review_id: "GOAL3-GA-CERTIFICATION-REVIEW-0294-NONCANONICAL",
+        operational_readiness_review_id: readiness.operational_readiness_review_id,
+        operational_readiness_review_path: join(projectRoot, readiness.operational_readiness_review_path),
+        operational_readiness_review_sha256: readiness.operational_readiness_review_artifact.sha256
+      }),
+    { code: "GOAL3_GA_CERTIFICATION_REVIEW_INVALID" },
+    "Task294 must reject non-canonical operational readiness paths before certification review"
+  );
 
   assert.throws(
     () =>

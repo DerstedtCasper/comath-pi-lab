@@ -239,6 +239,25 @@ function acceptanceReportIsCurrent(report: Goal3GaAcceptanceReport): boolean {
   );
 }
 
+function scrubNoAuthoritySupportFlags(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => scrubNoAuthoritySupportFlags(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+        key,
+        key === "can_promote_claim" || key === "can_certify_ga" ? false : scrubNoAuthoritySupportFlags(child)
+      ])
+    );
+  }
+  return value;
+}
+
+function toNoAuthorityAcceptanceSupportReport(report: Goal3GaAcceptanceReport): Goal3GaAcceptanceReport {
+  return scrubNoAuthoritySupportFlags(report) as Goal3GaAcceptanceReport;
+}
+
 export function recordGoal3GaCertificationReview(
   projectRoot: string,
   input: Goal3GaCertificationReviewInput
@@ -285,7 +304,8 @@ export function recordGoal3GaCertificationReview(
       code: "GOAL3_GA_CERTIFICATION_REVIEW_INTERNAL_ACCEPTANCE_INVALID"
     });
   }
-  const acceptanceText = `${JSON.stringify(acceptanceReport, null, 2)}\n`;
+  const acceptanceSupportReport = toNoAuthorityAcceptanceSupportReport(acceptanceReport);
+  const acceptanceText = `${JSON.stringify(acceptanceSupportReport, null, 2)}\n`;
   mkdirSync(dirname(absoluteAcceptancePath), { recursive: true });
   writeFileSync(absoluteAcceptancePath, acceptanceText, "utf8");
   const acceptanceArtifact: ArtifactReference = {
