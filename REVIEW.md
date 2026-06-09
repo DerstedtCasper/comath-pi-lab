@@ -1,3 +1,25 @@
+# Goal 3 Task 291 / Pi Operator-Service Transport Closure Review Consumer Bridge
+
+Scope: expose the Task290 service-owned operator/service transport closure review through the Pi thin client and read-only interactive planner without opening durable/live transport or creating proof/GA authority.
+
+Implementation notes:
+- Added `goal3-task291-pi-operator-service-transport-closure-review-consumer.test.mjs`.
+- Added `comath.release.piCodexLifecycleOperatorServiceTransportClosureReview` and `/cm:release lifecycle-operator-service-transport-closure-review`.
+- The Pi bridge calls only `POST /release/pi-codex-lifecycle/operator-service-transport-closure-review` under host confirmation, strips `confirmation_id`, forwards only terminal completion certificate id/path/hash plus optional closure-review id/mode, and translates only the terminal-certificate public lifecycle alias to the service-canonical path.
+- Public Pi schema and request bodies omit executor commands, caller attempt results, and caller completion certificates.
+- Public result sanitization preserves service-returned closure lifecycle flags while forcing `proof_authority=none`, `can_promote_claim=false`, `can_certify_ga=false`, `durable_transport_provided=false`, and `live_transport_open=false`.
+- The interactive real-Pi planner now sequences the closure-review checkpoint after the terminal completion certificate checkpoint.
+- Registered the Pi runtime tool/subcommand and synchronized AGENTS guidance, README, TODO, GA release criteria, threat model, adapter contracts, acceptance matrix, phase0 smoke discovery, and this review.
+
+Verification:
+- TDD RED was observed before implementation: focused Task291 failed because `comath.release.piCodexLifecycleOperatorServiceTransportClosureReview` was not registered.
+- During GREEN, the focused test exposed contradictory request-body sanitizer assertions for service-required `project_root` and canonical `.comath` artifact path fields; the test now excludes those service request fields from public-display leakage scans while still checking the remaining request body and all public result/planner/notification surfaces.
+- Current verification in this continuation: `corepack pnpm --filter @comath/pi-extension build` exited 0; focused Task291 exited 0; adjacent Task289 exited 0; adjacent Task223 initially failed on stale expected checkpoint lists, was updated, and then exited 0; service Task290 exited 0; `corepack pnpm --filter @comath/pi-extension typecheck` exited 0; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task291 discovered by the default runner; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across the root workspace suite after rerunning with a longer timeout; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task291 is Pi consumer wiring only. It does not re-read canonical service artifacts, expose executor output, accept caller certificates, open durable/live transport, mutate trusted Pi state, run Lean, promote mathematical claims, or certify GA. The Task290 service route remains responsible for artifact-chain validation.
+
+Residual risk: Goal 3 remains incomplete. Task291 does not implement production helper integration, broad proof breadth, durable long-lived operator transport, OS-isolation release readiness, or GA certification.
+
 # Goal 3 Task 290 / Service-Owned Operator Transport Closure Review
 
 Scope: add a service-owned closure review gate for the maintained operator/service transport chain after Task288 terminal completion certification, without opening durable/live transport or creating Lean proof authority.
