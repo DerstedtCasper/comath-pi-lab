@@ -52,6 +52,7 @@ import { runV3NegativeGaSlices } from "../release/v3-negative-ga-slices.js";
 import { assembleSourceReviewPublicArchive } from "../release/source-review-public-archive.js";
 import { reviewGoal3PublicArchiveSurfaces } from "../release/public-archive-review.js";
 import { recordGoal3GaOperationalReadinessReview } from "../release/goal3-ga-operational-readiness.js";
+import { recordGoal3ReleaseCandidateProofBreadthReview } from "../release/goal3-proof-breadth-review.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
 import { recordGoal3FinalGaAudit } from "../release/goal3-final-ga-audit.js";
 import {
@@ -511,6 +512,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           operational_readiness_review: recordGoal3GaOperationalReadinessReview(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/proof-breadth-review",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3ReleaseCandidateProofBreadthReview>[1] & {
+          project_root: string;
+        };
+        return {
+          proof_breadth_review: recordGoal3ReleaseCandidateProofBreadthReview(body.project_root, body)
         };
       }
     ],

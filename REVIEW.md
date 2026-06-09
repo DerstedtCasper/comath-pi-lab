@@ -1,3 +1,22 @@
+# Goal 3 Task 298 / Service-Owned Proof Breadth Review Gate
+
+Scope: add a service-owned release-candidate proof-breadth review artifact that derives the current 100-task positive matrix inside `comathd` and remains blocked until real Lean clean replay breadth exists.
+
+Implementation notes:
+- Added `goal3-task298-service-owned-proof-breadth-review.test.mjs`.
+- Added `recordGoal3ReleaseCandidateProofBreadthReview()` and `POST /release/goal3/proof-breadth-review`.
+- Added append-only `comath.goal3_release_candidate_proof_breadth_review.v1` review artifacts plus manifest/batch support artifacts.
+- Added the `goal3_release_candidate_proof_breadth_review_gate` status capability and `release.goal3_proof_breadth_review_recorded` provenance audit events.
+
+Verification:
+- TDD RED was observed before implementation: focused Task298 failed because `recordGoal3ReleaseCandidateProofBreadthReview` was not exported.
+- Focused Task298 later exited 0, covering export/capability exposure, route wiring, duplicate id rejection, service-side 100-task manifest/batch derivation, caller proof-breadth material being ignored, no self-hash recursion, audit event emission, and fail-closed no-authority semantics.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task298 exited 0; adjacent Task17, Task94, Task96, Task294, and Task296 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` initially hit the 5-minute timeout before diagnostic output, then exited 0 with a longer timeout and discovered Task298; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across smoke, Pi workspace tests, comathd package tests, Phase45 e2e, Task125 e2e, and Phase17 integrity evaluation; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task298 does not run Lean, accept caller proof-breadth matrices as authority, complete proof breadth, unblock final GA audit, promote mathematical claims, certify GA, or replace Lean clean replay authority. It records only a blocked release-candidate proof-breadth review with `proof_authority=none`, `can_promote_claim=false`, `can_certify_ga=false`, `proof_breadth_complete=false`, and `ga_certification_gate_separate=true`.
+
+Residual risk: Goal 3 remains incomplete. Task298 records the proof-breadth blocker more explicitly, but does not produce the actual per-task clean replay breadth, production OS sandbox helper completion, durable long-lived transport, or any new proof authority.
+
 # Goal 3 Task 297 / Pi Final GA Audit Consumer Bridge
 
 Scope: expose the Task296 service-owned final GA audit blocker through Pi host-confirmed thin-client wiring and the read-only interactive real-Pi planner without certifying GA.
