@@ -1,3 +1,22 @@
+# Goal 3 Task 294 / Service-Owned GA Certification Review Precondition
+
+Scope: add a service-owned GA certification review precondition gate that consumes the Task292 operational readiness review, records no-authority GA acceptance diagnostic support evidence, and fails closed until proof breadth plus final GA audit are complete.
+
+Implementation notes:
+- Added `goal3-task294-service-owned-ga-certification-review.test.mjs`.
+- Added `recordGoal3GaCertificationReview()` and `POST /release/goal3/ga-certification-review`.
+- Added append-only `comath.goal3_ga_certification_review.v1` review artifacts and no-authority acceptance diagnostic support artifacts.
+- Added the `goal3_ga_certification_review_gate` status capability and `release.goal3_ga_certification_review_recorded` provenance audit events.
+
+Verification:
+- TDD RED was observed before implementation: focused Task294 failed because `recordGoal3GaCertificationReview` was not exported.
+- GREEN hardening covers canonical Task292 readiness artifact re-reading, stale hash rejection, promotional readiness rejection, route wiring, persisted support-artifact hashes, non-recursive self-hash behavior, audit event emission, and fail-closed GA certification preconditions.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task294 exited 0; adjacent Task292 and Task17 regressions exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants before and after tracker updates; initial `corepack pnpm --filter @comath/comathd test` hit the 5-minute command timeout before diagnostic output because the default runner is a long serial suite, then the same command exited 0 with a longer timeout and discovered Task294; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task294 does not certify GA, run Lean, promote mathematical claims, accept caller proof/acceptance artifacts, open durable/live transport, mutate trusted Pi state, or replace Lean clean replay authority. It only records a blocked service-owned certification-precondition review with `proof_authority=none`, `can_promote_claim=false`, `can_certify_ga=false`, and `ga_certification_gate_separate=true`.
+
+Residual risk: Goal 3 remains incomplete. Task294 does not add a Pi consumer for the certification review route, release-candidate proof breadth closure, final GA audit closure, production OS helper completion, durable long-lived transport, or any new proof authority.
+
 # Goal 3 Task 293 / Pi GA Operational Readiness Review Consumer Bridge
 
 Scope: expose the Task292 service-owned GA operational readiness review through Pi host-confirmed thin-client wiring and the read-only interactive real-Pi planner without certifying GA.
