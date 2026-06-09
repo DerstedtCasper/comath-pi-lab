@@ -1,3 +1,22 @@
+# Goal 3 Task 299 / PM-001 Task-Local Final Authority Packaging
+
+Scope: remove the artificial PM-001 final-authority packaging dead end so future 100-task proof-breadth closure can account for every positive-matrix manifest task, while preserving the rule that PM-001 cannot inherit the historical representative fixture's authority.
+
+Implementation notes:
+- Added `goal3-task299-pm001-task-local-final-authority-packaging.test.mjs`.
+- Updated `packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3()` to allow PM-001 task-local packaging/blocker artifacts.
+- Updated `packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3()` to allow PM-001-inclusive tranches.
+- Updated Task47/Task48 regressions so their old PM-001 rejection assertions now check PM-001 task-local blocker semantics.
+
+Verification:
+- TDD RED was observed before implementation: focused Task299 failed with `invalid_positive_matrix_final_authority_task` when PM-001 packaging was attempted.
+- After implementation, focused Task299 exited 0; adjacent Task47, Task48, Task94, and Task96 regressions exited 0.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task299 exited 0; adjacent Task47, Task48, Task50, Task94, and Task96 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; the first `corepack pnpm --filter @comath/comathd test` surfaced an outdated Task50 PM-001-invalid assertion, then the same package test exited 0 after migrating that assertion and discovered Task299; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across smoke, Pi workspace tests, comathd package tests, Phase45 e2e, Task125 e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task299 does not complete proof breadth, run Lean, accept representative fixtures as PM-001 authority, promote mathematical claims, unblock final GA audit, or certify GA. It only makes PM-001 eligible for the same task-local Lean Authority v3 evidence path as the other positive-matrix tasks; without that evidence PM-001 remains `blocked_missing_final_evidence` with `proof_authority=none` and `can_promote_claim=false`.
+
+Residual risk: Goal 3 remains incomplete. Task299 removes a structural 100-task closure blocker, but actual release-candidate proof-breadth verification/execution, production OS helper closure, durable long-lived transport, and final GA certification remain open.
+
 # Goal 3 Task 298 / Service-Owned Proof Breadth Review Gate
 
 Scope: add a service-owned release-candidate proof-breadth review artifact that derives the current 100-task positive matrix inside `comathd` and remains blocked until real Lean clean replay breadth exists.

@@ -61,14 +61,24 @@ const persistedReport = JSON.parse(readFileSync(join(projectRoot, report.packagi
 assert.deepEqual(persistedReport.task_ids, report.task_ids);
 assert.equal(persistedReport.promoted_count, 0);
 
-assert.throws(
-  () => packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3({ projectRoot, startTaskId: "PM-001", endTaskId: "PM-004" }),
-  /invalid_positive_matrix_final_authority_tranche/
+const pm001Tranche = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3({
+  projectRoot,
+  startTaskId: "PM-001",
+  endTaskId: "PM-004",
+  claimIdPrefix: "C-T48-PM001"
+});
+assert.deepEqual(pm001Tranche.task_ids, ["PM-001", "PM-002", "PM-003", "PM-004"]);
+assert.equal(pm001Tranche.tranche_status, "blocked_missing_final_evidence");
+assert.equal(pm001Tranche.proof_authority, "none");
+assert.equal(
+  pm001Tranche.results.every((result) => result.proof_authority === "none" && result.can_promote_claim === false),
+  true,
+  "PM-001 final-authority tranche support must not inherit representative fixture authority"
 );
 assert.equal(
   existsSync(join(projectRoot, ".comath/release/positive_matrix/PM-001/final_authority_packaging_report_v3.json")),
-  false,
-  "invalid PM-001 tranche must not write PM-001 packaging artifacts"
+  true,
+  "valid PM-001 tranche must write PM-001 task-local packaging artifacts"
 );
 assert.throws(
   () => packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3({ projectRoot, startTaskId: "PM-012", endTaskId: "PM-004" }),

@@ -55,9 +55,15 @@ assert.equal(persisted.proof_authority, "none");
 assert.equal(persisted.can_promote_claim, false);
 assert.equal(persisted.promotion_requires_gate, true);
 
-assert.throws(
-  () => packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3({ projectRoot, taskId: "PM-001", claimId: "C-PM-001" }),
-  /invalid_positive_matrix_final_authority_task/
-);
+const pm001Report = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3({
+  projectRoot,
+  taskId: "PM-001",
+  claimId: "C-PM-001"
+});
+assert.equal(pm001Report.task_id, "PM-001");
+assert.equal(pm001Report.final_evidence_status, "blocked_missing_final_evidence");
+assert.equal(pm001Report.proof_authority, "none");
+assert.equal(pm001Report.can_promote_claim, false);
+assert.match(pm001Report.packaging_report_path, /^\.comath\/release\/positive_matrix\/PM-001\/final_authority_packaging_report_v3\.json$/);
 
 console.log("Goal 3 Task 47 PM-003 final authority blocker test passed.");

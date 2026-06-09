@@ -65,14 +65,25 @@ assert.deepEqual(persistedReport.missing_final_evidence_classes, report.missing_
 assert.deepEqual(persistedReport.task_ids, report.task_ids);
 assert.equal(persistedReport.promoted_count, 0);
 
-assert.throws(
-  () => packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3({ projectRoot, startTaskId: "PM-001", endTaskId: "PM-013" }),
-  /invalid_positive_matrix_final_authority_tranche/
+const pm001Inclusive = packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3({
+  projectRoot,
+  startTaskId: "PM-001",
+  endTaskId: "PM-013",
+  claimIdPrefix: "C-T50-PM001"
+});
+assert.equal(pm001Inclusive.task_ids[0], "PM-001");
+assert.equal(pm001Inclusive.task_ids.at(-1), "PM-013");
+assert.equal(pm001Inclusive.tranche_status, "blocked_missing_final_evidence");
+assert.equal(pm001Inclusive.proof_authority, "none");
+assert.equal(
+  pm001Inclusive.results.every((result) => result.proof_authority === "none" && result.can_promote_claim === false),
+  true,
+  "PM-001-inclusive tranche must remain non-authoritative without task-local Lean evidence"
 );
 assert.equal(
   existsSync(join(projectRoot, ".comath/release/positive_matrix/PM-001/final_authority_packaging_report_v3.json")),
-  false,
-  "invalid PM-001 tranche must not write PM-001 packaging artifacts"
+  true,
+  "valid PM-001-inclusive tranche must write PM-001 task-local packaging artifacts"
 );
 
 console.log("Goal 3 Task 50 PM-013 through PM-023 final authority tranche test passed.");

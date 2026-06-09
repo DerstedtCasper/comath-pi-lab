@@ -4647,9 +4647,6 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3(input: {
   sourceReport?: FinalAuthorityPackagingV3SourceReport;
 }): FinalAuthorityPackagingV3Report {
   const task = taskByIdOrThrow(input.taskId);
-  if (task.task_id === "PM-001") {
-    throw new Error("invalid_positive_matrix_final_authority_task");
-  }
 
   const missingFinalEvidenceClasses: Goal3GaPm002FinalEvidenceClass[] = [
     "lean_run_manifest_v3",
@@ -4701,15 +4698,11 @@ export function packageGoal3GaPositiveMatrixFinalAuthorityEvidenceTrancheV3(inpu
   const manifest = createGoal3GaPositiveTaskManifest();
   const startIndex = manifest.tasks.findIndex((task) => task.task_id === input.startTaskId);
   const endIndex = manifest.tasks.findIndex((task) => task.task_id === input.endTaskId);
-  if (startIndex < 0 || endIndex < 0 || startIndex > endIndex || input.startTaskId === "PM-001") {
+  if (startIndex < 0 || endIndex < 0 || startIndex > endIndex) {
     throw new Error("invalid_positive_matrix_final_authority_tranche");
   }
 
   const tasks = manifest.tasks.slice(startIndex, endIndex + 1);
-  if (tasks.some((task) => task.task_id === "PM-001")) {
-    throw new Error("invalid_positive_matrix_final_authority_tranche");
-  }
-
   const claimIdPrefix = input.claimIdPrefix ?? "C";
   const results = tasks.map((task) => packageGoal3GaPositiveMatrixFinalAuthorityEvidenceV3({
     projectRoot: input.projectRoot,
