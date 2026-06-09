@@ -1,3 +1,22 @@
+# Goal 3 Task 303 / Service-Owned GA Certificate Gate
+
+Scope: add the final service-owned GA certificate gate that consumes a ready Task302 certification review and emits a bounded release certificate artifact without promoting proof claims directly.
+
+Implementation notes:
+- Added `goal3-task303-service-owned-ga-certificate-gate.test.mjs`.
+- Added `recordGoal3GaCertificate()` and `POST /release/goal3/ga-certificate`.
+- Added append-only `comath.goal3_ga_certificate.v1` certificate artifacts, `goal3_ga_certificate_gate` capability exposure, final-audit hash re-read from the ready review, and `release.goal3_ga_certificate_recorded` provenance audit events.
+
+Verification:
+- TDD RED was observed before implementation: focused Task303 failed because `recordGoal3GaCertificate` was not exported.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0 and focused Task303 exited 0, covering ready-review certification, blocked-review rejection, final-audit tamper/stale rejection, route wiring, public redaction, claim-promotion separation, and audit event binding.
+- Code-review RED was observed after implementation: focused Task303 failed on a new mixed-provenance regression where `final_ga_audit_id` named one audit while `final_ga_audit_path`/artifact pointed at another. The gate now derives the canonical final-audit path from the review audit id and re-binds review, artifact, and audit body before issuing a certificate.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task303 exited 0 after the mixed-provenance regression was added; adjacent Task302 and Task301 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd typecheck` exited 0; the first 5-minute `corepack pnpm --filter @comath/comathd test` attempt hit the command timeout without failure output, then the same command exited 0 with a longer timeout and discovered Task303; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task303 certifies GA release readiness, not individual proof claims. The certificate may set `can_certify_ga=true`, but it keeps `can_promote_claim=false` and `claim_promotion_requires_ordinary_gate=true`; proof claims remain bound to Lean Authority v3 and ordinary promotion gates.
+
+Residual risk: Goal 3 remains incomplete on remaining product-core closure surfaces, especially production OS-helper enforcement and any service-owned release surfaces that still need to consume the certificate. Pi/public consumers are secondary thin-client follow-through after the service product loop is sound.
+
 # Goal 3 Task 302 / GA Certification Final-Audit Binding
 
 Scope: bind passed Task301 final GA audit into the Task294 GA certification review path so certification review can become ready for a separate certificate gate without issuing a GA certificate.
