@@ -139,6 +139,10 @@ function writeAdapterOsIsolationReadiness(id, ok, overrides = {}) {
     checks: {
       evidence_artifact_bound: { ok, observed: ok ? "bound" : null },
       provider_os_enforced: { ok, observed: ok ? "oci_container" : null },
+      production_helper_source: {
+        ok,
+        observed: ok ? "operator_configured_provider_helper" : null
+      },
       non_authority: { ok: true, observed: true }
     },
     adapter_execution_isolation: {
@@ -146,6 +150,9 @@ function writeAdapterOsIsolationReadiness(id, ok, overrides = {}) {
       current_boundary: ok ? "os_enforced" : "process_boundary_only",
       os_enforced: ok,
       provider: ok ? "oci_container" : null,
+      production_helper_configured: ok,
+      helper_profile_source: ok ? "operator_configured_provider_helper" : null,
+      bundled_protocol_asset: false,
       claims_runtime_enforcement: false,
       proof_authority: "none"
     },
@@ -285,6 +292,13 @@ try {
     "ready_for_ga_release_candidate_review"
   );
   assert.equal(routeResponse.body.operational_readiness_review.adapter_os_enforced, true);
+  assert.equal(routeResponse.body.operational_readiness_review.adapter_production_helper_source_bound, true);
+  assert.equal(
+    routeResponse.body.operational_readiness_review.adapter_helper_profile_source,
+    "operator_configured_provider_helper"
+  );
+  assert.equal(routeResponse.body.operational_readiness_review.adapter_production_helper_configured, true);
+  assert.equal(routeResponse.body.operational_readiness_review.adapter_bundled_protocol_asset, false);
   assert.equal(routeResponse.body.operational_readiness_review.can_certify_ga, false);
 
   const auditEvents = readAuditEvents(projectRoot);

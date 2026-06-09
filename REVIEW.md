@@ -1,3 +1,20 @@
+# Goal 3 Task 305 / GA Operational Readiness Production Helper Source Binding
+
+Scope: bind Task304 production helper source readiness into the service-owned GA operational readiness review, so release-chain consumption cannot accept legacy ready-looking OS-isolation artifacts that omit operator-configured helper provenance.
+
+Implementation notes:
+- Added `goal3-task305-ga-operational-readiness-production-helper-source-binding.test.mjs`.
+- Hardened `recordGoal3GaOperationalReadinessReview()` to require `checks.production_helper_source.ok=true` plus matching `adapter_execution_isolation` helper-source fields before a ready adapter OS-isolation review can feed operational readiness.
+- Operational readiness output and audit payload now carry `adapter_production_helper_source_bound`, `adapter_helper_profile_source`, `adapter_production_helper_configured`, and `adapter_bundled_protocol_asset` as non-authoritative release provenance.
+
+Verification:
+- TDD RED was observed before implementation: focused Task305 failed because the capability ledger did not advertise the GA operational readiness production helper source binding.
+- After implementation, `corepack pnpm --filter @comath/comathd build` exited 0; focused Task305 exited 0; adjacent Task292, Task294, Task296, Task301, Task302, Task303, and Task304 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task305 discovered by the default runner; and `corepack pnpm test` exited 0 across the root workspace suite.
+
+Boundary notes: Task305 is a service-owned release-chain consumption gate. It does not ship production sandbox helpers, run Lean, promote proof claims, certify GA by itself, mutate trusted Pi state, or change Lean clean replay authority.
+
+Residual risk: Goal 3 still has broader product-core release closure work after this binding; Pi/public consumers remain secondary.
+
 # Goal 3 Task 304 / Agent-Adapter OS-Isolation Production Helper Source Readiness
 
 Scope: harden the product-core OS-isolation readiness gate so bundled provider-helper protocol assets cannot satisfy GA release readiness even when the rest of the service-owned OS evidence chain is complete.

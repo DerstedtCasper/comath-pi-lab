@@ -147,11 +147,20 @@ function writeAdapterOsIsolationReadiness(id) {
       `.comath/release/agent-adapter-os-isolation/${id}/evidence.json`,
       "e"
     ),
+    checks: {
+      evidence_artifact_bound: { ok: true, observed: "bound" },
+      provider_os_enforced: { ok: true, observed: "oci_container" },
+      production_helper_source: { ok: true, observed: "operator_configured_provider_helper" },
+      non_authority: { ok: true, observed: true }
+    },
     adapter_execution_isolation: {
       required_for_ga: true,
       current_boundary: "os_enforced",
       os_enforced: true,
       provider: "oci_container",
+      production_helper_configured: true,
+      helper_profile_source: "operator_configured_provider_helper",
+      bundled_protocol_asset: false,
       claims_runtime_enforcement: false,
       proof_authority: "none"
     },

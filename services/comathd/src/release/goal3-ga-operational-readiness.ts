@@ -63,8 +63,17 @@ type AdapterOsIsolationReviewBody = {
     current_boundary?: unknown;
     os_enforced?: unknown;
     provider?: unknown;
+    production_helper_configured?: unknown;
+    helper_profile_source?: unknown;
+    bundled_protocol_asset?: unknown;
     claims_runtime_enforcement?: unknown;
     proof_authority?: unknown;
+  };
+  checks?: {
+    production_helper_source?: {
+      ok?: unknown;
+      observed?: unknown;
+    };
   };
   vetoes?: unknown;
   proof_authority?: unknown;
@@ -122,6 +131,10 @@ export type Goal3GaOperationalReadinessReview = {
     | "blocked_missing_os_enforced_adapter_isolation";
   adapter_os_enforced: boolean;
   adapter_os_isolation_required_for_ga: true;
+  adapter_production_helper_source_bound: boolean;
+  adapter_helper_profile_source: string | null;
+  adapter_production_helper_configured: boolean;
+  adapter_bundled_protocol_asset: boolean;
   proof_authority: "none";
   can_promote_claim: false;
   can_certify_ga: false;
@@ -334,6 +347,11 @@ function assertAdapterOsIsolationReview(
       body.adapter_execution_isolation.os_enforced !== true ||
       body.adapter_execution_isolation.current_boundary !== "os_enforced" ||
       !hasArtifactReference(body.evidence_artifact, "agent_adapter_os_isolation_evidence") ||
+      body.checks?.production_helper_source?.ok !== true ||
+      body.checks.production_helper_source.observed !== "operator_configured_provider_helper" ||
+      body.adapter_execution_isolation.production_helper_configured !== true ||
+      body.adapter_execution_isolation.helper_profile_source !== "operator_configured_provider_helper" ||
+      body.adapter_execution_isolation.bundled_protocol_asset !== false ||
       !Array.isArray(body.vetoes) ||
       body.vetoes.length !== 0
     )
@@ -392,6 +410,13 @@ export function recordGoal3GaOperationalReadinessReview(
   assertAdapterOsIsolationReview(osReview.body, projectId, osReviewId, canonicalOsReviewPath);
 
   const adapterReady = osReview.body.ok === true;
+  const adapterProductionHelperSourceBound =
+    adapterReady &&
+    osReview.body.checks?.production_helper_source?.ok === true &&
+    osReview.body.checks.production_helper_source.observed === "operator_configured_provider_helper" &&
+    osReview.body.adapter_execution_isolation?.production_helper_configured === true &&
+    osReview.body.adapter_execution_isolation.helper_profile_source === "operator_configured_provider_helper" &&
+    osReview.body.adapter_execution_isolation.bundled_protocol_asset === false;
   const adapterStatus = adapterReady
     ? "ready_for_os_isolation_release_review"
     : "blocked_missing_os_enforced_adapter_isolation";
@@ -431,6 +456,14 @@ export function recordGoal3GaOperationalReadinessReview(
     adapter_os_isolation_status: adapterStatus,
     adapter_os_enforced: adapterReady,
     adapter_os_isolation_required_for_ga: true,
+    adapter_production_helper_source_bound: adapterProductionHelperSourceBound,
+    adapter_helper_profile_source:
+      typeof osReview.body.adapter_execution_isolation?.helper_profile_source === "string"
+        ? osReview.body.adapter_execution_isolation.helper_profile_source
+        : null,
+    adapter_production_helper_configured:
+      osReview.body.adapter_execution_isolation?.production_helper_configured === true,
+    adapter_bundled_protocol_asset: osReview.body.adapter_execution_isolation?.bundled_protocol_asset === true,
     proof_authority: "none",
     can_promote_claim: false,
     can_certify_ga: false,
@@ -465,6 +498,14 @@ export function recordGoal3GaOperationalReadinessReview(
       adapter_os_isolation_review_id: osReviewId,
       adapter_os_isolation_review_artifact_sha256: osReview.artifact.sha256,
       adapter_os_enforced: adapterReady,
+      adapter_production_helper_source_bound: adapterProductionHelperSourceBound,
+      adapter_helper_profile_source:
+        typeof osReview.body.adapter_execution_isolation?.helper_profile_source === "string"
+          ? osReview.body.adapter_execution_isolation.helper_profile_source
+          : null,
+      adapter_production_helper_configured:
+        osReview.body.adapter_execution_isolation?.production_helper_configured === true,
+      adapter_bundled_protocol_asset: osReview.body.adapter_execution_isolation?.bundled_protocol_asset === true,
       blocker_reasons: blockerReasons,
       proof_authority: "none",
       can_promote_claim: false,

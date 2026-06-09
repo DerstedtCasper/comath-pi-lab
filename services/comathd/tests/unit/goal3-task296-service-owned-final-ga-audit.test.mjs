@@ -136,11 +136,23 @@ function writeAdapterOsIsolationReadiness(id, ok, overrides = {}) {
           "e"
         )
       : null,
+    checks: {
+      evidence_artifact_bound: { ok, observed: ok ? "bound" : null },
+      provider_os_enforced: { ok, observed: ok ? "oci_container" : null },
+      production_helper_source: {
+        ok,
+        observed: ok ? "operator_configured_provider_helper" : null
+      },
+      non_authority: { ok: true, observed: true }
+    },
     adapter_execution_isolation: {
       required_for_ga: true,
       current_boundary: ok ? "os_enforced" : "process_boundary_only",
       os_enforced: ok,
       provider: ok ? "oci_container" : null,
+      production_helper_configured: ok,
+      helper_profile_source: ok ? "operator_configured_provider_helper" : null,
+      bundled_protocol_asset: false,
       claims_runtime_enforcement: false,
       proof_authority: "none"
     },
