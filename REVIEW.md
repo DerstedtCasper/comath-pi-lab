@@ -1,3 +1,23 @@
+# Goal 3 Task 296 / Service-Owned Final GA Audit Blocker Gate
+
+Scope: add a service-owned final GA audit artifact that consumes the Task294 certification review and fails closed on release-candidate proof breadth without certifying GA.
+
+Implementation notes:
+- Added `goal3-task296-service-owned-final-ga-audit.test.mjs`.
+- Added `recordGoal3FinalGaAudit()` and `POST /release/goal3/final-ga-audit`.
+- Added append-only `comath.goal3_final_ga_audit.v1` audit artifacts and `release.goal3_final_ga_audit_recorded` provenance audit events.
+- The audit re-reads the Task294 certification review, Task292 operational-readiness artifact, and Task294 acceptance-support artifact by canonical path/hash.
+
+Verification:
+- TDD RED was observed before implementation: focused Task296 failed because `recordGoal3FinalGaAudit` was not exported.
+- GREEN covers route wiring, capability exposure, stale certification-review hash rejection, non-canonical certification-review path rejection, acceptance-support tamper rejection, promotional certification-review rejection, no self-hash recursion, audit event emission, and fail-closed final-audit semantics.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task296 exited 0; adjacent Task294, Task292, and Task17 regressions exited 0; `node scripts/phase0-smoke.mjs` initially failed because GA release criteria did not list the new focused suite, then exited 0 after doc synchronization.
+- Follow-up hardening RED was observed when focused Task296 accepted a Task294 review whose scalar `operational_readiness_review_path` disagreed with the artifact reference. The final gate now requires Task294 support artifact references to match the expected kind, scalar path, SHA-256, and byte size before re-reading disk. Post-fix verification: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task296 exited 0; adjacent Task294, Task292, and Phase17 regressions exited 0; `node scripts/phase0-smoke.mjs` exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task296 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across smoke, Pi workspace tests, comathd package tests, Phase45 e2e, Task125 e2e, and Phase17 integrity evaluation.
+
+Boundary notes: Task296 does not certify GA, run Lean, promote mathematical claims, accept caller final audits, open durable/live transport, mutate trusted Pi state, or replace Lean clean replay authority. It only records a service-owned blocked final-audit artifact with `final_ga_audit_available=true`, `final_ga_audit_passed=false`, `proof_authority=none`, `can_promote_claim=false`, `can_certify_ga=false`, and `ga_certificate_available=false`.
+
+Residual risk: Goal 3 remains incomplete. Task296 does not add a Pi consumer for the final-audit route, close release-candidate proof breadth, implement production OS sandbox helper completion, provide durable long-lived transport, or add any new proof authority.
+
 # Goal 3 Task 295 / Pi GA Certification Review Consumer Bridge
 
 Scope: expose the Task294 service-owned GA certification review precondition through Pi host-confirmed thin-client wiring and the read-only interactive real-Pi planner without certifying GA.

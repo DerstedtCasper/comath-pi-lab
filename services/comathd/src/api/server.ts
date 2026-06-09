@@ -53,6 +53,7 @@ import { assembleSourceReviewPublicArchive } from "../release/source-review-publ
 import { reviewGoal3PublicArchiveSurfaces } from "../release/public-archive-review.js";
 import { recordGoal3GaOperationalReadinessReview } from "../release/goal3-ga-operational-readiness.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
+import { recordGoal3FinalGaAudit } from "../release/goal3-final-ga-audit.js";
 import {
   collectPiCodexLifecycleEvidence,
   heartbeatPiCodexLifecycleOperatorTransportLease,
@@ -521,6 +522,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           ga_certification_review: recordGoal3GaCertificationReview(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/final-ga-audit",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3FinalGaAudit>[1] & {
+          project_root: string;
+        };
+        return {
+          final_ga_audit: recordGoal3FinalGaAudit(body.project_root, body)
         };
       }
     ],
