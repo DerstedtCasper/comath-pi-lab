@@ -1,3 +1,21 @@
+# Goal 3 Task 306 / GA Certificate Source-Bound Consumption
+
+Scope: add a service-owned product-core release closure gate that consumes a GA certificate only when the certificate chain remains bound to Task305 production helper source provenance.
+
+Implementation notes:
+- Added `goal3-task306-ga-certificate-source-bound-consumption.test.mjs`.
+- Added `recordGoal3GaCertificateConsumptionReview()` and `POST /release/goal3/ga-certificate-consumption-review`.
+- Added `goal3_ga_certificate_source_bound_consumption_gate` status exposure.
+
+Verification:
+- TDD RED was observed before implementation: focused Task306 failed because `recordGoal3GaCertificateConsumptionReview` was not exported.
+- Review-driven RED was observed after implementation: focused Task306 accepted a non-canonical operational-readiness path instead of throwing.
+- After hardening and documentation synchronization, `corepack pnpm --filter @comath/comathd build` exited 0; focused Task306 exited 0, including non-canonical operational-readiness and thin forged-readiness regressions; adjacent Task305, Task303, and Task302 regressions exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `node scripts/phase0-smoke.mjs` exited 0; `corepack pnpm --filter @comath/comathd test` exited 0 with Task306 discovered by the default runner; `corepack pnpm typecheck` exited 0; and `corepack pnpm test` exited 0 across the root workspace suite.
+
+Boundary notes: Task306 is a service-owned release-chain consumption gate. It may consume a GA certificate only after re-reading the certificate, certification review, final GA audit, proof-breadth closure, and Task305 source-bound operational readiness by canonical path/hash. It recomputes the operational-readiness path from the readiness id and revalidates the Task305/292 readiness boundary fields for requested mode, empty blockers, maintained transport primitive, no live/durable transport claim, current adapter OS-isolation readiness, OS enforcement, required-for-GA status, and operator-configured helper provenance. It can certify release readiness, but it must keep `can_promote_claim=false`, cannot promote individual proof claims, cannot replace Lean clean replay authority, and does not turn helper-source provenance into proof authority.
+
+Residual risk: Goal 3 still has broader release packaging, public review/archive, and operational hardening work after this product-core certificate consumption closure.
+
 # Goal 3 Task 305 / GA Operational Readiness Production Helper Source Binding
 
 Scope: bind Task304 production helper source readiness into the service-owned GA operational readiness review, so release-chain consumption cannot accept legacy ready-looking OS-isolation artifacts that omit operator-configured helper provenance.

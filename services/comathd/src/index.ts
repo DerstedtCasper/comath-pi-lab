@@ -76,3 +76,4 @@ export * from "./release/goal3-proof-breadth-closure.js";
 export * from "./release/goal3-ga-certification.js";
 export * from "./release/goal3-final-ga-audit.js";
 export * from "./release/goal3-ga-certificate.js";
+export * from "./release/goal3-ga-certificate-consumption.js";
