@@ -51,6 +51,7 @@ import {
 import { runV3NegativeGaSlices } from "../release/v3-negative-ga-slices.js";
 import { assembleSourceReviewPublicArchive } from "../release/source-review-public-archive.js";
 import { reviewGoal3PublicArchiveSurfaces } from "../release/public-archive-review.js";
+import { recordGoal3GaOperationalReadinessReview } from "../release/goal3-ga-operational-readiness.js";
 import {
   collectPiCodexLifecycleEvidence,
   heartbeatPiCodexLifecycleOperatorTransportLease,
@@ -498,6 +499,17 @@ async function route(method: string, path: string, body: unknown, context: Route
       (payload) => {
         const body = payload as Parameters<typeof reviewGoal3PublicArchiveSurfaces>[1] & { project_root: string };
         return reviewGoal3PublicArchiveSurfaces(body.project_root, body);
+      }
+    ],
+    [
+      "POST /release/goal3/ga-operational-readiness-review",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3GaOperationalReadinessReview>[1] & {
+          project_root: string;
+        };
+        return {
+          operational_readiness_review: recordGoal3GaOperationalReadinessReview(body.project_root, body)
+        };
       }
     ],
     [

@@ -1,3 +1,21 @@
+# Goal 3 Task 292 / Service-Owned GA Operational Readiness Review
+
+Scope: add a service-owned release-candidate operational readiness review that binds Task290 operator/service transport closure evidence to Task167 adapter OS-isolation readiness evidence without certifying GA.
+
+Implementation notes:
+- Added `goal3-task292-service-owned-ga-operational-readiness-review.test.mjs`.
+- Added `recordGoal3GaOperationalReadinessReview()` and `POST /release/goal3/ga-operational-readiness-review`.
+- The gate re-reads Task290 transport-closure review and Task167 adapter OS-isolation readiness artifacts by canonical path/hash, rejects stale or promotional material, and writes append-only readiness evidence plus provenance audit events.
+- The ready state is only `ready_for_ga_release_candidate_review`; output keeps `proof_authority=none`, `can_promote_claim=false`, `can_certify_ga=false`, and `ga_certification_gate_separate=true`.
+
+Verification:
+- TDD RED was observed before implementation: focused Task292 failed because `recordGoal3GaOperationalReadinessReview` was not exported.
+- Current verification in this continuation: `corepack pnpm --filter @comath/comathd build` exited 0; focused Task292 exited 0; adjacent Task167, Task290, and Task291 regressions exited 0; `corepack pnpm --filter @comath/comathd typecheck` exited 0; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm --filter @comath/comathd test` exited 0 with Task292 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task292 does not run Lean, promote mathematical claims, certify GA, open durable/live transport, mutate trusted Pi state, or replace final GA audit. It only records release-candidate operational readiness or a replayable OS-isolation readiness blocker from current service-owned inputs.
+
+Residual risk: Goal 3 remains incomplete. Task292 does not add a Pi consumer for this review, final GA certification, production proof breadth, or a new OS sandbox helper implementation.
+
 # Goal 3 Task 291 / Pi Operator-Service Transport Closure Review Consumer Bridge
 
 Scope: expose the Task290 service-owned operator/service transport closure review through the Pi thin client and read-only interactive planner without opening durable/live transport or creating proof/GA authority.
