@@ -1,3 +1,21 @@
+# Goal 3 Task 297 / Pi Final GA Audit Consumer Bridge
+
+Scope: expose the Task296 service-owned final GA audit blocker through Pi host-confirmed thin-client wiring and the read-only interactive real-Pi planner without certifying GA.
+
+Implementation notes:
+- Added `goal3-task297-pi-final-ga-audit-consumer.test.mjs`.
+- Added `comath.release.goal3FinalGaAudit` and `/cm:release goal3-final-ga-audit`.
+- Extended runtime registration, executable tool registration, direct tool execution, public alias translation, public result sanitization, and the read-only interactive real-Pi planner checkpoint after Task295.
+- The bridge forwards only Task294 certification-review id/path/hash plus optional final-audit id/mode to `POST /release/goal3/final-ga-audit`.
+
+Verification:
+- TDD RED was observed before implementation: focused Task297 failed because `comath.release.goal3FinalGaAudit` was not registered.
+- Current verification in this continuation: `corepack pnpm --filter @comath/pi-extension build` exited 0; focused Task297 exited 0; adjacent Task223 planner UX exited 0; adjacent Task295 Pi bridge exited 0; adjacent Task296 service final-audit gate exited 0; phase6 and phase26 registration tests exited 0 from the Pi package cwd; `node scripts/phase0-smoke.mjs` exited 0; `corepack pnpm --filter @comath/pi-extension typecheck` exited 0; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task297 discovered by the default runner; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across smoke, Pi workspace tests, comathd package tests, Phase45 e2e, Task125 e2e, and Phase17 integrity evaluation; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task297 is Pi consumer/planner wiring only. It does not re-read canonical service artifacts, accept caller acceptance reports, accept proof-breadth matrices, accept final GA audit payloads, expose proof claims or GA certificates, open durable/live transport, mutate trusted Pi state, run Lean, promote mathematical claims, certify GA, or replace the Task296 service route. It preserves only service-returned blocked final-audit flags while forcing `proof_authority=none`, `can_promote_claim=false`, `can_certify_ga=false`, `final_ga_audit_passed=false`, and `ga_certificate_available=false`.
+
+Residual risk: Goal 3 remains incomplete. Task297 does not close release-candidate proof breadth, production OS sandbox helper completion, durable long-lived transport, or any new proof authority.
+
 # Goal 3 Task 296 / Service-Owned Final GA Audit Blocker Gate
 
 Scope: add a service-owned final GA audit artifact that consumes the Task294 certification review and fails closed on release-candidate proof breadth without certifying GA.

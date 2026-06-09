@@ -221,6 +221,7 @@ function commandMetadata(command: string): Pick<
         "lifecycle-operator-service-transport-closure-review",
         "goal3-ga-operational-readiness-review",
         "goal3-ga-certification-review",
+        "goal3-final-ga-audit",
         "lifecycle-interactive-real-pi",
         "agent-adapter-os-isolation-probe",
         "agent-adapter-os-isolation-sandbox-execution",
