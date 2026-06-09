@@ -284,6 +284,9 @@ try {
         runner_available: true,
         runner_binary_sha256: helperBinarySha256,
         runner_version: "node-provider-helper-test",
+        helper_profile_source: "operator_configured_provider_helper",
+        production_helper_configured: true,
+        bundled_protocol_asset: false,
         diagnostics: [`${projectRoot} runner diagnostic must be scrubbed`, "runner resolved"]
       };
     }
@@ -345,6 +348,9 @@ try {
         helper_program: process.execPath,
         helper_binary_sha256: helperBinarySha256,
         helper_version: "node-provider-helper-test",
+        helper_profile_source: "operator_configured_provider_helper",
+        production_helper_configured: true,
+        bundled_protocol_asset: false,
         supported_platforms: ["win32"],
         diagnostics: [`${projectRoot} host validation diagnostic must be scrubbed`, "helper host ready"]
       };
@@ -382,6 +388,9 @@ try {
         helper_program: process.execPath,
         helper_args_prefix: [helperScript],
         helper_version: "node-provider-helper-test",
+        helper_profile_source: "operator_configured_provider_helper",
+        production_helper_configured: true,
+        bundled_protocol_asset: false,
         timeout_ms: 5000,
         diagnostics: [`${projectRoot} helper config diagnostic must be scrubbed`, "helper configured"]
       };
@@ -442,6 +451,9 @@ try {
   assert.equal(collection.provider_helper_collection.stderr_sha256, helperExecution.provider_helper_execution.stderr_sha256);
   assert.equal(collection.provider_helper_collection.transcript_sha256, helperExecution.provider_helper_execution.transcript_sha256);
   assert.equal(collection.provider_helper_collection.runtime_attestation_bound, true);
+  assert.equal(collection.provider_helper_collection.helper_profile_source, "operator_configured_provider_helper");
+  assert.equal(collection.provider_helper_collection.production_helper_configured, true);
+  assert.equal(collection.provider_helper_collection.bundled_protocol_asset, false);
   assert.equal(collection.probe.ok, true);
   assert.equal(collection.probe.probe_status, "os_isolation_probe_collected");
   assert.equal(collection.probe.evidence.collection_source, "service_owned_os_probe");
@@ -476,7 +488,12 @@ try {
     evidence_path: collection.probe.evidence_path
   });
   assert.equal(readiness.ok, true, "configured complete helper collection evidence should satisfy OS-isolation readiness");
+  assert.equal(readiness.checks.production_helper_source.ok, true);
+  assert.equal(readiness.checks.production_helper_source.observed, "operator_configured_provider_helper");
   assert.equal(readiness.adapter_execution_isolation.os_enforced, true);
+  assert.equal(readiness.adapter_execution_isolation.helper_profile_source, "operator_configured_provider_helper");
+  assert.equal(readiness.adapter_execution_isolation.production_helper_configured, true);
+  assert.equal(readiness.adapter_execution_isolation.bundled_protocol_asset, false);
   assert.equal(readiness.proof_authority, "none");
   assert.equal(readiness.can_certify_ga, false);
 

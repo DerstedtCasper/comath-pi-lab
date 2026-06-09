@@ -126,6 +126,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "agent_adapter_os_isolation_host_probe_collection",
       "agent_adapter_os_isolation_service_probe",
       "agent_adapter_os_isolation_readiness_gate",
+      "agent_adapter_os_isolation_production_helper_source_readiness_gate",
       "codex_cli_external_adapter_invocation",
       "codex_api_adapter_backend",
       "codex_api_retry_telemetry",

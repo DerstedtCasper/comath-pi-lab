@@ -1017,6 +1017,7 @@ export type AgentAdapterOsIsolationReview = {
     provider_specific_live_probe_attempt: AgentAdapterOsIsolationReviewCheck;
     provider_specific_live_probe_execution: AgentAdapterOsIsolationReviewCheck;
     provider_control_plane_execution_witness: AgentAdapterOsIsolationReviewCheck;
+    production_helper_source: AgentAdapterOsIsolationReviewCheck;
     host_path_secret_free: AgentAdapterOsIsolationReviewCheck;
     non_authority: AgentAdapterOsIsolationReviewCheck;
   };
@@ -1025,6 +1026,12 @@ export type AgentAdapterOsIsolationReview = {
     current_boundary: AgentAdapterOsIsolationBoundary;
     os_enforced: boolean;
     provider: AgentAdapterOsIsolationProvider | null;
+    production_helper_configured: boolean;
+    helper_profile_source:
+      | "operator_configured_provider_helper"
+      | "bundled_provider_helper_protocol_asset"
+      | "missing";
+    bundled_protocol_asset: boolean;
     claims_runtime_enforcement: false;
     proof_authority: "none";
   };
@@ -2097,6 +2104,78 @@ function providerHelperCollectionHasProviderControlPlaneExecutionWitness(
   );
 }
 
+function providerHelperCollectionHasProductionHelperSource(
+  projectRoot: string,
+  collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined,
+  evidence: AgentAdapterOsIsolationEvidence | undefined
+): boolean {
+  const helper = collection?.provider_helper_collection;
+  const helperExecutionBundle = collection?.helper_execution_id
+    ? readProviderHelperExecutionArtifact(projectRoot, collection.helper_execution_id)
+    : null;
+  const helperExecution = helperExecutionBundle?.helperExecution;
+  const helperExecutionArtifact = collection?.helper_execution_artifact;
+  if (
+    !collection ||
+    !helper ||
+    !evidence ||
+    !helperExecutionBundle ||
+    !helperExecution ||
+    !helperExecutionArtifact ||
+    collection.provider !== evidence.provider ||
+    collection.collection_id !== evidence.probe_id ||
+    helper.probe_source !== "service_owned_provider_helper_collection_probe" ||
+    helper.helper_profile_source !== "operator_configured_provider_helper" ||
+    helper.production_helper_configured !== true ||
+    helper.bundled_protocol_asset !== false ||
+    helper.proof_authority !== "none" ||
+    helperExecutionArtifact.kind !== "agent_adapter_os_isolation_provider_helper_execution" ||
+    helperExecutionArtifact.path !== helperExecutionBundle.artifact.path ||
+    helperExecutionArtifact.sha256 !== helperExecutionBundle.artifact.sha256 ||
+    helperExecutionArtifact.size_bytes !== helperExecutionBundle.artifact.size_bytes ||
+    helperExecution.project_id !== collection.project_id ||
+    helperExecution.helper_execution_id !== collection.helper_execution_id ||
+    helperExecution.runner_id !== collection.runner_id ||
+    helperExecution.launch_id !== collection.launch_id ||
+    helperExecution.adapter_id !== collection.adapter_id ||
+    helperExecution.backend !== collection.backend ||
+    helperExecution.provider !== collection.provider ||
+    helperExecution.ok !== true ||
+    helperExecution.provider_helper_attempted !== true ||
+    helperExecution.provider_helper_execution.helper_source !== "service_owned_provider_helper_config" ||
+    helperExecution.provider_helper_execution.helper_profile_source !== helper.helper_profile_source ||
+    helperExecution.provider_helper_execution.production_helper_configured !== true ||
+    helperExecution.provider_helper_execution.bundled_protocol_asset !== false ||
+    helperExecution.provider_helper_execution.proof_authority !== "none" ||
+    helperExecution.proof_authority !== "none" ||
+    helperExecution.can_promote_claim !== false ||
+    helperExecution.can_certify_ga !== false
+  ) {
+    return false;
+  }
+  if (!productionHelperProfileContractSpec(collection.provider)) {
+    return true;
+  }
+  const contract = helper.production_helper_profile_contract;
+  return Boolean(
+    contract &&
+      contract.provider === collection.provider &&
+      contract.provider_family === collection.provider &&
+      contract.helper_profile_source === "operator_configured_provider_helper" &&
+      contract.production_helper_configured === true &&
+      contract.bundled_protocol_asset === false &&
+      contract.proof_authority === "none" &&
+      contract.can_promote_claim === false &&
+      contract.can_certify_ga === false &&
+      productionHelperProfileContractSha256(contract) &&
+      productionHelperProfileContractsMatch({
+        provider: collection.provider,
+        candidate: contract,
+        expected: [helperExecution.provider_helper_execution.production_helper_profile_contract]
+      })
+  );
+}
+
 function providerHelperCollectionHasCurrentHostCapabilityProviderSpecificTool(input: {
   projectRoot: string;
   collection: AgentAdapterOsIsolationProviderHelperCollectionManifest | null | undefined;
@@ -2476,6 +2555,12 @@ function buildVetoes(input: {
     vetoes.push({
       code: "adapter_os_isolation_provider_control_plane_execution_witness_missing",
       message: "Collected OS-isolation evidence must bind the provider-specific live probe execution to a provider control-plane execution witness for the current sandbox family."
+    });
+  }
+  if (!input.checks.production_helper_source.ok) {
+    vetoes.push({
+      code: "adapter_os_isolation_production_helper_source_missing",
+      message: "OS-isolation release readiness requires an operator-configured production provider helper, not a bundled protocol asset."
     });
   }
   if (!input.checks.host_path_secret_free.ok) {
@@ -9581,6 +9666,17 @@ export function reviewAgentAdapterOsIsolationReadiness(
           : true
       )
     ));
+  const helperProfileSource =
+    providerHelperCollection?.provider_helper_collection.helper_profile_source ?? "missing";
+  const productionHelperConfigured =
+    providerHelperCollection?.provider_helper_collection.production_helper_configured === true;
+  const bundledProtocolAsset =
+    providerHelperCollection?.provider_helper_collection.bundled_protocol_asset === true;
+  const productionHelperSourceBound = providerHelperCollectionHasProductionHelperSource(
+    projectRoot,
+    providerHelperCollection,
+    evidence
+  );
   const checks: AgentAdapterOsIsolationReview["checks"] = {
     evidence_artifact_bound: check(Boolean(evidenceBundle), evidenceBundle ? evidenceBundle.artifact.path : null),
     provider_os_enforced: check(providerOsEnforced, provider),
@@ -9634,6 +9730,7 @@ export function reviewAgentAdapterOsIsolationReadiness(
         ? evidence?.provider_control_plane_execution_witness_sha256 ?? null
         : "not_required"
     ),
+    production_helper_source: check(productionHelperSourceBound, helperProfileSource),
     host_path_secret_free: check(hostPathSecretFree, hostPathSecretFree),
     non_authority: check(nonAuthority, nonAuthority)
   };
@@ -9656,6 +9753,9 @@ export function reviewAgentAdapterOsIsolationReadiness(
       current_boundary: ok ? "os_enforced" : "process_boundary_only",
       os_enforced: ok,
       provider,
+      production_helper_configured: productionHelperConfigured,
+      helper_profile_source: helperProfileSource,
+      bundled_protocol_asset: bundledProtocolAsset,
       claims_runtime_enforcement: false,
       proof_authority: "none"
     },
@@ -9680,6 +9780,9 @@ export function reviewAgentAdapterOsIsolationReadiness(
       evidence_path: evidenceBundle?.artifact.path ?? null,
       provider,
       os_enforced: ok,
+      production_helper_configured: productionHelperConfigured,
+      helper_profile_source: helperProfileSource,
+      bundled_protocol_asset: bundledProtocolAsset,
       veto_codes: vetoes.map((veto) => veto.code),
       proof_authority: "none",
       can_promote_claim: false,

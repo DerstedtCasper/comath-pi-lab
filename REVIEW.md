@@ -1,3 +1,23 @@
+# Goal 3 Task 304 / Agent-Adapter OS-Isolation Production Helper Source Readiness
+
+Scope: harden the product-core OS-isolation readiness gate so bundled provider-helper protocol assets cannot satisfy GA release readiness even when the rest of the service-owned OS evidence chain is complete.
+
+Implementation notes:
+- Added `goal3-task304-agent-adapter-os-isolation-production-helper-source-readiness-gate.test.mjs`.
+- Added a `production_helper_source` readiness check and `adapter_os_isolation_production_helper_source_missing` veto to `reviewAgentAdapterOsIsolationReadiness()`.
+- Bound review and audit output to `production_helper_configured`, `helper_profile_source`, and `bundled_protocol_asset` while keeping helper-source material `proof_authority="none"`.
+- Bound `production_helper_source` readiness to the current provider-helper collection's `helper_execution_artifact` and helper execution manifest, so collection-only source tampering cannot reclassify a bundled protocol asset as operator-configured production helper provenance.
+
+Verification:
+- TDD RED was observed before implementation: focused Task304 first failed because a bundled provider-helper protocol asset could make OS-isolation readiness `ok=true`.
+- TDD RED was observed after review hardening: focused Task304 failed with `true !== false` when a bundled collection manifest was tampered to claim `operator_configured_provider_helper` while the bound helper execution still recorded bundled provenance.
+- The production gate now rejects bundled protocol assets, rejects collection-only helper-source tampering, and accepts operator-configured production helper provenance only when the current helper execution and provider-family profile-contract material are hash-bound where available.
+- Full current verification for this continuation is recorded in the final Task304 tracker entry.
+
+Boundary notes: Task304 is a product-core release-readiness source gate, not a Lean proof authority, sandbox implementation, Pi trusted-state mutation path, claim-promotion gate, or standalone GA certificate.
+
+Residual risk: Goal 3 still has broader release/product closure work after this source gate, but Pi/public consumers remain secondary thin-client follow-through after the service loop is sound.
+
 # Goal 3 Task 303 / Service-Owned GA Certificate Gate
 
 Scope: add the final service-owned GA certificate gate that consumes a ready Task302 certification review and emits a bounded release certificate artifact without promoting proof claims directly.

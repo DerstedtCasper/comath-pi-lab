@@ -501,8 +501,21 @@ try {
     actor: "goal3-task188-test",
     evidence_path: collected.probe.evidence_path
   });
-  assert.equal(readiness.ok, true, "readiness still consumes only canonical probe/evidence artifacts");
+  assert.equal(
+    readiness.ok,
+    false,
+    "bundled provider-helper protocol assets can produce canonical probe artifacts but cannot satisfy GA release readiness"
+  );
   assert.equal(readiness.checks.provider_tool_execution_witness.ok, true);
+  assert.equal(readiness.checks.production_helper_source.ok, false);
+  assert.equal(readiness.checks.production_helper_source.observed, "bundled_provider_helper_protocol_asset");
+  assert.equal(
+    readiness.vetoes.some((veto) => veto.code === "adapter_os_isolation_production_helper_source_missing"),
+    true
+  );
+  assert.equal(readiness.adapter_execution_isolation.helper_profile_source, "bundled_provider_helper_protocol_asset");
+  assert.equal(readiness.adapter_execution_isolation.production_helper_configured, false);
+  assert.equal(readiness.adapter_execution_isolation.bundled_protocol_asset, true);
   assert.equal(readiness.can_certify_ga, false);
 
   const notEvidence = reviewAgentAdapterOsIsolationReadiness(projectRoot, {

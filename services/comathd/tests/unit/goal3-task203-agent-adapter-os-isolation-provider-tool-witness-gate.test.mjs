@@ -383,6 +383,9 @@ try {
       runner_available: true,
       runner_binary_sha256: helperBinarySha256,
       runner_version: "node-provider-helper-test",
+      helper_profile_source: "operator_configured_provider_helper",
+      production_helper_configured: true,
+      bundled_protocol_asset: false,
       diagnostics: [`${projectRoot} runner diagnostic must be scrubbed`, "runner resolved"]
     })
   });
@@ -439,6 +442,9 @@ try {
         helper_program: process.execPath,
         helper_binary_sha256: helperBinarySha256,
         helper_version: "node-provider-helper-test",
+        helper_profile_source: "operator_configured_provider_helper",
+        production_helper_configured: true,
+        bundled_protocol_asset: false,
         supported_platforms: ["win32"],
         diagnostics: [`${projectRoot} host validation diagnostic must be scrubbed`, "helper host ready"]
       };
@@ -469,6 +475,9 @@ try {
       helper_program: process.execPath,
       helper_args_prefix: [helperScript],
       helper_version: "node-provider-helper-test",
+      helper_profile_source: "operator_configured_provider_helper",
+      production_helper_configured: true,
+      bundled_protocol_asset: false,
       timeout_ms: 5000,
       diagnostics: [`${projectRoot} helper config diagnostic must be scrubbed`, "helper configured"]
     })
@@ -610,6 +619,9 @@ try {
   assert.equal(witnessedCollection.ok, true, "provider-tool-witnessed complete collection can create canonical OS evidence");
   assert.equal(witnessedCollection.collection_status, "provider_helper_os_evidence_collected");
   assert.equal(witnessedCollection.provider_helper_collection.os_enforcement_complete, true);
+  assert.equal(witnessedCollection.provider_helper_collection.helper_profile_source, "operator_configured_provider_helper");
+  assert.equal(witnessedCollection.provider_helper_collection.production_helper_configured, true);
+  assert.equal(witnessedCollection.provider_helper_collection.bundled_protocol_asset, false);
   assert.equal(witnessedCollection.provider_helper_collection.provider_tool_execution_witness_bound, true);
   assert.match(witnessedCollection.provider_helper_collection.provider_tool_execution_witness_sha256, /^[a-f0-9]{64}$/);
   assert.equal(witnessedCollection.probe.ok, true);
@@ -632,6 +644,11 @@ try {
     evidence_path: witnessedCollection.probe.evidence_path
   });
   assert.equal(witnessedReadiness.ok, true, "provider-tool-witnessed canonical evidence can satisfy OS-isolation readiness");
+  assert.equal(witnessedReadiness.checks.production_helper_source.ok, true);
+  assert.equal(witnessedReadiness.checks.production_helper_source.observed, "operator_configured_provider_helper");
+  assert.equal(witnessedReadiness.adapter_execution_isolation.helper_profile_source, "operator_configured_provider_helper");
+  assert.equal(witnessedReadiness.adapter_execution_isolation.production_helper_configured, true);
+  assert.equal(witnessedReadiness.adapter_execution_isolation.bundled_protocol_asset, false);
   assert.equal(witnessedReadiness.proof_authority, "none");
   assert.equal(witnessedReadiness.can_certify_ga, false);
 

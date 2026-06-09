@@ -580,11 +580,24 @@ try {
     actor: "goal3-task189-check-debug",
     evidence_path: collected.probe.evidence_path
   });
-  assert.equal(readiness.ok, true, "readiness consumes canonical service-owned probe/evidence artifacts only");
+  assert.equal(
+    readiness.ok,
+    false,
+    "canonical service-owned probe/evidence artifacts from bundled helper protocol assets still fail GA readiness"
+  );
   assert.equal(readiness.checks.service_owned_probe.ok, true);
   assert.equal(readiness.checks.collected_probe_binding.ok, true);
   assert.equal(readiness.checks.provider_tool_execution_witness.ok, true);
   assert.equal(readiness.checks.provider_specific_tool_execution.ok, true);
+  assert.equal(readiness.checks.production_helper_source.ok, false);
+  assert.equal(readiness.checks.production_helper_source.observed, "bundled_provider_helper_protocol_asset");
+  assert.equal(
+    readiness.vetoes.some((veto) => veto.code === "adapter_os_isolation_production_helper_source_missing"),
+    true
+  );
+  assert.equal(readiness.adapter_execution_isolation.helper_profile_source, "bundled_provider_helper_protocol_asset");
+  assert.equal(readiness.adapter_execution_isolation.production_helper_configured, false);
+  assert.equal(readiness.adapter_execution_isolation.bundled_protocol_asset, true);
   assert.equal(readiness.can_certify_ga, false);
 
   assertNotReadinessEvidence({

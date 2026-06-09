@@ -147,12 +147,22 @@ try {
     actor: "goal3-task170-test",
     evidence_path: collected.evidence_path
   });
-  assert.equal(review.ok, true, "service-owned collected OS-isolation probe evidence must satisfy the readiness gate");
-  assert.equal(review.readiness_status, "ready_for_os_isolation_release_review");
+  assert.equal(
+    review.ok,
+    false,
+    "direct service-owned collected OS-isolation probe evidence still needs production helper source provenance before readiness"
+  );
+  assert.equal(review.readiness_status, "blocked_missing_os_enforced_adapter_isolation");
   assert.equal(review.checks.service_owned_probe.ok, true);
   assert.equal(review.checks.collected_probe_binding.ok, true);
   assert.equal(review.checks.provider_os_enforced.ok, true);
   assert.equal(review.checks.network_isolation.ok, true);
+  assert.equal(review.checks.production_helper_source.ok, false);
+  assert.equal(
+    review.vetoes.some((veto) => veto.code === "adapter_os_isolation_production_helper_source_missing"),
+    true,
+    "direct host collection without provider-helper source provenance must fail the production helper source gate"
+  );
   assert.equal(review.can_certify_ga, false, "readiness review still cannot certify GA by itself");
 
   const incomplete = probeAgentAdapterOsIsolation(projectRoot, {

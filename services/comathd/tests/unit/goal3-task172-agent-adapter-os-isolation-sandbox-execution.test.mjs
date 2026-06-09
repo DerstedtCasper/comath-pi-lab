@@ -196,8 +196,18 @@ try {
     actor: "goal3-task172-test",
     evidence_path: collected.probe.evidence_path
   });
-  assert.equal(readiness.ok, true, "sandbox execution probe evidence must feed the existing Task167 readiness gate");
+  assert.equal(
+    readiness.ok,
+    false,
+    "sandbox execution probe evidence still needs production helper source provenance before readiness"
+  );
   assert.equal(readiness.checks.collected_probe_binding.ok, true);
+  assert.equal(readiness.checks.production_helper_source.ok, false);
+  assert.equal(
+    readiness.vetoes.some((veto) => veto.code === "adapter_os_isolation_production_helper_source_missing"),
+    true,
+    "sandbox execution evidence without provider-helper source provenance must fail the production helper source gate"
+  );
   assert.equal(readiness.can_certify_ga, false);
 
   const mismatchedLaunch = runAgentAdapterOsIsolationSandboxExecutionProbe(projectRoot, {

@@ -504,6 +504,9 @@ try {
       runner_available: true,
       runner_binary_sha256: helperBinarySha256,
       runner_version: "node-provider-helper-task211",
+      helper_profile_source: "operator_configured_provider_helper",
+      production_helper_configured: true,
+      bundled_protocol_asset: false,
       diagnostics: [`${projectRoot} runner diagnostic must be scrubbed`, "runner resolved"]
     })
   });
@@ -547,6 +550,9 @@ try {
       helper_program: process.execPath,
       helper_binary_sha256: helperBinarySha256,
       helper_version: "node-provider-helper-task211",
+      helper_profile_source: "operator_configured_provider_helper",
+      production_helper_configured: true,
+      bundled_protocol_asset: false,
       supported_platforms: ["win32"],
       diagnostics: [`${projectRoot} host validation diagnostic must be scrubbed`, "helper host ready"]
     })
@@ -571,6 +577,9 @@ try {
       helper_program: process.execPath,
       helper_args_prefix: [helperScript],
       helper_version: "node-provider-helper-task211",
+      helper_profile_source: "operator_configured_provider_helper",
+      production_helper_configured: true,
+      bundled_protocol_asset: false,
       timeout_ms: 5000,
       diagnostics: [`${projectRoot} helper config diagnostic must be scrubbed`, "helper configured"]
     })

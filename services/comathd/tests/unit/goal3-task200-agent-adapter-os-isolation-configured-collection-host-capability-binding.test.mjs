@@ -274,6 +274,9 @@ try {
         runner_available: true,
         runner_binary_sha256: helperBinarySha256,
         runner_version: "node-provider-helper-test",
+        helper_profile_source: "operator_configured_provider_helper",
+        production_helper_configured: true,
+        bundled_protocol_asset: false,
         diagnostics: [`${projectRoot} runner diagnostic must be scrubbed`, "runner resolved"]
       };
     }
@@ -335,6 +338,9 @@ try {
         helper_program: process.execPath,
         helper_binary_sha256: helperBinarySha256,
         helper_version: "node-provider-helper-test",
+        helper_profile_source: "operator_configured_provider_helper",
+        production_helper_configured: true,
+        bundled_protocol_asset: false,
         supported_platforms: ["win32"],
         diagnostics: [`${projectRoot} host validation diagnostic must be scrubbed`, "helper host ready"]
       };
@@ -374,6 +380,9 @@ try {
         helper_program: process.execPath,
         helper_args_prefix: [helperScript],
         helper_version: "node-provider-helper-test",
+        helper_profile_source: "operator_configured_provider_helper",
+        production_helper_configured: true,
+        bundled_protocol_asset: false,
         timeout_ms: 5000,
         diagnostics: [`${projectRoot} helper config diagnostic must be scrubbed`, "helper configured"]
       };
@@ -409,6 +418,9 @@ try {
   assert.equal(collection.provider_helper_collection.host_capability_probe_sha256, readyHost.provider_host_capability_artifact.sha256);
   assert.equal(collection.provider_helper_collection.host_capability_status, "provider_host_capability_observed");
   assert.equal(collection.provider_helper_collection.os_enforcement_complete, true);
+  assert.equal(collection.provider_helper_collection.helper_profile_source, "operator_configured_provider_helper");
+  assert.equal(collection.provider_helper_collection.production_helper_configured, true);
+  assert.equal(collection.provider_helper_collection.bundled_protocol_asset, false);
   assert.equal(collection.provider_helper_collection.provider_tool_execution_witness_bound, true);
   assert.match(collection.provider_helper_collection.provider_tool_execution_witness_sha256, /^[a-f0-9]{64}$/);
   assert.deepEqual(collection.provider_helper_collection.incomplete_os_enforcement_facts, []);
@@ -431,6 +443,11 @@ try {
     evidence_path: collection.probe.evidence_path
   });
   assert.equal(readiness.ok, true, "complete host-bound configured collection evidence can satisfy OS-isolation readiness");
+  assert.equal(readiness.checks.production_helper_source.ok, true);
+  assert.equal(readiness.checks.production_helper_source.observed, "operator_configured_provider_helper");
+  assert.equal(readiness.adapter_execution_isolation.helper_profile_source, "operator_configured_provider_helper");
+  assert.equal(readiness.adapter_execution_isolation.production_helper_configured, true);
+  assert.equal(readiness.adapter_execution_isolation.bundled_protocol_asset, false);
   assert.equal(readiness.proof_authority, "none");
   assert.equal(readiness.can_certify_ga, false);
 
