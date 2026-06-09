@@ -1,3 +1,22 @@
+# Goal 3 Task 293 / Pi GA Operational Readiness Review Consumer Bridge
+
+Scope: expose the Task292 service-owned GA operational readiness review through Pi host-confirmed thin-client wiring and the read-only interactive real-Pi planner without certifying GA.
+
+Implementation notes:
+- Added `goal3-task293-pi-ga-operational-readiness-review-consumer.test.mjs`.
+- Added `comath.release.goal3GaOperationalReadinessReview` and `/cm:release goal3-ga-operational-readiness-review`.
+- Extended Pi runtime registration, tool execution, public sanitization, and the interactive planner checkpoint after Task291.
+- The bridge forwards only Task290 transport-closure review id/path/hash plus Task167 adapter OS-isolation review id/path/hash, translating only maintained service-owned public aliases.
+
+Verification:
+- TDD RED was observed before implementation: focused Task293 failed because `comath.release.goal3GaOperationalReadinessReview` was not registered.
+- GREEN hardening caught and fixed two public-surface gaps: string-form `can_certify_ga=true` overclaims were not redacted, and caller-material keys such as `proof_claim`, `ga_certificate`, and `durable_transport_session` were not globally omitted from public results.
+- Current verification in this continuation: `corepack pnpm --filter @comath/pi-extension build` exited 0; focused Task293 exited 0; adjacent Task291 exited 0; adjacent Task223 initially failed on the stale checkpoint list, was updated, and then exited 0; phase6 and phase26 registration tests exited 0 from the Pi package cwd; service Task292 exited 0; `corepack pnpm --filter @comath/pi-extension typecheck` exited 0; `corepack pnpm --filter @comath/pi-extension test` exited 0 with Task293 discovered by the default Pi runner; `node scripts/phase0-smoke.mjs` exited 0 with 33 required entries and 33 invariants; `corepack pnpm typecheck` exited 0; `corepack pnpm test` exited 0 across the root workspace suite; `git diff --check` exited 0 with Windows LF-to-CRLF warnings only; `Test-Path -LiteralPath ".comath"` returned `False`.
+
+Boundary notes: Task293 does not re-read artifacts itself, run Lean, promote mathematical claims, certify GA, open durable/live transport, mutate trusted Pi state, or replace Task292/final GA audit. It is only a host-confirmed Pi consumer/planner bridge.
+
+Residual risk: Goal 3 remains incomplete. Task293 does not add final GA certification, release-candidate proof breadth, production OS sandbox helper completion, or durable long-lived transport.
+
 # Goal 3 Task 292 / Service-Owned GA Operational Readiness Review
 
 Scope: add a service-owned release-candidate operational readiness review that binds Task290 operator/service transport closure evidence to Task167 adapter OS-isolation readiness evidence without certifying GA.
