@@ -1,3 +1,20 @@
+# Goal 3 Task 311 / Source Release External Evidence Binding
+
+Scope: add a service-owned product-core external evidence binding gate that consumes current Task310 source release public checklist material and binds operator-provided external-notarization and OS-immutable-storage evidence without claiming external verification, restore, proof, promotion, or GA certification authority.
+
+Implementation notes:
+- Added `goal3-task311-source-release-external-evidence-binding.test.mjs`.
+- Added `recordGoal3SourceReleaseExternalEvidenceBinding()` and `POST /release/goal3/source-release-external-evidence-binding`.
+- Added `goal3_source_release_external_evidence_binding_gate` status exposure.
+- Reused `reviewGoal3PublicArchiveSurfaces()` instead of creating a new public review system; re-read the Task310 checklist, its bound `source.tar` bytes, and both operator evidence files by path/hash before writing binding material.
+
+Verification:
+- TDD RED was observed before implementation when focused Task311 failed because `recordGoal3SourceReleaseExternalEvidenceBinding` was not exported.
+- Documentation RED was observed after implementation when focused Task311 failed because README and release-hardening docs did not document the external evidence binding gate.
+- Full fresh verification is recorded in the final tracker entry for this continuation.
+
+Boundary notes: Task311 is an operator evidence binding surface only. It does not perform real external provider verification, provide OS-level immutability, run Lean, promote proof claims, create a restore source, certify individual proofs, replace Lean Authority v3, or create a Pi/public thin-client consumer.
+
 # Goal 3 Task 310 / Source Release Public Checklist
 
 Scope: add a service-owned product-core source release public checklist gate that consumes current Task309 presentation review material and makes the public checklist state explicit without claiming restore, proof, external notarization, OS immutability, or GA certification authority.
