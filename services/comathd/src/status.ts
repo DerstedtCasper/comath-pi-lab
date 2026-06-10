@@ -169,6 +169,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "goal3_source_artifact_presentation_review_gate",
       "goal3_source_release_public_checklist_gate",
       "goal3_source_release_external_evidence_binding_gate",
+      "goal3_source_release_external_evidence_chain_check_debug",
       "pi_codex_lifecycle_readiness_completion_prerequisite_binding",
       "pi_goal_mode_leanrunner_feedback_repair_loop",
       "pi_goal_mode_repair_hint_bundle",

@@ -1,3 +1,20 @@
+# Goal 3 Task 312 / Source Release Evidence Chain Check-Debug
+
+Scope: close the stale Task310->Task311 public-review chain gap found during check-debug audit, without expanding Task311 into real external-provider verification or OS immutable storage.
+
+Implementation notes:
+- Added `goal3-task312-source-release-evidence-chain-check-debug.test.mjs`.
+- Re-read the Task310 checklist public archive review by canonical id/path before accepting Task311 external evidence.
+- Reject missing or tampered Task310 public archive review manifests with no partial binding writes.
+- Added `goal3_source_release_external_evidence_chain_check_debug` status exposure and bound the checklist public archive review artifact into the Task311 binding/audit payload.
+
+Verification:
+- TDD RED was observed before implementation when focused Task312 failed because a deleted Task310 public archive review did not prevent `recordGoal3SourceReleaseExternalEvidenceBinding()` from accepting the checklist.
+- Review-driven RED was observed after the first implementation when focused Task312 accepted a semantically passing but byte-tampered Task310 public archive review; the gate now records public archive review manifest hash/size in audit provenance and rejects byte drift before binding operator evidence.
+- Fresh verification exited 0 for `corepack pnpm --filter @comath/comathd build`; focused Task312; adjacent Task311, Task310, Task142, and Task144 regressions; `node scripts/phase0-smoke.mjs`; `corepack pnpm --filter @comath/comathd typecheck`; `corepack pnpm --filter @comath/comathd test` with Task312 discovered by the default runner; `corepack pnpm typecheck`; and `corepack pnpm test` across the root workspace suite.
+
+Boundary notes: Task312 is source release evidence chain check-debug only. It does not perform real external provider verification, provide OS-level immutability, run Lean, promote proof claims, create a restore source, certify GA, or create a final public/Pi consumer.
+
 # Goal 3 Task 311 / Source Release External Evidence Binding
 
 Scope: add a service-owned product-core external evidence binding gate that consumes current Task310 source release public checklist material and binds operator-provided external-notarization and OS-immutable-storage evidence without claiming external verification, restore, proof, promotion, or GA certification authority.

@@ -467,8 +467,11 @@ export function reviewGoal3PublicArchiveSurfaces(
       code: "PUBLIC_ARCHIVE_REVIEW_ALREADY_EXISTS"
     });
   }
+  const manifestText = canonicalJson(result);
+  const manifestSha256 = sha256Text(manifestText);
+  const manifestSizeBytes = Buffer.byteLength(manifestText, "utf8");
   mkdirSync(dirname(absoluteManifestPath), { recursive: true });
-  writeFileSync(absoluteManifestPath, canonicalJson(result), "utf8");
+  writeFileSync(absoluteManifestPath, manifestText, "utf8");
   appendAuditEvent(projectRoot, {
     project_id: input.project_id,
     event_type: "goal3.public_archive_review_completed",
@@ -478,6 +481,8 @@ export function reviewGoal3PublicArchiveSurfaces(
       review_id: reviewId,
       ok: result.ok,
       manifest_path: result.manifest_path,
+      manifest_sha256: manifestSha256,
+      manifest_size_bytes: manifestSizeBytes,
       surface_count: surfaces.length,
       vetoes,
       proof_authority: "none",

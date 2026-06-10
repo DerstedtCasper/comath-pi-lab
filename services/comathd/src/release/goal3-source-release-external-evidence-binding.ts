@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { appendAuditEvent } from "../audit/jsonl-writer.js";
+import { appendAuditEvent, readAuditEvents } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
 import { sanitizePublicFormalAuthorityVocabulary } from "../proof-kernel/campaign/external-terminal-vocabulary.js";
 import { assertPathAllowed } from "../security/path-policy.js";
@@ -64,6 +64,8 @@ type Task310ChecklistBody = {
   source_archive_current?: unknown;
   download_descriptor?: unknown;
   download_descriptor_current?: unknown;
+  public_archive_review_id?: unknown;
+  public_archive_review_path?: unknown;
   public_archive_review_ok?: unknown;
   checklist_items?: unknown;
   public_source_review_ready?: unknown;
@@ -77,6 +79,17 @@ type Task310ChecklistBody = {
   presentation_is_proof_authority?: unknown;
   source_artifact_is_proof_authority?: unknown;
   claim_promotion_requires_ordinary_gate?: unknown;
+};
+
+type Task310PublicArchiveReviewBody = {
+  schema_version?: unknown;
+  review_id?: unknown;
+  project_id?: unknown;
+  ok?: unknown;
+  proof_authority?: unknown;
+  can_promote_claim?: unknown;
+  review_is_proof_authority?: unknown;
+  vetoes?: unknown;
 };
 
 type OperatorEvidenceBody = {
@@ -155,6 +168,8 @@ export type Goal3SourceReleaseExternalEvidenceBinding = {
   checklist_sha256: string;
   checklist_artifact: ArtifactReference;
   checklist_current: true;
+  checklist_public_archive_review_artifact: ArtifactReference;
+  checklist_public_archive_review_current: true;
   source_archive: Goal3SourceReleaseExternalEvidenceArchive;
   source_archive_current: true;
   external_notarization_evidence_artifact: ArtifactReference;
@@ -281,6 +296,24 @@ function asNonNegativeInteger(value: unknown, label: string): number {
     invalid(`Goal 3 source release external evidence binding ${label} is invalid`);
   }
   return value;
+}
+
+function publicArchiveReviewArtifactFromAudit(projectRoot: string, reviewId: string, reviewPath: string): ArtifactReference {
+  const event = readAuditEvents(projectRoot).find((entry) => {
+    const payload = entry.payload as Record<string, unknown>;
+    return (
+      entry.event_type === "goal3.public_archive_review_completed" &&
+      payload.review_id === reviewId &&
+      normalizeRelativePath(String(payload.manifest_path ?? "")) === reviewPath
+    );
+  });
+  const payload = event?.payload as Record<string, unknown> | undefined;
+  const sha256 = typeof payload?.manifest_sha256 === "string" ? payload.manifest_sha256.trim().toLowerCase() : "";
+  const sizeBytes = payload?.manifest_size_bytes;
+  if (!/^[a-f0-9]{64}$/u.test(sha256) || typeof sizeBytes !== "number" || !Number.isSafeInteger(sizeBytes) || sizeBytes < 0) {
+    stale("Goal 3 source release external evidence binding checklist public archive review provenance is stale");
+  }
+  return artifactReference(reviewPath, "goal3_public_archive_review", sha256, sizeBytes);
 }
 
 function readJsonArtifact(
@@ -412,12 +445,58 @@ function assertChecklistItems(value: unknown): void {
   }
 }
 
+function readTask310PublicArchiveReview(
+  projectRoot: string,
+  projectId: string,
+  reviewId: string,
+  reviewPath: string
+): ArtifactReference {
+  const canonicalPath = publicArchiveReviewPath(reviewId);
+  if (reviewPath !== canonicalPath) {
+    invalid("Goal 3 source release external evidence binding checklist public archive review path is not canonical");
+  }
+  const expectedArtifact = publicArchiveReviewArtifactFromAudit(projectRoot, reviewId, canonicalPath);
+  const absolutePath = assertPathAllowed(projectRoot, canonicalPath, { purpose: "read", resolveRealpath: true });
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    stale("Goal 3 source release external evidence binding checklist public archive review is stale");
+  }
+  const bytes = readFileSync(absolutePath);
+  if (sha256Bytes(bytes) !== expectedArtifact.sha256 || bytes.byteLength !== expectedArtifact.size_bytes) {
+    stale("Goal 3 source release external evidence binding checklist public archive review bytes are stale");
+  }
+  let body: Task310PublicArchiveReviewBody;
+  try {
+    body = JSON.parse(bytes.toString("utf8")) as Task310PublicArchiveReviewBody;
+  } catch {
+    invalid("Goal 3 source release external evidence binding checklist public archive review JSON is invalid");
+  }
+  if (
+    body.schema_version !== "comath.goal3_public_archive_review.v1" ||
+    body.review_id !== reviewId ||
+    body.project_id !== projectId ||
+    body.ok !== true ||
+    body.proof_authority !== "none" ||
+    body.can_promote_claim !== false ||
+    body.review_is_proof_authority !== false ||
+    !Array.isArray(body.vetoes) ||
+    body.vetoes.length !== 0
+  ) {
+    invalid("Goal 3 source release external evidence binding checklist public archive review is not current non-authoritative material");
+  }
+  return expectedArtifact;
+}
+
 function readChecklist(
   projectRoot: string,
   input: Goal3SourceReleaseExternalEvidenceBindingInput,
   checklistId: string,
   projectId: string
-): { body: Task310ChecklistBody; artifact: ArtifactReference; archive: Goal3SourceReleaseExternalEvidenceArchive } {
+): {
+  body: Task310ChecklistBody;
+  artifact: ArtifactReference;
+  publicArchiveReview: ArtifactReference;
+  archive: Goal3SourceReleaseExternalEvidenceArchive;
+} {
   const canonicalPath = checklistPath(checklistId);
   if (normalizeRelativePath(input.checklist_path) !== canonicalPath) {
     invalid("Goal 3 source release external evidence binding checklist path is not canonical");
@@ -446,14 +525,22 @@ function readChecklist(
     body.presentation_is_proof_authority !== false ||
     body.source_artifact_is_proof_authority !== false ||
     body.claim_promotion_requires_ordinary_gate !== true ||
-    typeof body.source_review_artifact_id !== "string"
+    typeof body.source_review_artifact_id !== "string" ||
+    typeof body.public_archive_review_id !== "string" ||
+    typeof body.public_archive_review_path !== "string"
   ) {
     invalid("Goal 3 source release external evidence binding checklist is not current non-authoritative material");
   }
   const archive = assertTask310SourceArchive(body.source_archive);
   assertTask310DownloadDescriptor(body.download_descriptor, body.source_review_artifact_id, archive);
   assertChecklistItems(body.checklist_items);
-  return { body, artifact: read.artifact, archive };
+  const publicArchiveReview = readTask310PublicArchiveReview(
+    projectRoot,
+    projectId,
+    body.public_archive_review_id,
+    normalizeRelativePath(body.public_archive_review_path)
+  );
+  return { body, artifact: read.artifact, publicArchiveReview, archive };
 }
 
 function assertArchiveBytesCurrent(projectRoot: string, archive: Goal3SourceReleaseExternalEvidenceArchive): void {
@@ -597,6 +684,8 @@ export function recordGoal3SourceReleaseExternalEvidenceBinding(
     checklist_sha256: checklist.artifact.sha256,
     checklist_artifact: checklist.artifact,
     checklist_current: true,
+    checklist_public_archive_review_artifact: checklist.publicArchiveReview,
+    checklist_public_archive_review_current: true,
     source_archive: checklist.archive,
     source_archive_current: true,
     external_notarization_evidence_artifact: externalNotarizationEvidence,
@@ -622,6 +711,7 @@ export function recordGoal3SourceReleaseExternalEvidenceBinding(
     binding_id: bindingId,
     checklist_id: checklistId,
     checklist_sha256: checklist.artifact.sha256,
+    checklist_public_archive_review_sha256: checklist.publicArchiveReview.sha256,
     source_archive_sha256: checklist.archive.archive_sha256,
     source_archive_size_bytes: checklist.archive.size_bytes,
     external_notarization_evidence_sha256: externalNotarizationEvidence.sha256,
@@ -684,6 +774,9 @@ export function recordGoal3SourceReleaseExternalEvidenceBinding(
       checklist_id: checklistId,
       checklist_path: checklist.artifact.path,
       checklist_sha256: checklist.artifact.sha256,
+      checklist_public_archive_review_path: checklist.publicArchiveReview.path,
+      checklist_public_archive_review_sha256: checklist.publicArchiveReview.sha256,
+      checklist_public_archive_review_current: true,
       source_archive_path: checklist.archive.archive_path,
       source_archive_sha256: checklist.archive.archive_sha256,
       source_archive_size_bytes: checklist.archive.size_bytes,
