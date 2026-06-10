@@ -63,6 +63,7 @@ import { recordGoal3SourceOnlyOpenSourceReviewArtifact } from "../release/goal3-
 import { recordGoal3SourceArtifactPresentationReview } from "../release/goal3-source-artifact-presentation-review.js";
 import { recordGoal3SourceReleasePublicChecklist } from "../release/goal3-source-release-public-checklist.js";
 import { recordGoal3SourceReleaseExternalEvidenceBinding } from "../release/goal3-source-release-external-evidence-binding.js";
+import { recordGoal3SourceReleaseExternalProviderVerification } from "../release/goal3-source-release-external-provider-verification.js";
 import {
   collectPiCodexLifecycleEvidence,
   heartbeatPiCodexLifecycleOperatorTransportLease,
@@ -630,6 +631,20 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           source_release_external_evidence_binding: recordGoal3SourceReleaseExternalEvidenceBinding(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/source-release-external-provider-verification",
+      async (payload) => {
+        const body = payload as Parameters<typeof recordGoal3SourceReleaseExternalProviderVerification>[1] & {
+          project_root: string;
+        };
+        return {
+          source_release_external_provider_verification: await recordGoal3SourceReleaseExternalProviderVerification(
+            body.project_root,
+            body
+          )
         };
       }
     ],

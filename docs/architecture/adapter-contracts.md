@@ -229,6 +229,8 @@ Sandbox execution probe manifests bridge the sandbox-launch preflight to canonic
 
 Caller-supplied request fields, Pi payloads, operator attestations, contract-only metadata, package launch metadata, and health-probe text cannot satisfy the OS-isolation readiness gate. They remain blocker evidence or diagnostics with `proof_authority: "none"`, `can_promote_claim: false`, and `can_certify_ga: false`.
 
+Task313 external provider verification treats release notarization and immutable-storage provider checks as adapter-like, service-owned evidence flows. The verification route may POST a sanitized request envelope to a configured provider URL only after re-reading the Task311 binding, Task310 public-review chain, selected operator evidence, and bound `source.tar` bytes by path/hash. Provider responses must bind provider id, evidence kind, binding hash, source archive hash/size, evidence hash, and receipt id; they may not carry restore, proof, promotion, or GA authority. The persisted result is release provenance only with `proof_authority="none"`, `can_restore=false`, `can_promote_claim=false`, `can_certify_ga=false`, `provider_result_is_proof_authority=false`, and `requires_separate_lean_authority=true`.
+
 ## Literature And Ingestion Adapters
 
 Providers may include arXiv, Semantic Scholar, OpenAlex, Crossref, Unpaywall, Jina Reader/Search, AnySearch, local PDF, local TeX, local Markdown, BibTeX, and Zotero-compatible metadata.

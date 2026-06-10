@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -204,6 +204,66 @@ try {
     ]
   });
   assertFailingReview(failingReview, projectRoot);
+
+  const safeUrlReview = reviewGoal3PublicArchiveSurfaces(projectRoot, {
+    project_id: project.project_id,
+    actor: "goal3-task142-safe-url",
+    review_id: "TASK142-SAFE-URL",
+    surfaces: [
+      {
+        surface_id: "safe-provider-url",
+        surface_kind: "public_route_payload",
+        payload: {
+          provider_terms_url: "https://example.invalid/provider/terms"
+        }
+      }
+    ]
+  });
+  assert.equal(safeUrlReview.ok, true);
+  assert.deepEqual(safeUrlReview.vetoes, []);
+  assertNoPublicLeak(safeUrlReview, projectRoot);
+
+  const embeddedDriveReview = reviewGoal3PublicArchiveSurfaces(projectRoot, {
+    project_id: project.project_id,
+    actor: "goal3-task142-embedded-drive",
+    review_id: "TASK142-EMBEDDED-DRIVE",
+    surfaces: [
+      {
+        surface_id: "embedded-drive",
+        surface_kind: "public_route_payload",
+        payload: {
+          prefixed_drive_path: "xD:\\secret\\file.lean",
+          underscored_drive_path: "_C:\\Users\\secret\\file.lean"
+        }
+      }
+    ]
+  });
+  assert.equal(embeddedDriveReview.ok, false);
+  assert.ok(embeddedDriveReview.vetoes.includes("public_archive_host_path_echo"));
+  assertNoPublicLeak(embeddedDriveReview, projectRoot);
+
+  const noPersistFailingReview = reviewGoal3PublicArchiveSurfaces(projectRoot, {
+    project_id: project.project_id,
+    actor: "goal3-task142-no-persist-failed-review",
+    review_id: "TASK142-FAIL-NO-PERSIST",
+    persist_failed_review: false,
+    surfaces: [
+      {
+        surface_id: "no-persist-authority-text",
+        surface_kind: "public_route_payload",
+        payload: {
+          label: "proven"
+        }
+      }
+    ]
+  });
+  assert.equal(noPersistFailingReview.ok, false);
+  assert.ok(noPersistFailingReview.vetoes.includes("public_archive_authority_vocabulary"));
+  assert.equal(
+    existsSync(join(projectRoot, noPersistFailingReview.manifest_path)),
+    false,
+    "failed public archive reviews may opt out of writing retry-poisoning manifests"
+  );
 
   const routeReview = await server.inject({
     method: "POST",

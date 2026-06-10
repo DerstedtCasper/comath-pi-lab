@@ -1,3 +1,20 @@
+# Goal 3 Task 313 / Source Release External Provider Verification
+
+## Scope
+
+Task313 external provider verification adds a service-owned source-release provider response gate after Task311. It consumes a current external evidence binding by canonical id/path/hash, re-reads the Task310 public-review chain, selected operator evidence, and bound `source.tar`, calls a configured provider verification URL from `comathd`, and persists only a non-authoritative provider verification manifest when the response binds the same provider id, evidence kind, binding hash, source archive hash/size, evidence hash, and receipt id.
+
+## TDD And Verification Notes
+
+- TDD RED was observed before implementation when the focused Task313 suite failed because `recordGoal3SourceReleaseExternalProviderVerification` was not exported.
+- Documentation RED was observed after implementation wiring when the focused Task313 suite failed because README and release-hardening docs did not yet document the external provider verification gate.
+- Review-driven REDs were observed after the first implementation: focused Task313 accepted provider responses with extra proof/restore/immutability authority fields, accepted a traversal-shaped source archive path when bytes still matched, and focused Task142 still misclassified legal `https://` URLs while lacking coverage for embedded drive-path echoes and non-persisted failed reviews.
+- Fresh verification exited 0 for `corepack pnpm --filter @comath/comathd build`; focused Task313; adjacent Task312, Task311, Task310, Task142, Task144, and Task145 regressions; `node scripts/phase0-smoke.mjs`; `corepack pnpm --filter @comath/comathd typecheck`; `corepack pnpm typecheck`; `corepack pnpm --filter @comath/comathd test` with Task313 discovered by the default runner; and `corepack pnpm test` across the root workspace suite, Pi extension tests, comathd default tests, Phase45 e2e, Task125 e2e, and Phase17 integrity evaluation.
+
+## Boundary Notes
+
+Task313 is provider response binding evidence only. It records `external_verification_performed=true` after a service-owned provider response matches the current source-release chain, but it does not provide OS-level immutable storage enforcement, inspect provider daemon policy, run Lean, promote proof claims, create a restore source, certify GA, or replace Lean Authority v3.
+
 # Goal 3 Task 312 / Source Release Evidence Chain Check-Debug
 
 Scope: close the stale Task310->Task311 public-review chain gap found during check-debug audit, without expanding Task311 into real external-provider verification or OS immutable storage.

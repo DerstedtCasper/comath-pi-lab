@@ -22,6 +22,7 @@ export type ReviewGoal3PublicArchiveSurfacesInput = {
   project_id: string;
   actor: string;
   review_id?: string;
+  persist_failed_review?: boolean;
   surfaces: PublicArchiveReviewSurfaceInput[];
 };
 
@@ -134,7 +135,18 @@ function hostPathVariants(projectRoot: string): string[] {
 }
 
 function valueHasHostPath(projectRoot: string, value: string): boolean {
-  if (/[A-Za-z]:[\\/]/.test(value) || value.includes("\\\\?\\") || value.startsWith("\\\\")) {
+  const drivePathPattern = /[A-Za-z]:[\\/]/g;
+  for (const match of value.matchAll(drivePathPattern)) {
+    const index = match.index ?? 0;
+    const isUriScheme =
+      value[index + 2] === "/" &&
+      value[index + 3] === "/" &&
+      /[A-Za-z][A-Za-z0-9+.-]*$/u.test(value.slice(0, index + 1));
+    if (!isUriScheme) {
+      return true;
+    }
+  }
+  if (value.includes("\\\\?\\") || value.startsWith("\\\\")) {
     return true;
   }
   return hostPathVariants(projectRoot).some((variant) => value.includes(variant));
@@ -460,6 +472,9 @@ export function reviewGoal3PublicArchiveSurfaces(
     warnings: [],
     manifest_path: manifestPath
   };
+  if (!result.ok && input.persist_failed_review === false) {
+    return result;
+  }
   const absoluteManifestPath = assertPathAllowed(projectRoot, manifestPath, { purpose: "runtime-write" });
   if (existsSync(absoluteManifestPath)) {
     throw new ComathError("public archive review already exists", {
