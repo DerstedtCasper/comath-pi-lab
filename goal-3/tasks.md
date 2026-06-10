@@ -5451,4 +5451,4 @@ Completion record:
 - Progress estimate after Task317: approximately 98.95% of the full GA design target is complete. Task317 closes a release-signoff freshness/prerequisite gap by making the durable long-lived transport blocker explicit and byte-current against the maintained primitive chain, but it does not provide durable/live transport or final GA signoff.
 - Residual risk: Goal 3 remains incomplete on final operational hardening. The signoff prerequisite now records `durable_long_lived_transport_not_provided` instead of allowing stale or overclaiming transport material through, but actual durable long-lived transport provision/decision and final GA release signoff/release-candidate audit closure remain separate work.
 - Next recommended step: continue product-core closure with a final GA release-signoff blocker/decision gate that consumes Task317 and the current source-release/OS-attestation chain, while preserving Lean Authority boundaries and avoiding any GA claim until the release-signoff gate is satisfied.
-- Commit: pending
+- Commit: `d739480` (`Add goal3 task317 durable transport signoff prerequisite`)
