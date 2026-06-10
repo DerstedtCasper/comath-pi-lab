@@ -1,3 +1,14 @@
+# Goal 3 Task 317 / Durable Transport Release-Signoff Prerequisite
+
+Scope: add a service-owned release-signoff prerequisite that revalidates the current GA operational-readiness transport chain while explicitly blocking durable long-lived transport signoff.
+
+Implementation notes:
+- Added `recordGoal3DurableTransportReleaseSignoffPrerequisite()` and `POST /release/goal3/durable-transport-release-signoff-prerequisite`.
+- The gate consumes a current Task292 operational-readiness artifact, re-reads the bound Task290 transport-closure review, then re-reads the nested terminal certificate, durable-transport prerequisite contract, transport continuity checkpoint, and maintained transport contract by hash/size.
+- The persisted prerequisite records maintained primitive freshness but remains `ok=false` with `durable_transport_signoff_status="blocked_durable_long_lived_transport_not_provided"` and `blocker_reasons=["durable_long_lived_transport_not_provided"]`.
+
+Boundary notes: Task317 does not provide durable/live transport, open WebSocket/SSE sessions, mutate Pi state, run Lean, promote proof claims, certify GA, or create proof authority. Stale nested transport material and hash-current live/durable transport overclaims fail closed before partial writes.
+
 # Goal 3 Task 316 / Pi Source-Release OS Immutability Attestation Consumer
 
 ## Scope

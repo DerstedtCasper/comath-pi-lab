@@ -52,6 +52,7 @@ import { runV3NegativeGaSlices } from "../release/v3-negative-ga-slices.js";
 import { assembleSourceReviewPublicArchive } from "../release/source-review-public-archive.js";
 import { reviewGoal3PublicArchiveSurfaces } from "../release/public-archive-review.js";
 import { recordGoal3GaOperationalReadinessReview } from "../release/goal3-ga-operational-readiness.js";
+import { recordGoal3DurableTransportReleaseSignoffPrerequisite } from "../release/goal3-ga-transport-chain-freshness.js";
 import { recordGoal3ReleaseCandidateProofBreadthReview } from "../release/goal3-proof-breadth-review.js";
 import { recordGoal3ReleaseCandidateProofBreadthClosure } from "../release/goal3-proof-breadth-closure.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
@@ -523,6 +524,18 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           operational_readiness_review: recordGoal3GaOperationalReadinessReview(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/durable-transport-release-signoff-prerequisite",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3DurableTransportReleaseSignoffPrerequisite>[1] & {
+          project_root: string;
+        };
+        return {
+          durable_transport_release_signoff_prerequisite:
+            recordGoal3DurableTransportReleaseSignoffPrerequisite(body.project_root, body)
         };
       }
     ],
