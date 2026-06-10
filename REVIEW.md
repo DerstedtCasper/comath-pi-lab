@@ -1,3 +1,21 @@
+# Goal 3 Task 307 / Source-Bound Release Package
+
+Scope: add a service-owned product-core public/source-review release package gate that consumes only current Task306 source-bound certificate-consumption material.
+
+Implementation notes:
+- Added `goal3-task307-source-bound-release-package.test.mjs`.
+- Added `recordGoal3SourceBoundReleasePackage()` and `POST /release/goal3/source-bound-release-package`.
+- Added `goal3_source_bound_public_release_package_gate` status exposure.
+- Reused `assembleSourceReviewPublicArchive()` and `reviewGoal3PublicArchiveSurfaces()` instead of creating a new archive or review system.
+
+Verification:
+- TDD RED was observed before implementation: focused Task307 failed because `recordGoal3SourceBoundReleasePackage` was not exported.
+- Full verification for Task307 is recorded in the final tracker entry for this continuation.
+
+Boundary notes: Task307 is a public diagnostic package gate, not a proof gate. It must keep `proof_authority="none"`, `can_promote_claim=false`, `can_certify_ga=false`, and `package_is_proof_authority=false`; it cannot replace Lean clean replay, certify individual proof claims, or turn source-review/public archive material into proof authority.
+
+Residual risk: Goal 3 still has broader open-source release polish and operational hardening work after this public/source-review package closure.
+
 # Goal 3 Task 306 / GA Certificate Source-Bound Consumption
 
 Scope: add a service-owned product-core release closure gate that consumes a GA certificate only when the certificate chain remains bound to Task305 production helper source provenance.
