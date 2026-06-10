@@ -53,6 +53,7 @@ import { assembleSourceReviewPublicArchive } from "../release/source-review-publ
 import { reviewGoal3PublicArchiveSurfaces } from "../release/public-archive-review.js";
 import { recordGoal3GaOperationalReadinessReview } from "../release/goal3-ga-operational-readiness.js";
 import { recordGoal3DurableTransportReleaseSignoffPrerequisite } from "../release/goal3-ga-transport-chain-freshness.js";
+import { recordGoal3FinalReleaseSignoffDecision } from "../release/goal3-final-release-signoff-decision.js";
 import { recordGoal3ReleaseCandidateProofBreadthReview } from "../release/goal3-proof-breadth-review.js";
 import { recordGoal3ReleaseCandidateProofBreadthClosure } from "../release/goal3-proof-breadth-closure.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
@@ -536,6 +537,18 @@ async function route(method: string, path: string, body: unknown, context: Route
         return {
           durable_transport_release_signoff_prerequisite:
             recordGoal3DurableTransportReleaseSignoffPrerequisite(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/final-release-signoff-decision",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3FinalReleaseSignoffDecision>[1] & {
+          project_root: string;
+        };
+        const { project_root: projectRoot, ...input } = body;
+        return {
+          final_release_signoff_decision: recordGoal3FinalReleaseSignoffDecision(projectRoot, input)
         };
       }
     ],

@@ -1,3 +1,14 @@
+# Goal 3 Task 318 / Final Release-Signoff Decision
+
+Scope: add a service-owned final release-signoff decision gate that consumes the current Task317 durable-transport prerequisite and Task315 source-release OS attestation chain without certifying GA.
+
+Implementation notes:
+- Added `recordGoal3FinalReleaseSignoffDecision()` and `POST /release/goal3/final-release-signoff-decision`.
+- The gate re-reads Task317 and Task315 by canonical id/path/hash, then re-reads source archive, operator evidence, and policy-inspection material by hash/size before writing the signoff decision.
+- The persisted decision remains `ok=false` with `final_release_signoff_status="blocked_final_ga_release_signoff_prerequisites"`, `ga_release_signoff_ready=false`, and blockers for durable transport and missing final certificate consumption.
+
+Boundary notes: Task318 does not provide durable/live transport, run Lean, promote proof claims, make OS/source-release evidence proof authority, or certify GA. Stale source-release bytes and proof/GA/transport overclaims fail closed before partial writes.
+
 # Goal 3 Task 317 / Durable Transport Release-Signoff Prerequisite
 
 Scope: add a service-owned release-signoff prerequisite that revalidates the current GA operational-readiness transport chain while explicitly blocking durable long-lived transport signoff.
