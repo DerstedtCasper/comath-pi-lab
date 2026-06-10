@@ -443,6 +443,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task307-source-bound-release-package.test.mjs",
   "goal3-task308-source-only-open-source-review-artifact-binding.test.mjs",
   "goal3-task309-source-artifact-presentation-review.test.mjs",
+  "goal3-task310-source-release-public-checklist.test.mjs",
   "goal3-task255-pi-goal-mode-intake-manifest.test.mjs",
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",

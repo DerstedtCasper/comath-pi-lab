@@ -61,6 +61,7 @@ import { recordGoal3GaCertificateConsumptionReview } from "../release/goal3-ga-c
 import { recordGoal3SourceBoundReleasePackage } from "../release/goal3-source-bound-release-package.js";
 import { recordGoal3SourceOnlyOpenSourceReviewArtifact } from "../release/goal3-source-only-open-source-review-artifact.js";
 import { recordGoal3SourceArtifactPresentationReview } from "../release/goal3-source-artifact-presentation-review.js";
+import { recordGoal3SourceReleasePublicChecklist } from "../release/goal3-source-release-public-checklist.js";
 import {
   collectPiCodexLifecycleEvidence,
   heartbeatPiCodexLifecycleOperatorTransportLease,
@@ -606,6 +607,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           source_artifact_presentation_review: recordGoal3SourceArtifactPresentationReview(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/source-release-public-checklist",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3SourceReleasePublicChecklist>[1] & {
+          project_root: string;
+        };
+        return {
+          source_release_public_checklist: recordGoal3SourceReleasePublicChecklist(body.project_root, body)
         };
       }
     ],

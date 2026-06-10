@@ -1,3 +1,20 @@
+# Goal 3 Task 310 / Source Release Public Checklist
+
+Scope: add a service-owned product-core source release public checklist gate that consumes current Task309 presentation review material and makes the public checklist state explicit without claiming restore, proof, external notarization, OS immutability, or GA certification authority.
+
+Implementation notes:
+- Added `goal3-task310-source-release-public-checklist.test.mjs`.
+- Added `recordGoal3SourceReleasePublicChecklist()` and `POST /release/goal3/source-release-public-checklist`.
+- Added `goal3_source_release_public_checklist_gate` status exposure.
+- Reused `reviewGoal3PublicArchiveSurfaces()` instead of creating a new public review system; re-read the Task309 presentation manifest, its bound public archive review, and the bound `source.tar` bytes before writing checklist material.
+
+Verification:
+- TDD RED was observed before implementation when focused Task310 failed because `recordGoal3SourceReleasePublicChecklist` was not exported.
+- Documentation RED was observed after implementation when focused Task310 failed because README and release-hardening docs did not document the source release public checklist.
+- Fresh verification passed for build, focused Task310, adjacent Task309/308/307/142, phase0 smoke, package/root typecheck, `@comath/comathd` default tests with Task310 discovered, and root workspace tests.
+
+Boundary notes: Task310 is a public source-review checklist surface only. It does not run Lean, promote proof claims, create a restore source, certify individual proofs, provide external notarization, provide OS-level immutable storage, replace Lean Authority v3, or create a Pi/public thin-client consumer.
+
 # Goal 3 Task 309 / Source Artifact Presentation Review
 
 Scope: add a service-owned product-core source artifact presentation review gate that consumes current Task308 source-only open-source review artifact material and exposes a non-restorable public download descriptor for review.
