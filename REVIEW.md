@@ -1,3 +1,19 @@
+# Goal 3 Task 315 / Source Release OS Immutability Attestation
+
+## Scope
+
+Task315 OS immutability attestation adds a service-owned source-release OS attestation gate after Task314. It consumes only a current `os_immutable_storage` provider policy inspection by canonical id/path/hash, re-reads its public-review provenance, Task313 verification artifact, selected operator evidence, provider policy response hashes, daemon identity, policy document hash, receipt id, and bound `source.tar`, calls a configured OS attestation URL from `comathd`, and persists only a non-authoritative attestation manifest when the response binds the same Task314/Task313/source/evidence/provider-policy material.
+
+## TDD And Verification Notes
+
+- TDD RED was observed before implementation when the focused Task315 suite failed because `recordGoal3SourceReleaseOsImmutabilityAttestation` was not exported.
+- Documentation RED was observed after implementation wiring when the focused Task315 suite failed because README and release-hardening docs did not yet document the OS immutability attestation gate.
+- Focused Task315 covers stale Task314 hashes before provider calls, notary-only evidence rejection, provider mismatch rejection, provider header leak rejection, authority/enforcement overclaim rejection, route wiring, public redaction, append-only manifest persistence, and audit provenance.
+
+## Boundary Notes
+
+Task315 is external OS attestation binding evidence only. It records `os_immutability_attestation_performed=true` after a service-owned provider response matches the current Task314 source-release chain, but it does not provide CoMath-owned OS enforcement, restore authority, proof authority, Lean replay, proof promotion, GA certification, or final public/Pi consumption. Unknown attestation response fields fail closed, provider-controlled `content-type` headers are normalized before persistence, and accepted artifacts keep `proof_authority="none"`, `can_restore=false`, `can_promote_claim=false`, `can_certify_ga=false`, `storage_is_proof_authority=false`, `attestation_is_proof_authority=false`, `co_math_os_immutability_enforced=false`, and `requires_separate_lean_authority=true`.
+
 # Goal 3 Task 314 / Source Release External Provider Policy Inspection
 
 ## Scope

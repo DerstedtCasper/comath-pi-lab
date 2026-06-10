@@ -65,6 +65,7 @@ import { recordGoal3SourceReleasePublicChecklist } from "../release/goal3-source
 import { recordGoal3SourceReleaseExternalEvidenceBinding } from "../release/goal3-source-release-external-evidence-binding.js";
 import { recordGoal3SourceReleaseExternalProviderVerification } from "../release/goal3-source-release-external-provider-verification.js";
 import { recordGoal3SourceReleaseExternalProviderPolicyInspection } from "../release/goal3-source-release-external-provider-policy-inspection.js";
+import { recordGoal3SourceReleaseOsImmutabilityAttestation } from "../release/goal3-source-release-os-immutability-attestation.js";
 import {
   collectPiCodexLifecycleEvidence,
   heartbeatPiCodexLifecycleOperatorTransportLease,
@@ -657,6 +658,20 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           source_release_external_provider_policy_inspection: await recordGoal3SourceReleaseExternalProviderPolicyInspection(
+            body.project_root,
+            body
+          )
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/source-release-os-immutability-attestation",
+      async (payload) => {
+        const body = payload as Parameters<typeof recordGoal3SourceReleaseOsImmutabilityAttestation>[1] & {
+          project_root: string;
+        };
+        return {
+          source_release_os_immutability_attestation: await recordGoal3SourceReleaseOsImmutabilityAttestation(
             body.project_root,
             body
           )

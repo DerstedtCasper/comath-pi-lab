@@ -448,6 +448,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task312-source-release-evidence-chain-check-debug.test.mjs",
   "goal3-task313-source-release-external-provider-verification.test.mjs",
   "goal3-task314-source-release-external-provider-policy-inspection.test.mjs",
+  "goal3-task315-source-release-os-immutability-attestation.test.mjs",
   "goal3-task255-pi-goal-mode-intake-manifest.test.mjs",
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",
