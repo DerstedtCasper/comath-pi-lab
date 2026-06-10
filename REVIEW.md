@@ -1,3 +1,16 @@
+# Goal 3 Task 319 / Durable Transport Release-Signoff Verification
+
+Scope: add a service-owned durable transport release-signoff verification gate that consumes the current Task317 prerequisite and optionally binds a maintained external transport evidence artifact without certifying GA.
+
+Implementation notes:
+- Added `recordGoal3DurableTransportReleaseSignoffVerification()` and `POST /release/goal3/durable-transport-release-signoff-verification`.
+- The gate re-reads Task317 and its nested operational-readiness, transport-closure, terminal-certificate, durable-contract, continuity, and maintained-contract artifacts by path/hash/size before writing verification material.
+- Missing external evidence persists a blocked `external_durable_transport_evidence_not_bound` verification; valid evidence must be service-owned, maintained-external, route/client-primitive-bound, and daemon/session-policy-hash-bound.
+- Valid external evidence must keep `fresh_until` inside its declared freshness window and must not carry extra proof, GA, signoff, restore, or custom-transport overclaim fields.
+- The route rejects caller-supplied proof/GA/custom-transport fields before writes and emits non-proof-authority verification audit provenance.
+
+Boundary notes: Task319 may record durable transport provenance when evidence is valid, but it does not build a CoMath WebSocket/SSE stack, run Lean, promote proof claims, make final GA signoff ready, or certify GA.
+
 # Goal 3 Task 318 / Final Release-Signoff Decision
 
 Scope: add a service-owned final release-signoff decision gate that consumes the current Task317 durable-transport prerequisite and Task315 source-release OS attestation chain without certifying GA.
