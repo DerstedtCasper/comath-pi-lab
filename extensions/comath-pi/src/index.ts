@@ -172,6 +172,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.goal3GaOperationalReadinessReview",
   "comath.release.goal3GaCertificationReview",
   "comath.release.goal3FinalGaAudit",
+  "comath.release.goal3SourceReleaseOsImmutabilityAttestation",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
   "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",
@@ -437,8 +438,11 @@ const publicTransportOverclaimPattern =
   /\b(?:long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided|live transport open|direct[- ]Pi[- ]write allowed)\b/gi;
 const publicUnattendedOverclaimPattern =
   /\b(?:production unattended executor|operator[- ]free execution completed|unattended real[- ]host execution completed|terminal unattended completion certified|terminal_unattended_completion_certified\s*[:=]\s*(?:true|1)|terminalUnattendedCompletionCertified\s*[:=]\s*(?:true|1)|completion certificate available|completion_certificate_available\s*[:=]\s*(?:true|1)|completionCertificateAvailable\s*[:=]\s*(?:true|1)|certified_terminal_completion|completion certification prerequisite recorded terminal|terminal_goal_completed|reviewed_terminal_completion|attempt review status recorded terminal|service[- ]owned attempt review completed|service_owned_attempt_review_completed\s*[:=]\s*(?:true|1)|serviceOwnedAttemptReviewCompleted\s*[:=]\s*(?:true|1)|unattended execution authorized|operator confirmation bypassed|operator approval recorded|operator approved|executor invoked|executor_invoked\s*[:=]\s*(?:true|1)|executorInvoked\s*[:=]\s*(?:true|1)|execution_attempted\s*[:=]\s*(?:true|1)|executionAttempted\s*[:=]\s*(?:true|1)|execution_attempt_succeeded\s*[:=]\s*(?:true|1)|executionAttemptSucceeded\s*[:=]\s*(?:true|1)|service[- ]owned evidence created|handoff can execute|GA certified|GA certification|can certify GA|can_certify_ga\s*[:=]\s*(?:true|1)|canCertifyGa\s*[:=]\s*(?:true|1)|can_promote_claim\s*[:=]\s*(?:true|1)|canPromoteClaim\s*[:=]\s*(?:true|1)|final GA audit passed|final_ga_audit_passed\s*[:=]\s*(?:true|1)|finalGaAuditPassed\s*[:=]\s*(?:true|1)|ga_certificate_available\s*[:=]\s*(?:true|1)|gaCertificateAvailable\s*[:=]\s*(?:true|1))\b/gi;
+const publicRestoreOverclaimPattern =
+  /\b(?:can restore|can_restore\s*[:=]\s*(?:true|1)|canRestore\s*[:=]\s*(?:true|1)|restorable source|restore source|attestation is restore source|attestation_is_restore_source\s*[:=]\s*(?:true|1)|result can be used as proof|result_can_be_used_as_proof\s*[:=]\s*(?:true|1))\b/gi;
 
-const hostPathEchoPattern = /(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
+const hostPathEchoPattern =
+  /(?<![A-Za-z])(?:[A-Za-z]:[\\/][^\r\n<>"']*|\\\\\?\\[^\r\n<>"']*|\\\\[^\\\r\n<>"']+[\\/][^\r\n<>"']*)/g;
 const posixHostPathEchoPattern =
   /(^|[\s"'=:(])\/(?:home|root|Users|tmp|var|mnt|media|srv|opt|etc|usr\/local|workspace|private|Volumes)\/[^\s<>"']*/g;
 const trustedRuntimePathEchoPattern = new RegExp(
@@ -454,9 +458,9 @@ const secretEchoPattern =
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
 const publicProofAuthorityKeyPattern = /^(?:proof_authority|proofAuthority)$/i;
 const publicFalseAuthorityKeyPattern =
-  /^(?:can_promote_claim|canPromoteClaim|can_certify_ga|canCertifyGa|final_ga_audit_passed|finalGaAuditPassed|ga_certificate_available|gaCertificateAvailable|durable_transport_provided|durableTransportProvided|live_transport_open|liveTransportOpen|indefinite_stream_open|indefiniteStreamOpen|long_lived_websocket_provided|longLivedWebsocketProvided|long_lived_sse_provided|longLivedSseProvided|pi_direct_write_allowed|piDirectWriteAllowed|direct_trusted_state_mutation|directTrustedStateMutation|os_enforced|osEnforced|operator_approved|operatorApproved|operatorApproval|executor_invoked|executorInvoked|execution_attempted|executionAttempted|execution_attempt_succeeded|executionAttemptSucceeded|execution_attempt_exit_code|executionAttemptExitCode|unattended_execution_authorized|unattendedExecutionAuthorized|unattended_real_host_execution_completed|unattendedRealHostExecutionCompleted|terminal_unattended_completion_certified|terminalUnattendedCompletionCertified|completion_certificate_available|completionCertificateAvailable|operator_confirmation_bypassed|operatorConfirmationBypassed|service_owned_evidence_created|serviceOwnedEvidenceCreated|service_owned_attempt_review_completed|serviceOwnedAttemptReviewCompleted|service_owned_checkpoint_chain_reviewed|serviceOwnedCheckpointChainReviewed|handoff_can_execute|handoffCanExecute)$/i;
+  /^(?:can_restore|canRestore|can_promote_claim|canPromoteClaim|can_certify_ga|canCertifyGa|final_ga_audit_passed|finalGaAuditPassed|ga_certificate_available|gaCertificateAvailable|durable_transport_provided|durableTransportProvided|live_transport_open|liveTransportOpen|indefinite_stream_open|indefiniteStreamOpen|long_lived_websocket_provided|longLivedWebsocketProvided|long_lived_sse_provided|longLivedSseProvided|pi_direct_write_allowed|piDirectWriteAllowed|direct_trusted_state_mutation|directTrustedStateMutation|os_enforced|osEnforced|os_immutability_enforced|osImmutabilityEnforced|co_math_os_immutability_enforced|coMathOsImmutabilityEnforced|storage_is_proof_authority|storageIsProofAuthority|attestation_is_proof_authority|attestationIsProofAuthority|attestation_is_restore_source|attestationIsRestoreSource|result_can_be_used_as_proof|resultCanBeUsedAsProof|operator_approved|operatorApproved|operatorApproval|executor_invoked|executorInvoked|execution_attempted|executionAttempted|execution_attempt_succeeded|executionAttemptSucceeded|execution_attempt_exit_code|executionAttemptExitCode|unattended_execution_authorized|unattendedExecutionAuthorized|unattended_real_host_execution_completed|unattendedRealHostExecutionCompleted|terminal_unattended_completion_certified|terminalUnattendedCompletionCertified|completion_certificate_available|completionCertificateAvailable|operator_confirmation_bypassed|operatorConfirmationBypassed|service_owned_evidence_created|serviceOwnedEvidenceCreated|service_owned_attempt_review_completed|serviceOwnedAttemptReviewCompleted|service_owned_checkpoint_chain_reviewed|serviceOwnedCheckpointChainReviewed|handoff_can_execute|handoffCanExecute)$/i;
 const publicOmittedMaterialKeyPattern =
-  /^(?:executor_command|executorCommand|execution_attempt_command|executionAttemptCommand|attempt_result|attemptResult|execution_attempt_result|executionAttemptResult|execution_attempt_result_path|executionAttemptResultPath|execution_attempt_result_artifact|executionAttemptResultArtifact|completion_certificate|completionCertificate|completion_certificate_json|completionCertificateJson|acceptance_report_json|acceptanceReportJson|proof_breadth_matrix|proofBreadthMatrix|proof_breadth_matrix_json|proofBreadthMatrixJson|final_ga_audit|finalGaAudit|final_ga_audit_json|finalGaAuditJson|lean_replay_manifest|leanReplayManifest|lean_replay_manifest_json|leanReplayManifestJson|lean_run_manifest|leanRunManifest|lean_run_manifest_json|leanRunManifestJson|final_replay_manifest|finalReplayManifest|final_replay_manifest_json|finalReplayManifestJson|proof_claim|proofClaim|proof_claim_json|proofClaimJson|ga_certificate|gaCertificate|ga_certificate_json|gaCertificateJson|durable_transport_session|durableTransportSession|durable_transport_session_json|durableTransportSessionJson)$/i;
+  /^(?:executor_command|executorCommand|execution_attempt_command|executionAttemptCommand|attempt_result|attemptResult|execution_attempt_result|executionAttemptResult|execution_attempt_result_path|executionAttemptResultPath|execution_attempt_result_artifact|executionAttemptResultArtifact|completion_certificate|completionCertificate|completion_certificate_json|completionCertificateJson|acceptance_report_json|acceptanceReportJson|proof_breadth_matrix|proofBreadthMatrix|proof_breadth_matrix_json|proofBreadthMatrixJson|final_ga_audit|finalGaAudit|final_ga_audit_json|finalGaAuditJson|lean_replay_manifest|leanReplayManifest|lean_replay_manifest_json|leanReplayManifestJson|lean_run_manifest|leanRunManifest|lean_run_manifest_json|leanRunManifestJson|final_replay_manifest|finalReplayManifest|final_replay_manifest_json|finalReplayManifestJson|proof_claim|proofClaim|proof_claim_json|proofClaimJson|ga_certificate|gaCertificate|ga_certificate_json|gaCertificateJson|restore_manifest|restoreManifest|restore_manifest_json|restoreManifestJson|attestation_artifact|attestationArtifact|attestation_artifact_json|attestationArtifactJson|os_attestation_response|osAttestationResponse|os_attestation_response_json|osAttestationResponseJson|durable_transport_session|durableTransportSession|durable_transport_session_json|durableTransportSessionJson)$/i;
 const candidateRepairProvenanceReferenceKeys = new Set([
   "source_repair_hint_execution",
   "source_repair_execution",
@@ -470,6 +474,7 @@ function sanitizePublicProofAuthorityValue(value: unknown): unknown {
       .replace(privilegedProofAuthorityPattern, "unverified_formal_status")
       .replace(publicTransportOverclaimPattern, "bounded_transport_checkpoint_only")
       .replace(publicUnattendedOverclaimPattern, "prepared_checkpoint_handoff_only")
+      .replace(publicRestoreOverclaimPattern, "non_restorable_public_evidence")
       .replace(hostPathEchoPattern, "[redacted_host_path]")
       .replace(posixHostPathEchoPattern, "$1[redacted_host_path]")
       .replace(secretEchoPattern, "[redacted_secret]");
@@ -875,6 +880,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.goal3GaOperationalReadinessReview" ||
     name === "comath.release.goal3GaCertificationReview" ||
     name === "comath.release.goal3FinalGaAudit" ||
+    name === "comath.release.goal3SourceReleaseOsImmutabilityAttestation" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
     name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe" ||
@@ -947,6 +953,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "goal3-ga-operational-readiness-review",
   "goal3-ga-certification-review",
   "goal3-final-ga-audit",
+  "goal3-source-release-os-immutability-attestation",
   "run-codex-api-probe",
   "review"
 ] as const;
@@ -988,11 +995,25 @@ function publicOperatorText(value: string): string {
   return sanitizePublicProofAuthorityValue(value) as string;
 }
 
+function publicProviderUrlText(value: string): string {
+  return value
+    .replace(privilegedProofAuthorityPattern, "unverified_formal_status")
+    .replace(publicTransportOverclaimPattern, "bounded_transport_checkpoint_only")
+    .replace(publicUnattendedOverclaimPattern, "prepared_checkpoint_handoff_only")
+    .replace(publicRestoreOverclaimPattern, "non_restorable_public_evidence")
+    .replace(hostPathEchoPattern, "[redacted_host_path]")
+    .replace(posixHostPathEchoPattern, "$1[redacted_host_path]")
+    .replace(trustedRuntimePathEchoPattern, "$1[redacted_trusted_runtime_path]")
+    .replace(encodedTrustedRuntimePathEchoPattern, "$1[redacted_trusted_runtime_path]")
+    .replace(secretEchoPattern, "[redacted_secret]");
+}
+
 function serviceArtifactPathText(value: string): string {
   return value
     .replace(privilegedProofAuthorityPattern, "unverified_formal_status")
     .replace(publicTransportOverclaimPattern, "bounded_transport_checkpoint_only")
     .replace(publicUnattendedOverclaimPattern, "prepared_checkpoint_handoff_only")
+    .replace(publicRestoreOverclaimPattern, "non_restorable_public_evidence")
     .replace(hostPathEchoPattern, "[redacted_host_path]")
     .replace(posixHostPathEchoPattern, "$1[redacted_host_path]")
     .replace(secretEchoPattern, "[redacted_secret]");
@@ -1006,6 +1027,8 @@ const publicGoal3GaOperationalReadinessArtifactPathPattern =
   /^service-owned-goal3-ga-operational-readiness\/([A-Za-z0-9_.:-]+)\/([A-Za-z0-9_.:-]+\.json)$/;
 const publicGoal3GaCertificationArtifactPathPattern =
   /^service-owned-goal3-ga-certification\/([A-Za-z0-9_.:-]+)\/([A-Za-z0-9_.:-]+\.json)$/;
+const publicGoal3SourceReleaseProviderPolicyInspectionArtifactPathPattern =
+  /^service-owned-goal3-source-release-external-provider-policy-inspection\/([A-Za-z0-9_.:-]+)\/([A-Za-z0-9_.:-]+\.json)$/;
 const trustedRuntimeRootName = ["", "comath"].join(".");
 
 function piLifecycleCanonicalArtifactPathText(value: string): string {
@@ -1157,6 +1180,23 @@ function goal3GaCertificationReviewArtifactPathText(value: string, gaCertificati
     );
   }
   return `${trustedRuntimeRootName}/release/goal3-ga-certification/${match[1]}/${match[2]}`;
+}
+
+function goal3SourceReleaseProviderPolicyInspectionArtifactPathText(
+  value: string,
+  policyInspectionId: string
+): string {
+  const sanitized = serviceArtifactPathText(value).trim();
+  const match = sanitized.match(publicGoal3SourceReleaseProviderPolicyInspectionArtifactPathPattern);
+  if (!match) {
+    return sanitized;
+  }
+  if (match[1] !== policyInspectionId || match[2] !== "policy-inspection.json") {
+    throw new Error(
+      "policy_inspection_path must reference service-owned-goal3-source-release-external-provider-policy-inspection/<policy_inspection_id>/policy-inspection.json"
+    );
+  }
+  return `${trustedRuntimeRootName}/release/goal3-source-release-external-provider-policy-inspection/${match[1]}/${match[2]}`;
 }
 
 function publicDiagnosticEnvironment(value: unknown): Record<string, string> | undefined {
@@ -1814,6 +1854,21 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     "final_ga_audit_id",
     `${projectId}-GOAL3-FINAL-GA-AUDIT`
   );
+  const sourceReleaseOsAttestationId = optionalPublicPlannerToken(
+    input,
+    "attestation_id",
+    `${projectId}-GOAL3-SOURCE-RELEASE-OS-ATTESTATION`
+  );
+  const sourceReleasePolicyInspectionId = optionalPublicPlannerToken(
+    input,
+    "policy_inspection_id",
+    `${projectId}-GOAL3-SOURCE-RELEASE-POLICY-INSPECTION`
+  );
+  const sourceReleaseProviderId = optionalPublicPlannerToken(
+    input,
+    "provider_id",
+    "source-release-os-attestation-provider"
+  );
   const adapterOsIsolationReviewId = optionalPublicPlannerToken(
     input,
     "adapter_os_isolation_review_id",
@@ -1972,6 +2027,24 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     input,
     "ga_certification_review_sha256",
     "GOAL3-GA-CERTIFICATION-REVIEW-SHA256"
+  );
+  const sourceReleasePolicyInspectionPath = optionalPublicPlannerPath(
+    input,
+    "policy_inspection_path",
+    `service-owned-goal3-source-release-external-provider-policy-inspection/${sourceReleasePolicyInspectionId}/policy-inspection.json`
+  );
+  const sourceReleasePolicyInspectionSha256 = optionalPublicPlannerToken(
+    input,
+    "policy_inspection_sha256",
+    "GOAL3-SOURCE-RELEASE-POLICY-INSPECTION-SHA256"
+  );
+  const sourceReleaseOsAttestationUrl = publicProviderUrlText(
+    readString(input, "os_attestation_url", { optional: true }) ??
+      "https://example.invalid/comath/source-release/os-attestation"
+  );
+  const sourceReleaseProviderTermsUrl = publicProviderUrlText(
+    readString(input, "provider_terms_url", { optional: true }) ??
+      "https://example.invalid/comath/source-release/os-attestation/terms"
   );
   const sessionManifestPath = optionalPublicPlannerPath(
     input,
@@ -2136,6 +2209,15 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `--ga-certification-review-path ${gaCertificationReviewPath} ` +
       `--ga-certification-review-sha256 ${gaCertificationReviewSha256} ` +
       "--requested-audit-mode open_formal_workbench_final_ga_audit",
+    "goal3-source-release-os-immutability-attestation":
+      `/cm:release goal3-source-release-os-immutability-attestation --project-id ${projectId} ` +
+      `--attestation-id ${sourceReleaseOsAttestationId} ` +
+      `--policy-inspection-id ${sourceReleasePolicyInspectionId} ` +
+      `--policy-inspection-path ${sourceReleasePolicyInspectionPath} ` +
+      `--policy-inspection-sha256 ${sourceReleasePolicyInspectionSha256} ` +
+      `--provider-id ${sourceReleaseProviderId} ` +
+      `--os-attestation-url ${sourceReleaseOsAttestationUrl} ` +
+      `--provider-terms-url ${sourceReleaseProviderTermsUrl}`,
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -2230,6 +2312,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       operational_readiness_review_sha256: operationalReadinessReviewSha256,
       ga_certification_review_path: gaCertificationReviewPath,
       ga_certification_review_sha256: gaCertificationReviewSha256,
+      source_release_os_attestation_id: sourceReleaseOsAttestationId,
+      source_release_policy_inspection_id: sourceReleasePolicyInspectionId,
+      source_release_policy_inspection_path: sourceReleasePolicyInspectionPath,
+      source_release_policy_inspection_sha256: sourceReleasePolicyInspectionSha256,
+      source_release_provider_id: sourceReleaseProviderId,
       pi_install_transcript_path: piInstallTranscriptPath,
       runtime_registration_snapshot_path: runtimeRegistrationSnapshotPath
     },
@@ -3651,6 +3738,36 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
         ),
         ga_certification_review_sha256: readString(input, "ga_certification_review_sha256"),
         requested_audit_mode: requestedAuditMode
+      })
+    );
+  }
+
+  if (name === "comath.release.goal3SourceReleaseOsImmutabilityAttestation") {
+    const attestationId = readString(input, "attestation_id", {
+      optional: true
+    });
+    const policyInspectionId = readString(input, "policy_inspection_id");
+    const providerTermsUrl = readString(input, "provider_terms_url", { optional: true });
+    return publicToolResult(
+      name,
+      client.post("/release/goal3/source-release-os-immutability-attestation", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        ...(attestationId === undefined
+          ? {}
+          : {
+              attestation_id: publicOperatorText(attestationId)
+            }),
+        policy_inspection_id: policyInspectionId,
+        policy_inspection_path: goal3SourceReleaseProviderPolicyInspectionArtifactPathText(
+          readString(input, "policy_inspection_path"),
+          policyInspectionId
+        ),
+        policy_inspection_sha256: readString(input, "policy_inspection_sha256"),
+        provider_id: publicOperatorText(readString(input, "provider_id")),
+        os_attestation_url: publicProviderUrlText(readString(input, "os_attestation_url")),
+        ...(providerTermsUrl === undefined ? {} : { provider_terms_url: publicProviderUrlText(providerTermsUrl) })
       })
     );
   }
@@ -5365,6 +5482,38 @@ export function createComathTools(): ToolDescriptor[] {
               type: "string",
               enum: ["open_formal_workbench_final_ga_audit"]
             }
+          }
+        )
+      )
+    },
+    {
+      name: "comath.release.goal3SourceReleaseOsImmutabilityAttestation",
+      description:
+        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 source-release OS immutability attestation using Task314 policy-inspection id/path/hash material, without exposing caller proof claims, Lean replay manifests, GA certificates, restore manifests, attestation artifacts, direct Pi mutation, CoMath-owned OS enforcement, or proof authority claims.",
+      mutates: true,
+      input_schema: requireConfirmationSchema(
+        objectSchema(
+          [
+            "project_root",
+            "project_id",
+            "actor",
+            "policy_inspection_id",
+            "policy_inspection_path",
+            "policy_inspection_sha256",
+            "provider_id",
+            "os_attestation_url"
+          ],
+          {
+            project_root: stringProp,
+            project_id: stringProp,
+            actor: stringProp,
+            attestation_id: stringProp,
+            policy_inspection_id: stringProp,
+            policy_inspection_path: stringProp,
+            policy_inspection_sha256: stringProp,
+            provider_id: stringProp,
+            os_attestation_url: stringProp,
+            provider_terms_url: stringProp
           }
         )
       )
@@ -7960,6 +8109,44 @@ async function handleReleaseCommand(
           requested_audit_mode:
             optionValue(parsed.args, "--requested-audit-mode") ??
             "open_formal_workbench_final_ga_audit"
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "goal3-source-release-os-immutability-attestation") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.goal3SourceReleaseOsImmutabilityAttestation"
+    );
+    if (!tool) {
+      throw new Error("Goal 3 source-release OS immutability attestation tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          attestation_id: optionValue(parsed.args, "--attestation-id"),
+          policy_inspection_id: requiredOption(
+            optionValue(parsed.args, "--policy-inspection-id"),
+            "policy_inspection_id"
+          ),
+          policy_inspection_path: requiredOption(
+            optionValue(parsed.args, "--policy-inspection-path"),
+            "policy_inspection_path"
+          ),
+          policy_inspection_sha256: requiredOption(
+            optionValue(parsed.args, "--policy-inspection-sha256"),
+            "policy_inspection_sha256"
+          ),
+          provider_id: requiredOption(optionValue(parsed.args, "--provider-id"), "provider_id"),
+          os_attestation_url: requiredOption(optionValue(parsed.args, "--os-attestation-url"), "os_attestation_url"),
+          provider_terms_url: optionValue(parsed.args, "--provider-terms-url")
         },
         ctx
       )

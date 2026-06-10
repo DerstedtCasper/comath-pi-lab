@@ -1,3 +1,19 @@
+# Goal 3 Task 316 / Pi Source-Release OS Immutability Attestation Consumer
+
+## Scope
+
+Task316 adds the Pi/public consumer bridge for the Task315 source-release OS immutability attestation gate. It registers `comath.release.goal3SourceReleaseOsImmutabilityAttestation`, exposes `/cm:release goal3-source-release-os-immutability-attestation`, translates only matching `service-owned-goal3-source-release-external-provider-policy-inspection/<policy_inspection_id>/policy-inspection.json` aliases to service-canonical paths, and adds the checkpoint to the read-only interactive real-Pi planner.
+
+## TDD And Verification Notes
+
+- TDD RED was observed before implementation when the focused Task316 suite failed because the Pi tool was not registered.
+- Focused Task316 covers schema/registration, host-confirmed command routing, model-supplied confirmation stripping, caller proof/Lean/GA/restore/attestation material stripping, policy-inspection alias mismatch rejection before service calls, read-only planner behavior, public sanitizer behavior, and runtime registration exposure.
+- A focused regression caught the URL sanitizer over-redacting `https://` as a Windows host path; the host-path pattern now avoids matching embedded `s:/` URL fragments while still redacting real drive paths.
+
+## Boundary Notes
+
+Task316 is a thin Pi consumer only. It does not change Task315 service semantics, call Lean, promote proof claims, create a restore source, certify GA, assert CoMath-owned OS immutability enforcement, open durable transport, or write `.comath` directly. Any returned or echoed proof, restore, GA, host-path, secret, attestation-artifact, or OS-enforcement overclaim is sanitized or dropped on the Pi/public surface.
+
 # Goal 3 Task 315 / Source Release OS Immutability Attestation
 
 ## Scope
