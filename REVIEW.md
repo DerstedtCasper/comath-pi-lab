@@ -1,3 +1,21 @@
+# Goal 3 Task 309 / Source Artifact Presentation Review
+
+Scope: add a service-owned product-core source artifact presentation review gate that consumes current Task308 source-only open-source review artifact material and exposes a non-restorable public download descriptor for review.
+
+Implementation notes:
+- Added `goal3-task309-source-artifact-presentation-review.test.mjs`.
+- Added `recordGoal3SourceArtifactPresentationReview()` and `POST /release/goal3/source-artifact-presentation-review`.
+- Added `goal3_source_artifact_presentation_review_gate` status exposure.
+- Reused `reviewGoal3PublicArchiveSurfaces()` instead of creating a new public review system, and re-read the bound `source.tar` bytes before writing presentation material.
+
+Verification:
+- TDD RED was observed before documentation synchronization: focused Task309 failed because README and release-hardening docs did not document the new source artifact presentation review.
+- Full verification for Task309 is recorded in the final tracker entry for this continuation.
+
+Boundary notes: Task309 is a source artifact presentation/download gate, not a proof gate, restore source, or GA certificate. It must keep `proof_authority="none"`, `can_restore=false`, `can_promote_claim=false`, `can_certify_ga=false`, and `presentation_is_proof_authority=false`; it cannot replace Lean clean replay, certify individual proof claims, restore runtime state, or turn source-review material into proof authority.
+
+Residual risk: Goal 3 still has broader open-source release polish, optional external notarization/immutable-storage evidence, and operational hardening work after this presentation closure.
+
 # Goal 3 Task 308 / Source-Only Open-Source Review Artifact
 
 Scope: add a service-owned product-core source-only open-source review artifact gate that consumes only current Task307 source-bound release-package material and generates a clean Git source archive for review.
