@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
@@ -54,7 +55,7 @@ export type Goal3PublicArchiveReviewResult = {
 };
 
 const privilegedPublicTerms =
-  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|proven|verified_final_authority_evidence)\b/i;
+  /\b(?:clean_replay_passed|completed_formal_proof|formally_checked|formal_proof_verified|formal_replay_passed|lean_kernel_clean_replay|proven|verified_final_authority_evidence|GA certified|can_certify_ga\s*[:=]\s*(?:true|1))\b/i;
 
 const knownSurfaceKinds = new Set<PublicArchiveReviewSurfaceKind>([
   "source_review_public_archive",
@@ -153,6 +154,10 @@ function addFinding(
   });
 }
 
+function sha256Bytes(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
 function inspectValue(
   projectRoot: string,
   surface: PublicArchiveReviewSurfaceInput,
@@ -201,6 +206,9 @@ function inspectValue(
     }
     if (key === "can_promote_claim" && entry === true) {
       addFinding(findings, surface, "public_archive_promotional_semantics", childLocation);
+    }
+    if (key === "can_certify_ga" && entry === true) {
+      addFinding(findings, surface, "public_archive_ga_certification_semantics", childLocation);
     }
     inspectValue(projectRoot, surface, entry, childLocation, findings);
   }
@@ -382,7 +390,8 @@ function inspectReferencedPublicReports(
       addFinding(findings, surface, "source_review_public_archive_report_invalid", `$.reports[${index}]`);
       continue;
     }
-    const publicPath = (report as { public_relative_path?: unknown }).public_relative_path;
+    const reportRecord = report as { public_relative_path?: unknown; sha256?: unknown; size_bytes?: unknown };
+    const publicPath = reportRecord.public_relative_path;
     if (typeof publicPath !== "string") {
       addFinding(findings, surface, "source_review_public_archive_report_path_missing", `$.reports[${index}].public_relative_path`);
       continue;
@@ -398,7 +407,11 @@ function inspectReferencedPublicReports(
         code: "PUBLIC_ARCHIVE_REVIEW_REFERENCED_REPORT_NOT_FILE"
       });
     }
-    const text = readFileSync(material.absolute, "utf8");
+    const bytes = readFileSync(material.absolute);
+    if (reportRecord.sha256 !== sha256Bytes(bytes) || reportRecord.size_bytes !== bytes.byteLength) {
+      addFinding(findings, surface, "source_review_public_archive_report_material_mismatch", `$.reports[${index}]`);
+    }
+    const text = bytes.toString("utf8");
     inspectValue(projectRoot, surface, text, `$.reports[${index}].public_content`, findings);
   }
 }
@@ -448,6 +461,12 @@ export function reviewGoal3PublicArchiveSurfaces(
     manifest_path: manifestPath
   };
   const absoluteManifestPath = assertPathAllowed(projectRoot, manifestPath, { purpose: "runtime-write" });
+  if (existsSync(absoluteManifestPath)) {
+    throw new ComathError("public archive review already exists", {
+      statusCode: 409,
+      code: "PUBLIC_ARCHIVE_REVIEW_ALREADY_EXISTS"
+    });
+  }
   mkdirSync(dirname(absoluteManifestPath), { recursive: true });
   writeFileSync(absoluteManifestPath, canonicalJson(result), "utf8");
   appendAuditEvent(projectRoot, {

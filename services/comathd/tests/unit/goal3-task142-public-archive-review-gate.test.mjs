@@ -141,6 +141,23 @@ try {
     ]
   });
   assertPassingReview(passingReview, projectRoot);
+  assert.throws(
+    () =>
+      reviewGoal3PublicArchiveSurfaces(projectRoot, {
+        project_id: project.project_id,
+        actor: "goal3-task142-duplicate",
+        review_id: "TASK142-PASS",
+        surfaces: [
+          {
+            surface_id: "source-review-duplicate",
+            surface_kind: "source_review_public_archive",
+            manifest_path: sourceReviewArchive.manifest_path
+          }
+        ]
+      }),
+    { code: "PUBLIC_ARCHIVE_REVIEW_ALREADY_EXISTS" },
+    "public archive reviews must be append-only and reject duplicate review manifests"
+  );
 
   const maliciousManifestPath = ".comath/release/source-review/public-archive/TASK142-MALICIOUS/manifest.json";
   mkdirSync(join(projectRoot, ".comath/release/source-review/public-archive/TASK142-MALICIOUS"), { recursive: true });

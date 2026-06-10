@@ -1,3 +1,21 @@
+# Goal 3 Task 308 / Source-Only Open-Source Review Artifact
+
+Scope: add a service-owned product-core source-only open-source review artifact gate that consumes only current Task307 source-bound release-package material and generates a clean Git source archive for review.
+
+Implementation notes:
+- Added `goal3-task308-source-only-open-source-review-artifact-binding.test.mjs`.
+- Added `recordGoal3SourceOnlyOpenSourceReviewArtifact()` and `POST /release/goal3/source-only-open-source-review-artifact`.
+- Added `goal3_source_only_open_source_review_artifact_gate` status exposure.
+- Reused `reviewGoal3PublicArchiveSurfaces()` instead of creating a new public review system, and used `git archive` rather than ad hoc filesystem packaging.
+
+Verification:
+- TDD RED was observed before documentation synchronization: focused Task308 failed because README and release-hardening docs did not document the new source-only review artifact.
+- Full verification for Task308 is recorded in the final tracker entry for this continuation.
+
+Boundary notes: Task308 is an open-source review artifact gate, not a proof gate or GA certificate. It must keep `proof_authority="none"`, `can_promote_claim=false`, `can_certify_ga=false`, and `source_artifact_is_proof_authority=false`; it cannot replace Lean clean replay, certify individual proof claims, or turn source-review material into proof authority.
+
+Residual risk: Goal 3 still has broader open-source release polish, optional external notarization/immutable-storage evidence, and operational hardening work after this source-only artifact closure.
+
 # Goal 3 Task 307 / Source-Bound Release Package
 
 Scope: add a service-owned product-core public/source-review release package gate that consumes only current Task306 source-bound certificate-consumption material.

@@ -78,3 +78,4 @@ export * from "./release/goal3-final-ga-audit.js";
 export * from "./release/goal3-ga-certificate.js";
 export * from "./release/goal3-ga-certificate-consumption.js";
 export * from "./release/goal3-source-bound-release-package.js";
+export * from "./release/goal3-source-only-open-source-review-artifact.js";
