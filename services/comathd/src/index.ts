@@ -83,3 +83,4 @@ export * from "./release/goal3-source-artifact-presentation-review.js";
 export * from "./release/goal3-source-release-public-checklist.js";
 export * from "./release/goal3-source-release-external-evidence-binding.js";
 export * from "./release/goal3-source-release-external-provider-verification.js";
+export * from "./release/goal3-source-release-external-provider-policy-inspection.js";

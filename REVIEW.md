@@ -1,3 +1,19 @@
+# Goal 3 Task 314 / Source Release External Provider Policy Inspection
+
+## Scope
+
+Task314 provider policy inspection adds a service-owned source-release provider policy-currentness gate after Task313. It consumes a current provider verification by canonical id/path/hash, re-reads its public-review provenance, selected operator evidence, provider response hashes, receipt id, and bound `source.tar`, calls a configured provider policy URL from `comathd`, and persists only a non-authoritative policy inspection manifest when the response binds the same verification hash, provider id, evidence kind, binding/source/evidence hashes, receipt id, and Task313 provider response hash.
+
+## TDD And Verification Notes
+
+- TDD RED was observed before implementation when the focused Task314 suite failed because `recordGoal3SourceReleaseExternalProviderPolicyInspection` was not exported.
+- Documentation RED was observed after implementation wiring when the focused Task314 suite failed because README and release-hardening docs did not yet document the provider policy inspection gate.
+- Review-driven REDs were observed after the first implementation: focused Task314 accepted provider policy responses that failed to echo the Task313 request/body hashes, persisted provider-controlled `content-type` headers containing secret-looking text, and allowed alias overclaim fields such as `ga_certified`, `restore_available`, or `os_immutability_attestation`.
+
+## Boundary Notes
+
+Task314 is provider policy-currentness binding evidence only. It records `provider_policy_inspection_performed=true` after a service-owned provider policy response matches the current Task313 source-release chain, but it does not provide OS-level immutable storage enforcement or attestation, run Lean, promote proof claims, create a restore source, certify GA, or replace Lean Authority v3. Provider policy response headers are normalized before persistence, all Task313 verification request/body/response hashes must be echoed by the provider policy response, and unknown provider policy response fields fail closed.
+
 # Goal 3 Task 313 / Source Release External Provider Verification
 
 ## Scope
