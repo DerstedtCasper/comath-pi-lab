@@ -1,3 +1,14 @@
+# Goal 3 Task 320 / Final Release-Signoff Task319 Consumption
+
+Scope: update the existing final release-signoff decision chain so Task319 durable transport verification can clear the durable blocker when paired with the existing GA certificate consumption path.
+
+Implementation review notes:
+- `recordGoal3FinalReleaseSignoffDecision()` accepts optional Task319 verification id/path/hash and rejects stale, expired, mismatched, or overclaiming transport verification material before writing.
+- Verified Task319 transport clears only `durable_long_lived_transport_not_provided`; missing GA certificate consumption still blocks final signoff.
+- Final signoff readiness requires both current Task319 verification and current Task306 certificate consumption, while the signoff artifact keeps `proof_authority=none`, `can_promote_claim=false`, and `can_certify_ga=false`.
+
+Boundary notes: Task320 does not make transport evidence proof authority, does not build a CoMath transport stack, does not promote proof claims, and does not certify GA.
+
 # Goal 3 Task 319 / Durable Transport Release-Signoff Verification
 
 Scope: add a service-owned durable transport release-signoff verification gate that consumes the current Task317 prerequisite and optionally binds a maintained external transport evidence artifact without certifying GA.

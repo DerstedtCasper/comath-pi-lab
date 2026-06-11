@@ -452,6 +452,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task317-ga-transport-chain-freshness-review.test.mjs",
   "goal3-task318-final-release-signoff-decision.test.mjs",
   "goal3-task319-durable-transport-release-signoff-verification.test.mjs",
+  "goal3-task320-final-release-signoff-task319-consumption.test.mjs",
   "goal3-task255-pi-goal-mode-intake-manifest.test.mjs",
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",
