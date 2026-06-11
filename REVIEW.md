@@ -1,3 +1,14 @@
+# Goal 3 Task 324 / Final Release-Candidate Check-Debug
+
+Scope: revalidate the Task322-323 final release-candidate closure chain and public release-hardening docs without adding a new release route or authority.
+
+Implementation review notes:
+- Added `goal3-task324-final-release-candidate-check-debug.test.mjs` and `goal3_final_release_candidate_check_debug`.
+- The focused regression keeps Task322/323 service route wiring, Task323 source guard strings, reduced Task315/Task319 chain coverage, capability exposure, phase0 smoke discovery, and public release-hardening documentation synchronized.
+- This check-debug pass intentionally leaves Pi/public consumption and proof-breadth execution as separate future frontiers.
+
+Boundary notes: Task324 is regression coverage only. It does not run Lean, expose a Pi consumer, promote proof claims, issue a closure certificate, certify GA, or make Task323 closure provenance proof authority.
+
 # Goal 3 Task 323 / Final Release-Candidate Closure Audit
 
 Scope: add a post-Task322 final release-candidate closure audit that consumes the certification-boundary review without issuing a certificate or proof authority.
