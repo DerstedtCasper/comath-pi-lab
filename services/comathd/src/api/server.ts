@@ -59,6 +59,7 @@ import { recordGoal3FinalReleaseSignoffCertificationBoundaryReview } from "../re
 import { recordGoal3FinalReleaseCandidateClosureAudit } from "../release/goal3-final-release-candidate-closure-audit.js";
 import { recordGoal3ReleaseCandidateProofBreadthReview } from "../release/goal3-proof-breadth-review.js";
 import { recordGoal3ReleaseCandidateProofBreadthClosure } from "../release/goal3-proof-breadth-closure.js";
+import { recordGoal3ReleaseCandidateProofBreadthExecutionBridge } from "../release/goal3-proof-breadth-execution-bridge.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
 import { recordGoal3FinalGaAudit } from "../release/goal3-final-ga-audit.js";
 import { recordGoal3GaCertificate } from "../release/goal3-ga-certificate.js";
@@ -612,6 +613,20 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           proof_breadth_closure: recordGoal3ReleaseCandidateProofBreadthClosure(body.project_root, body)
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/proof-breadth-execution-bridge",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3ReleaseCandidateProofBreadthExecutionBridge>[1] & {
+          project_root: string;
+        };
+        return {
+          proof_breadth_execution_bridge: recordGoal3ReleaseCandidateProofBreadthExecutionBridge(
+            body.project_root,
+            body
+          )
         };
       }
     ],

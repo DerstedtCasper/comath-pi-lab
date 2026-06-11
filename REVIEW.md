@@ -1,3 +1,16 @@
+# Goal 3 Task 326 / Proof-Breadth Execution Bridge
+
+Scope: add a service-owned release-candidate proof-breadth execution bridge that selects the next bounded PM tranche without running Lean or creating proof authority.
+
+Implementation review notes:
+- Added `goal3-task326-proof-breadth-execution-bridge.test.mjs`.
+- Added `recordGoal3ReleaseCandidateProofBreadthExecutionBridge()` and `POST /release/goal3/proof-breadth-execution-bridge`.
+- The bridge derives the current 100-task manifest, reads only canonical per-task final-authority packaging reports, counts verified/missing/blocked PM tasks, and persists an append-only `.comath/release/goal3-proof-breadth-execution-bridge/<id>/bridge.json` artifact.
+- The selected tranche exposes only task ids, categories, target status, expected canonical packaging report paths, and required final-evidence class names for later task-local Lean Authority v3 packaging.
+- Caller proof-breadth matrices, proof claims, Lean replay manifests, and GA wording are ignored/sanitized before persistence or audit events.
+
+Boundary notes: Task326 is execution planning only. It does not run Lean, synthesize proofs, close proof breadth, unblock final GA audit, promote claims, certify GA, replace Task300 closure verification, or replace Task301 final-audit binding.
+
 # Goal 3 Task 325 / Pi Final Release-Candidate Closure Audit Consumer
 
 Scope: expose the Task323 final release-candidate closure audit through the Pi/public surface as a host-confirmed thin client without moving proof or certificate authority into Pi.

@@ -78,6 +78,7 @@ export * from "./release/goal3-final-release-signoff-certification-boundary-revi
 export * from "./release/goal3-final-release-candidate-closure-audit.js";
 export * from "./release/goal3-proof-breadth-review.js";
 export * from "./release/goal3-proof-breadth-closure.js";
+export * from "./release/goal3-proof-breadth-execution-bridge.js";
 export * from "./release/goal3-ga-certification.js";
 export * from "./release/goal3-final-ga-audit.js";
 export * from "./release/goal3-ga-certificate.js";
