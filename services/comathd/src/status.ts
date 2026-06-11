@@ -163,6 +163,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "goal3_final_release_signoff_task319_consumption_gate",
       "goal3_durable_transport_release_signoff_verification_gate",
       "goal3_final_release_chain_check_debug",
+      "goal3_final_release_signoff_certification_boundary_review_gate",
       "goal3_release_candidate_proof_breadth_review_gate",
       "goal3_release_candidate_proof_breadth_closure_gate",
       "goal3_ga_certification_review_gate",

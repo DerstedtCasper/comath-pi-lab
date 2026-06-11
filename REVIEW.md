@@ -1,3 +1,14 @@
+# Goal 3 Task 322 / Final Release Signoff Certification-Boundary Review
+
+Scope: add a certification-boundary review over a current Task320 ready final signoff without issuing a new GA certificate or proof authority.
+
+Implementation review notes:
+- Added `recordGoal3FinalReleaseSignoffCertificationBoundaryReview()` and `POST /release/goal3/final-release-signoff-certification-boundary-review`.
+- The gate consumes only a canonical id/path/hash Task320 ready signoff and re-reads its Task306 certificate consumption, Task319 durable-transport verification, external durable-transport evidence, Task315 OS attestation, source archive, and operator evidence by current hash/size.
+- The focused regression covers stale source bytes, expired external transport evidence, blocked signoffs, duplicate append-only review ids, route overclaims, capability exposure, smoke discovery, and audit provenance.
+
+Boundary notes: Task322 is certification-boundary provenance only. It records that the consumed GA certificate remains the certifying artifact, while the boundary review itself keeps `proof_authority="none"`, `can_promote_claim=false`, `can_certify_ga=false`, `boundary_review_is_certificate=false`, and `ga_certificate_issued=false`.
+
 # Goal 3 Task 321 / Final Release-Chain Check-Debug
 
 Scope: revalidate the Task317-320 final release chain and its Task306/Task315 dependencies without adding new release authority.
