@@ -1,3 +1,14 @@
+# Goal 3 Task 330 / Proof-Breadth Pi Closure Check-Debug
+
+Scope: revalidate the Task328/329 Pi proof-breadth consumers and adjacent Task300/301/326 service proof-breadth gates without adding authority or public mutation surfaces.
+
+Implementation review notes:
+- Added `goal3-task330-proof-breadth-pi-closure-check-debug.test.mjs` and `goal3_release_candidate_proof_breadth_pi_closure_check_debug`.
+- The focused regression keeps Task328 review consumer blocked/no-authority, Task329 closure consumer non-promotional while preserving service-owned Task300 closure status/counts, Task326 execution bridge planning-only, Task300 as closure verifier, and Task301 as final-audit closure-binding gate.
+- The suite also guards phase0 smoke discovery, Pi package discovery, runtime registration, interactive planner ordering, and public release-hardening documentation.
+
+Boundary notes: Task330 is regression coverage only. It does not add a route, expose a new Pi tool, run Lean, write `.comath`, consume Task326 bridge output as closure evidence, execute broad proof breadth, expose final-GA-audit closure-binding public inputs, promote claims, unblock final GA audit by itself, or certify GA.
+
 # Goal 3 Task 329 / Pi Proof-Breadth Closure Consumer
 
 Scope: expose the Task300 service-owned proof-breadth closure verifier through Pi/public host-confirmed thin-client wiring only.

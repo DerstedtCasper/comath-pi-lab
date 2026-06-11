@@ -462,6 +462,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task327-proof-breadth-bridge-check-debug.test.mjs",
   "goal3-task328-pi-proof-breadth-review-consumer.test.mjs",
   "goal3-task329-pi-proof-breadth-closure-consumer.test.mjs",
+  "goal3-task330-proof-breadth-pi-closure-check-debug.test.mjs",
   "goal3-task255-pi-goal-mode-intake-manifest.test.mjs",
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",
