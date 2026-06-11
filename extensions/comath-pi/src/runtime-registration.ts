@@ -224,6 +224,7 @@ function commandMetadata(command: string): Pick<
         "goal3-final-ga-audit",
         "goal3-source-release-os-immutability-attestation",
         "goal3-final-release-candidate-closure-audit",
+        "goal3-proof-breadth-review",
         "lifecycle-interactive-real-pi",
         "agent-adapter-os-isolation-probe",
         "agent-adapter-os-isolation-sandbox-execution",

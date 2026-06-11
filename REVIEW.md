@@ -1,3 +1,15 @@
+# Goal 3 Task 328 / Pi Proof-Breadth Review Consumer
+
+Scope: expose the Task298 service-owned proof-breadth review through Pi/public host-confirmed thin-client wiring only.
+
+Implementation review notes:
+- Added `goal3-task328-pi-proof-breadth-review-consumer.test.mjs`.
+- Added `comath.release.goal3ProofBreadthReview`, `/cm:release goal3-proof-breadth-review`, runtime registration metadata, package-test discovery, phase0 smoke discovery, and the read-only interactive real-Pi planner checkpoint.
+- The Pi bridge forwards only project/actor material, optional `proof_breadth_review_id`, and `requested_review_mode` to `POST /release/goal3/proof-breadth-review`.
+- Public sanitizer coverage strips caller proof-breadth matrices, proof claims, Lean manifests, GA certificates, executor commands, durable transport sessions, host paths, secrets, confirmation ids, and proof/GA/proof-breadth overclaims, then forces blocked-review/no-authority public semantics.
+
+Boundary notes: Task328 is Pi thin-client wiring only. It does not run Lean, write `.comath` directly, close proof breadth, consume Task326 execution bridge output, replace Task300 closure verification, replace Task301 final-audit binding, promote claims, unblock final GA audit, or certify GA.
+
 # Goal 3 Task 327 / Proof-Breadth Bridge Check-Debug
 
 Scope: revalidate the Task326 proof-breadth execution bridge and adjacent Task298/300/301 proof-breadth gates without adding a new authority or public surface.

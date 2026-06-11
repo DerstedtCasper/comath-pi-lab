@@ -174,6 +174,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.goal3FinalGaAudit",
   "comath.release.goal3SourceReleaseOsImmutabilityAttestation",
   "comath.release.goal3FinalReleaseCandidateClosureAudit",
+  "comath.release.goal3ProofBreadthReview",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
   "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",
@@ -438,7 +439,7 @@ const privilegedProofAuthorityPattern =
 const publicTransportOverclaimPattern =
   /\b(?:long[- ]lived\s+(?:websocket|sse)|indefinite\s+sse|terminal transport recovered live|durable transport provided|live transport open|direct[- ]Pi[- ]write allowed)\b/gi;
 const publicUnattendedOverclaimPattern =
-  /\b(?:production unattended executor|operator[- ]free execution completed|unattended real[- ]host execution completed|terminal unattended completion certified|terminal_unattended_completion_certified\s*[:=]\s*(?:true|1)|terminalUnattendedCompletionCertified\s*[:=]\s*(?:true|1)|completion certificate available|completion_certificate_available\s*[:=]\s*(?:true|1)|completionCertificateAvailable\s*[:=]\s*(?:true|1)|certified_terminal_completion|completion certification prerequisite recorded terminal|terminal_goal_completed|reviewed_terminal_completion|attempt review status recorded terminal|service[- ]owned attempt review completed|service_owned_attempt_review_completed\s*[:=]\s*(?:true|1)|serviceOwnedAttemptReviewCompleted\s*[:=]\s*(?:true|1)|unattended execution authorized|operator confirmation bypassed|operator approval recorded|operator approved|executor invoked|executor_invoked\s*[:=]\s*(?:true|1)|executorInvoked\s*[:=]\s*(?:true|1)|execution_attempted\s*[:=]\s*(?:true|1)|executionAttempted\s*[:=]\s*(?:true|1)|execution_attempt_succeeded\s*[:=]\s*(?:true|1)|executionAttemptSucceeded\s*[:=]\s*(?:true|1)|service[- ]owned evidence created|handoff can execute|GA certified|GA certification|can certify GA|can_certify_ga\s*[:=]\s*(?:true|1)|canCertifyGa\s*[:=]\s*(?:true|1)|can_promote_claim\s*[:=]\s*(?:true|1)|canPromoteClaim\s*[:=]\s*(?:true|1)|final GA audit passed|final_ga_audit_passed\s*[:=]\s*(?:true|1)|finalGaAuditPassed\s*[:=]\s*(?:true|1)|ga_certificate_available\s*[:=]\s*(?:true|1)|gaCertificateAvailable\s*[:=]\s*(?:true|1)|ga_certificate_issued\s*[:=]\s*(?:true|1)|gaCertificateIssued\s*[:=]\s*(?:true|1)|closure audit is certificate|release_candidate_closure_audit_is_certificate\s*[:=]\s*(?:true|1)|releaseCandidateClosureAuditIsCertificate\s*[:=]\s*(?:true|1))\b/gi;
+  /\b(?:production unattended executor|operator[- ]free execution completed|unattended real[- ]host execution completed|terminal unattended completion certified|terminal_unattended_completion_certified\s*[:=]\s*(?:true|1)|terminalUnattendedCompletionCertified\s*[:=]\s*(?:true|1)|completion certificate available|completion_certificate_available\s*[:=]\s*(?:true|1)|completionCertificateAvailable\s*[:=]\s*(?:true|1)|certified_terminal_completion|completion certification prerequisite recorded terminal|terminal_goal_completed|reviewed_terminal_completion|attempt review status recorded terminal|service[- ]owned attempt review completed|service_owned_attempt_review_completed\s*[:=]\s*(?:true|1)|serviceOwnedAttemptReviewCompleted\s*[:=]\s*(?:true|1)|unattended execution authorized|operator confirmation bypassed|operator approval recorded|operator approved|executor invoked|executor_invoked\s*[:=]\s*(?:true|1)|executorInvoked\s*[:=]\s*(?:true|1)|execution_attempted\s*[:=]\s*(?:true|1)|executionAttempted\s*[:=]\s*(?:true|1)|execution_attempt_succeeded\s*[:=]\s*(?:true|1)|executionAttemptSucceeded\s*[:=]\s*(?:true|1)|service[- ]owned evidence created|handoff can execute|GA certified|GA certification|can certify GA|can_certify_ga\s*[:=]\s*(?:true|1)|canCertifyGa\s*[:=]\s*(?:true|1)|can_promote_claim\s*[:=]\s*(?:true|1)|canPromoteClaim\s*[:=]\s*(?:true|1)|proof breadth complete|proof_breadth_complete\s*[:=]\s*(?:true|1)|proofBreadthComplete\s*[:=]\s*(?:true|1)|final GA audit unblocked|final_ga_audit_unblocked\s*[:=]\s*(?:true|1)|finalGaAuditUnblocked\s*[:=]\s*(?:true|1)|final GA audit passed|final_ga_audit_passed\s*[:=]\s*(?:true|1)|finalGaAuditPassed\s*[:=]\s*(?:true|1)|ga_certificate_available\s*[:=]\s*(?:true|1)|gaCertificateAvailable\s*[:=]\s*(?:true|1)|ga_certificate_issued\s*[:=]\s*(?:true|1)|gaCertificateIssued\s*[:=]\s*(?:true|1)|closure audit is certificate|release_candidate_closure_audit_is_certificate\s*[:=]\s*(?:true|1)|releaseCandidateClosureAuditIsCertificate\s*[:=]\s*(?:true|1))\b/gi;
 const publicRestoreOverclaimPattern =
   /\b(?:can restore|can_restore\s*[:=]\s*(?:true|1)|canRestore\s*[:=]\s*(?:true|1)|restorable source|restore source|attestation is restore source|attestation_is_restore_source\s*[:=]\s*(?:true|1)|result can be used as proof|result_can_be_used_as_proof\s*[:=]\s*(?:true|1))\b/gi;
 
@@ -459,9 +460,9 @@ const secretEchoPattern =
 const secretObjectKeyPattern = /^(?:COMATH_CODEX_API_KEY|OPENAI_API_KEY|api[_-]?key|token|authorization)$/i;
 const publicProofAuthorityKeyPattern = /^(?:proof_authority|proofAuthority)$/i;
 const publicFalseAuthorityKeyPattern =
-  /^(?:can_restore|canRestore|can_promote_claim|canPromoteClaim|can_certify_ga|canCertifyGa|final_ga_audit_passed|finalGaAuditPassed|ga_certificate_available|gaCertificateAvailable|ga_certificate_issued|gaCertificateIssued|release_candidate_closure_audit_is_certificate|releaseCandidateClosureAuditIsCertificate|durable_transport_provided|durableTransportProvided|live_transport_open|liveTransportOpen|indefinite_stream_open|indefiniteStreamOpen|long_lived_websocket_provided|longLivedWebsocketProvided|long_lived_sse_provided|longLivedSseProvided|pi_direct_write_allowed|piDirectWriteAllowed|direct_trusted_state_mutation|directTrustedStateMutation|os_enforced|osEnforced|os_immutability_enforced|osImmutabilityEnforced|co_math_os_immutability_enforced|coMathOsImmutabilityEnforced|storage_is_proof_authority|storageIsProofAuthority|attestation_is_proof_authority|attestationIsProofAuthority|attestation_is_restore_source|attestationIsRestoreSource|result_can_be_used_as_proof|resultCanBeUsedAsProof|operator_approved|operatorApproved|operatorApproval|executor_invoked|executorInvoked|execution_attempted|executionAttempted|execution_attempt_succeeded|executionAttemptSucceeded|execution_attempt_exit_code|executionAttemptExitCode|unattended_execution_authorized|unattendedExecutionAuthorized|unattended_real_host_execution_completed|unattendedRealHostExecutionCompleted|terminal_unattended_completion_certified|terminalUnattendedCompletionCertified|completion_certificate_available|completionCertificateAvailable|operator_confirmation_bypassed|operatorConfirmationBypassed|service_owned_evidence_created|serviceOwnedEvidenceCreated|service_owned_attempt_review_completed|serviceOwnedAttemptReviewCompleted|service_owned_checkpoint_chain_reviewed|serviceOwnedCheckpointChainReviewed|handoff_can_execute|handoffCanExecute)$/i;
+  /^(?:can_restore|canRestore|can_promote_claim|canPromoteClaim|can_certify_ga|canCertifyGa|proof_breadth_complete|proofBreadthComplete|final_ga_audit_unblocked|finalGaAuditUnblocked|final_ga_audit_passed|finalGaAuditPassed|ga_certificate_available|gaCertificateAvailable|ga_certificate_issued|gaCertificateIssued|release_candidate_closure_audit_is_certificate|releaseCandidateClosureAuditIsCertificate|durable_transport_provided|durableTransportProvided|live_transport_open|liveTransportOpen|indefinite_stream_open|indefiniteStreamOpen|long_lived_websocket_provided|longLivedWebsocketProvided|long_lived_sse_provided|longLivedSseProvided|pi_direct_write_allowed|piDirectWriteAllowed|direct_trusted_state_mutation|directTrustedStateMutation|os_enforced|osEnforced|os_immutability_enforced|osImmutabilityEnforced|co_math_os_immutability_enforced|coMathOsImmutabilityEnforced|storage_is_proof_authority|storageIsProofAuthority|attestation_is_proof_authority|attestationIsProofAuthority|attestation_is_restore_source|attestationIsRestoreSource|result_can_be_used_as_proof|resultCanBeUsedAsProof|operator_approved|operatorApproved|operatorApproval|executor_invoked|executorInvoked|execution_attempted|executionAttempted|execution_attempt_succeeded|executionAttemptSucceeded|execution_attempt_exit_code|executionAttemptExitCode|unattended_execution_authorized|unattendedExecutionAuthorized|unattended_real_host_execution_completed|unattendedRealHostExecutionCompleted|terminal_unattended_completion_certified|terminalUnattendedCompletionCertified|completion_certificate_available|completionCertificateAvailable|operator_confirmation_bypassed|operatorConfirmationBypassed|service_owned_evidence_created|serviceOwnedEvidenceCreated|service_owned_attempt_review_completed|serviceOwnedAttemptReviewCompleted|service_owned_checkpoint_chain_reviewed|serviceOwnedCheckpointChainReviewed|handoff_can_execute|handoffCanExecute)$/i;
 const publicOmittedMaterialKeyPattern =
-  /^(?:executor_command|executorCommand|execution_attempt_command|executionAttemptCommand|attempt_result|attemptResult|execution_attempt_result|executionAttemptResult|execution_attempt_result_path|executionAttemptResultPath|execution_attempt_result_artifact|executionAttemptResultArtifact|completion_certificate|completionCertificate|completion_certificate_json|completionCertificateJson|acceptance_report_json|acceptanceReportJson|proof_breadth_matrix|proofBreadthMatrix|proof_breadth_matrix_json|proofBreadthMatrixJson|final_ga_audit|finalGaAudit|final_ga_audit_json|finalGaAuditJson|final_release_candidate_closure_audit|finalReleaseCandidateClosureAudit|final_release_candidate_closure_audit_json|finalReleaseCandidateClosureAuditJson|lean_replay_manifest|leanReplayManifest|lean_replay_manifest_json|leanReplayManifestJson|lean_run_manifest|leanRunManifest|lean_run_manifest_json|leanRunManifestJson|final_replay_manifest|finalReplayManifest|final_replay_manifest_json|finalReplayManifestJson|proof_claim|proofClaim|proof_claim_json|proofClaimJson|ga_certificate|gaCertificate|ga_certificate_json|gaCertificateJson|restore_manifest|restoreManifest|restore_manifest_json|restoreManifestJson|attestation_artifact|attestationArtifact|attestation_artifact_json|attestationArtifactJson|os_attestation_response|osAttestationResponse|os_attestation_response_json|osAttestationResponseJson|durable_transport_session|durableTransportSession|durable_transport_session_json|durableTransportSessionJson)$/i;
+  /^(?:executor_command|executorCommand|execution_attempt_command|executionAttemptCommand|attempt_result|attemptResult|execution_attempt_result|executionAttemptResult|execution_attempt_result_path|executionAttemptResultPath|execution_attempt_result_artifact|executionAttemptResultArtifact|completion_certificate|completionCertificate|completion_certificate_json|completionCertificateJson|acceptance_report_json|acceptanceReportJson|proof_breadth_matrix|proofBreadthMatrix|proof_breadth_matrix_path|proofBreadthMatrixPath|proof_breadth_matrix_sha256|proofBreadthMatrixSha256|proof_breadth_matrix_json|proofBreadthMatrixJson|proof_breadth_review_json|proofBreadthReviewJson|proof_breadth_closure_json|proofBreadthClosureJson|proof_breadth_execution_bridge_json|proofBreadthExecutionBridgeJson|final_ga_audit|finalGaAudit|final_ga_audit_json|finalGaAuditJson|final_release_candidate_closure_audit|finalReleaseCandidateClosureAudit|final_release_candidate_closure_audit_json|finalReleaseCandidateClosureAuditJson|lean_replay_manifest|leanReplayManifest|lean_replay_manifest_json|leanReplayManifestJson|lean_run_manifest|leanRunManifest|lean_run_manifest_json|leanRunManifestJson|final_replay_manifest|finalReplayManifest|final_replay_manifest_json|finalReplayManifestJson|proof_claim|proofClaim|proof_claim_json|proofClaimJson|ga_certificate|gaCertificate|ga_certificate_json|gaCertificateJson|restore_manifest|restoreManifest|restore_manifest_json|restoreManifestJson|attestation_artifact|attestationArtifact|attestation_artifact_json|attestationArtifactJson|os_attestation_response|osAttestationResponse|os_attestation_response_json|osAttestationResponseJson|durable_transport_session|durableTransportSession|durable_transport_session_json|durableTransportSessionJson)$/i;
 const candidateRepairProvenanceReferenceKeys = new Set([
   "source_repair_hint_execution",
   "source_repair_execution",
@@ -930,6 +931,74 @@ function sanitizeGoal3FinalReleaseCandidateClosureAuditPublicValue(value: unknow
   };
 }
 
+function restoreGoal3ProofBreadthReviewPublicFlags(sanitized: unknown, original: unknown): unknown {
+  if (!sanitized || typeof sanitized !== "object" || Array.isArray(sanitized)) {
+    return sanitized;
+  }
+  const originalRecord =
+    original && typeof original === "object" && !Array.isArray(original)
+      ? (original as Record<string, unknown>)
+      : {};
+  const restored: Record<string, unknown> = { ...(sanitized as Record<string, unknown>) };
+  restored.proof_authority = "none";
+  restored.proofAuthority = "none";
+  restored.can_promote_claim = false;
+  restored.canPromoteClaim = false;
+  restored.can_certify_ga = false;
+  restored.canCertifyGa = false;
+  restored.proof_breadth_complete = false;
+  restored.proofBreadthComplete = false;
+  restored.final_ga_audit_unblocked = false;
+  restored.finalGaAuditUnblocked = false;
+  if (typeof originalRecord.clean_replay_passed_count === "number") {
+    restored.clean_replay_passed_count = 0;
+  }
+  if (typeof originalRecord.promoted_count === "number") {
+    restored.promoted_count = 0;
+  }
+  if (typeof originalRecord.replayable_blocker_count === "number") {
+    restored.replayable_blocker_count =
+      typeof originalRecord.total_required_tasks === "number"
+        ? originalRecord.total_required_tasks
+        : originalRecord.replayable_blocker_count;
+  }
+  for (const key of [
+    "positive_task_manifest_current",
+    "positiveTaskManifestCurrent",
+    "positive_matrix_batch_current",
+    "positiveMatrixBatchCurrent",
+    "ga_certification_gate_separate",
+    "gaCertificationGateSeparate"
+  ]) {
+    if (originalRecord[key] === true) {
+      restored[key] = true;
+    }
+  }
+  return restored;
+}
+
+function sanitizeGoal3ProofBreadthReviewPublicValue(value: unknown): unknown {
+  const sanitized = sanitizePublicDisplayValue(value);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return sanitized;
+  }
+  const originalRecord = value as Record<string, unknown>;
+  if (!Object.hasOwn(originalRecord, "proof_breadth_review")) {
+    return sanitized;
+  }
+  const sanitizedRecord =
+    sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
+      ? (sanitized as Record<string, unknown>)
+      : {};
+  return {
+    ...sanitizedRecord,
+    proof_breadth_review: restoreGoal3ProofBreadthReviewPublicFlags(
+      sanitizePublicDisplayValue(originalRecord.proof_breadth_review),
+      originalRecord.proof_breadth_review
+    )
+  };
+}
+
 function shouldSanitizePublicToolResult(name: string): boolean {
   return (
     name === "comath.snapshot.export" ||
@@ -969,6 +1038,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.goal3FinalGaAudit" ||
     name === "comath.release.goal3SourceReleaseOsImmutabilityAttestation" ||
     name === "comath.release.goal3FinalReleaseCandidateClosureAudit" ||
+    name === "comath.release.goal3ProofBreadthReview" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
     name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe" ||
@@ -997,6 +1067,9 @@ async function publicToolResult(name: string, result: Promise<any>): Promise<any
   }
   if (name === "comath.release.goal3FinalReleaseCandidateClosureAudit") {
     return sanitizeGoal3FinalReleaseCandidateClosureAuditPublicValue(value);
+  }
+  if (name === "comath.release.goal3ProofBreadthReview") {
+    return sanitizeGoal3ProofBreadthReviewPublicValue(value);
   }
   return shouldSanitizePublicToolResult(name) ? sanitizePublicDisplayValue(value) : value;
 }
@@ -1046,6 +1119,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "goal3-final-ga-audit",
   "goal3-source-release-os-immutability-attestation",
   "goal3-final-release-candidate-closure-audit",
+  "goal3-proof-breadth-review",
   "run-codex-api-probe",
   "review"
 ] as const;
@@ -1970,6 +2044,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     "final_release_candidate_closure_audit_id",
     `${projectId}-GOAL3-FINAL-RELEASE-CANDIDATE-CLOSURE-AUDIT`
   );
+  const proofBreadthReviewId = optionalPublicPlannerToken(
+    input,
+    "proof_breadth_review_id",
+    `${projectId}-GOAL3-PROOF-BREADTH-REVIEW`
+  );
   const certificationBoundaryReviewId = optionalPublicPlannerToken(
     input,
     "certification_boundary_review_id",
@@ -2356,6 +2435,10 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `--certification-boundary-review-path ${certificationBoundaryReviewPath} ` +
       `--certification-boundary-review-sha256 ${certificationBoundaryReviewSha256} ` +
       "--requested-audit-mode open_formal_workbench_final_release_candidate_closure_audit",
+    "goal3-proof-breadth-review":
+      `/cm:release goal3-proof-breadth-review --project-id ${projectId} ` +
+      `--proof-breadth-review-id ${proofBreadthReviewId} ` +
+      "--requested-review-mode open_formal_workbench_release_candidate_proof_breadth",
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -2442,6 +2525,7 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       ga_certification_review_id: gaCertificationReviewId,
       final_ga_audit_id: finalGaAuditId,
       final_release_candidate_closure_audit_id: finalReleaseCandidateClosureAuditId,
+      proof_breadth_review_id: proofBreadthReviewId,
       certification_boundary_review_id: certificationBoundaryReviewId,
       transport_closure_review_path: transportClosureReviewPath,
       transport_closure_review_sha256: transportClosureReviewSha256,
@@ -3940,6 +4024,29 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
         ),
         certification_boundary_review_sha256: readString(input, "certification_boundary_review_sha256"),
         requested_audit_mode: requestedAuditMode
+      })
+    );
+  }
+
+  if (name === "comath.release.goal3ProofBreadthReview") {
+    const proofBreadthReviewId = readString(input, "proof_breadth_review_id", {
+      optional: true
+    });
+    const requestedReviewMode =
+      readString(input, "requested_review_mode", { optional: true }) ??
+      "open_formal_workbench_release_candidate_proof_breadth";
+    return publicToolResult(
+      name,
+      client.post("/release/goal3/proof-breadth-review", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        ...(proofBreadthReviewId === undefined
+          ? {}
+          : {
+              proof_breadth_review_id: publicOperatorText(proofBreadthReviewId)
+            }),
+        requested_review_mode: requestedReviewMode
       })
     );
   }
@@ -5716,6 +5823,31 @@ export function createComathTools(): ToolDescriptor[] {
             requested_audit_mode: {
               type: "string",
               enum: ["open_formal_workbench_final_release_candidate_closure_audit"]
+            }
+          }
+        )
+      )
+    },
+    {
+      name: "comath.release.goal3ProofBreadthReview",
+      description:
+        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 release-candidate proof-breadth review, without exposing caller proof-breadth matrices, proof claims, Lean replay manifests, GA certificates, executor commands, durable transport sessions, direct Pi mutation, proof-breadth closure, final-audit unblock, or proof authority claims.",
+      mutates: true,
+      input_schema: requireConfirmationSchema(
+        objectSchema(
+          [
+            "project_root",
+            "project_id",
+            "actor"
+          ],
+          {
+            project_root: stringProp,
+            project_id: stringProp,
+            actor: stringProp,
+            proof_breadth_review_id: stringProp,
+            requested_review_mode: {
+              type: "string",
+              enum: ["open_formal_workbench_release_candidate_proof_breadth"]
             }
           }
         )
@@ -8391,6 +8523,32 @@ async function handleReleaseCommand(
           requested_audit_mode:
             optionValue(parsed.args, "--requested-audit-mode") ??
             "open_formal_workbench_final_release_candidate_closure_audit"
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "goal3-proof-breadth-review") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.goal3ProofBreadthReview"
+    );
+    if (!tool) {
+      throw new Error("Goal 3 proof-breadth review tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          proof_breadth_review_id: optionValue(parsed.args, "--proof-breadth-review-id"),
+          requested_review_mode:
+            optionValue(parsed.args, "--requested-review-mode") ??
+            "open_formal_workbench_release_candidate_proof_breadth"
         },
         ctx
       )
