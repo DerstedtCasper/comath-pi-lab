@@ -175,6 +175,7 @@ const PI_RUNTIME_EXECUTABLE_TOOL_NAMES = new Set([
   "comath.release.goal3SourceReleaseOsImmutabilityAttestation",
   "comath.release.goal3FinalReleaseCandidateClosureAudit",
   "comath.release.goal3ProofBreadthReview",
+  "comath.release.goal3ProofBreadthClosure",
   "comath.release.agentAdapterOsIsolationProbe",
   "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
   "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",
@@ -999,6 +1000,82 @@ function sanitizeGoal3ProofBreadthReviewPublicValue(value: unknown): unknown {
   };
 }
 
+function isCompleteGoal3ProofBreadthClosure(original: Record<string, unknown>): boolean {
+  return (
+    original.ok === true &&
+    original.proof_breadth_status === "complete_release_candidate_proof_breadth" &&
+    original.total_required_tasks === 100 &&
+    original.verified_task_count === 100 &&
+    original.missing_task_count === 0 &&
+    original.blocked_task_count === 0 &&
+    original.proof_breadth_complete === true &&
+    original.final_ga_audit_unblocked === true
+  );
+}
+
+function restoreGoal3ProofBreadthClosurePublicFlags(sanitized: unknown, original: unknown): unknown {
+  if (!sanitized || typeof sanitized !== "object" || Array.isArray(sanitized)) {
+    return sanitized;
+  }
+  const originalRecord =
+    original && typeof original === "object" && !Array.isArray(original)
+      ? (original as Record<string, unknown>)
+      : {};
+  const restored: Record<string, unknown> = { ...(sanitized as Record<string, unknown>) };
+  const complete = isCompleteGoal3ProofBreadthClosure(originalRecord);
+  restored.proof_authority = complete ? "unverified_formal_status" : "none";
+  restored.proofAuthority = complete ? "unverified_formal_status" : "none";
+  restored.can_promote_claim = false;
+  restored.canPromoteClaim = false;
+  restored.can_certify_ga = false;
+  restored.canCertifyGa = false;
+  restored.ga_certificate_available = false;
+  restored.gaCertificateAvailable = false;
+  if (typeof originalRecord.proof_breadth_complete === "boolean") {
+    restored.proof_breadth_complete = complete;
+  }
+  if (typeof originalRecord.proofBreadthComplete === "boolean") {
+    restored.proofBreadthComplete = complete;
+  }
+  if (typeof originalRecord.final_ga_audit_unblocked === "boolean") {
+    restored.final_ga_audit_unblocked = complete;
+  }
+  if (typeof originalRecord.finalGaAuditUnblocked === "boolean") {
+    restored.finalGaAuditUnblocked = complete;
+  }
+  for (const key of [
+    "ga_certification_gate_separate",
+    "gaCertificationGateSeparate"
+  ]) {
+    if (originalRecord[key] === true) {
+      restored[key] = true;
+    }
+  }
+  return restored;
+}
+
+function sanitizeGoal3ProofBreadthClosurePublicValue(value: unknown): unknown {
+  const sanitized = sanitizePublicDisplayValue(value);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return sanitized;
+  }
+  const originalRecord = value as Record<string, unknown>;
+  if (!Object.hasOwn(originalRecord, "proof_breadth_closure")) {
+    return sanitized;
+  }
+  const sanitizedRecord =
+    sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
+      ? (sanitized as Record<string, unknown>)
+      : {};
+  return {
+    ...sanitizedRecord,
+    proof_breadth_closure: restoreGoal3ProofBreadthClosurePublicFlags(
+      sanitizePublicDisplayValue(originalRecord.proof_breadth_closure),
+      originalRecord.proof_breadth_closure
+    )
+  };
+}
+
 function shouldSanitizePublicToolResult(name: string): boolean {
   return (
     name === "comath.snapshot.export" ||
@@ -1039,6 +1116,7 @@ function shouldSanitizePublicToolResult(name: string): boolean {
     name === "comath.release.goal3SourceReleaseOsImmutabilityAttestation" ||
     name === "comath.release.goal3FinalReleaseCandidateClosureAudit" ||
     name === "comath.release.goal3ProofBreadthReview" ||
+    name === "comath.release.goal3ProofBreadthClosure" ||
     name === "comath.release.agentAdapterOsIsolationProbe" ||
     name === "comath.release.agentAdapterOsIsolationSandboxExecutionProbe" ||
     name === "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe" ||
@@ -1070,6 +1148,9 @@ async function publicToolResult(name: string, result: Promise<any>): Promise<any
   }
   if (name === "comath.release.goal3ProofBreadthReview") {
     return sanitizeGoal3ProofBreadthReviewPublicValue(value);
+  }
+  if (name === "comath.release.goal3ProofBreadthClosure") {
+    return sanitizeGoal3ProofBreadthClosurePublicValue(value);
   }
   return shouldSanitizePublicToolResult(name) ? sanitizePublicDisplayValue(value) : value;
 }
@@ -1120,6 +1201,7 @@ const PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS = [
   "goal3-source-release-os-immutability-attestation",
   "goal3-final-release-candidate-closure-audit",
   "goal3-proof-breadth-review",
+  "goal3-proof-breadth-closure",
   "run-codex-api-probe",
   "review"
 ] as const;
@@ -2049,6 +2131,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     "proof_breadth_review_id",
     `${projectId}-GOAL3-PROOF-BREADTH-REVIEW`
   );
+  const proofBreadthClosureId = optionalPublicPlannerToken(
+    input,
+    "proof_breadth_closure_id",
+    `${projectId}-GOAL3-PROOF-BREADTH-CLOSURE`
+  );
   const certificationBoundaryReviewId = optionalPublicPlannerToken(
     input,
     "certification_boundary_review_id",
@@ -2439,6 +2526,10 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `/cm:release goal3-proof-breadth-review --project-id ${projectId} ` +
       `--proof-breadth-review-id ${proofBreadthReviewId} ` +
       "--requested-review-mode open_formal_workbench_release_candidate_proof_breadth",
+    "goal3-proof-breadth-closure":
+      `/cm:release goal3-proof-breadth-closure --project-id ${projectId} ` +
+      `--proof-breadth-closure-id ${proofBreadthClosureId} ` +
+      "--requested-closure-mode open_formal_workbench_release_candidate_proof_breadth_closure",
     "run-codex-api-probe":
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
@@ -2526,6 +2617,7 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       final_ga_audit_id: finalGaAuditId,
       final_release_candidate_closure_audit_id: finalReleaseCandidateClosureAuditId,
       proof_breadth_review_id: proofBreadthReviewId,
+      proof_breadth_closure_id: proofBreadthClosureId,
       certification_boundary_review_id: certificationBoundaryReviewId,
       transport_closure_review_path: transportClosureReviewPath,
       transport_closure_review_sha256: transportClosureReviewSha256,
@@ -4047,6 +4139,29 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
               proof_breadth_review_id: publicOperatorText(proofBreadthReviewId)
             }),
         requested_review_mode: requestedReviewMode
+      })
+    );
+  }
+
+  if (name === "comath.release.goal3ProofBreadthClosure") {
+    const proofBreadthClosureId = readString(input, "proof_breadth_closure_id", {
+      optional: true
+    });
+    const requestedClosureMode =
+      readString(input, "requested_closure_mode", { optional: true }) ??
+      "open_formal_workbench_release_candidate_proof_breadth_closure";
+    return publicToolResult(
+      name,
+      client.post("/release/goal3/proof-breadth-closure", {
+        project_root: readString(input, "project_root"),
+        project_id: readString(input, "project_id"),
+        actor: publicOperatorText(readString(input, "actor")),
+        ...(proofBreadthClosureId === undefined
+          ? {}
+          : {
+              proof_breadth_closure_id: publicOperatorText(proofBreadthClosureId)
+            }),
+        requested_closure_mode: requestedClosureMode
       })
     );
   }
@@ -5848,6 +5963,32 @@ export function createComathTools(): ToolDescriptor[] {
             requested_review_mode: {
               type: "string",
               enum: ["open_formal_workbench_release_candidate_proof_breadth"]
+            }
+          }
+        )
+      )
+    },
+    {
+      name: "comath.release.goal3ProofBreadthClosure",
+      description:
+        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 release-candidate proof-breadth closure verifier, without exposing caller proof-breadth matrices, closure JSON, execution-bridge output, proof claims, Lean replay manifests, GA certificates, executor commands, durable transport sessions, direct Pi mutation, final-audit binding, or Pi proof authority claims.",
+      mutates: true,
+      input_schema: requireConfirmationSchema(
+        objectSchema(
+          [
+            "project_root",
+            "project_id",
+            "actor",
+            "proof_breadth_closure_id"
+          ],
+          {
+            project_root: stringProp,
+            project_id: stringProp,
+            actor: stringProp,
+            proof_breadth_closure_id: stringProp,
+            requested_closure_mode: {
+              type: "string",
+              enum: ["open_formal_workbench_release_candidate_proof_breadth_closure"]
             }
           }
         )
@@ -8549,6 +8690,35 @@ async function handleReleaseCommand(
           requested_review_mode:
             optionValue(parsed.args, "--requested-review-mode") ??
             "open_formal_workbench_release_candidate_proof_breadth"
+        },
+        ctx
+      )
+    );
+    return;
+  }
+  if (subcommand === "goal3-proof-breadth-closure") {
+    const tool = createComathTools().find(
+      (descriptor) => descriptor.name === "comath.release.goal3ProofBreadthClosure"
+    );
+    if (!tool) {
+      throw new Error("Goal 3 proof-breadth closure tool is not registered");
+    }
+    await notifyRuntimeResult(
+      ctx,
+      await executeRuntimeToolWithHostConfirmation(
+        client,
+        tool,
+        {
+          project_root: projectRootFrom(options, parsed.args),
+          project_id: requiredOption(optionValue(parsed.args, "--project-id"), "project_id"),
+          actor: actorFrom(options, parsed.args),
+          proof_breadth_closure_id: requiredOption(
+            optionValue(parsed.args, "--proof-breadth-closure-id"),
+            "proof_breadth_closure_id"
+          ),
+          requested_closure_mode:
+            optionValue(parsed.args, "--requested-closure-mode") ??
+            "open_formal_workbench_release_candidate_proof_breadth_closure"
         },
         ctx
       )

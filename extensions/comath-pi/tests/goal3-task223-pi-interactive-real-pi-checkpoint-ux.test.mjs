@@ -43,6 +43,7 @@ const expectedCheckpointSteps = [
   "goal3-source-release-os-immutability-attestation",
   "goal3-final-release-candidate-closure-audit",
   "goal3-proof-breadth-review",
+  "goal3-proof-breadth-closure",
   "run-codex-api-probe",
   "review"
 ];
@@ -577,6 +578,39 @@ const expectedNextActions = [
       "goal3-final-release-candidate-closure-audit",
       "goal3-proof-breadth-review"
     ],
+    action: "goal3-proof-breadth-closure",
+    command: /\/cm:release goal3-proof-breadth-closure/
+  },
+  {
+    completed: [
+      "run-real-pi-runtime-probe",
+      "lifecycle-operator-session",
+      "lifecycle-operator-transport-recovery",
+      "lifecycle-operator-transport-lease",
+      "lifecycle-operator-transport-heartbeat",
+      "lifecycle-guided-real-pi-execution",
+      "lifecycle-operator-service-transport-contract",
+      "lifecycle-automatic-real-pi-execution",
+      "lifecycle-operator-service-transport-continuity",
+      "lifecycle-unattended-real-host-handoff-review",
+      "lifecycle-unattended-real-host-operator-approval",
+      "lifecycle-unattended-real-host-executor-contract",
+      "lifecycle-unattended-real-host-durable-transport-contract",
+      "lifecycle-unattended-real-host-execution-readiness",
+      "lifecycle-unattended-real-host-execution-attempt",
+      "lifecycle-unattended-real-host-execution-attempt-review",
+      "lifecycle-unattended-real-host-completion-certification-prerequisite",
+      "lifecycle-unattended-real-host-terminal-completion-certificate-design",
+      "lifecycle-unattended-real-host-terminal-completion-certificate",
+      "lifecycle-operator-service-transport-closure-review",
+      "goal3-ga-operational-readiness-review",
+      "goal3-ga-certification-review",
+      "goal3-final-ga-audit",
+      "goal3-source-release-os-immutability-attestation",
+      "goal3-final-release-candidate-closure-audit",
+      "goal3-proof-breadth-review",
+      "goal3-proof-breadth-closure"
+    ],
     action: "run-codex-api-probe",
     command: /lifecycle-control run-codex-api-probe/
   },
@@ -608,6 +642,7 @@ const expectedNextActions = [
       "goal3-source-release-os-immutability-attestation",
       "goal3-final-release-candidate-closure-audit",
       "goal3-proof-breadth-review",
+      "goal3-proof-breadth-closure",
       "run-codex-api-probe"
     ],
     action: "review",

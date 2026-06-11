@@ -1,3 +1,15 @@
+# Goal 3 Task 329 / Pi Proof-Breadth Closure Consumer
+
+Scope: expose the Task300 service-owned proof-breadth closure verifier through Pi/public host-confirmed thin-client wiring only.
+
+Implementation review notes:
+- Added `goal3-task329-pi-proof-breadth-closure-consumer.test.mjs`.
+- Added `comath.release.goal3ProofBreadthClosure`, `/cm:release goal3-proof-breadth-closure`, runtime registration metadata, package-test discovery, phase0 smoke discovery, and the read-only interactive real-Pi planner checkpoint.
+- The Pi bridge forwards only project/actor material, `proof_breadth_closure_id`, and `requested_closure_mode` to `POST /release/goal3/proof-breadth-closure`.
+- Public sanitizer coverage strips caller proof-breadth matrices, closure JSON, Task326 bridge output, proof claims, Lean manifests, GA certificates, executor commands, durable transport sessions, host paths, secrets, confirmation ids, and proof/GA overclaims while preserving service-owned Task300 closure status/counts as non-promotional public evidence.
+
+Boundary notes: Task329 is Pi thin-client wiring only. It does not run Lean, write `.comath` directly, consume Task326 bridge output, replace Task300 closure verification, replace Task301 final-audit binding, promote claims, unblock final GA audit by itself, or certify GA.
+
 # Goal 3 Task 328 / Pi Proof-Breadth Review Consumer
 
 Scope: expose the Task298 service-owned proof-breadth review through Pi/public host-confirmed thin-client wiring only.
