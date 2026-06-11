@@ -5518,4 +5518,4 @@ Completion record:
 - Progress estimate after Task320: approximately 99.2% of the full GA design target is complete. Task320 closes the final release-signoff readiness aggregation gap between Task319 durable transport verification and Task306 GA certificate consumption, but it still does not turn final signoff provenance into GA certification or proof authority.
 - Residual risk: Goal 3 remains incomplete on final release closure and final audit polish. Final signoff readiness is now representable when required chains are current, but GA certification remains separate, proof claims still require ordinary Lean Authority gates, and a follow-up check-debug loop should audit Task317-320 together for overclaim regressions, stale-chain holes, and public wording drift.
 - Next recommended step: Task321 should run a comprehensive final release-chain check-debug loop over Task317-320 plus Task306/315/318/319 consumers, preserving `proof_authority=lean_kernel_clean_replay` only for actual clean Lean replay artifacts and keeping broad proof matrices as release-candidate audit debt.
-- Commit: pending
+- Commit: `23d81b3` (`Add goal3 task320 final signoff consumption`)
