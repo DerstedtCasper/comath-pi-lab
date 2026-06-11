@@ -1,3 +1,14 @@
+# Goal 3 Task 321 / Final Release-Chain Check-Debug
+
+Scope: revalidate the Task317-320 final release chain and its Task306/Task315 dependencies without adding new release authority.
+
+Implementation review notes:
+- Task321 keeps `goal3_final_release_chain_check_debug` exposed in `getComathdStatus()` and keeps `goal3-task321-final-release-chain-check-debug.test.mjs` in the phase0 smoke release-hardening suite.
+- The focused regression asserts the final signoff path remains bound to Task319 durable-transport verification, Task306 certificate consumption, freshness checks, and non-authoritative output.
+- The same regression keeps Task319 durable-transport verification as maintained-external transport provenance only, not proof authority, GA certification, or a CoMath-owned transport stack.
+
+Boundary notes: Task321 is check-debug coverage only. It does not add a new route, run Lean, promote proof claims, create durable transport, or certify GA.
+
 # Goal 3 Task 320 / Final Release-Signoff Task319 Consumption
 
 Scope: update the existing final release-signoff decision chain so Task319 durable transport verification can clear the durable blocker when paired with the existing GA certificate consumption path.
