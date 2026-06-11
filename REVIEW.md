@@ -1,3 +1,16 @@
+# Goal 3 Task 325 / Pi Final Release-Candidate Closure Audit Consumer
+
+Scope: expose the Task323 final release-candidate closure audit through the Pi/public surface as a host-confirmed thin client without moving proof or certificate authority into Pi.
+
+Implementation review notes:
+- Added `goal3-task325-pi-final-release-candidate-closure-audit-consumer.test.mjs`.
+- Added `comath.release.goal3FinalReleaseCandidateClosureAudit`, `/cm:release goal3-final-release-candidate-closure-audit`, runtime registration metadata, and an interactive real-Pi planner checkpoint after the Task316 source-release OS attestation checkpoint.
+- The consumer forwards only project/actor material, optional `final_release_candidate_closure_audit_id`, Task322 certification-boundary review id/path/hash, and the fixed Task323 audit mode to `POST /release/goal3/final-release-candidate-closure-audit`.
+- The public alias helper accepts only `service-owned-goal3-final-release-signoff-certification-boundary-review/<certification_boundary_review_id>/review.json` and rejects mismatches before any service POST.
+- Public request/result/confirmation/notification sanitization strips model confirmation ids, proof/Lean/GA/proof-breadth/closure-certificate/durable-transport material, host paths, secrets, and authority overclaims while preserving service-returned currentness flags.
+
+Boundary notes: Task325 is Pi thin-client wiring only. It does not change Task323 service semantics, reimplement the Task320/306/319/317/315 dependency closure, write `.comath` directly, run Lean, promote proof claims, issue a closure certificate, certify GA, or make release-candidate closure provenance proof authority.
+
 # Goal 3 Task 324 / Final Release-Candidate Check-Debug
 
 Scope: revalidate the Task322-323 final release-candidate closure chain and public release-hardening docs without adding a new release route or authority.

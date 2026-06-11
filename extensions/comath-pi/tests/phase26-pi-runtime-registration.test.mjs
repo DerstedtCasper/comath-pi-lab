@@ -206,6 +206,7 @@ for (const toolName of fakePi.tools.keys()) {
       "comath.release.goal3GaCertificationReview",
       "comath.release.goal3FinalGaAudit",
       "comath.release.goal3SourceReleaseOsImmutabilityAttestation",
+      "comath.release.goal3FinalReleaseCandidateClosureAudit",
       "comath.release.agentAdapterOsIsolationProbe",
       "comath.release.agentAdapterOsIsolationSandboxExecutionProbe",
       "comath.release.agentAdapterOsIsolationProviderHostCapabilityProbe",

@@ -41,6 +41,7 @@ const expectedCheckpointSteps = [
   "goal3-ga-certification-review",
   "goal3-final-ga-audit",
   "goal3-source-release-os-immutability-attestation",
+  "goal3-final-release-candidate-closure-audit",
   "run-codex-api-probe",
   "review"
 ];
@@ -512,6 +513,37 @@ const expectedNextActions = [
       "goal3-final-ga-audit",
       "goal3-source-release-os-immutability-attestation"
     ],
+    action: "goal3-final-release-candidate-closure-audit",
+    command: /\/cm:release goal3-final-release-candidate-closure-audit/
+  },
+  {
+    completed: [
+      "run-real-pi-runtime-probe",
+      "lifecycle-operator-session",
+      "lifecycle-operator-transport-recovery",
+      "lifecycle-operator-transport-lease",
+      "lifecycle-operator-transport-heartbeat",
+      "lifecycle-guided-real-pi-execution",
+      "lifecycle-operator-service-transport-contract",
+      "lifecycle-automatic-real-pi-execution",
+      "lifecycle-operator-service-transport-continuity",
+      "lifecycle-unattended-real-host-handoff-review",
+      "lifecycle-unattended-real-host-operator-approval",
+      "lifecycle-unattended-real-host-executor-contract",
+      "lifecycle-unattended-real-host-durable-transport-contract",
+      "lifecycle-unattended-real-host-execution-readiness",
+      "lifecycle-unattended-real-host-execution-attempt",
+      "lifecycle-unattended-real-host-execution-attempt-review",
+      "lifecycle-unattended-real-host-completion-certification-prerequisite",
+      "lifecycle-unattended-real-host-terminal-completion-certificate-design",
+      "lifecycle-unattended-real-host-terminal-completion-certificate",
+      "lifecycle-operator-service-transport-closure-review",
+      "goal3-ga-operational-readiness-review",
+      "goal3-ga-certification-review",
+      "goal3-final-ga-audit",
+      "goal3-source-release-os-immutability-attestation",
+      "goal3-final-release-candidate-closure-audit"
+    ],
     action: "run-codex-api-probe",
     command: /lifecycle-control run-codex-api-probe/
   },
@@ -541,6 +573,7 @@ const expectedNextActions = [
       "goal3-ga-certification-review",
       "goal3-final-ga-audit",
       "goal3-source-release-os-immutability-attestation",
+      "goal3-final-release-candidate-closure-audit",
       "run-codex-api-probe"
     ],
     action: "review",
@@ -566,6 +599,11 @@ for (const expected of expectedNextActions) {
     execution_id: "LIFE-GUIDED-EXEC-0223",
     terminal_review_id: "LIFE-TERMINAL-REVIEW-0223",
     transport_contract_id: "LIFE-TRANSPORT-CONTRACT-0223",
+    final_release_candidate_closure_audit_id: "GOAL3-CLOSURE-0223",
+    certification_boundary_review_id: "GOAL3-BOUNDARY-0223",
+    certification_boundary_review_path:
+      "service-owned-goal3-final-release-signoff-certification-boundary-review/GOAL3-BOUNDARY-0223/review.json",
+    certification_boundary_review_sha256: "4".repeat(64),
     handoff_review_id: "LIFE-HANDOFF-REVIEW-0223",
     orchestration_id: "LIFE-AUTOMATIC-REAL-PI-0223",
     continuity_id: "LIFE-TRANSPORT-CONTINUITY-0223",
