@@ -75,6 +75,7 @@ export * from "./release/goal3-ga-transport-chain-freshness.js";
 export * from "./release/goal3-final-release-signoff-decision.js";
 export * from "./release/goal3-durable-transport-release-signoff-verification.js";
 export * from "./release/goal3-final-release-signoff-certification-boundary-review.js";
+export * from "./release/goal3-final-release-candidate-closure-audit.js";
 export * from "./release/goal3-proof-breadth-review.js";
 export * from "./release/goal3-proof-breadth-closure.js";
 export * from "./release/goal3-ga-certification.js";

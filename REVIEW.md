@@ -1,3 +1,14 @@
+# Goal 3 Task 323 / Final Release-Candidate Closure Audit
+
+Scope: add a post-Task322 final release-candidate closure audit that consumes the certification-boundary review without issuing a certificate or proof authority.
+
+Implementation review notes:
+- Added `recordGoal3FinalReleaseCandidateClosureAudit()` and `POST /release/goal3/final-release-candidate-closure-audit`.
+- The gate consumes only a canonical id/path/hash Task322 boundary review, then re-reads the bound Task320 final signoff, Task306 certificate consumption, Task319 durable-transport verification, Task319-bound Task317 nested transport chain, external durable-transport evidence, Task315 policy-inspection/source-release OS attestation chain, source archive, and operator evidence by current hash/size.
+- The focused regression covers stale source bytes after Task322, expired external durable transport evidence, blocked boundary reviews, reduced Task315/Task319-like chain material, duplicate append-only audit ids, caller proof/GA-certificate overclaims, capability exposure, smoke discovery, and audit provenance.
+
+Boundary notes: Task323 is final release-candidate closure audit provenance only. It records that the consumed GA certificate remains the certifying artifact, while the Task323 artifact itself keeps `proof_authority="none"`, `can_promote_claim=false`, `can_certify_ga=false`, `release_candidate_closure_audit_is_certificate=false`, and `ga_certificate_issued=false`.
+
 # Goal 3 Task 322 / Final Release Signoff Certification-Boundary Review
 
 Scope: add a certification-boundary review over a current Task320 ready final signoff without issuing a new GA certificate or proof authority.

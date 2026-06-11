@@ -56,6 +56,7 @@ import { recordGoal3DurableTransportReleaseSignoffPrerequisite } from "../releas
 import { recordGoal3FinalReleaseSignoffDecision } from "../release/goal3-final-release-signoff-decision.js";
 import { recordGoal3DurableTransportReleaseSignoffVerification } from "../release/goal3-durable-transport-release-signoff-verification.js";
 import { recordGoal3FinalReleaseSignoffCertificationBoundaryReview } from "../release/goal3-final-release-signoff-certification-boundary-review.js";
+import { recordGoal3FinalReleaseCandidateClosureAudit } from "../release/goal3-final-release-candidate-closure-audit.js";
 import { recordGoal3ReleaseCandidateProofBreadthReview } from "../release/goal3-proof-breadth-review.js";
 import { recordGoal3ReleaseCandidateProofBreadthClosure } from "../release/goal3-proof-breadth-closure.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
@@ -577,6 +578,18 @@ async function route(method: string, path: string, body: unknown, context: Route
         return {
           final_release_signoff_certification_boundary_review:
             recordGoal3FinalReleaseSignoffCertificationBoundaryReview(projectRoot, input)
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/final-release-candidate-closure-audit",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3FinalReleaseCandidateClosureAudit>[1] & {
+          project_root: string;
+        };
+        const { project_root: projectRoot, ...input } = body;
+        return {
+          final_release_candidate_closure_audit: recordGoal3FinalReleaseCandidateClosureAudit(projectRoot, input)
         };
       }
     ],
