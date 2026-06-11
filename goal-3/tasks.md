@@ -5536,4 +5536,4 @@ Completion record:
 - Progress estimate after Task321: approximately 99.25% of the full GA design target is complete. Task321 closes a public/check-debug synchronization gap around the final release-chain, but it does not complete final GA certification or broad proof-breadth closure.
 - Residual risk: Goal 3 remains incomplete on final release closure and final audit polish. Final release-signoff readiness is regression-covered, but GA certification remains separate, proof claims still require ordinary Lean Authority gates, and broad proof matrices remain release-candidate audit debt.
 - Next recommended step: continue from the next live tracker frontier after this check-debug loop, likely final release polish or certification-facing closure that preserves `proof_authority=lean_kernel_clean_replay` only for actual clean Lean replay artifacts and keeps release-signoff provenance separate from proof authority.
-- Commit: pending
+- Commit: `18f3209` (`Add goal3 task321 final release-chain check-debug`)
