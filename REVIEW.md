@@ -1,3 +1,14 @@
+# Goal 3 Task 327 / Proof-Breadth Bridge Check-Debug
+
+Scope: revalidate the Task326 proof-breadth execution bridge and adjacent Task298/300/301 proof-breadth gates without adding a new authority or public surface.
+
+Implementation review notes:
+- Added `goal3-task327-proof-breadth-bridge-check-debug.test.mjs` and `goal3_release_candidate_proof_breadth_execution_bridge_check_debug`.
+- The focused regression keeps Task326 source guards, Task326 tranche-selection coverage, Task298/300/301 proof-breadth route wiring, capability exposure, phase0 smoke discovery, and public release-hardening documentation synchronized.
+- The check-debug suite asserts the bridge remains bounded execution planning with append-only provenance, caller proof-breadth material ignored, and no proof/promotion/certification authority.
+
+Boundary notes: Task327 is regression coverage only. It does not add a route, expose a Pi consumer, run Lean, synthesize proofs, close proof breadth, unblock final GA audit, promote claims, certify GA, replace Task300 closure verification, or replace Task301 final-audit binding.
+
 # Goal 3 Task 326 / Proof-Breadth Execution Bridge
 
 Scope: add a service-owned release-candidate proof-breadth execution bridge that selects the next bounded PM tranche without running Lean or creating proof authority.
