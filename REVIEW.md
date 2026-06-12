@@ -1,3 +1,16 @@
+# Goal 3 Task 343 / Selected-Tranche Next Closure Recheck
+
+Scope: consume a current Task341 selected-tranche next packaging results follow-up and continue the bounded proof-breadth loop by handing that current selected tranche back into selected-tranche closure recheck / Task300 aggregate closure semantics. This is the Task343 selected-tranche next closure recheck.
+
+Implementation review notes:
+- Added `goal3-task343-selected-tranche-next-closure-recheck.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosureRecheck()` and `POST /release/goal3/selected-tranche-next-closure-recheck`.
+- The recheck consumes only a Task341 id/path/hash triple, rejects stale Task341 material, re-hashes the selected canonical PM packaging reports, writes append-only non-certifying provenance, and keeps caller proof/GA material ignored.
+- The focused test keeps the Task343 path fail-closed when Task341 selected packaging results are incomplete: blocked selected PM reports stay blocked and are not counted as verified closure evidence.
+- The Task343 snapshot preserves Task341 `ready_for_proof_breadth_closure_recheck`; blocked selected-tranche currentness cannot be rewritten as ready during the handoff.
+
+Boundary notes: Task343 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, write packaging reports, trust caller success metadata, expose a Pi tool, replace Task300/301, write Task301 final-GA-audit artifacts, close global proof breadth by itself, unblock final GA audit by itself, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 342 / Selected-Tranche Next Packaging Currentness Check-Debug
 
 Scope: run the every-third-task check-debug pass over the selected-tranche next packaging/currentness loop after Task341. This is the Task342 selected-tranche next packaging currentness check-debug.

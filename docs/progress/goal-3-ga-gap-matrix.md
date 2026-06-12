@@ -101,6 +101,8 @@ Scope: current `D:\MATH _Studio\comath-pi-lab` `main` worktree against the 2026-
 
 Task342 selected-tranche next packaging currentness check-debug adds release-hardening regression coverage over the latest Task340/341 selected-tranche packaging/currentness loop and its Task338/335/334/326/300/301 authority boundaries. This records status/smoke/default-discovery/docs synchronization only; it does not add a route, Pi consumer, Lean replay, packaging writer, proof-breadth closure, final-audit unblock, claim promotion, certificate issuance, or GA certification.
 
+Task343 selected-tranche next closure recheck adds the Task341-bound selected-tranche currentness-to-Task300 handoff. It consumes only current Task341 id/path/hash material, re-hashes selected canonical PM packaging reports, records append-only non-certifying provenance, and keeps Task300 as aggregate proof-breadth closure authority plus Task301 as final-audit binding authority. It does not run Lean, write packaging reports, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert incomplete selected-tranche packaging into verified proof breadth.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |
