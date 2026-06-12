@@ -109,6 +109,8 @@ Task345 selected-tranche next closure bridge check-debug adds regression coverag
 
 Task346 selected-tranche next closure packaging follow-through adds the Task344-bound handoff into the existing selected-tranche packaging path. It consumes only current Task344 id/path/hash material, re-hashes Task344's delegated Task338 bridge, requires its delegated Task326 bridge reference to remain bound, rejects missing next bridges and evidence outside Task344's next selected PM task ids, delegates packaging through Task340/Task334, and records append-only non-certifying provenance. It does not run Lean, synthesize proofs, write Task300 closure or Task301 final-audit artifacts, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche packaging into global proof-breadth closure.
 
+Task347 selected-tranche next closure packaging results follow-up adds the Task346-bound currentness handoff over selected-tranche next closure packaging results. It consumes only current Task346 id/path/hash material, canonical-validates Task346-embedded Task344/Task338 provenance, delegates Task346's Task340 packaging output through Task341 currentness reuse, preserves Task335 currentness transitively through Task341, and records append-only non-certifying provenance. It does not run Lean, synthesize proofs, write Task300 closure, Task301 final-audit, or GA-certificate artifacts, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche packaging results into global proof-breadth closure.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |

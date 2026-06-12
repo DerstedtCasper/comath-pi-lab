@@ -1,3 +1,15 @@
+# Goal 3 Task 347 / Selected-Tranche Next Closure Packaging Results Follow-Up
+
+Scope: consume a current Task346 selected-tranche next closure packaging follow-through and continue the bounded proof-breadth loop by reusing Task341/Task335 selected-tranche packaging-result currentness checks over Task346's Task340/Task334 packaging output. This is the Task347 selected-tranche next closure packaging results follow-up.
+
+Implementation review notes:
+- Added `goal3-task347-selected-tranche-next-closure-packaging-results-follow-up.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsFollowUp()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-follow-up`.
+- The follow-up consumes only a Task346 id/path/hash triple, rejects stale Task346 material, canonical-validates Task346-embedded Task344/Task338 provenance, passes Task346's Task340 packaging follow-through through Task341 currentness reuse, and preserves the Task335 currentness witness plus Task334 packaging writer reference.
+- The persisted wrapper binds Task346, Task344, Task338, Task340, Task341, Task335, and Task334 artifacts by references/hashes without embedding proof reports or creating Task300 closure / Task301 final-audit / GA-certificate material.
+
+Boundary notes: Task347 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, write Task300 closure or Task301 final-audit artifacts, trust caller success metadata, expose a Pi tool/surface, replace Task300/301, close global proof breadth by itself, unblock final GA audit by itself, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 346 / Selected-Tranche Next Closure Packaging Follow-Through
 
 Scope: consume a current Task344 selected-tranche next closure execution bridge and continue the bounded proof-breadth loop by handing its delegated Task338 selected-tranche next execution bridge into the existing Task340/Task334 packaging path. This is the Task346 selected-tranche next closure packaging follow-through.
