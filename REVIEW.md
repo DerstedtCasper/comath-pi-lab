@@ -1,3 +1,14 @@
+# Goal 3 Task 331 / Pi Final-GA-Audit Closure-Binding Consumer
+
+Scope: extend the existing Task297 Pi final-GA-audit consumer so it can pass Task300 proof-breadth closure id/path/hash material into the Task301 service route without adding proof, closure, or GA certification authority to Pi.
+
+Implementation review notes:
+- Added `goal3-task331-pi-final-ga-audit-closure-binding-consumer.test.mjs` and wired it into Pi package discovery plus phase0 smoke discovery.
+- Extended `comath.release.goal3FinalGaAudit` and `/cm:release goal3-final-ga-audit` with optional all-or-none `proof_breadth_closure_id/path/sha256` inputs, matching `service-owned-goal3-proof-breadth-closure/<id>/closure.json` alias translation, direct execution forwarding, host-confirmed runtime command parsing, and read-only planner command emission.
+- Hardened the public final-GA-audit sanitizer so a closure-bound service pass can remain visible as non-certifying status while proof-authority wording is redacted and claim promotion, GA certification, certificate issuance, direct Pi mutation, and durable/live transport stay false.
+
+Boundary notes: Task331 is Pi thin-client wiring only. It does not add a service route, run Lean, write `.comath` directly, accept caller closure JSON or Task326 bridge output as closure evidence, replace Task300 closure verification, replace Task301 final-audit binding, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 330 / Proof-Breadth Pi Closure Check-Debug
 
 Scope: revalidate the Task328/329 Pi proof-breadth consumers and adjacent Task300/301/326 service proof-breadth gates without adding authority or public mutation surfaces.

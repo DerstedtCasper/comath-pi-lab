@@ -805,6 +805,30 @@ function restoreGoal3FinalGaAuditPublicFlags(
     context.includes("final_ga_audit") ||
     originalRecord.schema_version === "comath.goal3_final_ga_audit.v1";
   if (isFinalGaAudit) {
+    const closureBoundPassed =
+      originalRecord.ok === true &&
+      originalRecord.final_ga_audit_passed === true &&
+      originalRecord.final_ga_audit_status === "passed_release_candidate_final_ga_audit" &&
+      originalRecord.proof_breadth_status === "complete_release_candidate_proof_breadth" &&
+      originalRecord.proof_breadth_closure_current === true &&
+      Array.isArray(originalRecord.blocker_reasons) &&
+      originalRecord.blocker_reasons.length === 0;
+    restored.proof_authority = closureBoundPassed ? "unverified_formal_status" : "none";
+    restored.proofAuthority = closureBoundPassed ? "unverified_formal_status" : "none";
+    restored.can_promote_claim = false;
+    restored.canPromoteClaim = false;
+    restored.can_certify_ga = false;
+    restored.canCertifyGa = false;
+    restored.ga_certificate_available = false;
+    restored.gaCertificateAvailable = false;
+    restored.ga_certificate_issued = false;
+    restored.gaCertificateIssued = false;
+    if (typeof originalRecord.final_ga_audit_passed === "boolean") {
+      restored.final_ga_audit_passed = closureBoundPassed;
+    }
+    if (typeof originalRecord.finalGaAuditPassed === "boolean") {
+      restored.finalGaAuditPassed = closureBoundPassed;
+    }
     for (const key of [
       "final_ga_audit_available",
       "finalGaAuditAvailable",
@@ -813,7 +837,11 @@ function restoreGoal3FinalGaAuditPublicFlags(
       "operational_readiness_review_current",
       "operationalReadinessReviewCurrent",
       "acceptance_report_current",
-      "acceptanceReportCurrent"
+      "acceptanceReportCurrent",
+      "proof_breadth_closure_current",
+      "proofBreadthClosureCurrent",
+      "ga_certification_gate_separate",
+      "gaCertificationGateSeparate"
     ]) {
       if (originalRecord[key] === true) {
         restored[key] = true;
@@ -1275,6 +1303,8 @@ const publicGoal3GaOperationalReadinessArtifactPathPattern =
   /^service-owned-goal3-ga-operational-readiness\/([A-Za-z0-9_.:-]+)\/([A-Za-z0-9_.:-]+\.json)$/;
 const publicGoal3GaCertificationArtifactPathPattern =
   /^service-owned-goal3-ga-certification\/([A-Za-z0-9_.:-]+)\/([A-Za-z0-9_.:-]+\.json)$/;
+const publicGoal3ProofBreadthClosureArtifactPathPattern =
+  /^service-owned-goal3-proof-breadth-closure\/([A-Za-z0-9_.:-]+)\/([A-Za-z0-9_.:-]+\.json)$/;
 const publicGoal3SourceReleaseProviderPolicyInspectionArtifactPathPattern =
   /^service-owned-goal3-source-release-external-provider-policy-inspection\/([A-Za-z0-9_.:-]+)\/([A-Za-z0-9_.:-]+\.json)$/;
 const publicGoal3FinalReleaseSignoffCertificationBoundaryReviewArtifactPathPattern =
@@ -1430,6 +1460,43 @@ function goal3GaCertificationReviewArtifactPathText(value: string, gaCertificati
     );
   }
   return `${trustedRuntimeRootName}/release/goal3-ga-certification/${match[1]}/${match[2]}`;
+}
+
+function serviceOwnedArtifactIdText(value: string, field: string): string {
+  const sanitized = publicOperatorText(value).trim();
+  if (
+    sanitized !== value.trim() ||
+    !plannerSafeTokenPattern.test(sanitized) ||
+    hasUnsafePlannerFragment(value) ||
+    hasUnsafePlannerFragment(sanitized)
+  ) {
+    throw new Error(`${field} must be a safe service-owned token`);
+  }
+  return sanitized;
+}
+
+function goal3ProofBreadthClosurePublicAliasText(value: string, proofBreadthClosureId: string): string {
+  const safeId = serviceOwnedArtifactIdText(proofBreadthClosureId, "proof_breadth_closure_id");
+  const sanitized = serviceArtifactPathText(value).trim();
+  const match = sanitized.match(publicGoal3ProofBreadthClosureArtifactPathPattern);
+  if (!match) {
+    throw new Error(
+      "proof_breadth_closure_path must reference service-owned-goal3-proof-breadth-closure/<proof_breadth_closure_id>/closure.json"
+    );
+  }
+  const pathId = serviceOwnedArtifactIdText(match[1], "proof_breadth_closure_id");
+  if (pathId !== safeId || match[2] !== "closure.json") {
+    throw new Error(
+      "proof_breadth_closure_path must reference service-owned-goal3-proof-breadth-closure/<proof_breadth_closure_id>/closure.json"
+    );
+  }
+  return `service-owned-goal3-proof-breadth-closure/${pathId}/closure.json`;
+}
+
+function goal3ProofBreadthClosureArtifactPathText(value: string, proofBreadthClosureId: string): string {
+  const publicAlias = goal3ProofBreadthClosurePublicAliasText(value, proofBreadthClosureId);
+  const match = publicAlias.match(publicGoal3ProofBreadthClosureArtifactPathPattern);
+  return `${trustedRuntimeRootName}/release/goal3-proof-breadth-closure/${match![1]}/${match![2]}`;
 }
 
 function goal3SourceReleaseProviderPolicyInspectionArtifactPathText(
@@ -2031,6 +2098,9 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
   const sessionKind = readLifecycleWalkthroughSessionKind(input);
   const completedSteps = readInteractiveRealPiSteps(input);
   const completed = new Set<string>(completedSteps);
+  const nextStep =
+    PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS.find((step) => !completed.has(step)) ??
+    PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS[PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS.length - 1];
   const unattendedHandoff = buildPreparedUnattendedRealPiHandoff(input);
   const probeId = optionalPublicPlannerToken(input, "probe_id", `${projectId}-REAL-PI-RUNTIME`);
   const validationId = optionalPublicPlannerToken(input, "validation_id", `${projectId}-CODEX-API`);
@@ -2136,6 +2206,32 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
     "proof_breadth_closure_id",
     `${projectId}-GOAL3-PROOF-BREADTH-CLOSURE`
   );
+  const rawProofBreadthClosureId = readString(input, "proof_breadth_closure_id", { optional: true });
+  const rawProofBreadthClosurePath = readString(input, "proof_breadth_closure_path", { optional: true });
+  const rawProofBreadthClosureSha256 = readString(input, "proof_breadth_closure_sha256", { optional: true });
+  const proofBreadthClosureBindingFieldCount = [
+    rawProofBreadthClosureId,
+    rawProofBreadthClosurePath,
+    rawProofBreadthClosureSha256
+  ].filter((value) => value !== undefined).length;
+  const finalGaAuditClosureBindingIntent =
+    nextStep === "goal3-final-ga-audit" && proofBreadthClosureBindingFieldCount !== 0;
+  if (finalGaAuditClosureBindingIntent && proofBreadthClosureBindingFieldCount !== 3) {
+    throw new Error(
+      "proof_breadth_closure_id, proof_breadth_closure_path, and proof_breadth_closure_sha256 must be supplied together"
+    );
+  }
+  const finalGaAuditHasClosureBinding =
+    nextStep === "goal3-final-ga-audit" && proofBreadthClosureBindingFieldCount === 3;
+  const finalGaAuditProofBreadthClosureId = finalGaAuditHasClosureBinding
+    ? serviceOwnedArtifactIdText(rawProofBreadthClosureId!, "proof_breadth_closure_id")
+    : proofBreadthClosureId;
+  const proofBreadthClosurePath = finalGaAuditHasClosureBinding
+    ? goal3ProofBreadthClosurePublicAliasText(rawProofBreadthClosurePath!, finalGaAuditProofBreadthClosureId)
+    : `service-owned-goal3-proof-breadth-closure/${proofBreadthClosureId}/closure.json`;
+  const proofBreadthClosureSha256 = finalGaAuditHasClosureBinding
+    ? publicPlannerToken(rawProofBreadthClosureSha256!, "PROOF-BREADTH-CLOSURE-SHA256")
+    : optionalPublicPlannerToken(input, "proof_breadth_closure_sha256", "PROOF-BREADTH-CLOSURE-SHA256");
   const certificationBoundaryReviewId = optionalPublicPlannerToken(
     input,
     "certification_boundary_review_id",
@@ -2505,6 +2601,11 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `--ga-certification-review-id ${gaCertificationReviewId} ` +
       `--ga-certification-review-path ${gaCertificationReviewPath} ` +
       `--ga-certification-review-sha256 ${gaCertificationReviewSha256} ` +
+      (finalGaAuditHasClosureBinding
+        ? `--proof-breadth-closure-id ${finalGaAuditProofBreadthClosureId} ` +
+          `--proof-breadth-closure-path ${proofBreadthClosurePath} ` +
+          `--proof-breadth-closure-sha256 ${proofBreadthClosureSha256} `
+        : "") +
       "--requested-audit-mode open_formal_workbench_final_ga_audit",
     "goal3-source-release-os-immutability-attestation":
       `/cm:release goal3-source-release-os-immutability-attestation --project-id ${projectId} ` +
@@ -2534,10 +2635,6 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       `/cm:release lifecycle-control run-codex-api-probe --project-id ${projectId} --validation-id ${validationId}`,
     review: `/cm:release lifecycle-control review --project-id ${projectId} --review-id ${reviewId}`
   };
-  const nextStep =
-    PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS.find((step) => !completed.has(step)) ??
-    PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS[PI_LIFECYCLE_INTERACTIVE_REAL_PI_STEPS.length - 1];
-
   return {
     schema_version: "comath.pi.lifecycle.interactive_real_pi_checkpoint_ux.v1",
     project_id: projectId,
@@ -2618,6 +2715,8 @@ function buildPiCodexLifecycleInteractiveRealPi(input: Record<string, unknown>):
       final_release_candidate_closure_audit_id: finalReleaseCandidateClosureAuditId,
       proof_breadth_review_id: proofBreadthReviewId,
       proof_breadth_closure_id: proofBreadthClosureId,
+      proof_breadth_closure_path: proofBreadthClosurePath,
+      proof_breadth_closure_sha256: proofBreadthClosureSha256,
       certification_boundary_review_id: certificationBoundaryReviewId,
       transport_closure_review_path: transportClosureReviewPath,
       transport_closure_review_sha256: transportClosureReviewSha256,
@@ -4035,6 +4134,29 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
       optional: true
     });
     const gaCertificationReviewId = readString(input, "ga_certification_review_id");
+    const proofBreadthClosureId = readString(input, "proof_breadth_closure_id", {
+      optional: true
+    });
+    const proofBreadthClosurePath = readString(input, "proof_breadth_closure_path", {
+      optional: true
+    });
+    const proofBreadthClosureSha256 = readString(input, "proof_breadth_closure_sha256", {
+      optional: true
+    });
+    const hasProofBreadthClosureBinding =
+      proofBreadthClosureId !== undefined ||
+      proofBreadthClosurePath !== undefined ||
+      proofBreadthClosureSha256 !== undefined;
+    if (
+      hasProofBreadthClosureBinding &&
+      (proofBreadthClosureId === undefined ||
+        proofBreadthClosurePath === undefined ||
+        proofBreadthClosureSha256 === undefined)
+    ) {
+      throw new Error(
+        "proof_breadth_closure_id, proof_breadth_closure_path, and proof_breadth_closure_sha256 must be supplied together"
+      );
+    }
     const requestedAuditMode =
       readString(input, "requested_audit_mode", { optional: true }) ??
       "open_formal_workbench_final_ga_audit";
@@ -4055,6 +4177,19 @@ export async function executeComathTool(client: ComathClient, name: string, inpu
           gaCertificationReviewId
         ),
         ga_certification_review_sha256: readString(input, "ga_certification_review_sha256"),
+        ...(hasProofBreadthClosureBinding
+          ? {
+              proof_breadth_closure_id: serviceOwnedArtifactIdText(
+                proofBreadthClosureId!,
+                "proof_breadth_closure_id"
+              ),
+              proof_breadth_closure_path: goal3ProofBreadthClosureArtifactPathText(
+                proofBreadthClosurePath!,
+                proofBreadthClosureId!
+              ),
+              proof_breadth_closure_sha256: proofBreadthClosureSha256!
+            }
+          : {}),
         requested_audit_mode: requestedAuditMode
       })
     );
@@ -5852,7 +5987,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.goal3FinalGaAudit",
       description:
-        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 final GA audit blocker using Task294 certification-review id/path/hash material, without exposing caller acceptance reports, proof-breadth matrices, final GA audit payloads, proof claims, GA certificates, executor commands, Lean proof authority, direct Pi mutation, or durable/live transport claims.",
+        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 final GA audit using Task294 certification-review id/path/hash material and optional Task300 proof-breadth closure id/path/hash material, without exposing caller acceptance reports, proof-breadth matrices or closure JSON, final GA audit payloads, proof claims, GA certificates, executor commands, Lean proof authority, direct Pi mutation, or durable/live transport claims.",
       mutates: true,
       input_schema: requireConfirmationSchema(
         objectSchema(
@@ -5872,6 +6007,9 @@ export function createComathTools(): ToolDescriptor[] {
             ga_certification_review_id: stringProp,
             ga_certification_review_path: stringProp,
             ga_certification_review_sha256: stringProp,
+            proof_breadth_closure_id: stringProp,
+            proof_breadth_closure_path: stringProp,
+            proof_breadth_closure_sha256: stringProp,
             requested_audit_mode: {
               type: "string",
               enum: ["open_formal_workbench_final_ga_audit"]
@@ -8582,6 +8720,9 @@ async function handleReleaseCommand(
             optionValue(parsed.args, "--ga-certification-review-sha256"),
             "ga_certification_review_sha256"
           ),
+          proof_breadth_closure_id: optionValue(parsed.args, "--proof-breadth-closure-id"),
+          proof_breadth_closure_path: optionValue(parsed.args, "--proof-breadth-closure-path"),
+          proof_breadth_closure_sha256: optionValue(parsed.args, "--proof-breadth-closure-sha256"),
           requested_audit_mode:
             optionValue(parsed.args, "--requested-audit-mode") ??
             "open_formal_workbench_final_ga_audit"
