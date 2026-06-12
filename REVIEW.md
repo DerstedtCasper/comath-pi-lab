@@ -1,3 +1,15 @@
+# Goal 3 Task 349 / Selected-Tranche Next Closure Packaging Results Closure Recheck
+
+Scope: consume a current Task347 selected-tranche next closure packaging results follow-up and continue the bounded proof-breadth loop by delegating selected-tranche closure recheck to existing Task343/Task300 semantics. This is the Task349 selected-tranche next closure packaging results closure recheck.
+
+Implementation review notes:
+- Added `goal3-task349-selected-tranche-next-closure-packaging-results-closure-recheck.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureRecheck()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-recheck`.
+- The recheck consumes only a Task347 id/path/hash triple, rejects stale Task347 material, recomputes Task347-embedded Task346/344/338/340/334/341 artifact references, then delegates the closure recheck to existing Task343/Task300 plumbing.
+- The persisted Task349 wrapper binds Task347, delegated Task343, and Task300 artifacts by references/hashes without embedding proof reports or creating Task301 final-audit / Task303 GA-certificate material.
+
+Boundary notes: Task349 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call Task326/334/340/341 producer paths directly, replace Task300/301/303, write Task301 final-audit or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 348 / Selected-Tranche Next Closure Packaging Currentness Check-Debug
 
 Scope: regression-only check-debug coverage over the Task346/347 selected-tranche next closure packaging/currentness loop and adjacent Task344/338/341/335/334/300/301/303 authority boundaries.

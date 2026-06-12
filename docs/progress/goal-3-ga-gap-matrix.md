@@ -113,6 +113,8 @@ Task347 selected-tranche next closure packaging results follow-up adds the Task3
 
 Task348 selected-tranche next closure packaging/currentness check-debug adds regression coverage over the Task346/347 packaging/currentness loop and adjacent Task344/338/341/335/334/300/301/303 authority boundaries. It records status/smoke/default-discovery/docs synchronization only; it does not add a route, Pi consumer, Lean replay, proof synthesis, packaging/currentness/closure/final-audit/certificate writer, final-audit unblock, claim promotion, certificate issuance, or GA certification.
 
+Task349 selected-tranche next closure packaging results closure recheck adds the Task347-bound handoff back into existing Task343/Task300 selected-tranche closure recheck semantics. It consumes only current Task347 id/path/hash material, revalidates Task347's Task346/344/338/340/341/335/334 currentness references, records append-only non-certifying provenance, and keeps Task300 as aggregate proof-breadth closure authority plus Task301/303 as separate final-audit/certificate gates. It does not run Lean, synthesize proofs, call Task326/334/340/341 producer paths directly, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche recheck evidence into global proof-breadth completion.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |

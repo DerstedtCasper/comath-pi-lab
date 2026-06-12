@@ -123,6 +123,8 @@ Task347 selected-tranche next closure packaging results follow-up is current ser
 
 Task348 selected-tranche next closure packaging/currentness check-debug is regression-only release hardening over Task346/347. It keeps Task346 Task344/338-bound, Task347 Task346/341-bound, Task341/335 currentness semantics intact, Task300/301/303 authority separate, no Pi surface, no Lean execution, no proof synthesis, no closure/final-audit/certificate writes, no claim promotion, and no GA certification.
 
+Task349 selected-tranche next closure packaging results closure recheck is service-owned release-loop plumbing after Task348. It consumes only a current Task347 selected-tranche next closure packaging results follow-up id/path/hash, revalidates Task347's Task346/344/338/340/341/335/334 currentness references, then delegates the actual selected-tranche closure recheck to existing Task343/Task300 semantics. It has no Pi consumer/surface, no Lean execution, no direct Task326/334/340/341 producer call, no Task301 final-audit write, no Task303 certificate write, no claim promotion, and no GA certification authority.
+
 Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, production Codex/Pi adapter hardening, broad MathProve proof search or MathProve-as-proof-authority semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-80 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
