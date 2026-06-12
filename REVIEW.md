@@ -1,3 +1,14 @@
+# Goal 3 Task 348 / Selected-Tranche Next Closure Packaging Currentness Check-Debug
+
+Scope: regression-only check-debug coverage over the Task346/347 selected-tranche next closure packaging/currentness loop and adjacent Task344/338/341/335/334/300/301/303 authority boundaries.
+
+Implementation review notes:
+- Added `goal3-task348-selected-tranche-next-closure-packaging-currentness-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_next_closure_packaging_results_follow_up_check_debug` status exposure.
+- The check-debug suite keeps Task346 Task344/338-bound, Task347 Task346/341-bound, Task341/335 currentness semantics intact, Task300 as aggregate proof-breadth closure authority, Task301 as final-audit binding authority, and Task303 as the isolated GA-certificate gate.
+
+Boundary notes: Task348 adds no route and no Pi surface. It does not run Lean, synthesize proofs, write packaging/currentness/closure/final-audit/GA-certificate artifacts, trust caller success metadata, promote claims, issue certificates, certify GA, or close global proof breadth.
+
 # Goal 3 Task 347 / Selected-Tranche Next Closure Packaging Results Follow-Up
 
 Scope: consume a current Task346 selected-tranche next closure packaging follow-through and continue the bounded proof-breadth loop by reusing Task341/Task335 selected-tranche packaging-result currentness checks over Task346's Task340/Task334 packaging output. This is the Task347 selected-tranche next closure packaging results follow-up.

@@ -121,6 +121,8 @@ Current implementation frontier:
 
 Task347 selected-tranche next closure packaging results follow-up is current service-owned release-loop plumbing. It consumes only a current Task346 selected-tranche next closure packaging follow-through id/path/hash, canonical-validates Task346-embedded Task344/Task338 provenance, reuses Task341/Task335 selected-tranche packaging-result currentness over the Task346-bound Task340/Task334 packaging output, and records append-only non-certifying evidence. It has no Pi consumer/surface, no Lean execution, no Task300 proof-breadth closure replacement, no Task301 final-audit replacement, no GA-certificate artifact write, no claim promotion, no certificate issuance, and no GA certification authority.
 
+Task348 selected-tranche next closure packaging/currentness check-debug is regression-only release hardening over Task346/347. It keeps Task346 Task344/338-bound, Task347 Task346/341-bound, Task341/335 currentness semantics intact, Task300/301/303 authority separate, no Pi surface, no Lean execution, no proof synthesis, no closure/final-audit/certificate writes, no claim promotion, and no GA certification.
+
 Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, production Codex/Pi adapter hardening, broad MathProve proof search or MathProve-as-proof-authority semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-80 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading
