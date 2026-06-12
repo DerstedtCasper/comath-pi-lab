@@ -44,6 +44,17 @@ Implementation review notes:
 
 Boundary notes: Task328 is Pi thin-client wiring only. It does not run Lean, write `.comath` directly, close proof breadth, consume Task326 execution bridge output, replace Task300 closure verification, replace Task301 final-audit binding, promote claims, unblock final GA audit, or certify GA.
 
+# Goal 3 Task 333 / Proof-Breadth Follow-Through Check-Debug
+
+Scope: revalidate the Task332 proof-breadth follow-through and adjacent Task326/300/301 proof-breadth gates without adding a new authority or public surface.
+
+Implementation review notes:
+- Added `goal3-task333-proof-breadth-follow-through-check-debug.test.mjs` and `goal3_release_candidate_proof_breadth_execution_follow_through_check_debug`.
+- The focused regression keeps Task332 source guards, Task332 stale-bridge/no-write/no-authority test coverage, Task326/300/301 proof-breadth route and authority boundaries, capability exposure, phase0 smoke discovery, default-test discovery, and public release-hardening documentation synchronized.
+- The check-debug suite asserts the follow-through remains bridge-hash-bound, selected-tranche-only, append-only provenance with no Lean execution, no missing packaging fabrication, no Pi/public surface, and no proof/promotion/certification authority.
+
+Boundary notes: Task333 is regression coverage only. It does not add a route, expose a Pi consumer, run Lean, synthesize proofs, write missing packaging reports, close proof breadth, unblock final GA audit, promote claims, certify GA, replace Task300 closure verification, or replace Task301 final-audit binding.
+
 # Goal 3 Task 332 / Proof-Breadth Execution Follow-Through
 
 Scope: add a service-owned follow-through witness for the bounded PM tranche selected by Task326 without making the witness a proof authority.
