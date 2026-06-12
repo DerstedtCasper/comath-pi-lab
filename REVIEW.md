@@ -1,3 +1,15 @@
+# Goal 3 Task 342 / Selected-Tranche Next Packaging Currentness Check-Debug
+
+Scope: run the every-third-task check-debug pass over the selected-tranche next packaging/currentness loop after Task341. This is the Task342 selected-tranche next packaging currentness check-debug.
+
+Implementation review notes:
+- Added `goal3-task342-selected-tranche-next-packaging-currentness-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_next_packaging_results_follow_up_check_debug` status exposure.
+- The regression keeps Task340 bound to Task338 and delegated Task326 material, keeps Task340 delegating only to Task334, keeps Task341 bound to Task340, and keeps Task341 delegating currentness only to Task335.
+- The regression also checks route/export wiring, default discovery, no Pi surface, Task326/334/335/300/301 authority boundaries, and public release-hardening wording.
+
+Boundary notes: Task342 is check-debug coverage only. It does not add a route, expose a Pi tool, run Lean, synthesize proofs, write packaging/closure/final-audit reports, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 341 / Selected-Tranche Next Packaging Results Follow-Up
 
 Scope: consume a current Task340 selected-tranche next packaging follow-through and continue the bounded proof-breadth loop by reusing the existing Task335 selected-tranche packaging results currentness witness. This is the Task341 selected-tranche next packaging results follow-up.

@@ -99,6 +99,8 @@ Scope: current `D:\MATH _Studio\comath-pi-lab` `main` worktree against the 2026-
 | Positive proof research workflow. | Positive vertical slices rely on registered theorem-family or Nat linear paths now quarantined/historical. | Obsolete for Goal 3 acceptance; need workflow that does not rely on production theorem recognizers. | Task 17 |
 | Open-source release quality. | Package/runtime/docs evidence exists; no final Goal 3 GA audit yet. | Deferred. | Tasks 18-20 |
 
+Task342 selected-tranche next packaging currentness check-debug adds release-hardening regression coverage over the latest Task340/341 selected-tranche packaging/currentness loop and its Task338/335/334/326/300/301 authority boundaries. This records status/smoke/default-discovery/docs synchronization only; it does not add a route, Pi consumer, Lean replay, packaging writer, proof-breadth closure, final-audit unblock, claim promotion, certificate issuance, or GA certification.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |
