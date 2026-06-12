@@ -1,3 +1,15 @@
+# Goal 3 Task 340 / Selected-Tranche Next Packaging Follow-Through
+
+Scope: consume a current Task338 selected-tranche next execution bridge and continue the bounded proof-breadth loop by delegating its next Task326 bridge to the existing Task334 task-local packaging follow-through. This is the Task340 selected-tranche next packaging follow-through.
+
+Implementation review notes:
+- Added `goal3-task340-selected-tranche-next-packaging-follow-through.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextPackagingFollowThrough()` and `POST /release/goal3/selected-tranche-next-packaging-follow-through`.
+- The follow-through consumes only a Task338 next bridge id/path/hash triple, rejects stale Task338 material, re-hashes the delegated Task326 bridge, rejects missing next bridges and selected-tranche drift, rejects evidence outside Task338's next selected PM tranche, and delegates to Task334 for canonical task-local packaging.
+- The artifact binds Task338, the delegated Task326 bridge, the Task334 follow-through artifact, selected task ids, selected packaging report artifacts, and non-certifying provenance without embedding proof reports.
+
+Boundary notes: Task340 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, trust caller success metadata, expose a Pi tool, replace Task334/326/300/301, write Task300 closure or Task301 final-GA-audit artifacts, close global proof breadth by itself, unblock final GA audit by itself, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 339 / Selected-Tranche Next Bridge Check-Debug
 
 Scope: revalidate Task338 and the adjacent Task337/326/300/301/334/335/336 proof-breadth chain without adding execution, closure, Pi, or final-audit authority.

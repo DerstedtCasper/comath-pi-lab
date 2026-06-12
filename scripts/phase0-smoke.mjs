@@ -472,6 +472,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task337-selected-tranche-closure-recheck.test.mjs",
   "goal3-task338-selected-tranche-next-execution-bridge.test.mjs",
   "goal3-task339-selected-tranche-next-bridge-check-debug.test.mjs",
+  "goal3-task340-selected-tranche-next-packaging-follow-through.test.mjs",
   "goal3-task255-pi-goal-mode-intake-manifest.test.mjs",
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",

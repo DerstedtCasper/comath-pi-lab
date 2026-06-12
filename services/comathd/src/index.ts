@@ -84,6 +84,7 @@ export * from "./release/goal3-proof-breadth-task-local-packaging-follow-through
 export * from "./release/goal3-proof-breadth-selected-tranche-packaging-results-follow-up.js";
 export * from "./release/goal3-proof-breadth-selected-tranche-closure-recheck.js";
 export * from "./release/goal3-proof-breadth-selected-tranche-next-execution-bridge.js";
+export * from "./release/goal3-proof-breadth-selected-tranche-next-packaging-follow-through.js";
 export * from "./release/goal3-ga-certification.js";
 export * from "./release/goal3-final-ga-audit.js";
 export * from "./release/goal3-ga-certificate.js";
