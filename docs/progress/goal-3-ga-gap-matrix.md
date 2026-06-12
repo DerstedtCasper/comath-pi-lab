@@ -103,6 +103,8 @@ Task342 selected-tranche next packaging currentness check-debug adds release-har
 
 Task343 selected-tranche next closure recheck adds the Task341-bound selected-tranche currentness-to-Task300 handoff. It consumes only current Task341 id/path/hash material, re-hashes selected canonical PM packaging reports, records append-only non-certifying provenance, and keeps Task300 as aggregate proof-breadth closure authority plus Task301 as final-audit binding authority. It does not run Lean, write packaging reports, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert incomplete selected-tranche packaging into verified proof breadth.
 
+Task344 selected-tranche next closure execution bridge adds the Task343-bound handoff back into selected-tranche next execution planning. It consumes only current Task343 id/path/hash material, preserves Task343-bound Task300 closure and selected PM packaging-report currentness checks through Task338 semantics, records append-only non-certifying provenance, and keeps Task338/Task326 as bounded next-tranche execution-planning plumbing. It does not run Lean, synthesize proofs, write packaging/currentness/closure/final-audit artifacts, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche continuation into global proof-breadth closure.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |

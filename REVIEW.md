@@ -1,3 +1,16 @@
+# Goal 3 Task 344 / Selected-Tranche Next Closure Execution Bridge
+
+Scope: consume a current Task343 selected-tranche next closure recheck and continue the bounded proof-breadth loop by handing that closure/currentness result back into the existing Task338 selected-tranche next execution bridge / Task326 execution-planning semantics. This is the Task344 selected-tranche next closure execution bridge.
+
+Implementation review notes:
+- Added `goal3-task344-selected-tranche-next-closure-execution-bridge.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosureExecutionBridge()` and `POST /release/goal3/selected-tranche-next-closure-execution-bridge`.
+- The bridge consumes only a Task343 id/path/hash triple, rejects stale Task343 material, delegates stale Task300 closure and selected PM packaging-report currentness checks through Task338, and keeps caller proof/GA material ignored.
+- Task338 now accepts explicit false `selected_tranche_ready_for_proof_breadth_closure_recheck` values from Task343 snapshots instead of misclassifying blocked selected-tranche currentness as an invalid recheck.
+- Review-driven hardening added a current-hash tamper regression so Task344 rejects Task343 artifacts whose no-authority flags are weakened (`accepts_caller_success_metadata`, `accepts_caller_proof_material`, or `ga_certification_gate_separate`) instead of laundering them into a normalized Task344 artifact.
+
+Boundary notes: Task344 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, write packaging/currentness/closure/final-audit artifacts, trust caller success metadata, expose a Pi tool, replace Task300/301, close global proof breadth by itself, unblock final GA audit by itself, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 343 / Selected-Tranche Next Closure Recheck
 
 Scope: consume a current Task341 selected-tranche next packaging results follow-up and continue the bounded proof-breadth loop by handing that current selected tranche back into selected-tranche closure recheck / Task300 aggregate closure semantics. This is the Task343 selected-tranche next closure recheck.

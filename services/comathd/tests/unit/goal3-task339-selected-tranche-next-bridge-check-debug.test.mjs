@@ -87,7 +87,7 @@ for (const pattern of [
   /GOAL3_SELECTED_TRANCHE_NEXT_EXECUTION_BRIDGE_STALE_COMPLETED_REPORT/s,
   /GOAL3_SELECTED_TRANCHE_NEXT_EXECUTION_BRIDGE_ALREADY_EXISTS/s,
   /selected_packaging_report_artifacts_current !== true/s,
-  /selected_tranche_ready_for_proof_breadth_closure_recheck !== true/s,
+  /typeof recheck\.body\.selected_tranche_ready_for_proof_breadth_closure_recheck !== "boolean"/s,
   /closure\.body\.proof_breadth_complete === true/s,
   /recordGoal3ReleaseCandidateProofBreadthExecutionBridge\(projectRoot,\s*\{/s,
   /requested_bridge_mode: "open_formal_workbench_release_candidate_proof_breadth_execution_bridge"/s,

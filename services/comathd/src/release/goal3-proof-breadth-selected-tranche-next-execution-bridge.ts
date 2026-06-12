@@ -233,7 +233,7 @@ function assertRecheckArtifact(
     recheck.body.selected_tranche_closure_recheck_id !== recheckId ||
     recheck.body.selected_tranche_closure_recheck_path !== recheckPath ||
     recheck.body.selected_packaging_report_artifacts_current !== true ||
-    recheck.body.selected_tranche_ready_for_proof_breadth_closure_recheck !== true ||
+    typeof recheck.body.selected_tranche_ready_for_proof_breadth_closure_recheck !== "boolean" ||
     recheck.body.runs_lean !== false ||
     recheck.body.executes_proofs !== false ||
     recheck.body.proof_authority !== "none" ||
