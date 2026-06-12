@@ -1,3 +1,15 @@
+# Goal 3 Task 341 / Selected-Tranche Next Packaging Results Follow-Up
+
+Scope: consume a current Task340 selected-tranche next packaging follow-through and continue the bounded proof-breadth loop by reusing the existing Task335 selected-tranche packaging results currentness witness. This is the Task341 selected-tranche next packaging results follow-up.
+
+Implementation review notes:
+- Added `goal3-task341-selected-tranche-next-packaging-results-follow-up.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextPackagingResultsFollowUp()` and `POST /release/goal3/selected-tranche-next-packaging-results-follow-up`.
+- The follow-up consumes only a Task340 next packaging follow-through id/path/hash triple, rejects stale Task340 material, requires Task340 to bind a delegated Task326 bridge and Task334 follow-through artifact, and reuses Task335 for selected-tranche packaging-result currentness checks.
+- The artifact binds Task340 and the Task335 follow-up by path/hash while preserving selected task counts, selected report currentness, blocker reasons, and non-certifying provenance for later closure recheck.
+
+Boundary notes: Task341 is service-owned currentness plumbing only. It does not run Lean, synthesize proofs, write packaging reports, trust caller success metadata, expose a Pi tool, replace Task335/326/334/300/301, write Task300 closure or Task301 final-GA-audit artifacts, close global proof breadth by itself, unblock final GA audit by itself, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 340 / Selected-Tranche Next Packaging Follow-Through
 
 Scope: consume a current Task338 selected-tranche next execution bridge and continue the bounded proof-breadth loop by delegating its next Task326 bridge to the existing Task334 task-local packaging follow-through. This is the Task340 selected-tranche next packaging follow-through.
