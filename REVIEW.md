@@ -1,3 +1,15 @@
+# Goal 3 Task 346 / Selected-Tranche Next Closure Packaging Follow-Through
+
+Scope: consume a current Task344 selected-tranche next closure execution bridge and continue the bounded proof-breadth loop by handing its delegated Task338 selected-tranche next execution bridge into the existing Task340/Task334 packaging path. This is the Task346 selected-tranche next closure packaging follow-through.
+
+Implementation review notes:
+- Added `goal3-task346-selected-tranche-next-closure-packaging-follow-through.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingFollowThrough()` and `POST /release/goal3/selected-tranche-next-closure-packaging-follow-through`.
+- The follow-through consumes only a Task344 id/path/hash triple, rejects stale Task344 material, re-hashes the Task344-delegated Task338 bridge, requires its delegated Task326 bridge reference to remain bound, rejects missing next bridges and unselected PM evidence, and delegates packaging to Task340/Task334.
+- The persisted wrapper binds Task344, delegated Task338, delegated Task340, and Task334 artifacts by references/hashes without embedding proof reports or creating closure/final-audit material.
+
+Boundary notes: Task346 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, write Task300 closure or Task301 final-audit artifacts, trust caller success metadata, expose a Pi tool, replace Task300/301, close global proof breadth by itself, unblock final GA audit by itself, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 345 / Selected-Tranche Next Closure Bridge Check-Debug
 
 Scope: revalidate the Task343/344 selected-tranche next closure-to-execution bridge stack, adjacent Task338/326 execution-planning layers, Task300/301 authority boundaries, status/route/default discovery, no-Pi-public-surface constraints, and release-hardening wording. This is the Task345 selected-tranche next closure bridge check-debug pass.
