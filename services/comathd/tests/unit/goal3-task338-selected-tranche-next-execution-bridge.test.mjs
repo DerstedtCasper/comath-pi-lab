@@ -214,6 +214,28 @@ try {
   assert.equal(recheck.proof_breadth_complete, false);
   assert.equal(recheck.proof_breadth_closure.verified_task_count, 6);
 
+  const closureAbsolutePath = join(projectRoot, recheck.proof_breadth_closure_path);
+  const originalClosureText = readFileSync(closureAbsolutePath, "utf8");
+  const tamperedClosure = JSON.parse(originalClosureText);
+  tamperedClosure.blocker_reasons = [
+    ...tamperedClosure.blocker_reasons,
+    "GOAL3_TASK338_TAMPERED_BOUND_CLOSURE"
+  ];
+  writeFileSync(closureAbsolutePath, `${JSON.stringify(tamperedClosure, null, 2)}\n`, "utf8");
+  assert.throws(
+    () =>
+      recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextExecutionBridge(projectRoot, {
+        project_id: projectId,
+        selected_tranche_next_execution_bridge_id: "GOAL3-SELECTED-TRANCHE-NEXT-BRIDGE-0338-CLOSURE-STALE",
+        selected_tranche_closure_recheck_id: recheck.selected_tranche_closure_recheck_id,
+        selected_tranche_closure_recheck_path: recheck.selected_tranche_closure_recheck_path,
+        selected_tranche_closure_recheck_sha256: recheck.selected_tranche_closure_recheck_artifact.sha256
+      }),
+    { code: "GOAL3_SELECTED_TRANCHE_NEXT_EXECUTION_BRIDGE_STALE_CLOSURE" },
+    "Task338 must reject stale Task337-bound Task300 closure artifacts before selecting another tranche"
+  );
+  writeFileSync(closureAbsolutePath, originalClosureText, "utf8");
+
   assert.throws(
     () =>
       recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextExecutionBridge(projectRoot, {

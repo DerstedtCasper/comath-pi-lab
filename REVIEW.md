@@ -1,3 +1,15 @@
+# Goal 3 Task 339 / Selected-Tranche Next Bridge Check-Debug
+
+Scope: revalidate Task338 and the adjacent Task337/326/300/301/334/335/336 proof-breadth chain without adding execution, closure, Pi, or final-audit authority.
+
+Implementation review notes:
+- Added `goal3-task339-selected-tranche-next-bridge-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_next_execution_bridge_check_debug` status exposure.
+- The focused regression keeps Task338 source guards for Task337 artifact hash binding, Task300 closure artifact re-read, completed selected PM report re-hashing, Task326-only delegation, caller material ignoring, append-only provenance, and non-authority flags.
+- The same regression keeps Task337 as the Task335-to-Task300 recheck wrapper, Task326 as bounded execution planning, Task300 as aggregate proof-breadth closure, Task301 as final-audit binding, and verifies no Pi/public surface for Task338.
+
+Boundary notes: Task339 is check-debug coverage only. It does not add a route, expose a Pi tool, run Lean, write packaging/closure/final-audit reports, synthesize proofs, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 338 / Selected-Tranche Next Execution Bridge
 
 Scope: consume a current Task337 selected-tranche closure recheck and continue the selected-tranche proof-breadth loop by delegating to the existing Task326 execution bridge for the next bounded PM tranche. This is the Task338 selected-tranche next execution bridge.
