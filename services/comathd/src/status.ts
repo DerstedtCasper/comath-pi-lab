@@ -173,6 +173,7 @@ export function getComathdStatus(): ComathdRuntimeStatus {
       "goal3_release_candidate_proof_breadth_pi_closure_check_debug",
       "goal3_release_candidate_proof_breadth_execution_follow_through",
       "goal3_release_candidate_proof_breadth_execution_follow_through_check_debug",
+      "goal3_release_candidate_proof_breadth_task_local_packaging_follow_through",
       "goal3_ga_certification_review_gate",
       "goal3_final_ga_audit_gate",
       "goal3_ga_certificate_gate",

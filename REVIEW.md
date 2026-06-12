@@ -1,3 +1,15 @@
+# Goal 3 Task 334 / Task-Local Lean Authority Packaging Follow-Through
+
+Scope: add a service-owned bounded follow-through that turns the Task326 selected proof-breadth tranche into canonical task-local Lean Authority v3 packaging reports through the existing project-local verifier, without making the follow-through proof authority.
+
+Implementation review notes:
+- Added `goal3-task334-task-local-lean-authority-packaging-follow-through.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthTaskLocalPackagingFollowThrough()` and `POST /release/goal3/task-local-lean-authority-packaging-follow-through`.
+- The follow-through consumes only a Task326 bridge id/path/hash triple, rejects stale/mismatched bridge material through hash binding, rejects evidence for PM tasks outside the bridge-selected tranche, and invokes the existing `packageGoal3GaPositiveMatrixFinalAuthorityEvidenceFromEvidenceV3()` project-local verifier for selected PM tasks.
+- The artifact records selected verified/blocked task ids, written canonical packaging report artifacts, append-only provenance, caller-material ignoring, and Task332 recheck compatibility while preserving non-certifying status.
+
+Boundary notes: Task334 may write selected canonical PM packaging reports as verified or blocked according to existing project-local evidence, but it does not run Lean, synthesize proofs, trust caller success metadata, write Task300 closure artifacts, write Task301 final-GA-audit artifacts, expose a Pi consumer, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 331 / Pi Final-GA-Audit Closure-Binding Consumer
 
 Scope: extend the existing Task297 Pi final-GA-audit consumer so it can pass Task300 proof-breadth closure id/path/hash material into the Task301 service route without adding proof, closure, or GA certification authority to Pi.
