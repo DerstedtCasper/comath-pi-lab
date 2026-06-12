@@ -1,3 +1,15 @@
+# Goal 3 Task 336 / Selected-Tranche Packaging Results Check-Debug
+
+Scope: revalidate Task335 and the adjacent Task334/332/326/300/301 proof-breadth chain without adding execution, closure, or public authority.
+
+Implementation review notes:
+- Added `goal3-task336-selected-tranche-packaging-results-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_packaging_results_follow_up_check_debug` status exposure.
+- The focused regression keeps Task335 source guards for Task334 artifact hash binding, Task326 selected-tranche matching, selected canonical PM report re-hashing, Task332 recheck witness embedding, caller material ignoring, append-only provenance, and non-authority flags.
+- The same regression keeps Task334 as the selected packaging writer, Task332 as the selected-tranche recheck witness, Task300 as aggregate proof-breadth closure, Task301 as final-audit binding, and verifies no Pi/public surface for Task335.
+
+Boundary notes: Task336 is check-debug coverage only. It does not add a route, expose a Pi tool, run Lean, write packaging reports, synthesize proofs, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 335 / Selected-Tranche Packaging Results Follow-Up
 
 Scope: add a Task334-bound currentness follow-up that rechecks the selected-tranche packaging reports without making selected-tranche readiness global proof-breadth closure.
