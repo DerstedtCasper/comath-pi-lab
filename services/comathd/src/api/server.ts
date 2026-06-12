@@ -60,6 +60,7 @@ import { recordGoal3FinalReleaseCandidateClosureAudit } from "../release/goal3-f
 import { recordGoal3ReleaseCandidateProofBreadthReview } from "../release/goal3-proof-breadth-review.js";
 import { recordGoal3ReleaseCandidateProofBreadthClosure } from "../release/goal3-proof-breadth-closure.js";
 import { recordGoal3ReleaseCandidateProofBreadthExecutionBridge } from "../release/goal3-proof-breadth-execution-bridge.js";
+import { recordGoal3ReleaseCandidateProofBreadthExecutionFollowThrough } from "../release/goal3-proof-breadth-execution-follow-through.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
 import { recordGoal3FinalGaAudit } from "../release/goal3-final-ga-audit.js";
 import { recordGoal3GaCertificate } from "../release/goal3-ga-certificate.js";
@@ -624,6 +625,20 @@ async function route(method: string, path: string, body: unknown, context: Route
         };
         return {
           proof_breadth_execution_bridge: recordGoal3ReleaseCandidateProofBreadthExecutionBridge(
+            body.project_root,
+            body
+          )
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/proof-breadth-execution-follow-through",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3ReleaseCandidateProofBreadthExecutionFollowThrough>[1] & {
+          project_root: string;
+        };
+        return {
+          proof_breadth_execution_follow_through: recordGoal3ReleaseCandidateProofBreadthExecutionFollowThrough(
             body.project_root,
             body
           )

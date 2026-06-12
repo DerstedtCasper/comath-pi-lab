@@ -44,6 +44,19 @@ Implementation review notes:
 
 Boundary notes: Task328 is Pi thin-client wiring only. It does not run Lean, write `.comath` directly, close proof breadth, consume Task326 execution bridge output, replace Task300 closure verification, replace Task301 final-audit binding, promote claims, unblock final GA audit, or certify GA.
 
+# Goal 3 Task 332 / Proof-Breadth Execution Follow-Through
+
+Scope: add a service-owned follow-through witness for the bounded PM tranche selected by Task326 without making the witness a proof authority.
+
+Implementation review notes:
+- Added `goal3-task332-proof-breadth-execution-follow-through.test.mjs`.
+- Added `recordGoal3ReleaseCandidateProofBreadthExecutionFollowThrough()` and `POST /release/goal3/proof-breadth-execution-follow-through`.
+- The follow-through consumes only a Task326 bridge id/path/hash triple, re-reads the canonical bridge artifact, then checks only the selected tasks' canonical final-authority packaging reports.
+- The artifact records selected verified/blocked/missing task ids, selected packaging report hashes, readiness for a later Task300 closure recheck, append-only provenance, and non-certifying audit events.
+- Caller proof material, proof-success wording, host paths, and GA wording are sanitized or ignored before persistence and public route output.
+
+Boundary notes: Task332 does not run Lean, synthesize proofs, write missing packaging reports, close global proof breadth, unblock final GA audit, expose a Pi consumer, promote claims, certify GA, replace Task300 closure verification, or replace Task301 final-audit binding.
+
 # Goal 3 Task 327 / Proof-Breadth Bridge Check-Debug
 
 Scope: revalidate the Task326 proof-breadth execution bridge and adjacent Task298/300/301 proof-breadth gates without adding a new authority or public surface.
