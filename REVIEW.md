@@ -1,3 +1,15 @@
+# Goal 3 Task 335 / Selected-Tranche Packaging Results Follow-Up
+
+Scope: add a Task334-bound currentness follow-up that rechecks the selected-tranche packaging reports without making selected-tranche readiness global proof-breadth closure.
+
+Implementation review notes:
+- Added `goal3-task335-selected-tranche-packaging-results-follow-up.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTranchePackagingResultsFollowUp()` and `POST /release/goal3/selected-tranche-packaging-results-follow-up`.
+- The follow-up consumes only a Task326 bridge id/path/hash triple plus a Task334 task-local packaging follow-through id/path/hash triple, re-reads both artifacts by current hash, rejects Task334/bridge selected-tranche drift, and re-hashes only the selected canonical PM packaging reports recorded by Task334.
+- The artifact embeds the reused Task332 selected-tranche recheck witness, records current selected verified/blocked/missing task ids, and emits non-certifying provenance while preserving Task300/Task301 as the only proof-breadth closure/final-audit gates.
+
+Boundary notes: Task335 records selected-tranche packaging-result currentness only. It does not run Lean, synthesize proofs, trust Task334 summary success, inspect unselected PM tasks, write Task300 closure artifacts, write Task301 final-GA-audit artifacts, expose a Pi consumer, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 334 / Task-Local Lean Authority Packaging Follow-Through
 
 Scope: add a service-owned bounded follow-through that turns the Task326 selected proof-breadth tranche into canonical task-local Lean Authority v3 packaging reports through the existing project-local verifier, without making the follow-through proof authority.

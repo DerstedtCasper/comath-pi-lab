@@ -62,6 +62,7 @@ import { recordGoal3ReleaseCandidateProofBreadthClosure } from "../release/goal3
 import { recordGoal3ReleaseCandidateProofBreadthExecutionBridge } from "../release/goal3-proof-breadth-execution-bridge.js";
 import { recordGoal3ReleaseCandidateProofBreadthExecutionFollowThrough } from "../release/goal3-proof-breadth-execution-follow-through.js";
 import { recordGoal3ReleaseCandidateProofBreadthTaskLocalPackagingFollowThrough } from "../release/goal3-proof-breadth-task-local-packaging-follow-through.js";
+import { recordGoal3ReleaseCandidateProofBreadthSelectedTranchePackagingResultsFollowUp } from "../release/goal3-proof-breadth-selected-tranche-packaging-results-follow-up.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
 import { recordGoal3FinalGaAudit } from "../release/goal3-final-ga-audit.js";
 import { recordGoal3GaCertificate } from "../release/goal3-ga-certificate.js";
@@ -657,6 +658,18 @@ async function route(method: string, path: string, body: unknown, context: Route
             body.project_root,
             body
           )
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/selected-tranche-packaging-results-follow-up",
+      (payload) => {
+        const body = payload as Parameters<typeof recordGoal3ReleaseCandidateProofBreadthSelectedTranchePackagingResultsFollowUp>[1] & {
+          project_root: string;
+        };
+        return {
+          selected_tranche_packaging_results_follow_up:
+            recordGoal3ReleaseCandidateProofBreadthSelectedTranchePackagingResultsFollowUp(body.project_root, body)
         };
       }
     ],
