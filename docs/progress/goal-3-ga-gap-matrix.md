@@ -105,6 +105,8 @@ Task343 selected-tranche next closure recheck adds the Task341-bound selected-tr
 
 Task344 selected-tranche next closure execution bridge adds the Task343-bound handoff back into selected-tranche next execution planning. It consumes only current Task343 id/path/hash material, preserves Task343-bound Task300 closure and selected PM packaging-report currentness checks through Task338 semantics, records append-only non-certifying provenance, and keeps Task338/Task326 as bounded next-tranche execution-planning plumbing. It does not run Lean, synthesize proofs, write packaging/currentness/closure/final-audit artifacts, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche continuation into global proof-breadth closure.
 
+Task345 selected-tranche next closure bridge check-debug adds regression coverage over the Task343/344 closure-to-next-execution bridge and the adjacent Task338/326/300/301 authority chain. It records status/smoke/default-discovery/docs synchronization only, keeps Task344 Task343-hash-bound and Task338-delegating, keeps Task343 Task300-reusing, and keeps no-Pi-public-surface boundaries. It does not add a route, Pi consumer, Lean replay, proof synthesis, packaging/currentness/closure/final-audit writer, final-audit unblock, claim promotion, certificate issuance, or GA certification.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |

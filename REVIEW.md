@@ -1,3 +1,15 @@
+# Goal 3 Task 345 / Selected-Tranche Next Closure Bridge Check-Debug
+
+Scope: revalidate the Task343/344 selected-tranche next closure-to-execution bridge stack, adjacent Task338/326 execution-planning layers, Task300/301 authority boundaries, status/route/default discovery, no-Pi-public-surface constraints, and release-hardening wording. This is the Task345 selected-tranche next closure bridge check-debug pass.
+
+Implementation review notes:
+- Added `goal3-task345-selected-tranche-next-closure-bridge-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_next_closure_execution_bridge_check_debug` status exposure.
+- The regression keeps Task344 Task343-hash-bound, Task338-delegating, no direct Task326 call, no Lean execution, no packaging/currentness/closure/final-audit writes, and no Pi surface.
+- The regression also keeps Task343 as the Task341-to-Task300 wrapper, Task338 as the currentness-checked Task326 delegation layer, Task326 as bounded execution planning, Task300 as aggregate proof-breadth closure authority, and Task301 as final-audit binding authority.
+
+Boundary notes: Task345 is check-debug coverage only. It does not add a route, expose a Pi tool, run Lean, synthesize proofs, write packaging/currentness/closure/final-audit artifacts, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 344 / Selected-Tranche Next Closure Execution Bridge
 
 Scope: consume a current Task343 selected-tranche next closure recheck and continue the bounded proof-breadth loop by handing that closure/currentness result back into the existing Task338 selected-tranche next execution bridge / Task326 execution-planning semantics. This is the Task344 selected-tranche next closure execution bridge.
