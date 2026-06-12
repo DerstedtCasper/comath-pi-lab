@@ -1,3 +1,15 @@
+# Goal 3 Task 337 / Selected-Tranche Closure Recheck
+
+Scope: consume a current Task335 selected-tranche packaging-results follow-up and hand that current selected tranche back to the existing Task300 proof-breadth closure verifier without creating new proof, Pi, or final-audit authority.
+
+Implementation review notes:
+- Added `goal3-task337-selected-tranche-closure-recheck.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheClosureRecheck()` and `POST /release/goal3/selected-tranche-closure-recheck`.
+- The recheck consumes only a Task335 follow-up id/path/hash triple, rejects stale Task335 material, re-hashes the selected canonical PM packaging reports before invoking Task300, and binds the resulting Task300 proof-breadth closure artifact into append-only Task337 provenance.
+- The artifact records selected task ids, selected packaging report hashes, the Task300 closure status/counts, and non-certifying audit provenance while preserving Task300 as aggregate closure authority and Task301 as final-audit binding authority.
+
+Boundary notes: Task337 is service-owned closure recheck plumbing only. It does not run Lean, synthesize proofs, trust caller success metadata, expose a Pi tool, replace Task300, write Task301 final-GA-audit artifacts, close global proof breadth by itself, unblock final GA audit by itself, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 336 / Selected-Tranche Packaging Results Check-Debug
 
 Scope: revalidate Task335 and the adjacent Task334/332/326/300/301 proof-breadth chain without adding execution, closure, or public authority.
