@@ -137,6 +137,8 @@ Task359 selected-tranche next closure execution packaging results closure execut
 
 Task360 selected-tranche closure execution packaging results currentness check-debug adds regression coverage over the Task358/359 loop. It keeps Task358 bound to Task356 and existing Task352/346/340/334 packaging semantics, keeps Task359 bound to Task358 and existing Task353/347/341/335 currentness semantics, verifies route/export/status/smoke/default discovery, and preserves Task300/301/303 authority separation. It keeps no packaging/currentness artifact writer and does not add a route, run Lean, synthesize proofs, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche currentness evidence into global proof-breadth completion.
 
+Task361 selected-tranche next closure execution packaging results closure execution packaging results closure recheck adds the Task359-bound handoff back into existing Task355/349/343/300 selected-tranche closure recheck semantics. It consumes only current Task359 id/path/hash material, validates copied Task358/Task356/Task355 references plus the delegated Task353 artifact reference, records append-only non-certifying provenance, and keeps Task300 as aggregate proof-breadth closure authority plus Task301/303 as separate final-audit/certificate gates. It does not run Lean, synthesize proofs, call lower producer paths directly, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche closure execution packaging results closure recheck evidence into global proof-breadth completion.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |

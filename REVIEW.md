@@ -1,3 +1,15 @@
+# Goal 3 Task 361 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Recheck
+
+Scope: consume a current Task359 selected-tranche next closure execution packaging results closure execution packaging results follow-up and continue the bounded proof-breadth loop by delegating selected-tranche closure recheck to existing Task355/349/343/300 semantics only when Task359 is ready.
+
+Implementation review notes:
+- Added `goal3-task361-closure-exec-packaging-results-closure-exec-packaging-results-closure-recheck.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingResultsClosureExecutionPackagingResultsClosureRecheck()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-recheck`.
+- The wrapper consumes only a Task359 id/path/hash triple, rejects stale or weakened Task359 material, validates copied Task358/Task356/Task355 artifact references and the delegated Task353 artifact reference, then delegates through existing Task355/349/343/300 closure recheck plumbing only when Task359 is ready.
+- The persisted Task361 wrapper binds Task359 and delegated Task355 artifacts by references/hashes without embedding proof reports or creating Task301 final-audit or Task303 GA-certificate material.
+
+Boundary notes: Task361 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task301 final-audit or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 360 / Selected-Tranche Closure Execution Packaging Results Currentness Check-Debug
 
 Scope: regression-only coverage over the Task358/359 selected-tranche closure execution packaging/results currentness chain, preserving Task358's Task356-to-Task352/346/340/334 closure execution packaging handoff and Task359's Task358-to-Task353/347/341/335 packaging-results currentness handoff.
