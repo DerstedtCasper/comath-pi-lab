@@ -1,3 +1,15 @@
+# Goal 3 Task 362 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Bridge
+
+Scope: consume a current Task361 selected-tranche next closure execution packaging results closure execution packaging results closure recheck and continue the bounded proof-breadth loop by delegating selected-tranche closure execution to existing Task356/350/344/338 semantics only when Task361 has a delegated Task355.
+
+Implementation review notes:
+- Added `goal3-task362-closure-exec-packaging-results-closure-exec-packaging-results-closure-execution-bridge.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingResultsClosureExecutionPackagingResultsClosureExecutionBridge()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-bridge`.
+- The wrapper consumes only a Task361 id/path/hash triple, rejects stale or weakened Task361 material, validates copied Task356/Task355 artifact references and the delegated Task355 artifact reference, then delegates through existing Task356/350/344/338 closure execution plumbing only when Task361 has delegated closure-recheck material.
+- The persisted Task362 wrapper binds Task361 and delegated Task356 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task362 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 361 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Recheck
 
 Scope: consume a current Task359 selected-tranche next closure execution packaging results closure execution packaging results follow-up and continue the bounded proof-breadth loop by delegating selected-tranche closure recheck to existing Task355/349/343/300 semantics only when Task359 is ready.
