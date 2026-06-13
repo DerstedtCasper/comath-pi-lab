@@ -129,6 +129,8 @@ Task355 selected-tranche next closure execution packaging results closure rechec
 
 Task356 selected-tranche next closure execution packaging results closure execution bridge adds the Task355-bound handoff back into existing Task350/344/338 selected-tranche closure execution semantics. It consumes only current Task355 id/path/hash material, validates the Task355-bound delegated Task349 closure-recheck reference, records append-only non-certifying provenance, and keeps Task300 as aggregate proof-breadth closure authority plus Task301/303 as separate final-audit/certificate gates. It does not run Lean, synthesize proofs, call producer paths directly outside the existing Task350 wrapper, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche closure execution evidence into global proof-breadth completion.
 
+Task357 selected-tranche closure recheck-to-execution check-debug adds regression coverage over the Task355/356 loop. It keeps Task355 bound to Task353 and existing Task349/343/300 closure-recheck semantics, keeps Task356 bound to Task355 and existing Task350/344/338 closure-execution semantics, verifies route/export/status/smoke/default discovery, and preserves Task300/301/303 authority separation. It does not add a route, run Lean, synthesize proofs, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche closure execution evidence into global proof-breadth completion.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |
