@@ -1,3 +1,15 @@
+# Goal 3 Task 359 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Follow-Up
+
+Scope: consume a current Task358 selected-tranche next closure execution packaging results closure execution packaging follow-through and continue the bounded proof-breadth loop by delegating selected-tranche packaging-results currentness to existing Task353/347/341/335 semantics.
+
+Implementation review notes:
+- Added `goal3-task359-closure-exec-packaging-results-closure-exec-packaging-results-follow-up.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingResultsClosureExecutionPackagingResultsFollowUp()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-follow-up`.
+- The wrapper consumes only a Task358 id/path/hash triple, rejects stale or weakened Task358 material, validates the Task358-bound delegated Task352 artifact reference, then delegates through existing Task353/347/341/335 packaging-results currentness plumbing.
+- The persisted Task359 wrapper binds Task358 and delegated Task353 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task359 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 358 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Follow-Through
 
 Scope: consume a current Task356 selected-tranche next closure execution packaging results closure execution bridge and continue the bounded proof-breadth loop by delegating selected-tranche closure execution packaging to existing Task352/346/340/334 semantics.
