@@ -1,3 +1,15 @@
+# Goal 3 Task 350 / Selected-Tranche Next Closure Packaging Results Closure Execution Bridge
+
+Scope: consume a current Task349 selected-tranche next closure packaging results closure recheck and continue the bounded proof-breadth loop by delegating selected-tranche closure execution to existing Task344/338 bridge semantics. This is the Task350 selected-tranche next closure packaging results closure execution bridge.
+
+Implementation review notes:
+- Added `goal3-task350-selected-tranche-next-closure-packaging-results-closure-execution-bridge.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionBridge()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-bridge`.
+- The bridge consumes only a Task349 id/path/hash triple, rejects stale Task349 material, validates no-authority Task349 flags, then delegates closure execution to existing Task344/338 bridge plumbing.
+- The persisted Task350 wrapper binds Task349 and delegated bridge artifacts by references/hashes without embedding proof reports or creating Task301 final-audit / Task303 GA-certificate material.
+
+Boundary notes: Task350 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call Task326/338 producer paths directly, replace Task300/301/303, write Task301 final-audit or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 349 / Selected-Tranche Next Closure Packaging Results Closure Recheck
 
 Scope: consume a current Task347 selected-tranche next closure packaging results follow-up and continue the bounded proof-breadth loop by delegating selected-tranche closure recheck to existing Task343/Task300 semantics. This is the Task349 selected-tranche next closure packaging results closure recheck.

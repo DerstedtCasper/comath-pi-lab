@@ -115,6 +115,8 @@ Task348 selected-tranche next closure packaging/currentness check-debug adds reg
 
 Task349 selected-tranche next closure packaging results closure recheck adds the Task347-bound handoff back into existing Task343/Task300 selected-tranche closure recheck semantics. It consumes only current Task347 id/path/hash material, revalidates Task347's Task346/344/338/340/341/335/334 currentness references, records append-only non-certifying provenance, and keeps Task300 as aggregate proof-breadth closure authority plus Task301/303 as separate final-audit/certificate gates. It does not run Lean, synthesize proofs, call Task326/334/340/341 producer paths directly, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche recheck evidence into global proof-breadth completion.
 
+Task350 selected-tranche next closure packaging results closure execution bridge adds the Task349-bound handoff back into existing Task344/338 selected-tranche closure execution bridge semantics. It consumes only current Task349 id/path/hash material, records append-only non-certifying provenance, and keeps Task300 as aggregate proof-breadth closure authority plus Task301/303 as separate final-audit/certificate gates. It does not run Lean, synthesize proofs, call Task326/338 producer paths directly, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche execution evidence into global proof-breadth completion.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |

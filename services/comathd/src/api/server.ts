@@ -72,6 +72,7 @@ import { recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosureExecut
 import { recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingFollowThrough } from "../release/goal3-proof-breadth-selected-tranche-next-closure-packaging-follow-through.js";
 import { recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsFollowUp } from "../release/goal3-proof-breadth-selected-tranche-next-closure-packaging-results-follow-up.js";
 import { recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureRecheck } from "../release/goal3-proof-breadth-selected-tranche-next-closure-packaging-results-closure-recheck.js";
+import { recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionBridge } from "../release/goal3-proof-breadth-selected-tranche-next-closure-packaging-results-closure-execution-bridge.js";
 import { recordGoal3GaCertificationReview } from "../release/goal3-ga-certification.js";
 import { recordGoal3FinalGaAudit } from "../release/goal3-final-ga-audit.js";
 import { recordGoal3GaCertificate } from "../release/goal3-ga-certificate.js";
@@ -796,6 +797,23 @@ async function route(method: string, path: string, body: unknown, context: Route
         return {
           selected_tranche_next_closure_packaging_results_closure_recheck:
             recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureRecheck(
+              body.project_root,
+              body
+            )
+        };
+      }
+    ],
+    [
+      "POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-bridge",
+      (payload) => {
+        const body = payload as Parameters<
+          typeof recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionBridge
+        >[1] & {
+          project_root: string;
+        };
+        return {
+          selected_tranche_next_closure_packaging_results_closure_execution_bridge:
+            recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionBridge(
               body.project_root,
               body
             )
