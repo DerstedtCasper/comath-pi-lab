@@ -127,6 +127,8 @@ Task349 selected-tranche next closure packaging results closure recheck is servi
 
 Task350 selected-tranche next closure packaging results closure execution bridge is service-owned release-loop plumbing after Task349. It consumes only a current Task349 selected-tranche next closure packaging results closure recheck id/path/hash, re-reads and hash-binds that artifact, then delegates next selected-tranche closure execution to existing Task344/338 bridge semantics. It has no Pi consumer/surface, no Lean execution, no direct Task326/338 producer call, no Task301 final-audit write, no Task303 certificate write, no claim promotion, and no GA certification authority.
 
+Task351 selected-tranche next closure results-to-execution check-debug is regression-only release hardening over Task349/350. It keeps Task349 Task347-bound and Task343/Task300-delegating, keeps Task350 Task349-bound and Task344/338-delegating, keeps Task344/338/326 execution-planning boundaries intact, keeps Task300/301/303 authority separate, and keeps no Pi surface, no Lean execution, no proof synthesis, no closure/final-audit/certificate writes, no claim promotion, and no GA certification.
+
 Do not implement broad generalization subsystems without explicit phase tracking. In particular, do not implement generic theorem proving, production Codex/Pi adapter hardening, broad MathProve proof search or MathProve-as-proof-authority semantics, or native TriviumDB production switching without target-platform validation. Do not treat Research Alpha evaluation or the Phase 18-80 vertical slices as a claim of broad mathematical discovery capability.
 
 ## Required Reading

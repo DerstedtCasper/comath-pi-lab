@@ -1,3 +1,15 @@
+# Goal 3 Task 351 / Selected-Tranche Next Closure Results-To-Execution Check-Debug
+
+Scope: regression-only check-debug coverage over the Task349/350 selected-tranche next closure results-to-execution loop, adjacent Task344/338/326 execution-planning layers, Task300/301/303 authority separation, status/route/default discovery, no-Pi-public-surface constraints, and release-hardening wording.
+
+Implementation review notes:
+- Added `goal3-task351-selected-tranche-next-closure-results-to-execution-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_next_closure_packaging_results_closure_execution_bridge_check_debug` status exposure.
+- The regression keeps Task349 Task347-bound and Task343/Task300-delegating, with no direct Task326/338/344 route, no Lean execution, no Task301/303 writes, and no proof/certificate authority.
+- The regression keeps Task350 Task349-bound and Task344/338-delegating, with no direct Task326/338/300/301/303 call, no Pi surface, and no proof/certificate authority.
+
+Boundary notes: Task351 is check-debug coverage only. It does not add a route, expose a Pi tool, run Lean, synthesize proofs, write packaging/currentness/closure/final-audit/GA-certificate artifacts, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 350 / Selected-Tranche Next Closure Packaging Results Closure Execution Bridge
 
 Scope: consume a current Task349 selected-tranche next closure packaging results closure recheck and continue the bounded proof-breadth loop by delegating selected-tranche closure execution to existing Task344/338 bridge semantics. This is the Task350 selected-tranche next closure packaging results closure execution bridge.
