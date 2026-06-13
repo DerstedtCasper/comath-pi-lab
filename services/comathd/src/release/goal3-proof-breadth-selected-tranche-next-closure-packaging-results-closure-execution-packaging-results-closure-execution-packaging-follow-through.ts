@@ -415,8 +415,10 @@ function callerProofOrGaMaterialPresent(
     record.can_certify_ga !== undefined ||
     record.can_promote_claim !== undefined ||
     record.final_ga_audit_json !== undefined ||
+    record.final_ga_audit_id !== undefined ||
     record.proof_breadth_closure_json !== undefined ||
-    record.proof_breadth_closure_id !== undefined
+    record.proof_breadth_closure_id !== undefined ||
+    record.ga_certificate_id !== undefined
   );
 }
 

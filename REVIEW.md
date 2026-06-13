@@ -1,3 +1,15 @@
+# Goal 3 Task 360 / Selected-Tranche Closure Execution Packaging Results Currentness Check-Debug
+
+Scope: regression-only coverage over the Task358/359 selected-tranche closure execution packaging/results currentness chain, preserving Task358's Task356-to-Task352/346/340/334 closure execution packaging handoff and Task359's Task358-to-Task353/347/341/335 packaging-results currentness handoff.
+
+Implementation review notes:
+- Added `goal3-task360-closure-exec-packaging-results-closure-exec-packaging-results-currentness-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_next_closure_packaging_results_closure_execution_packaging_results_closure_execution_packaging_results_follow_up_check_debug` status exposure.
+- The regression keeps Task358 Task356-bound, currentness-checking delegated Task350/Task352 material, and delegating closure execution packaging through existing Task352/346/340/334 semantics.
+- The regression keeps Task359 Task358-bound, currentness-checking delegated Task352/Task353 material, and delegating packaging-results currentness through existing Task353/347/341/335 semantics without bypassing currentness witnesses.
+
+Boundary notes: Task360 is check-debug coverage only. It does not add a route, expose a Pi tool, run Lean, synthesize proofs, write packaging/currentness/closure/final-audit/GA-certificate artifacts, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 359 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Follow-Up
 
 Scope: consume a current Task358 selected-tranche next closure execution packaging results closure execution packaging follow-through and continue the bounded proof-breadth loop by delegating selected-tranche packaging-results currentness to existing Task353/347/341/335 semantics.

@@ -393,7 +393,10 @@ function callerProofOrGaMaterialPresent(
     record.can_certify_ga !== undefined ||
     record.can_promote_claim !== undefined ||
     record.final_ga_audit_json !== undefined ||
-    record.proof_breadth_closure_json !== undefined
+    record.final_ga_audit_id !== undefined ||
+    record.proof_breadth_closure_json !== undefined ||
+    record.proof_breadth_closure_id !== undefined ||
+    record.ga_certificate_id !== undefined
   );
 }
 
@@ -405,7 +408,7 @@ function sanitizeBlockerReason(value: string, source: "task358" | "delegated"): 
   const trimmed = value.trim();
   const sanitized = sanitizeActor(trimmed);
   if (sanitized !== trimmed || !/^[A-Za-z0-9_.:-]{1,200}$/u.test(trimmed)) {
-    return `${source}_blocker_reason_redacted`;
+    return source === "task358" ? "task358_blocker_reason_redacted" : "delegated_blocker_reason_redacted";
   }
   return trimmed;
 }
@@ -603,7 +606,7 @@ export function recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosur
     missing_selected_task_ids: delegated.missing_selected_task_ids,
     blocked_selected_task_ids: delegated.blocked_selected_task_ids,
     selected_packaging_report_artifacts: delegated.selected_packaging_report_artifacts,
-    selected_packaging_report_artifacts_current: true,
+    selected_packaging_report_artifacts_current: delegated.selected_packaging_report_artifacts_current,
     ready_for_proof_breadth_closure_recheck: delegated.ready_for_proof_breadth_closure_recheck,
     proof_breadth_complete: false,
     final_ga_audit_unblocked: false,

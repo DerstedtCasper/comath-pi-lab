@@ -737,6 +737,38 @@ try {
   assert.doesNotMatch(JSON.stringify(sanitizedBlockerFollowUp), gaOverclaimTerms);
   writeFileSync(join(projectRoot, task358Path), originalTask358Text, "utf8");
 
+  const cleanTask358Text = `${JSON.stringify(
+    {
+      ...JSON.parse(originalTask358Text),
+      blocker_reasons: []
+    },
+    null,
+    2
+  )}\n`;
+  writeFileSync(join(projectRoot, task358Path), cleanTask358Text, "utf8");
+  const closureIdOnlyOverclaim =
+    recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingResultsClosureExecutionPackagingResultsFollowUp(
+      projectRoot,
+      {
+        project_id: projectId,
+        selected_tranche_next_closure_packaging_results_closure_execution_packaging_results_closure_execution_packaging_results_follow_up_id:
+          "GOAL3-SELECTED-TRANCHE-NEXT-CLOSURE-EXEC-PACKAGING-RESULTS-CLOSURE-EXEC-PACKAGING-RESULTS-0359-CLOSURE-ID-ONLY",
+        selected_tranche_next_closure_packaging_results_closure_execution_packaging_results_closure_execution_packaging_follow_through_id:
+          task358.body.selected_tranche_next_closure_packaging_results_closure_execution_packaging_results_closure_execution_packaging_follow_through_id,
+        selected_tranche_next_closure_packaging_results_closure_execution_packaging_results_closure_execution_packaging_follow_through_path:
+          task358Path,
+        selected_tranche_next_closure_packaging_results_closure_execution_packaging_results_closure_execution_packaging_follow_through_sha256:
+          sha256Text(cleanTask358Text),
+        proof_breadth_closure_id: "GOAL3-FORGED-PROOF-BREADTH-CLOSURE"
+      }
+    );
+  assert.equal(
+    closureIdOnlyOverclaim.blocker_reasons.includes("caller_proof_or_ga_authority_material_ignored"),
+    true,
+    "Task359 must treat caller-supplied proof_breadth_closure_id as proof/GA authority material even without proof_breadth_closure_json"
+  );
+  writeFileSync(join(projectRoot, task358Path), originalTask358Text, "utf8");
+
   const closureFilesBefore = collectRelativeFiles(".comath/release/goal3-proof-breadth-closure");
   const finalAuditFilesBefore = collectRelativeFiles(".comath/release/goal3-final-ga-audit");
   const gaCertificateFilesBefore = collectRelativeFiles(".comath/release/goal3-ga-certificate");
