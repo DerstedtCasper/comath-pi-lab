@@ -121,6 +121,8 @@ Task351 selected-tranche next closure results-to-execution check-debug adds regr
 
 Task352 selected-tranche next closure execution packaging follow-through adds the Task350-bound handoff back into existing Task346/340/334 selected-tranche packaging semantics. It consumes only current Task350 id/path/hash material, records append-only non-certifying provenance, rejects unselected evidence through delegated packaging checks, and keeps Task300 as aggregate proof-breadth closure authority plus Task301/303 as separate final-audit/certificate gates. It does not run Lean, synthesize proofs, call Task326/334/338/340 producer paths directly, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche packaging evidence into global proof-breadth completion.
 
+Task353 selected-tranche next closure execution packaging results follow-up adds the Task352-bound handoff back into existing Task347/341/335 selected-tranche packaging-results currentness semantics. It consumes only current Task352 id/path/hash material, validates the Task352-bound delegated Task346 packaging reference, records append-only non-certifying provenance, and keeps Task300 as aggregate proof-breadth closure authority plus Task301/303 as separate final-audit/certificate gates. It does not run Lean, synthesize proofs, call producer paths directly, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche currentness evidence into global proof-breadth completion.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |
