@@ -1,3 +1,15 @@
+# Goal 3 Task 366 / Task366 Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Currentness Check-Debug
+
+Scope: regression-only coverage over the Task364/365 selected-tranche closure execution packaging/results currentness chain, preserving Task364's Task362-to-Task358/352/346/340/334 closure execution packaging handoff and Task365's Task364-to-Task359/353/347/341/335 packaging-results currentness handoff.
+
+Implementation review notes:
+- Added `goal3-task366-closure-exec-packaging-results-closure-exec-packaging-results-closure-exec-packaging-results-currentness-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_next_closure_packaging_results_closure_execution_packaging_results_closure_execution_packaging_results_closure_execution_packaging_results_follow_up_check_debug` status exposure.
+- The regression keeps Task364 Task362-bound, currentness-checking copied and delegated Task356/Task355 material, and delegating closure execution packaging through existing Task358/352/346/340/334 semantics.
+- The regression keeps Task365 Task364-bound, currentness-checking copied Task362/Task361/Task356/Task355 material plus delegated Task358 material, and delegating packaging-results currentness through existing Task359/353/347/341/335 semantics without bypassing currentness witnesses.
+
+Boundary notes: Task366 is check-debug coverage only. It does not add a route, expose a Pi tool, run Lean, synthesize proofs, call lower producer paths directly, write packaging/currentness/closure/final-audit/GA-certificate artifacts, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 365 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Follow-Up
 
 Scope: consume a current Task364 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging follow-through and continue the bounded proof-breadth loop by delegating selected-tranche packaging-results currentness to existing Task359/353/347/341/335 semantics only when Task364 has delegated Task358 closure-execution packaging material.
