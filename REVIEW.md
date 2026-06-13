@@ -1,3 +1,15 @@
+# Goal 3 Task 356 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Bridge
+
+Scope: consume a current Task355 selected-tranche next closure execution packaging results closure recheck and continue the bounded proof-breadth loop by delegating selected-tranche closure execution to existing Task350/344/338 semantics.
+
+Implementation review notes:
+- Added `goal3-task356-closure-exec-packaging-results-closure-execution-bridge.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingResultsClosureExecutionBridge()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-bridge`.
+- The bridge consumes only a Task355 id/path/hash triple, rejects stale or weakened Task355 material, validates the Task355-bound delegated Task349 artifact reference, then delegates through existing Task350/344/338 closure execution plumbing.
+- The persisted Task356 wrapper binds Task355 and delegated Task350/344/338 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task356 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call Task326/338/344 producer paths directly outside the existing Task350 wrapper, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 355 / Selected-Tranche Next Closure Execution Packaging Results Closure Recheck
 
 Scope: consume a current Task353 selected-tranche next closure execution packaging results follow-up and continue the bounded proof-breadth loop by delegating selected-tranche closure recheck to existing Task349/343/300 semantics.
