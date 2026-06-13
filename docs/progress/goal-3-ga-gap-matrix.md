@@ -125,6 +125,8 @@ Task353 selected-tranche next closure execution packaging results follow-up adds
 
 Task354 selected-tranche closure execution packaging results currentness check-debug adds regression coverage over the Task352/353 loop. It keeps Task352 bound to Task350 and existing Task346/340/334 packaging semantics, keeps Task353 bound to Task352 and existing Task347/341/335 currentness semantics, verifies route/export/status/smoke/default discovery, and preserves Task300/301/303 authority separation. It does not add a route, run Lean, synthesize proofs, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche currentness evidence into global proof-breadth completion.
 
+Task355 selected-tranche next closure execution packaging results closure recheck adds the Task353-bound handoff back into existing Task349/343/300 selected-tranche closure recheck semantics. It consumes only current Task353 id/path/hash material, validates the Task353-bound delegated Task347 packaging-results reference, records append-only non-certifying provenance, and keeps Task300 as aggregate proof-breadth closure authority plus Task301/303 as separate final-audit/certificate gates. It does not run Lean, synthesize proofs, call producer paths directly, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche closure recheck evidence into global proof-breadth completion.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |

@@ -487,6 +487,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task352-closure-exec-packaging-follow-through.test.mjs",
   "goal3-task353-closure-exec-packaging-results-follow-up.test.mjs",
   "goal3-task354-closure-exec-packaging-results-currentness-check-debug.test.mjs",
+  "goal3-task355-closure-exec-packaging-results-closure-recheck.test.mjs",
   "goal3-task255-pi-goal-mode-intake-manifest.test.mjs",
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",

@@ -1,3 +1,15 @@
+# Goal 3 Task 355 / Selected-Tranche Next Closure Execution Packaging Results Closure Recheck
+
+Scope: consume a current Task353 selected-tranche next closure execution packaging results follow-up and continue the bounded proof-breadth loop by delegating selected-tranche closure recheck to existing Task349/343/300 semantics.
+
+Implementation review notes:
+- Added `goal3-task355-closure-exec-packaging-results-closure-recheck.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingResultsClosureRecheck()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-recheck`.
+- The recheck consumes only a Task353 id/path/hash triple, rejects stale or weakened Task353 material, validates the Task353-bound delegated Task347 artifact reference, then delegates through existing Task349/343/300 closure recheck plumbing.
+- The persisted Task355 wrapper binds Task353 and delegated Task349 artifacts by references/hashes without embedding proof reports or creating Task301 final-audit or Task303 GA-certificate material.
+
+Boundary notes: Task355 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call Task326/334/338/340/341 producer paths directly, replace Task300/301/303, write Task301 final-audit or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 354 / Selected-Tranche Closure Execution Packaging Results Currentness Check-Debug
 
 Scope: regression-only check-debug coverage over the Task352/353 selected-tranche closure execution packaging/results currentness loop, adjacent Task346/347/341/335 delegated currentness layers, Task300/301/303 authority separation, status/route/default discovery, no-Pi-public-surface constraints, and release-hardening wording.
