@@ -1,3 +1,15 @@
+# Goal 3 Task 358 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Follow-Through
+
+Scope: consume a current Task356 selected-tranche next closure execution packaging results closure execution bridge and continue the bounded proof-breadth loop by delegating selected-tranche closure execution packaging to existing Task352/346/340/334 semantics.
+
+Implementation review notes:
+- Added `goal3-task358-closure-exec-packaging-results-closure-exec-packaging-follow-through.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingResultsClosureExecutionPackagingFollowThrough()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-follow-through`.
+- The wrapper consumes only a Task356 id/path/hash triple, rejects stale or weakened Task356 material, validates the Task356-bound delegated Task350 artifact reference, then delegates through existing Task352/346/340/334 closure execution packaging plumbing.
+- The persisted Task358 wrapper binds Task356 and delegated Task352 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task358 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 357 / Selected-Tranche Closure Recheck-To-Execution Check-Debug
 
 Scope: regression-only coverage over the Task355/356 selected-tranche closure recheck-to-execution chain, preserving Task355's Task353-to-Task349/343/300 closure-recheck handoff and Task356's Task355-to-Task350/344/338 closure-execution handoff.
