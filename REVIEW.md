@@ -1,3 +1,11 @@
+# Goal 3 Task 368 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Bridge
+
+- Task368 consumes only current Task367 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results closure recheck id/path/hash material, re-reads and hash-binds it, and rejects stale or weakened no-authority artifacts.
+- The wrapper delegates selected-tranche closure execution only through existing Task362/356/350/344/338 semantics when Task367 carries delegated Task361 closure-recheck material; otherwise it records a blocked non-certifying bridge without running delegated execution.
+- The persisted Task368 wrapper binds Task367 and delegated Task362 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task368 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 367 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Recheck
 
 Scope: consume a current Task365 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results follow-up and continue the bounded proof-breadth loop by delegating selected-tranche closure recheck to existing Task361/355/349/343/300 semantics only when Task365 has delegated Task359 material.
