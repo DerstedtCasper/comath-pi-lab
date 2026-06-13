@@ -1,3 +1,15 @@
+# Goal 3 Task 365 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Follow-Up
+
+Scope: consume a current Task364 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging follow-through and continue the bounded proof-breadth loop by delegating selected-tranche packaging-results currentness to existing Task359/353/347/341/335 semantics only when Task364 has delegated Task358 closure-execution packaging material.
+
+Implementation review notes:
+- Added `goal3-task365-closure-exec-packaging-results-closure-exec-packaging-results-closure-exec-packaging-results-follow-up.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingResultsClosureExecutionPackagingResultsClosureExecutionPackagingResultsFollowUp()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-follow-up`.
+- The wrapper consumes only a Task364 id/path/hash triple, rejects stale or weakened Task364 material, validates copied Task362/Task361/Task356/Task355 artifact references plus delegated Task358 when present, and delegates through existing Task359/353/347/341/335 packaging-results currentness plumbing only when Task364 has delegated Task358 material.
+- The persisted Task365 wrapper binds Task364 and delegated Task359 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task365 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 364 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Follow-Through
 
 Scope: consume a current Task362 selected-tranche next closure execution packaging results closure execution packaging results closure execution bridge and continue the bounded proof-breadth loop by delegating selected-tranche closure execution packaging to existing Task358/352/346/340/334 semantics only when Task362 has delegated Task356 closure-execution material.
