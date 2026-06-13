@@ -1,3 +1,15 @@
+# Goal 3 Task 367 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Recheck
+
+Scope: consume a current Task365 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results follow-up and continue the bounded proof-breadth loop by delegating selected-tranche closure recheck to existing Task361/355/349/343/300 semantics only when Task365 has delegated Task359 material.
+
+Implementation review notes:
+- Added `goal3-task367-closure-exec-packaging-results-closure-exec-packaging-results-closure-exec-packaging-results-closure-recheck.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingResultsClosureExecutionPackagingResultsClosureExecutionPackagingResultsClosureRecheck()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-recheck`.
+- The recheck consumes only a Task365 id/path/hash triple, rejects stale or weakened Task365 material, validates copied Task364/Task362/Task361/Task356/Task355 material plus delegated Task359 material when present, then delegates through existing Task361 closure-recheck plumbing.
+- The persisted Task367 wrapper binds Task365 and delegated Task361 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task367 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 366 / Task366 Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Currentness Check-Debug
 
 Scope: regression-only coverage over the Task364/365 selected-tranche closure execution packaging/results currentness chain, preserving Task364's Task362-to-Task358/352/346/340/334 closure execution packaging handoff and Task365's Task364-to-Task359/353/347/341/335 packaging-results currentness handoff.
