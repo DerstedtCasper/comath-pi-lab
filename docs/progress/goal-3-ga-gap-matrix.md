@@ -119,6 +119,8 @@ Task350 selected-tranche next closure packaging results closure execution bridge
 
 Task351 selected-tranche next closure results-to-execution check-debug adds regression coverage over the Task349/350 closure-results-to-execution loop and adjacent Task344/338/326/300/301/303 authority boundaries. It records status/smoke/default-discovery/docs synchronization only; it does not add a route, Pi consumer, Lean replay, proof synthesis, packaging/currentness/closure/final-audit/GA-certificate writer, final-audit unblock, claim promotion, certificate issuance, or GA certification.
 
+Task352 selected-tranche next closure execution packaging follow-through adds the Task350-bound handoff back into existing Task346/340/334 selected-tranche packaging semantics. It consumes only current Task350 id/path/hash material, records append-only non-certifying provenance, rejects unselected evidence through delegated packaging checks, and keeps Task300 as aggregate proof-breadth closure authority plus Task301/303 as separate final-audit/certificate gates. It does not run Lean, synthesize proofs, call Task326/334/338/340 producer paths directly, expose Pi/public authority, promote claims, issue certificates, certify GA, or convert selected-tranche packaging evidence into global proof-breadth completion.
+
 ## Phase 18-81 Evidence Classification
 
 | Evidence family | Reuse classification | Reason |

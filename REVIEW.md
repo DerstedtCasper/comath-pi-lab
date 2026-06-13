@@ -1,3 +1,15 @@
+# Goal 3 Task 352 / Selected-Tranche Next Closure Execution Packaging Follow-Through
+
+Scope: consume a current Task350 selected-tranche next closure packaging results closure execution bridge and continue the bounded proof-breadth loop by delegating next selected-tranche closure execution packaging to existing Task346/340/334 packaging semantics.
+
+Implementation review notes:
+- Added `goal3-task352-closure-exec-packaging-follow-through.test.mjs` and wired it into phase0 smoke discovery.
+- Added `recordGoal3ReleaseCandidateProofBreadthSelectedTrancheNextClosurePackagingResultsClosureExecutionPackagingFollowThrough()` and `POST /release/goal3/selected-tranche-next-closure-packaging-results-closure-execution-packaging-follow-through`.
+- The follow-through consumes only a Task350 id/path/hash triple, rejects stale or weakened Task350 material, then delegates packaging through existing Task346/340/334 plumbing.
+- The persisted Task352 wrapper binds Task350 and delegated packaging artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task352 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call Task326/334/338/340 producer paths directly, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 351 / Selected-Tranche Next Closure Results-To-Execution Check-Debug
 
 Scope: regression-only check-debug coverage over the Task349/350 selected-tranche next closure results-to-execution loop, adjacent Task344/338/326 execution-planning layers, Task300/301/303 authority separation, status/route/default discovery, no-Pi-public-surface constraints, and release-hardening wording.
