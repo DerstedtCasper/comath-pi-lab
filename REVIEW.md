@@ -1,3 +1,15 @@
+# Goal 3 Task 363 / Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Recheck-To-Execution Check-Debug
+
+Scope: regression-only coverage over the Task361/362 selected-tranche closure recheck-to-execution chain, preserving Task361's Task359-to-Task355/349/343/300 closure-recheck handoff and Task362's Task361-to-Task356/350/344/338 closure-execution handoff.
+
+Implementation review notes:
+- Added `goal3-task363-closure-exec-packaging-results-closure-exec-packaging-results-closure-recheck-to-execution-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_next_closure_packaging_results_closure_execution_packaging_results_closure_execution_packaging_results_closure_execution_bridge_check_debug` status exposure.
+- The regression keeps Task361 Task359-bound, currentness-checking copied and delegated Task359/Task358/Task356/Task355/Task353 material, and delegating closure recheck through existing Task355/349/343/300 semantics.
+- The regression keeps Task362 Task361-bound, currentness-checking copied and delegated Task361/Task356/Task355 material, and delegating closure execution through existing Task356/350/344/338 semantics without bypassing the Task356 wrapper.
+
+Boundary notes: Task363 is check-debug coverage only. It does not add a route, expose a Pi tool, run Lean, synthesize proofs, call lower producer paths directly, write packaging/currentness/closure/final-audit/GA-certificate artifacts, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 362 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Bridge
 
 Scope: consume a current Task361 selected-tranche next closure execution packaging results closure execution packaging results closure recheck and continue the bounded proof-breadth loop by delegating selected-tranche closure execution to existing Task356/350/344/338 semantics only when Task361 has a delegated Task355.
