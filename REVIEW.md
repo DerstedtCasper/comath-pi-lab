@@ -1,3 +1,15 @@
+# Goal 3 Task 354 / Selected-Tranche Closure Execution Packaging Results Currentness Check-Debug
+
+Scope: regression-only check-debug coverage over the Task352/353 selected-tranche closure execution packaging/results currentness loop, adjacent Task346/347/341/335 delegated currentness layers, Task300/301/303 authority separation, status/route/default discovery, no-Pi-public-surface constraints, and release-hardening wording.
+
+Implementation review notes:
+- Added `goal3-task354-closure-exec-packaging-results-currentness-check-debug.test.mjs` and wired it into phase0 smoke discovery.
+- Added `goal3_release_candidate_proof_breadth_selected_tranche_next_closure_packaging_results_closure_execution_packaging_results_follow_up_check_debug` status exposure.
+- The regression keeps Task352 Task350-bound and Task346/340/334-delegating, with no direct Task326/334/338/340 producer call, no Lean execution, no Task300/301/303 writes, and no proof/certificate authority.
+- The regression keeps Task353 Task352-bound and Task347/341/335-delegating, with no direct producer call, no Pi surface, and no proof/certificate authority.
+
+Boundary notes: Task354 is check-debug coverage only. It does not add a route, expose a Pi tool, run Lean, synthesize proofs, write packaging/currentness/closure/final-audit/GA-certificate artifacts, close global proof breadth, unblock final GA audit, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 353 / Selected-Tranche Next Closure Execution Packaging Results Follow-Up
 
 Scope: consume a current Task352 selected-tranche next closure execution packaging follow-through and continue the bounded proof-breadth loop by delegating selected-tranche closure execution packaging-results currentness to existing Task347/341/335 semantics.
