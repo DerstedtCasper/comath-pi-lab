@@ -1,3 +1,11 @@
+# Goal 3 Task 370 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Follow-Through
+
+- Task370 consumes only current Task368 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results closure execution bridge id/path/hash material, re-reads and hash-binds it, and rejects stale or weakened no-authority artifacts.
+- The wrapper delegates selected-tranche closure execution packaging only through existing Task364/358/352/346/340/334 semantics when Task368 carries delegated Task362 material; otherwise it records a blocked non-certifying follow-through without running delegated packaging.
+- The persisted Task370 wrapper binds Task368 and delegated Task364 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task370 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 369 / Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Recheck-To-Execution Check-Debug
 
 - Task369 is regression-only coverage over the Task367/368 selected-tranche closure recheck-to-execution chain.
