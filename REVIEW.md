@@ -1,3 +1,11 @@
+# Goal 3 Task 373 / Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Recheck
+
+- Task373 consumes only current Task371 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results closure execution packaging results follow-up id/path/hash material, re-reads and hash-binds it, and rejects stale or weakened no-authority artifacts.
+- The wrapper delegates selected-tranche closure recheck only through existing Task367/361/355/349/343/300 semantics when Task371 carries delegated Task365 material; otherwise it records a blocked non-certifying recheck without running delegated closure recheck.
+- The persisted Task373 wrapper binds Task371, delegated Task365, and delegated Task367 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task373 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure outside existing delegated semantics, write Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 372 / Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Currentness Check-Debug
 
 - Task372 is regression-only coverage over the Task370/371 selected-tranche closure execution packaging results currentness chain.
