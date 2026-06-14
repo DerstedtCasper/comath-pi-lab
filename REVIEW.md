@@ -1,3 +1,11 @@
+# Goal 3 Task 371 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Follow-Up
+
+- Task371 consumes only current Task370 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results closure execution packaging follow-through id/path/hash material, re-reads and hash-binds it, and rejects stale or weakened no-authority artifacts.
+- The wrapper delegates selected-tranche packaging-results currentness only through existing Task365/359/353/347/341/335 semantics when Task370 carries delegated Task364 material; otherwise it records a blocked non-certifying follow-up without running delegated currentness.
+- The persisted Task371 wrapper binds Task370 and delegated Task365 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task371 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure, Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 370 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Follow-Through
 
 - Task370 consumes only current Task368 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results closure execution bridge id/path/hash material, re-reads and hash-binds it, and rejects stale or weakened no-authority artifacts.

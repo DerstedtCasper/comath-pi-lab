@@ -503,6 +503,7 @@ const releaseHardeningFocusedSuites = [
   "goal3-task368-closure-execution-bridge.test.mjs",
   "goal3-task369-closure-exec-packaging-results-closure-exec-packaging-results-closure-exec-packaging-results-closure-recheck-to-execution-check-debug.test.mjs",
   "goal3-task370-closure-exec-packaging-results-closure-exec-packaging-results-closure-exec-packaging-results-closure-exec-packaging-follow-through.test.mjs",
+  "goal3-task371-closure-exec-packaging-results-closure-exec-packaging-results-closure-exec-packaging-results-closure-exec-packaging-results-follow-up.test.mjs",
   "goal3-task255-pi-goal-mode-intake-manifest.test.mjs",
   "goal3-task256-pi-goal-mode-research-plan.test.mjs",
   "goal3-task257-pi-goal-mode-adapter-execution-manifest.test.mjs",

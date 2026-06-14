@@ -105,6 +105,7 @@ export * from "./release/goal3-proof-breadth-selected-tranche-next-closure-packa
 export * from "./release/goal3-proof-breadth-selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-recheck.js";
 export * from "./release/goal3-proof-breadth-selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-bridge.js";
 export * from "./release/goal3-proof-breadth-selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-packaging-follow-through.js";
+export * from "./release/goal3-proof-breadth-selected-tranche-next-closure-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-closure-execution-packaging-results-follow-up.js";
 export * from "./release/goal3-ga-certification.js";
 export * from "./release/goal3-final-ga-audit.js";
 export * from "./release/goal3-ga-certificate.js";
