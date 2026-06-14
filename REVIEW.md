@@ -1,3 +1,11 @@
+# Goal 3 Task 369 / Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Recheck-To-Execution Check-Debug
+
+- Task369 is regression-only coverage over the Task367/368 selected-tranche closure recheck-to-execution chain.
+- The focused suite keeps Task367 route/export/status/smoke/default discovery and Task365-bound delegation through Task361/355/349/343/300 material synchronized.
+- The focused suite keeps Task368 route/export/status/smoke/default discovery and Task367-bound delegation through Task362/356/350/344/338 material synchronized.
+
+Boundary notes: Task369 adds no release writer, no route, no Pi surface, no Lean execution, no proof synthesis, no direct lower producer calls, no Task300/Task301/Task303 writes, no claim promotion, no certificate issuance, and no GA certification.
+
 # Goal 3 Task 368 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Bridge
 
 - Task368 consumes only current Task367 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results closure recheck id/path/hash material, re-reads and hash-binds it, and rejects stale or weakened no-authority artifacts.
