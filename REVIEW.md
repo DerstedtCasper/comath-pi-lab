@@ -1,3 +1,11 @@
+# Goal 3 Task 372 / Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Currentness Check-Debug
+
+- Task372 is regression-only coverage over the Task370/371 selected-tranche closure execution packaging results currentness chain.
+- The focused suite keeps Task370 route/export/status/smoke/default discovery and Task368-bound delegation through Task364/358/352/346/340/334 material synchronized.
+- The focused suite keeps Task371 route/export/status/smoke/default discovery and Task370-bound delegation through Task365/359/353/347/341/335 material synchronized.
+
+Boundary notes: Task372 adds no release writer, no route, no Pi surface, no Lean execution, no proof synthesis, no direct lower producer calls, no Task300/Task301/Task303 writes, no claim promotion, no certificate issuance, and no GA certification.
+
 # Goal 3 Task 371 / Selected-Tranche Next Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Follow-Up
 
 - Task371 consumes only current Task370 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results closure execution packaging follow-through id/path/hash material, re-reads and hash-binds it, and rejects stale or weakened no-authority artifacts.
