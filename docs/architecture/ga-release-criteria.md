@@ -1,6 +1,6 @@
 # GA Release Criteria
 
-This document is the Goal 3 public-release gate. It is stricter than historical Phase 18-81 vertical-slice readiness and must be read together with `docs/progress/goal-3-ga-gap-matrix.md` and `goal-3/tasks.md`.
+This document is the Goal 3 public-release gate. It is stricter than historical Phase 18-81 vertical-slice readiness and must be read together with the public architecture, threat-model, adapter-contract, evidence-pack, and source-release documentation.
 
 macOS is outside the current GA environment adaptation scope.
 

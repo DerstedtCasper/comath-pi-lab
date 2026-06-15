@@ -1,4 +1,6 @@
 .comath/
+.claude/
+goal-3/
 .tmp/
 node_modules/
 .pnpm-store/
@@ -6,6 +8,7 @@ node_modules/
 .worktrees/
 dist/
 coverage/
+docs/progress/handoff-*.md
 *.tsbuildinfo
 .env
 .env.*
