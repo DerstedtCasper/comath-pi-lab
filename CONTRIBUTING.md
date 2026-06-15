@@ -13,16 +13,14 @@ CoMath contributions must preserve the Lean-authority boundary.
 
 ## Development Checks
 
-Before opening a release-facing change, run the smallest relevant focused test plus the package or root gate:
+Before opening a release-facing change against the public product snapshot, run the public build and typecheck gates:
 
 ```text
-corepack pnpm --filter @comath/comathd test
-corepack pnpm --filter @comath/pi-extension test
 corepack pnpm build
 corepack pnpm typecheck
-corepack pnpm test
-node scripts/phase0-smoke.mjs
 ```
+
+Maintainers run private QA, replay, and evaluation suites before a release tag. Those suites are intentionally not shipped in the public product tree.
 
 Use `docs/architecture/ga-release-criteria.md` for release decisions and `docs/architecture/threat-model.md` for security review.
 
@@ -30,6 +28,5 @@ Use `docs/architecture/ga-release-criteria.md` for release decisions and `docs/a
 
 - State whether a feature is a workflow gate, evidence source, candidate generator, or proof authority.
 - Say `candidate`, `draft`, or `replayable blocker` when final clean replay is absent.
-- Keep old Phase 18-81 slices described as historical vertical-slice evidence or fixtures unless regenerated through the Goal 3 trusted path.
-- Cite tests or file paths for any implementation claim.
-
+- Keep historical vertical-slice claims out of user-facing docs unless they are regenerated through the current trusted path and backed by public replay evidence.
+- Cite product source, architecture documents, replay manifests, or public evidence packs for implementation claims.

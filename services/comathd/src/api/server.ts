@@ -94,7 +94,7 @@ import { recordGoal3FinalGaAudit } from "../release/goal3-final-ga-audit.js";
 import { recordGoal3GaCertificate } from "../release/goal3-ga-certificate.js";
 import { recordGoal3GaCertificateConsumptionReview } from "../release/goal3-ga-certificate-consumption.js";
 import { recordGoal3SourceBoundReleasePackage } from "../release/goal3-source-bound-release-package.js";
-import { recordGoal3SourceOnlyOpenSourceReviewArtifact } from "../release/goal3-source-only-open-source-review-artifact.js";
+import { recordGoal3SourceAvailableReviewArtifact } from "../release/goal3-source-available-review-artifact.js";
 import { recordGoal3SourceArtifactPresentationReview } from "../release/goal3-source-artifact-presentation-review.js";
 import { recordGoal3SourceReleasePublicChecklist } from "../release/goal3-source-release-public-checklist.js";
 import { recordGoal3SourceReleaseExternalEvidenceBinding } from "../release/goal3-source-release-external-evidence-binding.js";
@@ -1153,13 +1153,13 @@ async function route(method: string, path: string, body: unknown, context: Route
       }
     ],
     [
-      "POST /release/goal3/source-only-open-source-review-artifact",
+      "POST /release/goal3/source-available-review-artifact",
       (payload) => {
-        const body = payload as Parameters<typeof recordGoal3SourceOnlyOpenSourceReviewArtifact>[1] & {
+        const body = payload as Parameters<typeof recordGoal3SourceAvailableReviewArtifact>[1] & {
           project_root: string;
         };
         return {
-          source_only_open_source_review_artifact: recordGoal3SourceOnlyOpenSourceReviewArtifact(body.project_root, body)
+          source_available_review_artifact: recordGoal3SourceAvailableReviewArtifact(body.project_root, body)
         };
       }
     ],

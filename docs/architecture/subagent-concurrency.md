@@ -1,36 +1,36 @@
 # Subagent Concurrency
 
-## Safe Early Parallelism
+Subagent concurrency is a campaign search feature, not a shortcut around trusted state. Parallel work is allowed only when each worker has a distinct stage-local scope and all trusted writes flow through `comathd`.
 
-Early phases may run these in parallel only when write sets are disjoint:
+## Safe Parallelism
 
-- repo-architect: documentation and ADRs;
-- type-schema-engineer: types, schemas, schema tests;
-- security-auditor: read-only or `SECURITY_REVIEW.md`;
-- math-integrity-auditor: read-only or `MATH_INTEGRITY_REVIEW.md`.
+Safe parallel lanes include:
+
+- independent literature retrieval over separate sources;
+- independent proof-route proposals for the same locked statement;
+- independent Lean skeleton candidates under the same FormalSpecLock;
+- independent review/red-team passes over already materialized candidate artifacts;
+- independent adapter probes whose outputs are recorded as `proof_authority=none`.
 
 ## Conflict Rule
 
-Work is conflicting and must be serialized when two agents need the same:
+Work is conflicting and must be serialized when two lanes need the same:
 
-- public type or schema;
-- route file;
-- path policy file;
-- gate or claim promotion file;
-- migration;
-- GraphPatch apply contract;
-- root package-manager file;
-- tracking contract document.
+- FormalSpecLock or AssumptionLedger mutation;
+- campaign terminal-state decision;
+- trusted `.comath/` runtime write;
+- proof promotion request;
+- dependency lock or final replay manifest;
+- external adapter configuration.
 
 ## Merge Rule
 
-The parent coordinator merges only after:
+The coordinator merges only after:
 
-1. inspecting changed files;
-2. checking boundary compliance;
-3. running relevant validation;
-4. updating `TODO.md`;
-5. updating `REVIEW.md`.
+1. checking the locked statement hash;
+2. checking assumptions and dependency declarations;
+3. verifying all child outputs are non-authoritative candidates or evidence;
+4. submitting accepted material through `comathd`;
+5. preserving rejected routes and blockers as audit evidence.
 
-Subagent reports are not evidence of success unless command logs or artifacts are present.
-
+Subagent reports are not evidence of success unless they reference durable artifacts, replay manifests, or service-owned audit records.

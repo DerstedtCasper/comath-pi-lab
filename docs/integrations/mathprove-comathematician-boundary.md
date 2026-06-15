@@ -1,21 +1,22 @@
 # MathProve And AI Co-Mathematician Boundary
 
-AI co-mathematician arXiv:2605.06651 v2 is used as workflow inspiration: asynchronous stateful workspaces, workstreams, shared artifacts, working paper provenance, review, and human steering.
+AI co-mathematician work is used as workflow inspiration: asynchronous stateful workspaces, workstreams, shared artifacts, working paper provenance, review, and human steering.
 
-CoMath Pi Lab does not claim to reproduce DeepMind's closed system, FrontierMath results, discovery outcomes, or model capabilities.
+CoMath Pi Lab does not claim to reproduce closed research systems, benchmark results, discovery outcomes, or model capabilities.
 
-MathProve-Skill is positioned as:
+MathProve-style workflows are internalized as native CoMath workflow principles:
 
-- evidence producer;
-- gate runner;
-- final audit participant;
-- proof-engineering bridge.
+- evidence production;
+- gate running;
+- final audit participation;
+- proof-engineering bridge behavior;
+- stepwise verification and replay.
 
-It is not positioned as:
+They are not:
 
-- an autonomous theorem prover;
-- proof evidence by itself;
-- a replacement for Lean kernel checking;
-- a clone of DeepMind's AI co-mathematician.
+- autonomous theorem proving authority;
+- proof evidence by themselves;
+- replacements for Lean kernel checking;
+- clones of any closed AI co-mathematician system.
 
-Phase 18 adds a native CoMath proof-kernel vertical slice under `services/comathd/src/proof-kernel`. That slice, not the MathProve bridge mock, owns the current executable Lean replay evidence for the bounded `Nat.add_zero` campaign and the exact `n + 1 = n` refutation path. Future MathProve integration may contribute routes, audits, or artifacts, but it still must pass the ordinary CoMath proof-kernel/gate semantics before any `formally_checked` promotion.
+Native CoMath proof-kernel code owns executable Lean replay evidence, counterexample/refutation evidence, and promotion gates. External workflow inspiration may contribute routes, audits, or artifacts, but every promoted result must still pass ordinary CoMath proof-kernel semantics before any `formally_checked` promotion.

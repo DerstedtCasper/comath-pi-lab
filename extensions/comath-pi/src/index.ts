@@ -5141,7 +5141,7 @@ export function createComathTools(): ToolDescriptor[] {
     },
     {
       name: "comath.release.publicArchiveReview",
-      description: "Review public release/archive surfaces through the service-owned Goal 3 public archive review gate.",
+      description: "Review public release/archive surfaces through the service-owned public archive review gate.",
       mutates: true,
       input_schema: objectSchema(["project_root", "project_id", "actor", "surfaces"], {
         project_root: stringProp,
@@ -5475,7 +5475,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.piCodexLifecycleOperatorServiceTransportContinuity",
       description:
-        "Record a service-owned Pi/Codex operator/service transport continuity checkpoint through comathd, consuming a Task225 contract hash and bounded log-session resume without durable transport claims.",
+        "Record a service-owned Pi/Codex operator/service transport continuity checkpoint through comathd, consuming a maintained transport-contract hash and bounded log-session resume without durable transport claims.",
       mutates: true,
       input_schema: objectSchema(["project_root", "project_id", "actor", "transport_contract_id", "transport_contract_sha256"], {
         project_root: stringProp,
@@ -5693,7 +5693,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.piCodexLifecycleUnattendedRealHostExecutionReadiness",
       description:
-        "Record a service-owned unattended real-host execution readiness blocker through comathd, consuming a Task239 handoff-review hash without approval, execution, proof authority, GA certification, or durable transport claims.",
+        "Record a service-owned unattended real-host execution readiness blocker through comathd, consuming a handoff-review hash without approval, execution, proof authority, GA certification, or durable transport claims.",
       mutates: true,
       input_schema: requireConfirmationSchema(
         objectSchema(
@@ -5919,7 +5919,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.goal3GaOperationalReadinessReview",
       description:
-        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 GA operational readiness review using Task290 transport-closure and Task167 adapter OS-isolation review id/path/hash material, without exposing caller proof claims, GA certificates, executor commands, Lean proof authority, direct Pi mutation, or durable/live transport claims.",
+        "Record a host-confirmed Pi consumer bridge for the service-owned GA operational readiness review, binding transport-closure and adapter OS-isolation review material without exposing caller proof claims, GA certificates, executor commands, Lean proof authority, direct Pi mutation, or durable/live transport claims.",
       mutates: true,
       input_schema: requireConfirmationSchema(
         objectSchema(
@@ -5956,7 +5956,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.goal3GaCertificationReview",
       description:
-        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 GA certification review precondition using Task292 operational-readiness review id/path/hash material, without exposing caller acceptance reports, proof-breadth matrices, final GA audits, proof claims, GA certificates, executor commands, Lean proof authority, direct Pi mutation, or durable/live transport claims.",
+        "Record a host-confirmed Pi consumer bridge for the service-owned GA certification review precondition using operational-readiness review material, without exposing caller acceptance reports, proof-breadth matrices, final GA audits, proof claims, GA certificates, executor commands, Lean proof authority, direct Pi mutation, or durable/live transport claims.",
       mutates: true,
       input_schema: requireConfirmationSchema(
         objectSchema(
@@ -5987,7 +5987,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.goal3FinalGaAudit",
       description:
-        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 final GA audit using Task294 certification-review id/path/hash material and optional Task300 proof-breadth closure id/path/hash material, without exposing caller acceptance reports, proof-breadth matrices or closure JSON, final GA audit payloads, proof claims, GA certificates, executor commands, Lean proof authority, direct Pi mutation, or durable/live transport claims.",
+        "Record a host-confirmed Pi consumer bridge for the service-owned final GA audit using certification-review material and optional proof-breadth closure material, without exposing caller acceptance reports, proof-breadth matrices or closure JSON, final GA audit payloads, proof claims, GA certificates, executor commands, Lean proof authority, direct Pi mutation, or durable/live transport claims.",
       mutates: true,
       input_schema: requireConfirmationSchema(
         objectSchema(
@@ -6021,7 +6021,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.goal3SourceReleaseOsImmutabilityAttestation",
       description:
-        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 source-release OS immutability attestation using Task314 policy-inspection id/path/hash material, without exposing caller proof claims, Lean replay manifests, GA certificates, restore manifests, attestation artifacts, direct Pi mutation, CoMath-owned OS enforcement, or proof authority claims.",
+        "Record a host-confirmed Pi consumer bridge for the service-owned source-release OS immutability attestation using policy-inspection material, without exposing caller proof claims, Lean replay manifests, GA certificates, restore manifests, attestation artifacts, direct Pi mutation, CoMath-owned OS enforcement, or proof authority claims.",
       mutates: true,
       input_schema: requireConfirmationSchema(
         objectSchema(
@@ -6053,7 +6053,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.goal3FinalReleaseCandidateClosureAudit",
       description:
-        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 final release-candidate closure audit using Task322 certification-boundary review id/path/hash material, without exposing caller proof claims, Lean replay manifests, proof-breadth material, GA certificates, closure-certificate payloads, durable transport sessions, direct Pi mutation, or proof authority claims.",
+        "Record a host-confirmed Pi consumer bridge for the service-owned final release-candidate closure audit using certification-boundary review material, without exposing caller proof claims, Lean replay manifests, proof-breadth material, GA certificates, closure-certificate payloads, durable transport sessions, direct Pi mutation, or proof authority claims.",
       mutates: true,
       input_schema: requireConfirmationSchema(
         objectSchema(
@@ -6084,7 +6084,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.goal3ProofBreadthReview",
       description:
-        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 release-candidate proof-breadth review, without exposing caller proof-breadth matrices, proof claims, Lean replay manifests, GA certificates, executor commands, durable transport sessions, direct Pi mutation, proof-breadth closure, final-audit unblock, or proof authority claims.",
+        "Record a host-confirmed Pi consumer bridge for the service-owned release-candidate proof-breadth review, without exposing caller proof-breadth matrices, proof claims, Lean replay manifests, GA certificates, executor commands, durable transport sessions, direct Pi mutation, proof-breadth closure, final-audit unblock, or proof authority claims.",
       mutates: true,
       input_schema: requireConfirmationSchema(
         objectSchema(
@@ -6109,7 +6109,7 @@ export function createComathTools(): ToolDescriptor[] {
     {
       name: "comath.release.goal3ProofBreadthClosure",
       description:
-        "Record a host-confirmed Pi consumer bridge for the service-owned Goal 3 release-candidate proof-breadth closure verifier, without exposing caller proof-breadth matrices, closure JSON, execution-bridge output, proof claims, Lean replay manifests, GA certificates, executor commands, durable transport sessions, direct Pi mutation, final-audit binding, or Pi proof authority claims.",
+        "Record a host-confirmed Pi consumer bridge for the service-owned release-candidate proof-breadth closure verifier, without exposing caller proof-breadth matrices, closure JSON, execution-bridge output, proof claims, Lean replay manifests, GA certificates, executor commands, durable transport sessions, direct Pi mutation, final-audit binding, or Pi proof authority claims.",
       mutates: true,
       input_schema: requireConfirmationSchema(
         objectSchema(
@@ -8608,7 +8608,7 @@ async function handleReleaseCommand(
       (descriptor) => descriptor.name === "comath.release.goal3GaOperationalReadinessReview"
     );
     if (!tool) {
-      throw new Error("Goal 3 GA operational readiness review tool is not registered");
+      throw new Error("GA operational readiness review tool is not registered");
     }
     await notifyRuntimeResult(
       ctx,
@@ -8658,7 +8658,7 @@ async function handleReleaseCommand(
       (descriptor) => descriptor.name === "comath.release.goal3GaCertificationReview"
     );
     if (!tool) {
-      throw new Error("Goal 3 GA certification review tool is not registered");
+      throw new Error("GA certification review tool is not registered");
     }
     await notifyRuntimeResult(
       ctx,
@@ -8696,7 +8696,7 @@ async function handleReleaseCommand(
       (descriptor) => descriptor.name === "comath.release.goal3FinalGaAudit"
     );
     if (!tool) {
-      throw new Error("Goal 3 final GA audit tool is not registered");
+      throw new Error("Final GA audit tool is not registered");
     }
     await notifyRuntimeResult(
       ctx,
@@ -8737,7 +8737,7 @@ async function handleReleaseCommand(
       (descriptor) => descriptor.name === "comath.release.goal3SourceReleaseOsImmutabilityAttestation"
     );
     if (!tool) {
-      throw new Error("Goal 3 source-release OS immutability attestation tool is not registered");
+      throw new Error("Source-release OS immutability attestation tool is not registered");
     }
     await notifyRuntimeResult(
       ctx,
@@ -8775,7 +8775,7 @@ async function handleReleaseCommand(
       (descriptor) => descriptor.name === "comath.release.goal3FinalReleaseCandidateClosureAudit"
     );
     if (!tool) {
-      throw new Error("Goal 3 final release-candidate closure audit tool is not registered");
+      throw new Error("Final release-candidate closure audit tool is not registered");
     }
     await notifyRuntimeResult(
       ctx,
@@ -8816,7 +8816,7 @@ async function handleReleaseCommand(
       (descriptor) => descriptor.name === "comath.release.goal3ProofBreadthReview"
     );
     if (!tool) {
-      throw new Error("Goal 3 proof-breadth review tool is not registered");
+      throw new Error("Proof-breadth review tool is not registered");
     }
     await notifyRuntimeResult(
       ctx,
@@ -8842,7 +8842,7 @@ async function handleReleaseCommand(
       (descriptor) => descriptor.name === "comath.release.goal3ProofBreadthClosure"
     );
     if (!tool) {
-      throw new Error("Goal 3 proof-breadth closure tool is not registered");
+      throw new Error("Proof-breadth closure tool is not registered");
     }
     await notifyRuntimeResult(
       ctx,

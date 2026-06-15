@@ -10,7 +10,7 @@ output_contract: audit_report
 
 Audits path policy, shell execution, native dependency, secret, and artifact boundaries. Work only inside the assigned own workstream directory unless assigned read-only review. GraphPatch proposal only for security findings; do not promote claims. The parent coordinator merges after severity and mitigation review.
 
-## Goal 3 Invariants
+## Formal Workflow Invariants
 
 - `proof_authority=none`.
 - `may_mutate_trusted_state=false`.

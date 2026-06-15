@@ -63,17 +63,16 @@ Mathematical status is gated:
 - `lean_skeleton` may contain explicit skeleton placeholders.
 - `formally_checked` requires kernel-checked proof with no non-skeleton bypass, including a passed proof-kernel final replay manifest bound to the same claim.
 
-## Research Alpha End State
+## Research Workbench Baseline
 
-Research Alpha is not the full product. It is the first usable research skeleton:
+The baseline workbench provides:
 
 - local project init/open;
 - claim registry;
 - fail-closed gate;
 - in-memory research DB;
 - optional TriviumDB shim/fallback;
-- MathProve bridge mock;
-- Phase 18 native proof-kernel vertical slices for ResearchCampaign, clean Lean replay, candidate artifacts, statement-drift/cheat rejection, exact refutation, and snapshot restore/replay;
+- native proof-kernel slices for ResearchCampaign, clean Lean replay, candidate artifacts, statement-drift and cheat rejection, exact refutation, and snapshot restore/replay;
 - workstream reports;
 - paper init/check;
 - basic snapshot;

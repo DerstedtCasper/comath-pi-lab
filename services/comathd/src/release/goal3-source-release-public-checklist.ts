@@ -343,7 +343,7 @@ function assertTask309SourceArchive(value: unknown): Goal3SourceReleaseChecklist
   if (
     archive.generated_by !== "git_archive" ||
     archive.archive_format !== "tar" ||
-    !archivePath.startsWith(".comath/release/goal3-source-only-open-source-review-artifact/") ||
+    !archivePath.startsWith(".comath/release/goal3-source-available-review-artifact/") ||
     !archivePath.endsWith("/source.tar") ||
     !/^[a-f0-9]{64}$/u.test(archiveSha256) ||
     sizeBytes <= 0 ||
@@ -521,7 +521,7 @@ function assertTask309PresentationCurrent(
   }
   const sourceReviewArtifact = assertArtifactReference(
     body.source_review_artifact,
-    "goal3_source_only_open_source_review_artifact"
+    "goal3_source_available_review_artifact"
   );
   if (normalizeRelativePath(String(body.source_review_artifact_path ?? "")) !== sourceReviewArtifact.path) {
     throw new ComathError("Goal 3 source release public checklist source artifact path binding is invalid", {

@@ -2,15 +2,16 @@
   "name": "@comath/comathd",
   "version": "0.0.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-agent-adapters.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "corepack pnpm build && node scripts/run-default-tests.mjs",
-    "test:trivium": "node tests/optional/phase13-trivium-db.test.mjs",
-    "eval:trivium": "corepack pnpm build && node scripts/run-trivium-target-evaluation.mjs"
+    "test": "node -e \"console.log('Internal comathd QA suites are not shipped in the public product snapshot. Use corepack pnpm --filter @comath/comathd build and typecheck for public validation.')\"",
+    "test:trivium": "node -e \"console.log('Internal Trivium QA suites are not shipped in the public product snapshot.')\"",
+    "eval:trivium": "node -e \"console.log('Internal Trivium evaluation suites are not shipped in the public product snapshot.')\""
   },
   "dependencies": {
     "zod": "4.1.12"

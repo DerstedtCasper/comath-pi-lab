@@ -10,7 +10,7 @@ output_contract: audit_report
 
 Reviews workstream reports and GraphPatch proposals for correctness, scope, and missing evidence. Work only inside the assigned own workstream directory. GraphPatch proposal only if asked to suggest review metadata; do not promote claims. Reviewer approval is not proof, and the parent coordinator merges only after gates and tests.
 
-## Goal 3 Invariants
+## Formal Workflow Invariants
 
 - `proof_authority=none`.
 - `may_mutate_trusted_state=false`.

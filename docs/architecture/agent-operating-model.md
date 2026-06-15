@@ -1,108 +1,66 @@
 # Agent Operating Model
 
+CoMath uses agents as bounded research workers, not as proof authorities. The coordinator owns campaign state, merge order, and release decisions through `comathd`; specialist agents produce proposals, critiques, variants, retrieval notes, computation reports, and blockers.
+
 ## Coordinator Role
 
-The parent coordinator owns:
+The coordinator owns:
 
-- phase scope;
-- merge order;
-- TODO/REVIEW updates;
-- validation commands;
-- conflict resolution;
-- final acceptance against `COMATH_PI_LAB_DEV_PLAN.md`.
+- campaign scope and stage order;
+- FormalSpecLock and AssumptionLedger preservation;
+- candidate intake and elimination;
+- hard-veto routing for statement drift, hidden assumptions, dependency pollution, fake Lean logs, and no-replay proof claims;
+- final promotion requests through `comathd` gates only.
 
-The coordinator must not trust a child agent's success claim without checking files and validation evidence.
-
-## Concurrency Budget
-
-The current allowed concurrency budget is `rpm=4` with reasoning effort `high` for substantial subagent work.
-
-Use that budget to selectively accelerate:
-
-- read-only architecture/security/math-integrity reviews;
-- independent implementation slices with disjoint write sets;
-- late-stage domain/paper/dashboard work after workstream boundaries exist.
-
-Do not use that budget to create write conflicts. A low global RPM means the coordinator should prefer local deterministic commands and reserve subagents for bounded review or disjoint work.
+The coordinator must not trust a child agent's success claim without checking the referenced artifacts and service-owned replay evidence.
 
 ## Agent Roles
 
-| Agent | Responsibility | Write Scope | Review Surface |
-| --- | --- | --- | --- |
-| repo-architect | architecture, ADRs, docs | `docs`, root docs | boundary and design consistency |
-| type-schema-engineer | types, schemas, ID/hash | `services/comathd/src/types`, `schemas`, tests | schema validity |
-| service-engineer | server, routes, config, path policy | `services/comathd/src/api`, `project`, `security` | service tests |
-| pi-extension-engineer | Pi commands, tools, resources, renderers | `extensions`, `skills`, `prompts` | Pi API compatibility |
-| memory-db-engineer | memory adapters, StableIdMap, retrieval | `services/comathd/src/memory`, `db` | adapter and fallback tests |
-| verification-engineer | gates, MathProve, Lean/SymPy/Sage/SAT runners | `claim`, `verification`, `python` | gate and runner tests |
-| proof-kernel-engineer | ResearchCampaign, Lean clean replay, candidate ensembles, final replay artifacts | `services/comathd/src/proof-kernel`, proof-kernel tests | GA proof-kernel replay and gate tests |
-| artifact-paper-engineer | artifact store, paper, BibTeX, snapshot | `artifacts`, paper tools | artifact/paper tests |
-| security-auditor | path, shell, secrets, replay, native deps | read-only or `SECURITY_REVIEW.md` | severity findings |
-| math-integrity-auditor | claim promotion, proof status, paper wording | read-only or `MATH_INTEGRITY_REVIEW.md` | integrity findings |
-| domain-braid-agent | braid statistics domain pack | `domain`, `skills/braid-statistics`, `python/braid` | domain pack report |
+The GA workflow is one coordinator plus eight specialists:
+
+| Agent | Responsibility | Authority Boundary |
+| --- | --- | --- |
+| coordinator | owns stage sequencing, merge decisions, and terminal-state routing | may request `comathd` actions but cannot certify proof truth |
+| librarian | searches literature and records citation/provenance notes | retrieval output is evidence only |
+| computation | runs CAS/SMT/SAT-style hint adapters when enabled | computation output is hint/refutation only |
+| proof-route | proposes proof strategies and failed-route memory | proposals are candidates only |
+| formalization | drafts Lean skeletons and candidate proof bodies | candidate material requires Lean replay |
+| reviewer | attacks assumptions, dependencies, and statement drift | review is a veto source, not proof authority |
+| graph-builder | prepares structured evidence and relation updates | graph changes remain service-gated |
+| security-auditor | checks path, secret, adapter, and supply-chain boundaries | security findings cannot promote claims |
+| math-integrity-auditor | checks proof-status wording and no-cheat boundaries | integrity findings cannot replace Lean replay |
 
 ## Child Agent Output Contract
 
-Every child result must include:
+Every machine-ingested child result should include:
 
-- assigned role;
-- exact write scope;
+- assigned role and exact scope;
 - `proof_authority=none`;
 - `may_mutate_trusted_state=false`;
 - locked statement hash, or an explicit blocker if no FormalSpecLock exists;
-- strict JSON/schema output for machine-ingested artifacts;
-- introduced assumptions and introduced dependencies;
-- files changed or read-only confirmation;
-- tests/checks run;
-- blockers;
-- hard vetoes, including statement drift, hidden assumptions, dependency pollution, fake Lean logs, and no-replay proof claims;
-- boundary deviations;
-- recommended TODO/REVIEW updates.
+- introduced assumptions and dependencies;
+- files or artifacts read;
+- candidate outputs, blockers, and hard vetoes;
+- statement-drift and no-cheat observations;
+- requested next `comathd` action, if any.
 
-## Goal 3 Agent Invariants
+## Stage-Local Variants
 
-The Goal 3 agent team is one coordinator plus eight specialists. Stage-local variants are search and review mechanisms only. No agent or variant has proof authority.
-
-Required prompt invariants:
-
-- preserve the locked statement hash;
-- do not mutate trusted `.comath/` proof state;
-- do not mark claims proven from votes, reviewer approval, literature, theorem search, CAS/SAT/SMT, or MathProve-style audit output;
-- request service-owned LeanRunner checks and final clean replay for proof status;
-- report blockers, introduced assumptions, introduced dependencies, statement changes, and hard vetoes explicitly.
-
-## Parallel Execution Rules
-
-Parallel work is allowed only when write scopes are disjoint.
-
-Unsafe pairings:
-
-- `memory-db-engineer` and `service-engineer` editing the same routes;
-- `verification-engineer` and claim registry editing the same gate route;
-- `artifact-paper-engineer` and `security-auditor` editing path policy;
-- two agents editing the same public schema or root package file.
-
-Recommended phase-specific concurrency:
-
-- Early: type/schema implementation, docs review, security read-only review, math-integrity read-only review.
-- Middle: serialize route, path-policy, claim-gate, migration, and GraphPatch apply work.
-- Late: parallelize domain pack, paper system, and dashboard renderers after core mutation gateway exists.
+Stage-local multi-candidate generation is a search mechanism. Variants may be ranked, voted on, eliminated, or promoted to later stages only as candidates. A vote, reviewer approval, literature hit, theorem-search result, CAS/SMT/SAT result, or MathProve-style audit can never mark a proof as proven.
 
 ## Merge Protocol
 
-1. Read child report.
-2. Inspect changed files.
-3. Check against allowed scope.
-4. Run relevant tests.
-5. Update `TODO.md`.
-6. Update `REVIEW.md`.
-7. Record residual risks.
+1. Read the child artifact or report.
+2. Check the locked statement and assumptions.
+3. Check the output's authority flags.
+4. Submit only valid candidate material to `comathd`.
+5. Require service-owned LeanRunManifest and final clean replay material before any proof promotion.
 
 ## Escalation Protocol
 
-Escalate to the human only when:
+Escalate to the operator when:
 
-- a required dependency cannot be installed or probed after fallback is documented;
-- a safety invariant conflicts with requested behavior;
-- the same blocker repeats across three goal turns;
-- the implementation plan is discovered to be structurally wrong.
+- the statement or assumptions are ambiguous;
+- a live adapter dependency cannot be configured or probed;
+- replay fails for environmental reasons and produces a replayable blocker;
+- a requested behavior would weaken the Lean-authority or no-cheat boundary.

@@ -2,6 +2,7 @@
   "name": "comath-pi-lab",
   "version": "0.0.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Auditable Pi-based agentic mathematics research workbench.",
   "type": "module",
   "packageManager": "pnpm@11.3.0",
@@ -11,7 +12,7 @@
   "scripts": {
     "build": "corepack pnpm -r --if-present build",
     "typecheck": "corepack pnpm -r --if-present typecheck",
-    "test": "node scripts/phase0-smoke.mjs && corepack pnpm -r --workspace-concurrency=1 --if-present test && node tests/e2e/phase45-pi-comathd-install-session.test.mjs && node tests/e2e/goal3-task125-pi-research-loop-public-ux-authority.test.mjs && node tests/evaluation/phase17-integrity-evaluation.test.mjs"
+    "test": "node -e \"console.log('Internal QA suites are not shipped in the public product snapshot. Use corepack pnpm build and corepack pnpm typecheck for public validation.')\""
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

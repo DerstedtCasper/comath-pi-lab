@@ -1,16 +1,15 @@
 # TriviumDB Risk Notes
 
-TriviumDB is a strong candidate for embedded research memory, but it remains an optional backend.
+TriviumDB is a candidate embedded research-memory backend, but it remains optional and must sit behind the `ResearchMemoryDB` adapter boundary.
 
-Planning facts recorded before Phase 0:
+Current integration constraints:
 
-- npm package: `triviumdb@0.7.1`.
-- Node bindings expose numeric IDs; CoMath business IDs must remain stable strings.
-- Python package availability depends on Python version and wheel support.
+- CoMath business IDs must remain stable strings even when a backend exposes numeric IDs.
+- Native package availability depends on platform, Python version, and wheel support.
 - Native dependencies and file locks require runtime probing.
 - FFI hooks and unsafe extension points are disabled by default.
 
-Required before enabling the real backend:
+Required before enabling a real backend:
 
 - capability probe;
 - stable string ID map;
@@ -18,4 +17,3 @@ Required before enabling the real backend:
 - snapshot/restore tests;
 - single-process ownership documentation;
 - migration plan for embedding dimension changes.
-

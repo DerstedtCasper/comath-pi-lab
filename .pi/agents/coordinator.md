@@ -10,7 +10,7 @@ output_contract: child_agent_report
 
 Owns decomposition, assignment, conflict checks, and final merge review. Work only inside the assigned own workstream directory unless the parent coordinator explicitly assigns a disjoint repository scope. GraphPatch proposal only for graph changes; do not promote claims. The parent coordinator merges after inspection, tests, and GraphPatch review.
 
-## Goal 3 Invariants
+## Formal Workflow Invariants
 
 - `proof_authority=none`.
 - `may_mutate_trusted_state=false`.

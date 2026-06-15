@@ -135,13 +135,13 @@ function normalizeRelativePath(path: string): string {
 
 function sourceReviewArtifactPath(artifactId: string): string {
   return normalizeRelativePath(
-    join(".comath", "release", "goal3-source-only-open-source-review-artifact", artifactId, "source-artifact.json")
+    join(".comath", "release", "goal3-source-available-review-artifact", artifactId, "source-artifact.json")
   );
 }
 
 function sourceArchivePath(artifactId: string): string {
   return normalizeRelativePath(
-    join(".comath", "release", "goal3-source-only-open-source-review-artifact", artifactId, "source.tar")
+    join(".comath", "release", "goal3-source-available-review-artifact", artifactId, "source.tar")
   );
 }
 
@@ -232,7 +232,7 @@ function readSourceReviewArtifact(
   try {
     return {
       body: JSON.parse(bytes.toString("utf8")) as Task308SourceReviewArtifactBody,
-      artifact: artifactReference(canonicalPath, "goal3_source_only_open_source_review_artifact", actualSha256, bytes.byteLength)
+      artifact: artifactReference(canonicalPath, "goal3_source_available_review_artifact", actualSha256, bytes.byteLength)
     };
   } catch {
     throw new ComathError("Goal 3 source artifact presentation review source artifact JSON is invalid", {
@@ -309,11 +309,11 @@ function assertTask308ArtifactCurrent(
   artifact: ArtifactReference
 ): Goal3SourceArtifactPresentationArchive {
   if (
-    body.schema_version !== "comath.goal3_source_only_open_source_review_artifact.v1" ||
+    body.schema_version !== "comath.goal3_source_available_review_artifact.v1" ||
     body.source_review_artifact_id !== artifactId ||
     body.project_id !== projectId ||
     body.ok !== true ||
-    body.source_review_artifact_status !== "source_only_open_source_review_artifact_ready" ||
+    body.source_review_artifact_status !== "source_available_review_artifact_ready" ||
     normalizeRelativePath(String(body.source_review_artifact_path ?? "")) !== artifact.path ||
     body.release_package_current !== true ||
     body.source_bound_release_chain_current !== true ||

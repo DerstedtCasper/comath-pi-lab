@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for Phase 0 planning.
+Accepted for the public architecture baseline.
 
 ## Decision
 
@@ -13,4 +13,3 @@ Mathematical status promotion must pass explicit gates. `formally_checked` can o
 - Reviewer approval and agent consensus are auxiliary signals only.
 - Failed proof attempts are preserved as evidence and blockers.
 - Gate code must fail closed by default.
-

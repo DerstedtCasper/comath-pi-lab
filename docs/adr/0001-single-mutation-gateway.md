@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for Phase 0 planning.
+Accepted for the public architecture baseline.
 
 ## Decision
 
@@ -14,4 +14,3 @@ All trusted project mutations will flow through `comathd`. Pi extensions, subage
 - Path policy can be enforced before writes.
 - Subagent output is reviewable before merge.
 - Direct DB writes from Pi extensions are forbidden.
-

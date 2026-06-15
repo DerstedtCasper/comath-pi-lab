@@ -36,7 +36,7 @@ type Goal3SourceBoundReleasePackageBody = {
   claim_promotion_requires_ordinary_gate?: unknown;
 };
 
-export type Goal3SourceOnlyOpenSourceReviewArtifactInput = {
+export type Goal3SourceAvailableReviewArtifactInput = {
   project_id: string;
   source_review_artifact_id?: string;
   actor?: string;
@@ -45,7 +45,7 @@ export type Goal3SourceOnlyOpenSourceReviewArtifactInput = {
   release_package_sha256: string;
 };
 
-export type Goal3SourceOnlyOpenSourceArchive = {
+export type Goal3SourceAvailableArchive = {
   generated_by: "git_archive";
   archive_format: "tar";
   archive_path: string;
@@ -63,14 +63,14 @@ export type Goal3SourceOnlyOpenSourceArchive = {
   includes_node_modules: false;
 };
 
-export type Goal3SourceOnlyOpenSourceReviewArtifact = {
-  schema_version: "comath.goal3_source_only_open_source_review_artifact.v1";
+export type Goal3SourceAvailableReviewArtifact = {
+  schema_version: "comath.goal3_source_available_review_artifact.v1";
   source_review_artifact_id: string;
   project_id: string;
   actor: string;
   created_at: string;
   ok: true;
-  source_review_artifact_status: "source_only_open_source_review_artifact_ready";
+  source_review_artifact_status: "source_available_review_artifact_ready";
   source_review_artifact_path: string;
   release_package_id: string;
   release_package_path: string;
@@ -79,7 +79,7 @@ export type Goal3SourceOnlyOpenSourceReviewArtifact = {
   source_bound_release_chain_current: true;
   source_review_public_archive_manifest_path: string;
   source_review_public_archive_manifest_sha256: string;
-  source_archive: Goal3SourceOnlyOpenSourceArchive;
+  source_archive: Goal3SourceAvailableArchive;
   public_archive_review_id: string;
   public_archive_review_path: string;
   public_archive_review_ok: true;
@@ -91,8 +91,8 @@ export type Goal3SourceOnlyOpenSourceReviewArtifact = {
   source_review_artifact: ArtifactReference;
 };
 
-type Goal3SourceOnlyOpenSourceReviewArtifactBody = Omit<
-  Goal3SourceOnlyOpenSourceReviewArtifact,
+type Goal3SourceAvailableReviewArtifactBody = Omit<
+  Goal3SourceAvailableReviewArtifact,
   "source_review_artifact"
 >;
 
@@ -141,7 +141,7 @@ type BoundPublicArchive = {
 };
 
 type PreparedSourceArchive = {
-  archive: Goal3SourceOnlyOpenSourceArchive;
+  archive: Goal3SourceAvailableArchive;
   absoluteArchivePath: string;
   absoluteTempArchivePath: string;
 };
@@ -152,19 +152,19 @@ function normalizeRelativePath(path: string): string {
 
 function sourceReviewArtifactPath(artifactId: string): string {
   return normalizeRelativePath(
-    join(".comath", "release", "goal3-source-only-open-source-review-artifact", artifactId, "source-artifact.json")
+    join(".comath", "release", "goal3-source-available-review-artifact", artifactId, "source-artifact.json")
   );
 }
 
 function sourceArchivePath(artifactId: string): string {
   return normalizeRelativePath(
-    join(".comath", "release", "goal3-source-only-open-source-review-artifact", artifactId, "source.tar")
+    join(".comath", "release", "goal3-source-available-review-artifact", artifactId, "source.tar")
   );
 }
 
 function sourceArchiveTempPath(artifactId: string): string {
   return normalizeRelativePath(
-    join(".comath", "release", "goal3-source-only-open-source-review-artifact", artifactId, "source.tar.tmp")
+    join(".comath", "release", "goal3-source-available-review-artifact", artifactId, "source.tar.tmp")
   );
 }
 
@@ -207,7 +207,7 @@ function assertSha256(value: string | undefined): string {
 }
 
 function sanitizeActor(value: string | undefined): string {
-  return (value ?? "goal3-source-only-open-source-review-artifact")
+  return (value ?? "goal3-source-available-review-artifact")
     .replace(/(?:[A-Za-z]:[\\/][^\s"']+|\\\\[^\s"']+)/gu, "[redacted-path]")
     .replace(
       /(?:Authorization:\s*Bearer\s+\S+|api[_-]?key(?:=\S+)?|token=\S+|sk-[A-Za-z0-9_-]+)/giu,
@@ -316,7 +316,7 @@ function forbiddenSourceEntries(entries: SourceTreeEntry[]): SourceTreeEntry[] {
 
 function readReleasePackage(
   projectRoot: string,
-  input: Goal3SourceOnlyOpenSourceReviewArtifactInput,
+  input: Goal3SourceAvailableReviewArtifactInput,
   packageId: string
 ): { body: Goal3SourceBoundReleasePackageBody; artifact: ArtifactReference } {
   const canonicalPath = releasePackagePath(packageId);
@@ -512,17 +512,17 @@ function commitPreparedSourceArchive(prepared: PreparedSourceArchive): void {
   renameSync(prepared.absoluteTempArchivePath, prepared.absoluteArchivePath);
 }
 
-export function recordGoal3SourceOnlyOpenSourceReviewArtifact(
+export function recordGoal3SourceAvailableReviewArtifact(
   projectRoot: string,
-  input: Goal3SourceOnlyOpenSourceReviewArtifactInput
-): Goal3SourceOnlyOpenSourceReviewArtifact {
+  input: Goal3SourceAvailableReviewArtifactInput
+): Goal3SourceAvailableReviewArtifact {
   const projectId = assertSafeId(input.project_id, "project_id");
   const artifactId = assertSafeId(input.source_review_artifact_id, "source_review_artifact_id");
   const packageId = assertSafeId(input.release_package_id, "release_package_id");
   const manifestPath = sourceReviewArtifactPath(artifactId);
   const archivePath = sourceArchivePath(artifactId);
   const tempArchivePath = sourceArchiveTempPath(artifactId);
-  const publicArchiveReviewId = `GOAL3-SOURCE-ONLY-OPEN-SOURCE-REVIEW-${artifactId}`;
+  const publicArchiveReviewId = `GOAL3-source-available-REVIEW-${artifactId}`;
   const publicArchiveReviewManifestPath = publicArchiveReviewPath(publicArchiveReviewId);
   const absoluteManifestPath = assertPathAllowed(projectRoot, manifestPath, { purpose: "runtime-write" });
   const absoluteArchivePath = assertPathAllowed(projectRoot, archivePath, { purpose: "runtime-write" });
@@ -555,14 +555,14 @@ export function recordGoal3SourceOnlyOpenSourceReviewArtifact(
   const actor = sanitizeActor(input.actor);
   const preparedSourceArchive = prepareGitSourceArchive(projectRoot, artifactId);
   const sourceArchive = preparedSourceArchive.archive;
-  const body: Goal3SourceOnlyOpenSourceReviewArtifactBody = {
-    schema_version: "comath.goal3_source_only_open_source_review_artifact.v1",
+  const body: Goal3SourceAvailableReviewArtifactBody = {
+    schema_version: "comath.goal3_source_available_review_artifact.v1",
     source_review_artifact_id: artifactId,
     project_id: projectId,
     actor,
     created_at: new Date().toISOString(),
     ok: true,
-    source_review_artifact_status: "source_only_open_source_review_artifact_ready",
+    source_review_artifact_status: "source_available_review_artifact_ready",
     source_review_artifact_path: manifestPath,
     release_package_id: packageId,
     release_package_path: releasePackage.artifact.path,
@@ -582,7 +582,7 @@ export function recordGoal3SourceOnlyOpenSourceReviewArtifact(
     claim_promotion_requires_ordinary_gate: true
   };
   const publicPayload = sanitizePublicFormalAuthorityVocabulary({
-    schema_version: "comath.goal3_source_only_open_source_review_artifact_route_payload.v1",
+    schema_version: "comath.goal3_source_available_review_artifact_route_payload.v1",
     source_review_artifact_id: artifactId,
     release_package_sha256: releasePackage.artifact.sha256,
     source_archive_sha256: sourceArchive.archive_sha256,
@@ -606,12 +606,12 @@ export function recordGoal3SourceOnlyOpenSourceReviewArtifact(
           manifest_path: packageArchive.sourceReviewPublicArchiveManifestPath
         },
         {
-          surface_id: `source-only-open-source-route:${artifactId}`,
+          surface_id: `source-available-route:${artifactId}`,
           surface_kind: "public_route_payload",
           payload: publicPayload
         },
         {
-          surface_id: `source-only-open-source-manifest:${artifactId}`,
+          surface_id: `source-available-manifest:${artifactId}`,
           surface_kind: "public_review_manifest",
           payload: body
         }
@@ -632,11 +632,11 @@ export function recordGoal3SourceOnlyOpenSourceReviewArtifact(
   const manifestText = canonicalJson(body);
   mkdirSync(dirname(absoluteManifestPath), { recursive: true });
   writeFileSync(absoluteManifestPath, manifestText, "utf8");
-  const result: Goal3SourceOnlyOpenSourceReviewArtifact = {
+  const result: Goal3SourceAvailableReviewArtifact = {
     ...body,
     source_review_artifact: artifactReference(
       manifestPath,
-      "goal3_source_only_open_source_review_artifact",
+      "goal3_source_available_review_artifact",
       sha256Text(manifestText),
       Buffer.byteLength(manifestText, "utf8")
     )
@@ -644,7 +644,7 @@ export function recordGoal3SourceOnlyOpenSourceReviewArtifact(
 
   appendAuditEvent(projectRoot, {
     project_id: projectId,
-    event_type: "release.goal3_source_only_open_source_review_artifact_recorded",
+    event_type: "release.goal3_source_available_review_artifact_recorded",
     actor,
     target_id: projectId,
     payload: {

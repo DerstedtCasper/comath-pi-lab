@@ -1,19 +1,19 @@
 # CoMath Pi Lab
 
-CoMath Pi Lab is an open-source, agentic formal mathematics research workbench built around Lean4/mathlib. It is not a theorem prover, not a replacement for mathlib, and not a private mathematical kernel. CoMath coordinates research agents, external retrieval/search/computation tools, formalization planning, evidence capture, and release gates. A mathematical proof claim is promotable only when Lean4/mathlib clean replay succeeds and the required provenance/integrity material is bound.
+CoMath Pi Lab is a source-available, non-commercially licensed agentic formal mathematics research workbench built around Lean4/mathlib. It is not a theorem prover, not a replacement for mathlib, and not a private mathematical kernel. CoMath coordinates research agents, external retrieval/search/computation tools, formalization planning, evidence capture, and release gates. A mathematical proof claim is promotable only when Lean4/mathlib clean replay succeeds and the required provenance/integrity material is bound.
 
-中文：CoMath Pi Lab 是围绕 Lean4/mathlib 构建的开源 agentic 形式化数学研究工作台。它不是定理证明器，不替代 mathlib，也不维护私有数学内核。CoMath 负责 agent 调度、外部检索/搜索/计算工具接入、形式化任务规划、证据链和发布门控；数学证明声明只有在 Lean4/mathlib clean replay 通过，并绑定所需来源与完整性证据后，才允许被提升。
+中文：CoMath Pi Lab 是围绕 Lean4/mathlib 构建的源码可见、非商用许可的 agentic 形式化数学研究工作台。它不是定理证明器，不替代 mathlib，也不维护私有数学内核。CoMath 负责 agent 调度、外部检索/搜索/计算工具接入、形式化任务规划、证据链和发布门控；数学证明声明只有在 Lean4/mathlib clean replay 通过，并绑定所需来源与完整性证据后，才允许被提升。
 
 ## Status
 
-Current status: Goal 3 GA-refactor / GA-candidate workstream. The core trust surfaces, Pi goal-mode loop, adapter contracts, release gates, and representative acceptance harness are present, but the repository must not be described as final GA until the internal development tracker and final GA audit close.
+Current status: GA-candidate product snapshot. The core trust surfaces, Pi goal-mode loop, adapter contracts, release gates, and public architecture docs are present, but the project must not be described as final GA until a maintainer-run release audit produces replayable public evidence.
 
-当前状态：Goal 3 GA 重构 / GA 候选工作流。当前代码已具备核心信任面、Pi goal-mode 循环、adapter 合约、发布门控和代表性验收 harness；但在内部开发 tracker 与最终 GA audit 完成前，不应宣称已经 final GA。
+当前状态：GA 候选产品快照。当前代码已具备核心信任面、Pi goal-mode 循环、adapter 合约、发布门控和公开架构文档；但在维护者完成 release audit 并产出可 replay 的公开证据前，不应宣称已经 final GA。
 
 Use this wording publicly:
 
 ```text
-CoMath is an open-source agentic formal mathematics workbench built around Lean4/mathlib. It orchestrates external proof, search, retrieval, computation, and agent tools, and promotes a mathematical claim only after clean Lean replay and integrity audit pass.
+CoMath is a source-available, non-commercially licensed agentic formal mathematics workbench built around Lean4/mathlib. It orchestrates external proof, search, retrieval, computation, and agent tools, and promotes a mathematical claim only after clean Lean replay and integrity audit pass.
 ```
 
 Forbidden wording:
@@ -60,7 +60,7 @@ Key directories:
 - `extensions/comath-pi/`: Pi command/tool/resource registration and sanitized public interaction layer.
 - `services/comathd/src/proof-kernel/`: formal-spec, campaign, agent-stage, Lean replay, dependency, axiom, and no-cheat machinery.
 - `services/comathd/src/adapters/`: external wheel registry contracts.
-- `services/comathd/src/release/`: Goal 3 release, audit, certificate, proof-breadth, and source-review gates.
+- `services/comathd/src/release/`: release, audit, certificate, proof-breadth, and source-review gates.
 - `config/`: non-secret sample configuration.
 - `docs/architecture/`: GA release criteria, threat model, adapter contracts, evidence-pack policy, and module boundaries.
 - `.comath/`: runtime state written by `comathd`; ignored by Git and never committed.
@@ -71,7 +71,7 @@ Key directories:
 - `extensions/comath-pi/`：Pi 命令/工具/资源注册，以及净化后的公开交互层。
 - `services/comathd/src/proof-kernel/`：formal spec、campaign、agent-stage、Lean replay、dependency、axiom 与 no-cheat 机制。
 - `services/comathd/src/adapters/`：external wheel registry 合约。
-- `services/comathd/src/release/`：Goal 3 发布、审计、证书、proof-breadth 与 source-review 门控。
+- `services/comathd/src/release/`：发布、审计、证书、proof-breadth 与 source-review 门控。
 - `config/`：非密钥配置样例。
 - `docs/architecture/`：GA release criteria、threat model、adapter contracts、evidence-pack policy 和 module boundaries。
 - `.comath/`：由 `comathd` 写入的运行时状态，已被 Git 忽略，禁止提交。
@@ -93,10 +93,11 @@ corepack pnpm build
 corepack pnpm typecheck
 ```
 
-Full validation:
+Public validation:
 
 ```text
-corepack pnpm test
+corepack pnpm build
+corepack pnpm typecheck
 ```
 
 Focused package validation:
@@ -104,12 +105,11 @@ Focused package validation:
 ```text
 corepack pnpm --filter @comath/comathd build
 corepack pnpm --filter @comath/comathd typecheck
-corepack pnpm --filter @comath/comathd test
 corepack pnpm --filter @comath/pi-extension build
 corepack pnpm --filter @comath/pi-extension typecheck
-corepack pnpm --filter @comath/pi-extension test
-node scripts/phase0-smoke.mjs
 ```
+
+The public product snapshot intentionally does not ship the maintainers' internal QA suites, evaluation fixtures, local goal ledgers, or development handoff notes. Release maintainers run those internal gates before tagging a public release and publish only product source plus replayable public evidence packs.
 
 中文部署：
 
@@ -118,7 +118,7 @@ node scripts/phase0-smoke.mjs
 - 真实 proof replay 路径需要 Lean4/Lake/mathlib。
 - 只有显式启用 live adapter 时才配置外部 provider 凭据与 endpoint。
 - 运行 `corepack pnpm install`、`corepack pnpm build`、`corepack pnpm typecheck`。
-- 完整验证使用 `corepack pnpm test`。
+- 公开产品快照不分发维护者内部 QA、evaluation fixture、本地 goal ledger 或开发 handoff。公开验证使用 build/typecheck；发布维护者在打 tag 前运行内部 gate，并只发布产品源码与可 replay 的公开证据包。
 
 ### Local HTTP Service
 
@@ -193,7 +193,7 @@ Pi is the intended interaction layer. Registered command families include:
 /cm:agent run <profile-id>
 /cm:paper init
 /cm:claim get <claim-id>
-/cm:release goal3-final-ga-audit
+/cm:release <release-audit-subcommand>
 ```
 
 Pi commands are thin clients over `comathd`; mutating tools require host confirmation and must not write `.comath/` directly.
@@ -228,7 +228,7 @@ curl -sS -X POST http://127.0.0.1:8787/campaign/CAM-0001/replay \
 
 ### 3. In-Process API
 
-For tests, workers, and host applications, use the injected API without opening a network port:
+For workers, automation, and host applications, use the injected API without opening a network port:
 
 ```js
 import { createComathServer } from "./services/comathd/dist/index.js";
@@ -278,9 +278,15 @@ Without final clean replay, outputs remain `draft`, `hypothesis`, `candidate`, `
 
 中文：任何 promoted proof artifact 必须绑定 FormalSpecLock、AssumptionLedger、命题/定理头 hash、dependency lock、toolchain/artifact hash、service-owned LeanRunManifest、no-cheat/dependency/axiom/statement-diff evidence、FinalReplayManifest v3 和第三方 replay 命令。没有 final clean replay 的产物只能是 draft/hypothesis/candidate/blocker/counterexample 等非提升状态。
 
+## License
+
+CoMath Pi Lab is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Non-commercial use, modification, and redistribution are permitted under that license. Commercial use requires a separate license from the licensor.
+
+中文：CoMath Pi Lab 使用 [PolyForm Noncommercial License 1.0.0](LICENSE)。该许可证允许非商用使用、修改和再分发；商用使用需要从许可方另行取得授权。
+
 ## Git Hygiene
 
-Tracked source may include implementation tests because they are part of the open-source verification contract. Do not commit generated or local-only material:
+The public GitHub tree should contain product source, public architecture docs, sample configuration, and runtime prompt assets only. Do not commit generated, local-only, private QA, or maintainer workflow material:
 
 - `.comath/`
 - `.tmp/`
@@ -289,7 +295,8 @@ Tracked source may include implementation tests because they are part of the ope
 - `dist/`
 - `coverage/`
 - `.env` / `.env.*`
-- local handoff notes unless intentionally promoted into docs
+- local goal/runbook/plan/review ledgers and local handoff notes
+- `tests/`, package-local `tests/`, evaluation fixtures, smoke scripts, and maintainer QA runners
 - private paper corpora, API keys, provider transcripts, or host-specific paths
 
 Before pushing:
@@ -298,10 +305,11 @@ Before pushing:
 git status -sb
 git diff --check
 git diff --name-status origin/main..HEAD
-git ls-files .comath .tmp .worktrees node_modules dist coverage
+git ls-files .comath .tmp .worktrees node_modules dist coverage tests
+git ls-files | rg "(^tests/|/tests/|\\.test\\.|phase0-smoke|docs/progress|docs/superpowers/(plans|specs))"
 ```
 
-中文：测试代码属于开源验证合约，可以跟随本体提交；但运行时状态、生成物、本地计划、私有语料、密钥和 host-specific 路径不得提交。
+中文：GitHub 公开树只应包含产品源码、公开架构文档、配置样例和运行时 prompt 资产。本地 goal/runbook/plan/review 账本、测试集、evaluation fixture、smoke 脚本、内部 QA runner、运行时状态、生成物、私有语料、密钥和 host-specific 路径都不应提交。
 
 ## Release Documents
 
@@ -313,7 +321,5 @@ git ls-files .comath .tmp .worktrees node_modules dist coverage
 - [Module Boundaries](docs/architecture/module-boundaries.md)
 - [Config Samples](config/README.md)
 - [Contributing](CONTRIBUTING.md)
-- [Security Review](SECURITY_REVIEW.md)
-- [Mathematical Integrity Review](MATH_INTEGRITY_REVIEW.md)
 
 中文：发布判断以 `docs/architecture/ga-release-criteria.md` 和 `docs/architecture/threat-model.md` 等公开架构/安全文档为准。内部开发 tracker 不作为 GitHub 面向用户的公开入口。README 是入口说明，不替代 release gate。

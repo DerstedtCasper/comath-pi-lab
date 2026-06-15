@@ -550,7 +550,7 @@ function assertSourceArchive(value: unknown): Goal3SourceReleaseExternalProvider
   if (
     archive.generated_by !== "git_archive" ||
     archive.archive_format !== "tar" ||
-    !archivePath.startsWith(".comath/release/goal3-source-only-open-source-review-artifact/") ||
+    !archivePath.startsWith(".comath/release/goal3-source-available-review-artifact/") ||
     !archivePath.endsWith("/source.tar") ||
     !/^[a-f0-9]{64}$/u.test(archiveSha256) ||
     sizeBytes <= 0 ||
