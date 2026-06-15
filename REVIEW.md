@@ -1,3 +1,11 @@
+# Goal 3 Task 374 / Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Bridge
+
+- Task374 consumes only current Task373 selected-tranche closure execution packaging results closure execution packaging results closure execution packaging results closure execution packaging results closure recheck id/path/hash material, re-reads and hash-binds it, and rejects stale or weakened no-authority artifacts.
+- The wrapper delegates selected-tranche closure execution only through existing Task368/362/356/350/344/338 semantics when Task373 carries delegated Task367 material; otherwise it records a blocked non-certifying bridge without running delegated closure execution.
+- The persisted Task374 wrapper binds Task373, delegated Task367, and delegated Task368 artifacts by references/hashes without embedding proof reports or creating Task300 closure, Task301 final-audit, or Task303 GA-certificate material.
+
+Boundary notes: Task374 is service-owned loop plumbing only. It does not run Lean, synthesize proofs, expose a Pi tool/surface, call lower producer paths directly, replace Task300/301/303, write Task300 closure outside existing delegated semantics, write Task301 final-audit, or Task303 certificate artifacts, promote claims, issue certificates, or certify GA.
+
 # Goal 3 Task 373 / Selected-Tranche Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Execution Packaging Results Closure Recheck
 
 - Task373 consumes only current Task371 selected-tranche next closure execution packaging results closure execution packaging results closure execution packaging results closure execution packaging results follow-up id/path/hash material, re-reads and hash-binds it, and rejects stale or weakened no-authority artifacts.
