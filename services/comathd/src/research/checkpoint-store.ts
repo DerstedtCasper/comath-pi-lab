@@ -157,8 +157,8 @@ export function createCheckpointStore(runtime: ProjectRuntime, options: Checkpoi
         const timestamp = new Date(runtime.clock.now()).toISOString();
         stageResearchMutation(runtime.root, "INSERT INTO checkpoints(checkpoint_id,attempt_key,seq,payload_sha256,parent_sha256,artifact_ref,created_at) VALUES (?,?,?,?,?,?,?)",
           [checkpoint.checkpoint_id, current.attemptKey, checkpoint.seq, digest, checkpoint.parent_checkpoint_sha256 ?? null, JSON.stringify(artifactRef), timestamp]);
-        stageResearchMutation(runtime.root, "UPDATE tasks SET task_json=?,status=?,generation=? WHERE task_id=?",
-          [JSON.stringify({ ...current.task, checkpoint_head: checkpoint.checkpoint_id, updated_at: timestamp }), current.task.status, current.task.generation, current.task.task_id]);
+        stageResearchMutation(runtime.root, "UPDATE tasks SET task_json=json_set(task_json,'$.checkpoint_head',?,'$.updated_at',?) WHERE task_id=? AND generation=?",
+          [checkpoint.checkpoint_id, timestamp, current.task.task_id, current.task.generation]);
         const observed = store.get("SELECT observed_json FROM reservations WHERE attempt_key=?", current.attemptKey);
         const usage = observed ? (JSON.parse(String(observed.observed_json)) as { usage?: { tool_calls?: number | null; output_tokens?: number | null } }).usage : undefined;
         const count = Number(store.get("SELECT COUNT(*) AS count FROM events WHERE task_id=? AND generation=? AND type='ToolCallObserved'", checkpoint.task_id, checkpoint.generation)?.count ?? 0);

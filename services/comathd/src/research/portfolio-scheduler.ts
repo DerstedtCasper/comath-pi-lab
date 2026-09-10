@@ -118,7 +118,8 @@ export class PortfolioScheduler {
         type: "UsageUpdated", actor: "service:provider", payload: { attempt_key: input.attempt_key, source_key: input.source_key, usage: input.usage } });
       if (result.stop_required && task.generation === Number(attempt.generation) && ["leased", "running"].includes(task.status)) {
         this.runtime.store.putTask({ ...task, status: "cancelling", blocked_reason: "budget_threshold", updated_at: new Date(this.runtime.clock.now()).toISOString() });
-        this.runtime.store.run("UPDATE attempts SET state='cancelling',fault_reason='budget_threshold' WHERE attempt_key=?", input.attempt_key);
+        const stamp = new Date(this.runtime.clock.now()).toISOString();
+        this.runtime.store.run("UPDATE attempts SET state='cancelling',fault_reason='budget_threshold',stop_reason='budget',stop_requested_at=?,fenced_at=?,grace_deadline_at=NULL WHERE attempt_key=?", stamp, stamp, input.attempt_key);
         this.runtime.store.run("UPDATE tool_executions SET stop_intent='budget_threshold' WHERE attempt_key=? AND state<>'terminated'", input.attempt_key);
         this.events.appendEvent({ campaign_id: task.campaign_id, task_id: task.task_id, generation: task.generation, type: "TaskStopRequested", actor: "service:scheduler", payload: { reason: "budget_threshold", attempt_key: input.attempt_key } });
         this.runtime.store.afterCommit(() => {

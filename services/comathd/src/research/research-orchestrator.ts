@@ -139,8 +139,16 @@ export class ResearchOrchestrator {
       const after = validateResearchDagPatch(campaign, this.runtime.store.listTasks(campaign.campaign_id), patch,
         { now: new Date(this.runtime.clock.now()).toISOString(), validateDraft: draft => this.validateDraft(draft, campaign) });
       this.persistGraph(after.tasks);
-      for (const cancelled of patch.cancel_tasks) this.events.appendEvent({ campaign_id: campaign.campaign_id, task_id: cancelled.task_id,
-        type: "TaskStopRequested", actor: principal.id, payload: { reason: cancelled.reason } });
+      for (const cancelled of patch.cancel_tasks) {
+        const task = after.tasks.find(task => task.task_id === cancelled.task_id)!;
+        if (task.status === "cancelling") {
+          const stamp = new Date(this.runtime.clock.now()).toISOString();
+          this.runtime.store.run("UPDATE attempts SET state='cancelling',stop_reason='user_cancel',stop_requested_at=?,fenced_at=?,grace_deadline_at=NULL WHERE task_id=? AND generation=? AND state<>'terminated'", stamp, stamp, task.task_id, task.generation);
+          this.runtime.store.run("UPDATE tool_executions SET stop_intent='user_cancel' WHERE attempt_key IN (SELECT attempt_key FROM attempts WHERE task_id=? AND generation=?) AND state<>'terminated'", task.task_id, task.generation);
+        }
+        this.events.appendEvent({ campaign_id: campaign.campaign_id, task_id: cancelled.task_id,
+          type: "TaskStopRequested", actor: principal.id, payload: { reason: cancelled.reason } });
+      }
       const revision = campaign.revision + 1;
       const event = this.events.appendEvent({ campaign_id: campaign.campaign_id, type: "DagPatched", actor: principal.id,
         payload: { revision, command_id: patch.command_id, created_task_ids: after.created_task_ids, cancelled_task_ids: after.cancelled_task_ids, rationale: patch.rationale } });

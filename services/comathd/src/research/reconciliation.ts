@@ -136,7 +136,16 @@ export class AttemptReconciler {
   async reconcileAttempt(attemptKey: string): Promise<{ health: string; next_action: string }> {
     const { attempt, task } = this.attempt(attemptKey), now = this.runtime.clock.now();
     if (attempt.state === "terminated") return { health: "terminated", next_action: "usage_reconciliation" };
-    if (attempt.fenced_at) return { health: "fenced", next_action: "confirm_termination" };
+    if (attempt.fenced_at) {
+      // Stop is idempotent. A previous failed callback must not strand a live execution forever.
+      await this.hooks.stop(attemptKey, (attempt.stop_reason as AttemptStopReason | null) ?? "crash");
+      const confirmation = await this.hooks.inspect(attemptKey);
+      if (confirmation.runtime_terminated && confirmation.tools_terminated) {
+        this.confirmTermination(attemptKey, confirmation);
+        return { health: "terminated", next_action: "usage_reconciliation" };
+      }
+      return { health: "fenced", next_action: "confirm_termination" };
+    }
     if (task.status === "leased" && now >= Date.parse(String(attempt.start_deadline_at))) {
       await this.requestStop(attemptKey, "start_deadline"); return { health: "start_timeout", next_action: "confirm_termination" };
     }
