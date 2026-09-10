@@ -1,8 +1,9 @@
 import { type ComputeRunnerRequest, runPythonRunner } from "./runner-contracts.js";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessByStdio } from "node:child_process";
+import type { Readable } from "node:stream";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, toNamespacedPath } from "node:path";
 import { z } from "zod";
 import { ComathError } from "../errors.js";
 import { canonicalJson } from "./runner-contracts.js";
@@ -41,7 +42,10 @@ export async function runResearchSympyDifference(raw: unknown, config: ResearchS
   if (process.platform === "win32" && process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
   return await new Promise<{ kind: "sympy_difference"; result: unknown; metadata: { execution_mode: "local_process"; python_sha256: string; script_sha256: string;
     input_sha256: string; stdout_sha256: string; stderr_sha256: string; isolation_verified: false; proof_authority: "none" }; termination_confirmed: true }>((resolve, reject) => {
-    const child = spawn(python, ["-I", "-B", "-X", "utf8", scriptCopy, "--input-file", inputPath], { cwd: execution.workspace, env, shell: false, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    let child: ChildProcessByStdio<null, Readable, Readable>;
+    try {
+      child = spawn(python, ["-I", "-B", "-X", "utf8", toNamespacedPath(scriptCopy), "--input-file", toNamespacedPath(inputPath)], { cwd: toNamespacedPath(execution.workspace), env, shell: false, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    } catch { reject(new ResearchSympyExecutionError("SYMPY_PROCESS_ERROR", true)); return; }
     let stdout = Buffer.alloc(0), stderr = Buffer.alloc(0), stopping: string | undefined, spawned = false;
     const stop = (code: string) => { stopping ??= code; if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); };
     const abort = () => stop("SYMPY_CANCELLED");
@@ -55,6 +59,8 @@ export async function runResearchSympyDifference(raw: unknown, config: ResearchS
     });
     child.stdout.on("data", bytes => { if (stdout.length + bytes.length > 256 * 1024) stop("SYMPY_OUTPUT_LIMIT"); else stdout = Buffer.concat([stdout, bytes]); });
     child.stderr.on("data", bytes => { if (stderr.length + bytes.length > 64 * 1024) stop("SYMPY_OUTPUT_LIMIT"); else stderr = Buffer.concat([stderr, bytes]); });
+    child.stdout.on("error", () => stop("SYMPY_PIPE_ERROR"));
+    child.stderr.on("error", () => stop("SYMPY_PIPE_ERROR"));
     child.once("error", () => { clearTimeout(timer); execution.signal.removeEventListener("abort", abort); reject(new ResearchSympyExecutionError("SYMPY_PROCESS_ERROR", !spawned)); });
     child.once("close", code => {
       clearTimeout(timer); execution.signal.removeEventListener("abort", abort);
