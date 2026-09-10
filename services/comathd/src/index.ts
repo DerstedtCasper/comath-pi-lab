@@ -16,6 +16,20 @@ export * from "./artifacts/hash.js";
 export * from "./artifacts/store.js";
 export * from "./artifacts/snapshot-manifest.js";
 export * from "./artifacts/snapshots.js";
+export { ProjectRuntime, getAcquiredProjectRuntime } from "./research/project-runtime.js";
+export type { ProjectRuntimeDependencies } from "./research/project-runtime.js";
+export { acquireDaemonOwner } from "./research/daemon-owner.js";
+export type { DaemonOwner } from "./research/daemon-owner.js";
+export { ResearchStore, openResearchStore, researchDatabasePath, RESEARCH_SCHEMA_VERSION } from "./research/research-store.js";
+export type { ResearchClock, ResearchStoreOptions, ResearchEvent } from "./research/research-store.js";
+export { probeResearchLayout, ensureResearchControlReady } from "./research/research-migration.js";
+export type { ResearchLayout, ResearchMigrationOptions, ResearchMigrationReceipt, MigrationQuiescence } from "./research/research-migration.js";
+export { sha256Schema, artifactPointerSchema, scopeBindingSchema, taskKindSchema, taskStatusSchema,
+  researchPoolSchema, usageSchema, taskBudgetSchema, researchTaskDraftSchema, researchTaskSchema,
+  researchControlCampaignSchema, researchDagPatchSchema, researchEventInputSchema,
+  parseResearchInput, researchJsonSchemas } from "./research/research-schemas.js";
+export type { ScopeBinding, TaskKind, TaskStatus, TaskBudget, ResearchTaskDraft, ResearchTask,
+  ResearchControlCampaign, ResearchDagPatch, ResearchEventInput } from "./research/research-schemas.js";
 export * from "./artifacts/replay.js";
 export * from "./artifacts/bibtex.js";
 export * from "./artifacts/paper.js";

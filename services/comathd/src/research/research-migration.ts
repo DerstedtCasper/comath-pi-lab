@@ -1,0 +1,154 @@
+import { createHash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative, resolve, sep } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { z } from "zod";
+import { exportSnapshot, restoreSnapshot, verifySnapshot } from "../artifacts/snapshots.js";
+import { ComathError } from "../errors.js";
+import { resolveResearchControlPath, type DaemonOwner } from "./daemon-owner.js";
+import { researchDatabasePath, RESEARCH_SCHEMA_VERSION, type ResearchClock } from "./research-store.js";
+
+const receiptSchema = z.strictObject({ schema_version: z.literal(1), database_schema_version: z.literal(1),
+  root: z.string(), origin: z.enum(["fresh", "legacy"]), created_at: z.iso.datetime(),
+  snapshot_manifest_path: z.string().optional(), snapshot_manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  restore_verified_at: z.iso.datetime().optional() });
+const journalSchema = receiptSchema.extend({ phase: z.enum(["started", "backup_created", "restore_verified"]) });
+export type ResearchMigrationReceipt = z.infer<typeof receiptSchema>;
+type MigrationJournal = z.infer<typeof journalSchema>;
+export type ResearchLayout = { kind: "fresh" | "legacy" | "current" | "partial"; root: string; schemaVersion: number;
+  receipt?: ResearchMigrationReceipt; journal?: MigrationJournal };
+export type MigrationQuiescence = {
+  admissions_stopped: boolean; workers_stopped: boolean; tools_stopped: boolean;
+  writers_quiet: boolean; pending_commits_reconciled: boolean;
+};
+export type ResearchMigrationOptions = {
+  /** Trusted service executor must actually drain/reconcile old writers before confirming. */
+  quiesce?: (root: string) => Promise<MigrationQuiescence>;
+  /** Service lifecycle hook, also permits deterministic crash injection before schema creation. */
+  afterRestoreVerified?: (receipt: ResearchMigrationReceipt) => void | Promise<void>;
+};
+function migrationFile(root: string, name: "journal" | "receipt"): string {
+  return resolveResearchControlPath(root, `migration-${name}.json`);
+}
+function blocked(message: string): ComathError { return new ComathError(message, { code: "MIGRATION_BLOCKED", statusCode: 409 }); }
+function readVersion(root: string): number {
+  const path = researchDatabasePath(root); if (!existsSync(path)) return 0;
+  const db = new DatabaseSync(path, { readOnly: true });
+  try { return Number(db.prepare("PRAGMA user_version").get()?.user_version); } finally { db.close(); }
+}
+function writeAtomic(path: string, value: unknown): void {
+  const temp = `${path}.tmp`;
+  writeFileSync(temp, JSON.stringify(value, null, 2) + "\n", { encoding: "utf8", flush: true });
+  renameSync(temp, path);
+}
+/** Read-only, and deliberately called before owner acquisition creates .comath/control. */
+export function probeResearchLayout(projectRoot: string): ResearchLayout {
+  const root = realpathSync(projectRoot);
+  const schemaVersion = readVersion(root);
+  const receiptPath = migrationFile(root, "receipt"), journalPath = migrationFile(root, "journal");
+  try {
+    if (existsSync(receiptPath)) {
+      const receipt = receiptSchema.parse(JSON.parse(readFileSync(receiptPath, "utf8")));
+      if (receipt.root !== root) throw blocked("Migration receipt belongs to another root");
+      if (receipt.origin === "legacy" && (!receipt.snapshot_manifest_path || !receipt.snapshot_manifest_sha256 || !receipt.restore_verified_at)) throw blocked("Incomplete legacy migration receipt");
+      if (schemaVersion === RESEARCH_SCHEMA_VERSION) return { kind: "current", root, schemaVersion, receipt };
+      // A receipt cannot authorize creating a missing database or an unknown upgrade.
+      return { kind: "legacy", root, schemaVersion };
+    }
+    if (existsSync(journalPath)) {
+      const journal = journalSchema.parse(JSON.parse(readFileSync(journalPath, "utf8")));
+      if (journal.root !== root) throw blocked("Migration journal belongs to another root");
+      return { kind: "partial", root, schemaVersion, journal };
+    }
+  } catch (error) { if (error instanceof ComathError) throw error; throw blocked(`Invalid migration metadata: ${String(error)}`); }
+  const runtime = join(root, ".comath");
+  const onlyOwner = existsSync(join(runtime, "control")) && readdirSync(runtime).every(name => name === "control")
+    && readdirSync(join(runtime, "control")).every(name => /^owner\.sqlite(?:-journal|-wal|-shm)?$/.test(name));
+  return { kind: !existsSync(runtime) || onlyOwner ? "fresh" : "legacy", root, schemaVersion };
+}
+async function requireQuiescence(root: string, options: ResearchMigrationOptions): Promise<void> {
+  if (!options.quiesce) throw blocked("Legacy migration requires confirmed worker/tool/writer quiescence and pending commit reconciliation");
+  let result: MigrationQuiescence;
+  try { result = await options.quiesce(root); }
+  catch (error) { throw blocked(`Cannot confirm migration quiescence: ${String(error)}`); }
+  if (![result.admissions_stopped, result.workers_stopped, result.tools_stopped, result.writers_quiet, result.pending_commits_reconciled].every(value => value === true)) throw blocked("Legacy writers or executions have not been confirmed quiet");
+  const path = researchDatabasePath(root);
+  if (existsSync(path)) {
+    const db = new DatabaseSync(path);
+    try {
+      db.exec("PRAGMA busy_timeout=1000");
+      const checkpoint = db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get();
+      if (Number(checkpoint?.busy) !== 0) throw blocked("Research WAL checkpoint could not complete");
+    } finally { db.close(); }
+  }
+}
+function snapshotHash(path: string): string { return createHash("sha256").update(readFileSync(path)).digest("hex"); }
+function checkedSnapshotPath(root: string, path: string): string {
+  const allowed = resolve(root, ".comath", "snapshots");
+  const canonical = realpathSync(path);
+  const rel = relative(allowed, canonical);
+  if (!rel || rel.startsWith("..") || resolve(allowed, rel) !== canonical) throw blocked("Migration snapshot is outside project snapshots");
+  return canonical;
+}
+async function verifyRestorableBackup(root: string, journal: MigrationJournal, clock: ResearchClock): Promise<void> {
+  let temporary: string | undefined;
+  try {
+    if (!journal.snapshot_manifest_path || !journal.snapshot_manifest_sha256) throw blocked("Migration backup reference is incomplete");
+    const path = checkedSnapshotPath(root, journal.snapshot_manifest_path);
+    if (snapshotHash(path) !== journal.snapshot_manifest_sha256) throw blocked("Migration backup manifest hash changed");
+    const verification = await verifySnapshot(path);
+    if (!verification.ok || !verification.manifest?.can_restore || verification.manifest.snapshot_kind !== "internal_restore") throw blocked("Migration backup failed snapshot/replay verification");
+    temporary = mkdtempSync(join(tmpdir(), "comath-migration-restore-"));
+    await restoreSnapshot(path, temporary, { actor: "research-migration" });
+    // Restore performs the original snapshot/replay verifier; also verify every installed byte.
+    for (const entry of verification.manifest.entries) {
+      const restored = resolve(temporary, entry.relative_path);
+      if (!restored.startsWith(resolve(temporary) + sep) || snapshotHash(restored) !== entry.sha256) throw blocked("Restored migration bytes do not match snapshot");
+    }
+    journal.restore_verified_at = new Date(clock.now()).toISOString();
+    journal.phase = "restore_verified";
+    writeAtomic(migrationFile(root, "journal"), journal);
+  } catch (error) { if (error instanceof ComathError && error.code === "MIGRATION_BLOCKED") throw error; throw blocked(`Migration restore verification failed: ${String(error)}`); }
+  finally {
+    if (temporary && resolve(temporary).startsWith(resolve(tmpdir()) + sep)) rmSync(temporary, { recursive: true, force: true });
+  }
+}
+/** Does not create/upgrade research schema. The returned receipt authorizes that next short step. */
+export async function ensureResearchControlReady(layout: ResearchLayout, owner: DaemonOwner, clock: ResearchClock,
+  options: ResearchMigrationOptions = {}): Promise<ResearchMigrationReceipt> {
+  if (owner.root !== layout.root) throw blocked("Migration requires the same project's owner");
+  if (layout.kind === "current" && layout.receipt) return layout.receipt;
+  if (layout.schemaVersion > RESEARCH_SCHEMA_VERSION) throw blocked(`Unsupported future research schema ${layout.schemaVersion}`);
+  const root = layout.root;
+  let journal = layout.journal;
+  if (!journal) {
+    journal = { schema_version: 1, database_schema_version: 1, root, origin: layout.kind === "fresh" ? "fresh" : "legacy",
+      created_at: new Date(clock.now()).toISOString(), phase: "started" };
+    writeAtomic(migrationFile(root, "journal"), journal);
+  }
+  if (journal.origin === "legacy") {
+    await requireQuiescence(root, options);
+    if (!journal.snapshot_manifest_path) {
+      try {
+        const metadata = JSON.parse(readFileSync(join(root, ".comath", "project.json"), "utf8")) as { project_id?: string };
+        if (!metadata.project_id) throw blocked("Legacy project metadata is missing its project ID");
+        const snapshot = await exportSnapshot(root, { project_id: metadata.project_id, actor: "research-migration", audience: "internal_restore" });
+        journal.snapshot_manifest_path = snapshot.manifest_path;
+        journal.snapshot_manifest_sha256 = snapshotHash(snapshot.manifest_path);
+        journal.phase = "backup_created";
+        writeAtomic(migrationFile(root, "journal"), journal);
+      } catch (error) { if (error instanceof ComathError && error.code === "MIGRATION_BLOCKED") throw error; throw blocked(`Migration snapshot failed: ${String(error)}`); }
+    }
+    await verifyRestorableBackup(root, journal, clock);
+    const { phase: _phase, ...receipt } = journal;
+    await options.afterRestoreVerified?.(receipt);
+  }
+  const { phase: _phase, ...receipt } = journal;
+  return receipt;
+}
+/** Called only after the schema transaction and legacy ID import completed successfully. */
+export function finalizeResearchMigration(root: string, receipt: ResearchMigrationReceipt): void {
+  if (receipt.root !== root || readVersion(root) !== RESEARCH_SCHEMA_VERSION) throw blocked("Schema is not ready for migration receipt");
+  writeAtomic(migrationFile(root, "receipt"), receiptSchema.parse(receipt));
+}

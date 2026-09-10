@@ -239,6 +239,14 @@ function collectRuntimeFiles(projectRoot: string): string[] {
         continue;
       }
       const absolutePath = join(absoluteDir, name);
+      const runtimeRelative = normalizeRelativePath(relative(root, absolutePath));
+      // Lifetime ownership and migration bookkeeping are local coordination,
+      // never restorable research facts. Provider homes live outside .comath.
+      if (/^\.comath\/control\/owner\.sqlite(?:-journal|-wal|-shm)?$/.test(runtimeRelative)
+        || runtimeRelative === ".comath/control/migration-journal.json"
+        || runtimeRelative === ".comath/control/migration-receipt.json") {
+        continue;
+      }
       const stat = lstatSync(absolutePath);
       if (stat.isSymbolicLink() || stat.isBlockDevice() || stat.isCharacterDevice()) {
         throw new ComathError("snapshot source contains unsafe link", {
