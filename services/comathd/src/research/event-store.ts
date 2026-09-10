@@ -17,6 +17,16 @@ export type ResearchEventStore = {
   close(): void;
 };
 const runtimeHubs = new WeakMap<ProjectRuntime, Set<() => void>>();
+export function notifyResearchEventsCommitted(runtime: ProjectRuntime): void {
+  runtime.store.afterCommit(() => {
+    const listeners = runtimeHubs.get(runtime);
+    if (!listeners) return;
+    for (const listener of [...listeners]) {
+      if (!listeners.has(listener)) continue;
+      try { listener(); } catch { listeners.delete(listener); }
+    }
+  });
+}
 
 function failure(code: string, message: string, statusCode = 409): ComathError { return new ComathError(message, { code, statusCode }); }
 function fromRow(row: Record<string, unknown>): ResearchEvent {

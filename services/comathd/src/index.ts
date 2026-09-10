@@ -26,6 +26,10 @@ export type { BudgetLedger, BudgetLimits, BudgetAccountView, BudgetReservationVi
 export { PortfolioScheduler, createPortfolioScheduler } from "./research/portfolio-scheduler.js";
 export type { ResearchGrant, PortfolioSchedulerHooks } from "./research/portfolio-scheduler.js";
 export { createResourceAdmission, validateResourceConfig } from "./research/resource-admission.js";
+export { createCheckpointStore, renderCheckpointMarkdown, researchCheckpointSchema, researchCheckpointJsonSchema } from "./research/checkpoint-store.js";
+export type { ResearchCheckpoint, CheckpointReceipt, CheckpointStore, CheckpointStoreOptions } from "./research/checkpoint-store.js";
+export { AttemptReconciler, createAttemptReconciler } from "./research/reconciliation.js";
+export type { AttemptStopReason, AttemptTermination, AttemptLifecycleHooks } from "./research/reconciliation.js";
 export type { ResearchResourceConfig, ToolPermitRequest } from "./research/resource-admission.js";
 export { withProjectCommit, withTrustedWriter, prepareTrustCommit, finalizeTrustCommit, reconcileTrustCommits,
   assertProjectReadable, readCommittedFile, existsCommittedFile, writeCommittedFile, listCommittedDirectory,

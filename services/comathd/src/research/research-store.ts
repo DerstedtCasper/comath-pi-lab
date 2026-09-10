@@ -40,7 +40,11 @@ CREATE TABLE attempts (
  attempt_key TEXT NOT NULL UNIQUE, run_id TEXT NOT NULL UNIQUE, state TEXT NOT NULL,
  worker_id TEXT, lease_token_hash TEXT CHECK(lease_token_hash IS NULL OR length(lease_token_hash)=64),
  expires_at TEXT, last_heartbeat_at TEXT, runtime_kind TEXT, runtime_handle_json TEXT CHECK(runtime_handle_json IS NULL OR json_valid(runtime_handle_json)),
- start_deadline_at TEXT, context_pack_ref TEXT, fault_reason TEXT, PRIMARY KEY(task_id,generation));
+ start_deadline_at TEXT, context_pack_ref TEXT, fault_reason TEXT,
+ stop_reason TEXT, stop_requested_at TEXT, grace_deadline_at TEXT, fenced_at TEXT, termination_confirmed INTEGER NOT NULL DEFAULT 0,
+ checkpoint_requested_at TEXT, last_checkpoint_tool_calls INTEGER NOT NULL DEFAULT 0,
+ last_checkpoint_output_tokens INTEGER NOT NULL DEFAULT 0, last_checkpoint_at TEXT,
+ PRIMARY KEY(task_id,generation));
 CREATE TABLE permits (attempt_key TEXT NOT NULL REFERENCES attempts(attempt_key), resource_key TEXT NOT NULL,
  amount INTEGER NOT NULL DEFAULT 1 CHECK(amount>0), deadline TEXT NOT NULL, PRIMARY KEY(attempt_key,resource_key));
 CREATE TABLE tool_executions (execution_id TEXT PRIMARY KEY, attempt_key TEXT NOT NULL REFERENCES attempts(attempt_key),
