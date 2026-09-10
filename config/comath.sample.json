@@ -8,6 +8,7 @@
     "model_policies": {},
     "tool_policies": {},
     "runtimes": {},
+    "live_tools": {},
     "heartbeat_ms": 30000,
     "lease_ttl_ms": 120000,
     "max_fault_retries": 3,

@@ -70,7 +70,7 @@ export class AttemptReconciler {
     this.runtime.store.transaction(() => {
       const { attempt, task } = this.attempt(attemptKey);
       if (attempt.state === "terminated") return;
-      if (attempt.stop_reason && reason !== "user_cancel") return;
+      if (attempt.stop_reason && reason !== "user_cancel" && !(reason === "budget" && attempt.stop_reason !== "user_cancel")) return;
       const now = this.runtime.clock.now(), stamp = new Date(now).toISOString();
       const previousGraceExpired = reason === "checkpoint_overdue" && attempt.checkpoint_requested_at && now >= Date.parse(String(attempt.checkpoint_requested_at)) + (this.hooks.checkpoint_grace_ms ?? 30000);
       const grace = !previousGraceExpired && ["pause", "handoff", "checkpoint_overdue"].includes(reason) && !attempt.fenced_at && Date.parse(String(attempt.expires_at)) > now;
@@ -149,6 +149,11 @@ export class AttemptReconciler {
         return { health: "terminated", next_action: "usage_reconciliation" };
       }
       return { health: "fenced", next_action: "confirm_termination" };
+    }
+    // The grant's fixed start deadline preserves its original timestamp even as heartbeats renew TTL.
+    const grantedAt = Date.parse(String(attempt.start_deadline_at)) - 60000;
+    if (task.kind !== "legacy_run" && Number.isFinite(grantedAt) && now - grantedAt >= task.budget.wall_ms) {
+      await this.requestStop(attemptKey, "budget"); return { health: "budget_exhausted", next_action: "confirm_termination" };
     }
     if (task.status === "leased" && now >= Date.parse(String(attempt.start_deadline_at))) {
       await this.requestStop(attemptKey, "start_deadline"); return { health: "start_timeout", next_action: "confirm_termination" };

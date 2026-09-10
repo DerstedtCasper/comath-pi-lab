@@ -11,6 +11,9 @@ export type ComathConfig = {
 };
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/);
 const boundedMs = z.number().int().min(1).max(86400000);
+const wheelTerms = z.strictObject({ license_note: z.string().min(1), terms_url: z.url().optional(), redistribution_policy: z.string().min(1) });
+const wheelHttp = z.strictObject({ endpoint: z.url(), wire_format: z.enum(["query_json", "query_text"]), credential_env: envName.optional(),
+  timeout_ms: z.number().int().min(1).max(120000).optional(), max_response_bytes: z.number().int().min(1).max(2 * 1024 * 1024).optional(), terms: wheelTerms });
 export const researchConfigSchema = z.strictObject({
   enabled: z.boolean().default(false), max_active_workers: z.number().int().min(1).max(64).default(4),
   provider_policies: z.record(z.string(), z.strictObject({ launch_rpm: z.number().int().min(1).max(4).default(4), max_sessions: z.number().int().min(1).max(64).default(4) })).default({}),
@@ -26,6 +29,10 @@ export const researchConfigSchema = z.strictObject({
   operator_host: z.enum(["127.0.0.1", "::1", "localhost"]).default("127.0.0.1"), operator_port: z.number().int().min(0).max(65535).default(8787),
   worker_gateway_host: z.string().default("127.0.0.1"), worker_gateway_port: z.number().int().min(0).max(65535).default(8788),
   operator_token_env: envName.optional(), host_approval_token_env: envName.optional(),
+  live_tools: z.strictObject({ retrieval_search: wheelHttp.optional(), theorem_search: wheelHttp.extend({ wire_format: z.literal("query_json") }).optional(),
+    retrieval_read: wheelHttp.extend({ wire_format: z.enum(["reader_url_text", "reader_url_json", "reader_prefix_text"]) }).optional(),
+    sympy: z.strictObject({ python: z.string().refine(isAbsolute), python_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+      script: z.string().refine(isAbsolute), script_sha256: z.string().regex(/^[a-f0-9]{64}$/) }).optional() }).prefault({}),
   tool_limits: z.strictObject({ lean: z.number().int().min(1).max(64).default(1), cas: z.number().int().min(1).max(64).default(2), retrieval: z.number().int().min(1).max(64).default(4) }).prefault({})
 }).superRefine((config, ctx) => {
   if (config.lease_ttl_ms < 3 * config.heartbeat_ms) ctx.addIssue({ code: "custom", message: "Lease TTL must be at least three heartbeats" });

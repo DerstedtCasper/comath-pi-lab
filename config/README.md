@@ -14,6 +14,8 @@ Host-installed adapters resolve the `research.runtimes[*].kind` identifiers. Nam
 
 The daemon acquires one owner per canonical project, recovers durable state before starting listeners/scheduling, and stops new grants before draining shutdown. An unconfirmed process keeps its durable reservations; a still-running application callback prevents the owner/store from being released underneath it. `SIGINT`/`SIGTERM` and embedded `close()` share the shutdown path. Forced process termination requires recovery on the next start.
 
+`research.live_tools` optionally configures `retrieval_search`, `retrieval_read` and `theorem_search` with an explicit endpoint, supported wire format, terms and optional credential environment-variable name. The sample configures none. Each worker call must also be listed in its tool policy and is admitted through the shared retrieval permit pool. Reader URLs must occur in task-readable source evidence or an explicit host authorization callback. Successful result artifacts and replayable receipts are committed together; repeating the same command does not repeat the HTTP request. A disconnected worker request cancels its HTTP tool, while operator command acceptance remains durable.
+
 ## Provider Helper Handles
 
 Adapter OS-isolation provider helpers are configured outside the sample with absolute service-owned executable paths. macOS is outside the current GA environment-adaptation scope.

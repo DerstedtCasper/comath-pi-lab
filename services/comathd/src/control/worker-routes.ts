@@ -100,9 +100,10 @@ export function createWorkerGateway(runtime: ProjectRuntime, options: WorkerGate
           if (tool) {
             if (!options.tool) unavailable();
             const controller = new AbortController(); activeTools.add(controller);
-            request.once("aborted", () => controller.abort());
+            const disconnected = () => { if (!response.writableEnded) controller.abort(); };
+            request.once("aborted", disconnected); response.once("close", disconnected);
             try { data = await options.tool(principal, tool[1], body, controller.signal); }
-            finally { activeTools.delete(controller); }
+            finally { activeTools.delete(controller); request.off("aborted", disconnected); response.off("close", disconnected); }
           } else if (url.pathname === "/worker/v1/failures") data = options.failure ? await options.failure(principal, body) : unavailable();
           else data = options.proposal ? await options.proposal(principal, body) : unavailable();
         }

@@ -18,6 +18,7 @@ import { createResearchContextService } from "./context-service.js";
 import type { ContextPackPolicy } from "./context-pack-builder.js";
 import { createResearchFailureService } from "./failure-service.js";
 import type { FailureIndexOptions } from "./failure-index.js";
+import { createResearchToolExecutor } from "./research-tool-executor.js";
 
 export type ResearchExecutionConsumer = {
   validate(task: ResearchTask): void;
@@ -40,6 +41,7 @@ export type ResearchDaemonOptions = {
   inspectRecoveredWorker?: WorkerExecutionHostOptions["inspectRecovered"];
   contextPolicy?: (task: ResearchTask) => Omit<ContextPackPolicy, "byte_cap" | "visibility">;
   verifyRetryCondition?: FailureIndexOptions["verifyRetryCondition"];
+  authorizeReaderUrl?: (task: ResearchTask, url: string) => boolean;
 };
 const defaultDependencies: ProjectRuntimeDependencies = { clock: { now: () => Date.now() }, executor: {},
   migration: { quiesce: async root => verifyLegacyRuntimeQuiescence(root) } };
@@ -71,6 +73,7 @@ export class ResearchDaemon {
   readonly scheduler;
   readonly reconciler;
   recovery: { blocked_operations: string[]; unconfirmed_attempts: string[] } = { blocked_operations: [], unconfirmed_attempts: [] };
+  toolRecovery: { terminated: string[]; unconfirmed: string[] } = { terminated: [], unconfirmed: [] };
   private started = false;
   private closing?: Promise<void>;
   private readonly dispatched = new Set<Promise<void>>();
@@ -81,6 +84,7 @@ export class ResearchDaemon {
   private execution?: ResearchExecutionConsumer;
   private contextService?: ReturnType<typeof createResearchContextService>;
   private failureService?: ReturnType<typeof createResearchFailureService>;
+  private toolExecutor?: ReturnType<typeof createResearchToolExecutor>;
   get isReleased(): boolean { return this.released; }
   private constructor(readonly runtime: ProjectRuntime, readonly config: ResearchConfig, private readonly options: ResearchDaemonOptions) {
     if (options.contextPolicy) this.contextService = createResearchContextService(runtime, { policyForTask: task => {
@@ -139,6 +143,10 @@ export class ResearchDaemon {
       inspect: key => (this.execution?.lifecycle ?? unavailable).inspect(key),
       max_fault_retries: config.max_fault_retries, lease_ttl_ms: config.lease_ttl_ms,
       checkpoint_grace_ms: config.checkpoint.grace_ms, checkpoint: config.checkpoint });
+    this.toolExecutor = createResearchToolExecutor(runtime, this.scheduler, { wheels: config.live_tools, sympy: config.live_tools.sympy,
+      allowedTools: task => config.tool_policies[task.tool_policy_id]?.allowed_tools ?? [],
+      authorizeReaderUrl: (task, url) => options.authorizeReaderUrl?.(task, url) ?? this.contextService?.allowsSourceUrl(task, url) ?? false,
+      onArtifactCommitted: this.contextService?.gatewayOptions.onArtifactCommitted });
   }
   static async create(root: string, options: ResearchDaemonOptions): Promise<ResearchDaemon> {
     const config = researchConfigSchema.parse(options.config);
@@ -148,6 +156,7 @@ export class ResearchDaemon {
     try {
       runtime.store.run(`PRAGMA busy_timeout=${config.sqlite_busy_timeout_ms}`);
       daemon = new ResearchDaemon(runtime, config, options);
+      daemon.toolRecovery = daemon.toolExecutor?.recover() ?? { terminated: [], unconfirmed: [] };
       daemon.recovery = await daemon.reconciler.recover();
       drainResearchAuditOutbox(runtime.root);
       return daemon;
@@ -162,7 +171,7 @@ export class ResearchDaemon {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     if (this.gatewayReady) return this.gatewayReady;
     this.gateway = createWorkerGateway(this.runtime, { ...(this.contextService?.gatewayOptions ?? { authorizeArtifact: () => false }),
-      ...(this.failureService ? { failure: this.failureService.recordWorkerFailure } : {}), ...this.options.workerGateway });
+      ...(this.failureService ? { failure: this.failureService.recordWorkerFailure } : {}), tool: this.toolExecutor?.workerTool, ...this.options.workerGateway });
     this.gatewayReady = this.gateway.listen({ host: this.config.worker_gateway_host, port: this.config.worker_gateway_port });
     return this.gatewayReady;
   }
@@ -188,7 +197,7 @@ export class ResearchDaemon {
         if (this.runtime.store.getTask(String(row.task_id))?.kind === "legacy_run") continue;
         draining.push(this.reconciler.requestStop(String(row.attempt_key), "handoff"));
       }
-      draining.push(shutdownLegacyRuntime(this.runtime.root), this.execution?.close?.() ?? Promise.resolve(), this.adapters.close(), ...this.dispatched, ...this.applicationWork);
+      draining.push(shutdownLegacyRuntime(this.runtime.root), this.execution?.close?.() ?? Promise.resolve(), this.toolExecutor?.close() ?? Promise.resolve(), this.adapters.close(), ...this.dispatched, ...this.applicationWork);
       if (this.gateway) draining.push(this.gatewayReady!.then(() => this.gateway!.close()));
       // If any code can still write to the store, never release ownership underneath it.
       const settled = await withinShutdownGrace(Promise.allSettled(draining), this.config.stop_grace_ms);
@@ -226,7 +235,8 @@ export async function acquireResearchDaemon(root: string, options: ResearchDaemo
       || entry.options.workerGateway !== options.workerGateway || entry.options.createExecution !== options.createExecution
       || entry.options.workerInput !== options.workerInput || entry.options.validateWorkerTask !== options.validateWorkerTask
       || entry.options.inspectRecoveredWorker !== options.inspectRecoveredWorker || entry.options.contextPolicy !== options.contextPolicy
-      || entry.options.verifyRetryCondition !== options.verifyRetryCondition || entry.options.createAdapters !== options.createAdapters) {
+      || entry.options.verifyRetryCondition !== options.verifyRetryCondition || entry.options.createAdapters !== options.createAdapters
+      || entry.options.authorizeReaderUrl !== options.authorizeReaderUrl) {
       fail("DAEMON_CONFIG_CONFLICT", "Project daemon already has different host dependencies or configuration");
     }
   } else {

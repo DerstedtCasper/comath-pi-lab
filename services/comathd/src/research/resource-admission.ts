@@ -76,7 +76,7 @@ export class ResearchResourceAdmission {
       if (!attempt) fail("RESEARCH_ATTEMPT_UNKNOWN", "Tool attempt is unknown");
       const task = this.runtime.store.getTask(String(attempt.task_id));
       if (!task || task.generation !== Number(attempt.generation) || !["leased", "running"].includes(task.status)
-        || !["leased", "running"].includes(String(attempt.state)) || Date.parse(String(attempt.expires_at)) <= this.runtime.clock.now()) {
+        || !["leased", "running"].includes(String(attempt.state)) || attempt.fenced_at || attempt.stop_requested_at || Date.parse(String(attempt.expires_at)) <= this.runtime.clock.now()) {
         fail("RESEARCH_ATTEMPT_FENCED", "Tool call has no active current lease");
       }
       const limit = (this.config().tool_limits ?? { lean: 1, cas: 2, retrieval: 4 })[request.kind];

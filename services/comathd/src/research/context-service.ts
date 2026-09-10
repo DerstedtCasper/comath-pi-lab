@@ -12,6 +12,8 @@ import type { ResearchGrant } from "./portfolio-scheduler.js";
 import { buildContextPack, materializeContextPack, type ContextPackPolicy, type ContextFailureRoute } from "./context-pack-builder.js";
 import type { ArtifactPointer, ResearchTask } from "./research-schemas.js";
 import { resolveProjectCommitPath } from "./project-commit.js";
+import { listArtifactRefs } from "../artifacts/store.js";
+import { readFileSync, statSync } from "node:fs";
 
 export type ResearchContextOptions = { policyForTask: (task: ResearchTask) => ContextPackPolicy;
   findFailures?: (task: ResearchTask, policy: ContextPackPolicy) => ContextFailureRoute[] };
@@ -98,5 +100,26 @@ export function createResearchContextService(runtime: ProjectRuntime, options: R
       "Submit checkpoints and research results through the scoped service MCP tools. A result has no proof authority; Lean clean replay remains final authority.",
       "SERVICE CONTEXT (verified UTF-8 JSON):", bytes.toString("utf8")].join("\n\n");
   }
-  return { gatewayOptions, workerInput, buildPrompt, policyForTask: policyFor };
+  function allowsSourceUrl(task: ResearchTask, url: string): boolean {
+    const policy = policyFor(task);
+    const sources = [...policy.mandatory, ...(policy.selected ?? []), ...(policy.lazy ?? []), ...(policy.statement_brief ? [policy.statement_brief] : [])].map(source => source.ref);
+    for (const row of runtime.store.all("SELECT t.result_ref FROM tool_executions t JOIN attempts a ON a.attempt_key=t.attempt_key WHERE a.task_id=? AND t.result_ref IS NOT NULL", task.task_id)) {
+      sources.push(JSON.parse(String(row.result_ref)) as ArtifactPointer);
+    }
+    const refs = listArtifactRefs(runtime.root);
+    for (const source of sources) {
+      if (!policy.authorizeArtifact(task, source)) continue;
+      const ref = refs.find(value => value.id === source.artifact_id && value.sha256 === source.sha256);
+      if (!ref) continue;
+      const path = resolveProjectCommitPath(runtime.root, ref.path);
+      if (statSync(path).size > 512 * 1024) continue;
+      const bytes = readFileSync(path);
+      if (createHash("sha256").update(bytes).digest("hex") !== source.sha256) continue;
+      let data: { source_url?: unknown; document?: { source_url?: unknown }; results?: { source_url?: unknown }[] };
+      try { data = JSON.parse(bytes.toString("utf8")); } catch { continue; }
+      if (data && (data.source_url === url || data.document?.source_url === url || Array.isArray(data.results) && data.results.some(result => result?.source_url === url))) return true;
+    }
+    return false;
+  }
+  return { gatewayOptions, workerInput, buildPrompt, policyForTask: policyFor, allowsSourceUrl };
 }
