@@ -21,6 +21,7 @@ export type WorkerExecutionHost = {
   validate(task: ResearchTask): void;
   dispatch(grant: ResearchGrant, adapter: AgentRuntimeAdapter): Promise<void>;
   lifecycle: Pick<AttemptLifecycleHooks, "requestCheckpoint" | "stop" | "inspect">;
+  steer(attemptKey: string, instruction: string): Promise<void>;
   close(): Promise<void>;
 };
 const id = z.string().min(1).max(200);
@@ -111,6 +112,18 @@ export function createWorkerExecutionHost(options: WorkerExecutionHostOptions): 
     if (!entry.adapter.capabilities().steer) throw error("WORKER_STEER_UNSUPPORTED", "Adapter cannot receive checkpoint steering");
     await entry.adapter.steer(entry.handle, "Submit a complete checkpoint through the configured service checkpoint interface, including accepted artifact references. This request does not authorize new tools or a success result while stopping.");
     record(entry, "WorkerCheckpointRequested", {});
+  }
+  async function steer(attemptKey: string, instruction: string): Promise<void> {
+    assertOwner();
+    const entry = attempts.get(attemptKey), row = runtime.store.get("SELECT * FROM attempts WHERE attempt_key=?", attemptKey);
+    const task = row && runtime.store.getTask(String(row.task_id));
+    if (!entry?.handle || entry.terminationConfirmed || entry.protocolFailed || entry.controller.signal.aborted
+      || !row || !task || task.generation !== entry.grant.generation || task.status !== "running" || row.state !== "running"
+      || row.fenced_at || row.stop_requested_at || Date.parse(String(row.expires_at)) <= runtime.clock.now()) throw error("WORKER_HANDLE_UNAVAILABLE", "Only the current running worker may receive service steering");
+    if (!instruction.trim() || Buffer.byteLength(instruction) > 32768) throw error("WORKER_STEER_INVALID", "Service steering exceeds the bounded instruction contract");
+    if (!entry.adapter.capabilities().steer) throw error("WORKER_STEER_UNSUPPORTED", "Adapter cannot receive service steering");
+    await entry.adapter.steer(entry.handle, instruction);
+    record(entry, "WorkerServiceSteered", { instruction_sha256: hash(instruction) });
   }
   async function applyUsage(entry: RunningAttempt, snapshot: UsageSnapshot, final: boolean): Promise<void> {
     const parsed = snapshotSchema.safeParse(snapshot);
@@ -219,5 +232,5 @@ export function createWorkerExecutionHost(options: WorkerExecutionHostOptions): 
     });
     return closing;
   }
-  return { validate, dispatch, lifecycle: { requestCheckpoint, stop, inspect }, close };
+  return { validate, dispatch, lifecycle: { requestCheckpoint, stop, inspect }, steer, close };
 }

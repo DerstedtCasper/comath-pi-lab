@@ -27,6 +27,7 @@ export type ResearchExecutionConsumer = {
   validate(task: ResearchTask): void;
   dispatch(grant: ResearchGrant, adapter: AgentRuntimeAdapter): Promise<void>;
   lifecycle: AttemptLifecycleHooks;
+  steer?(attemptKey: string, instruction: string): Promise<void>;
   close?(): Promise<void>;
 };
 export type ResearchDaemonOptions = {
@@ -170,7 +171,10 @@ export class ResearchDaemon {
       authorizeArtifact: options.workerGateway?.authorizeArtifact ?? this.contextService.gatewayOptions.authorizeArtifact,
       onArtifactCommitted: options.workerGateway?.onArtifactCommitted ?? this.contextService.gatewayOptions.onArtifactCommitted
     });
-    if (config.supervisor) this.supervisor = createSupervisorDriver(this.app, this.scheduler, config, this.resultService);
+    if (config.supervisor) this.supervisor = createSupervisorDriver(this.app, this.scheduler, config, this.resultService, {
+      steer: (key, instruction) => this.execution?.steer?.(key, instruction) ?? Promise.reject(new ComathError("Runtime cannot receive correction steering", { code: "WORKER_STEER_UNSUPPORTED" })),
+      stop: key => this.reconciler.requestStop(key, "supervisor_invalid")
+    });
   }
   static async create(root: string, options: ResearchDaemonOptions): Promise<ResearchDaemon> {
     const config = researchConfigSchema.parse(options.config);

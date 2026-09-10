@@ -6,7 +6,7 @@ import type { PortfolioScheduler } from "./portfolio-scheduler.js";
 import type { ProjectRuntime } from "./project-runtime.js";
 import type { ResearchTask } from "./research-schemas.js";
 
-export type AttemptStopReason = "pause" | "handoff" | "user_cancel" | "lease_expired" | "start_deadline" | "crash" | "budget" | "checkpoint_overdue";
+export type AttemptStopReason = "pause" | "handoff" | "user_cancel" | "lease_expired" | "start_deadline" | "crash" | "budget" | "checkpoint_overdue" | "supervisor_invalid";
 export type AttemptTermination = { runtime_terminated: boolean; tools_terminated: boolean; usage_complete: boolean };
 export type AttemptLifecycleHooks = {
   requestCheckpoint: (attemptKey: string) => Promise<void>;
@@ -99,6 +99,7 @@ export class AttemptReconciler {
       const next: ResearchTask = { ...task, updated_at: new Date(this.runtime.clock.now()).toISOString() };
       if (reason === "user_cancel") { next.status = "cancelled"; delete next.blocked_reason; }
       else if (reason === "pause") { next.status = "blocked"; next.blocked_reason = "paused"; }
+      else if (reason === "supervisor_invalid") { next.status = "blocked"; next.blocked_reason = "supervisor_invalid_proposal"; }
       else if (reason === "handoff" || reason === "checkpoint_overdue") {
         next.status = task.checkpoint_head ? "queued" : "blocked";
         if (task.checkpoint_head) delete next.blocked_reason; else next.blocked_reason = "checkpoint_missing";

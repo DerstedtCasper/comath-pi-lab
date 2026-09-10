@@ -31,6 +31,7 @@ export function defaultResearchContextPolicy(task: ResearchTask, visibility: "ta
 }
 
 type ResultService = ReturnType<typeof createResearchResultService>;
+export type SupervisorWorkerControl = { steer(attemptKey: string, instruction: string): Promise<void>; stop(attemptKey: string): Promise<void> };
 /** Host-owned event consumer. No provider calls, custom runtime, budget increases or proof promotion. */
 export class SupervisorDriver {
   private running = false;
@@ -43,7 +44,7 @@ export class SupervisorDriver {
   readonly loop;
   readonly blockers = new Map<string, string>();
   constructor(private readonly app: ResearchOrchestrator, private readonly scheduler: PortfolioScheduler,
-    private readonly config: ResearchConfig, private readonly results: ResultService) {
+    private readonly config: ResearchConfig, private readonly results: ResultService, private readonly control?: SupervisorWorkerControl) {
     if (!config.supervisor) fail("SUPERVISOR_CONFIG_REQUIRED");
     this.loop = createResearchLoop(app, {
       classifyEvent: event => {
@@ -142,6 +143,7 @@ export class SupervisorDriver {
   }
   private async finish(campaign: ResearchControlCampaign): Promise<void> {
     const runtime = this.app.runtime, task = runtime.store.getTask(campaign.supervisor.inflight_task_id!);
+    if (task?.status === "running") { await this.correctRejectedProposal(task); return; }
     if (!task || task.status !== "succeeded") return;
     const row = runtime.store.get("SELECT seq FROM events WHERE campaign_id=? AND task_id=? AND generation=? AND type='SupervisorProposalAccepted' ORDER BY seq DESC LIMIT 1", campaign.campaign_id, task.task_id, task.generation);
     if (!row) return;
@@ -158,6 +160,58 @@ export class SupervisorDriver {
     const outcome = this.loop.finishSupervisorTurn({ command_id: `driver-finish:${seq}`, campaign_id: campaign.campaign_id,
       task_id: task.task_id, generation: task.generation, source_event_seq: seq, artifact: ref, proposal: JSON.parse(bytes.toString("utf8")) });
     if (outcome.status === "finished") this.scheduler.wake();
+  }
+  private async correctRejectedProposal(task: ResearchTask): Promise<void> {
+    const { store } = this.app.runtime;
+    const rows = store.all("SELECT seq FROM events WHERE campaign_id=? AND task_id=? AND generation=? AND type='SupervisorProposalRejected' ORDER BY seq LIMIT 2", task.campaign_id, task.task_id, task.generation);
+    if (!rows.length) return;
+    const sources = rows.map(row => {
+      const event = this.app.events.readEventsAfter({ campaign_id: task.campaign_id, after_seq: Number(row.seq) - 1, limit: 1 })[0];
+      const ref = artifactPointerSchema.parse((event.payload as Record<string, unknown>).result_ref);
+      if (!this.results.verifyRejectedProposal(event, task, ref)) fail("SUPERVISOR_SOURCE_NOT_VERIFIED");
+      return { event, ref };
+    });
+    const source = sources[0], attemptKey = String((source.event.payload as Record<string, unknown>).attempt_key);
+    const key = `supervisor-correction:${task.task_id}:g${task.generation}`;
+    const existing = store.get("SELECT status,response_json FROM commands WHERE command_id=?", key);
+    const block = async (code: string) => {
+      if (!this.control) fail("SUPERVISOR_CORRECTION_CONTROL_UNAVAILABLE");
+      store.transaction(() => {
+        if (!store.get("SELECT command_id FROM commands WHERE command_id=?", `${key}:blocked`)) {
+          const payload = { code, attempt_key: attemptKey, source_event_seqs: sources.map(source => source.event.seq),
+            rejected_refs: sources.map(source => source.ref), proof_authority: "none" };
+          this.app.events.appendEvent({ campaign_id: task.campaign_id, task_id: task.task_id, generation: task.generation,
+            type: "SupervisorCorrectionBlocked", actor: "research-loop", payload });
+          store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'internal:supervisor-driver',?,?,'blocked')", `${key}:blocked`, fingerprint(payload), JSON.stringify(payload));
+          const current = store.getTask(task.task_id)!;
+          if (current.generation === task.generation && current.status === "running") store.putTask({ ...current, blocked_reason: "supervisor_invalid_proposal" });
+        }
+      });
+      await this.control.stop(attemptKey);
+      fail(code);
+    };
+    if (rows.length > 1) return block("SUPERVISOR_CORRECTION_EXHAUSTED");
+    if (store.get("SELECT command_id FROM commands WHERE command_id=?", `${key}:blocked`)) return block("SUPERVISOR_CORRECTION_BLOCKED");
+    if (existing) {
+      if (existing.status === "committed") return;
+      // A crash between durable intent and transport acknowledgement must not duplicate steering.
+      return block("SUPERVISOR_CORRECTION_DELIVERY_UNCONFIRMED");
+    }
+    if (!this.control) fail("SUPERVISOR_CORRECTION_CONTROL_UNAVAILABLE");
+    const instruction = "Your submitted research DAG proposal did not satisfy the declared C4 structure. Read the complete proposal_schema in your service snapshot and submit exactly one corrected JSON object through research_worker_propose with a new command_id. Preserve the declared campaign, original proposal_base_revision, scope and task budget. Do not add assumptions, change limits or claim proof authority. This is the single permitted structure correction.";
+    const intent = { attempt_key: attemptKey, source_event_seq: source.event.seq, artifact: source.ref, instruction_sha256: fingerprint(instruction), proof_authority: "none" };
+    store.transaction(() => {
+      store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'internal:supervisor-driver',?,?,'prepared')", key, fingerprint(intent), JSON.stringify(intent));
+      this.app.events.appendEvent({ campaign_id: task.campaign_id, task_id: task.task_id, generation: task.generation,
+        type: "SupervisorCorrectionRequested", actor: "research-loop", payload: intent });
+    });
+    try { await this.control.steer(attemptKey, instruction); }
+    catch { await block("SUPERVISOR_CORRECTION_DELIVERY_UNCONFIRMED"); return; }
+    store.transaction(() => {
+      store.run("UPDATE commands SET status='committed' WHERE command_id=? AND status='prepared'", key);
+      this.app.events.appendEvent({ campaign_id: task.campaign_id, task_id: task.task_id, generation: task.generation,
+        type: "SupervisorCorrectionSent", actor: "research-loop", payload: intent });
+    });
   }
   private async campaignTurn(campaignId: string): Promise<void> {
     let page;
@@ -220,6 +274,6 @@ export class SupervisorDriver {
   stop(): void { this.closed = true; this.running = false; this.unsubscribe?.(); this.unsubscribe = undefined; if (this.timer) clearInterval(this.timer); }
   async close(): Promise<void> { this.stop(); await this.drain(); }
 }
-export function createSupervisorDriver(app: ResearchOrchestrator, scheduler: PortfolioScheduler, config: ResearchConfig, results: ResultService): SupervisorDriver {
-  return new SupervisorDriver(app, scheduler, config, results);
+export function createSupervisorDriver(app: ResearchOrchestrator, scheduler: PortfolioScheduler, config: ResearchConfig, results: ResultService, control?: SupervisorWorkerControl): SupervisorDriver {
+  return new SupervisorDriver(app, scheduler, config, results, control);
 }

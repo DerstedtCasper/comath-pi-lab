@@ -39,6 +39,7 @@ export type ResearchResultService = {
   acceptWorkerResult(principal: WorkerPrincipal, raw: unknown): Promise<ResearchResultReceipt>;
   acceptWorkerProposal(principal: WorkerPrincipal, raw: unknown): Promise<ResearchResultReceipt>;
   verifyAcceptedResult(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>, proposal?: unknown): boolean;
+  verifyRejectedProposal(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>): boolean;
 };
 const digest = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
 const hash = (value: unknown) => digest(canonicalJson(value));
@@ -216,18 +217,19 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
       return confirmed;
     } finally { await unlink(path).catch(error => { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }); }
   }
-  function verifyAcceptedResult(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>, proposal?: unknown): boolean {
+  function verifyReceipt(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>, proposal?: unknown, rejected = false): boolean {
     try {
       owner(); assertProjectReadable(runtime.root, undefined, task.campaign_id);
-      if (!Number.isSafeInteger(event.seq) || !["ResearchResultAccepted", "SupervisorProposalAccepted"].includes(event.type) || event.actor !== "service:research-results") return false;
+      if (!Number.isSafeInteger(event.seq) || !(rejected ? event.type === "SupervisorProposalRejected" : ["ResearchResultAccepted", "SupervisorProposalAccepted"].includes(event.type)) || event.actor !== "service:research-results") return false;
       const currentTask = store.getTask(task.task_id), storedEvent = store.get("SELECT * FROM events WHERE seq=?", event.seq);
-      if (!currentTask || !storedEvent || currentTask.status !== "succeeded" || task.status !== "succeeded" || currentTask.generation !== task.generation
+      const expectedStatus = rejected ? "running" : "succeeded";
+      if (!currentTask || !storedEvent || currentTask.status !== expectedStatus || task.status !== expectedStatus || currentTask.generation !== task.generation
         || event.task_id !== task.task_id || event.generation !== task.generation || event.campaign_id !== task.campaign_id || currentTask.campaign_id !== task.campaign_id
-        || currentTask.accepted_result_id !== artifact.artifact_id || task.accepted_result_id !== artifact.artifact_id || canonicalJson(currentTask.scope) !== canonicalJson(task.scope)
+        || !rejected && (currentTask.accepted_result_id !== artifact.artifact_id || task.accepted_result_id !== artifact.artifact_id) || canonicalJson(currentTask.scope) !== canonicalJson(task.scope)
         || event.type !== storedEvent.type || event.actor !== storedEvent.actor || event.created_at !== storedEvent.created_at
         || storedEvent.payload_sha256 !== event.payload_sha256 || event.payload_sha256 !== hash(event.payload) || canonicalJson(JSON.parse(String(storedEvent.payload_json))) !== canonicalJson(event.payload)) return false;
       const receipt = event.payload as unknown as ResearchResultReceipt;
-      if (receipt.status !== "accepted" || receipt.event_type !== event.type || receipt.task_id !== task.task_id || receipt.generation !== task.generation
+      if (receipt.status !== (rejected ? "rejected" : "accepted") || receipt.event_type !== event.type || receipt.task_id !== task.task_id || receipt.generation !== task.generation
         || receipt.campaign_id !== task.campaign_id || receipt.scope_sha256 !== hash(task.scope) || canonicalJson(receipt.result_ref) !== canonicalJson(artifact) || receipt.proof_authority !== "none") return false;
       const row = store.get("SELECT * FROM trust_commits WHERE operation_id=?", receipt.operation_id);
       if (!row || row.phase !== "committed" || row.campaign_id !== task.campaign_id) return false;
@@ -243,6 +245,9 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
         const result = researchResultSchema.parse(payload);
         if (result.task_id !== task.task_id || result.generation !== task.generation || result.result_id !== receipt.result_id || result.kind !== receipt.result_kind
           || canonicalJson(result.scope) !== canonicalJson(task.scope) || proposal !== undefined) return false;
+      } else if (rejected) {
+        if (task.kind !== "synthesize" || receipt.result_kind !== "supervisor_proposal" || !receipt.rejection_code
+          || proposalError(task, payload).code !== receipt.rejection_code) return false;
       } else {
         const parsed = researchDagPatchSchema.parse(payload);
         if (task.kind !== "synthesize" || parsed.campaign_id !== task.campaign_id || parsed.base_revision !== receipt.base_revision || receipt.result_kind !== "supervisor_proposal"
@@ -251,5 +256,7 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
       return true;
     } catch { return false; }
   }
-  return { acceptWorkerResult: (principal, raw) => accept(principal, raw, false), acceptWorkerProposal: (principal, raw) => accept(principal, raw, true), verifyAcceptedResult };
+  return { acceptWorkerResult: (principal, raw) => accept(principal, raw, false), acceptWorkerProposal: (principal, raw) => accept(principal, raw, true),
+    verifyAcceptedResult: (event, task, artifact, proposal) => verifyReceipt(event, task, artifact, proposal),
+    verifyRejectedProposal: (event, task, artifact) => verifyReceipt(event, task, artifact, undefined, true) };
 }
