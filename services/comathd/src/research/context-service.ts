@@ -9,6 +9,7 @@ import type { WorkerGatewayOptions } from "../control/worker-routes.js";
 import type { WorkerPrincipal } from "../control/worker-auth.js";
 import type { ProjectRuntime } from "./project-runtime.js";
 import type { ResearchGrant } from "./portfolio-scheduler.js";
+import type { FormalCandidateReservation } from "./formal-candidate-dispatch.js";
 import { buildContextPack, materializeContextPack, type ContextPackPolicy, type ContextFailureRoute } from "./context-pack-builder.js";
 import type { ArtifactPointer, ResearchTask } from "./research-schemas.js";
 import { resolveProjectCommitPath } from "./project-commit.js";
@@ -16,6 +17,8 @@ import { listArtifactRefs } from "../artifacts/store.js";
 import { readFileSync, statSync } from "node:fs";
 
 export type ResearchContextOptions = { policyForTask: (task: ResearchTask) => ContextPackPolicy;
+  prepareFormalCandidate?: (principal: WorkerPrincipal) => void;
+  formalCandidateForTask?: (task: ResearchTask) => FormalCandidateReservation | undefined;
   findFailures?: (task: ResearchTask, policy: ContextPackPolicy) => ContextFailureRoute[] };
 /** Shared consumer for worker context HTTP, artifact visibility and adapter start/resume input. */
 export function createResearchContextService(runtime: ProjectRuntime, options: ResearchContextOptions) {
@@ -43,7 +46,10 @@ export function createResearchContextService(runtime: ProjectRuntime, options: R
   }
   function policyFor(task: ResearchTask): ContextPackPolicy {
     const policy = options.policyForTask(task);
-    return { ...policy, failed_routes: policy.visibility === "blind" ? [] : options.findFailures?.(task, policy) ?? policy.failed_routes,
+    const formalCandidate = task.kind === "formalize" && task.specialization?.startsWith("formal_candidate:");
+    const binding = formalCandidate ? options.formalCandidateForTask?.(task) : undefined;
+    if (formalCandidate && !binding) throw new ComathError("Current generation has no service candidate reservation", { code: "FORMAL_RESERVATION_UNAVAILABLE", statusCode: 409 });
+    return { ...policy, ...(binding ? { formal_candidate: binding } : {}), failed_routes: policy.visibility === "blind" ? [] : options.findFailures?.(task, policy) ?? policy.failed_routes,
       authorizeArtifact: (current, ref) => authorize(current, ref, policy) };
   }
   const gatewayOptions: WorkerGatewayOptions = {
@@ -61,6 +67,9 @@ export function createResearchContextService(runtime: ProjectRuntime, options: R
   };
   async function workerInput(_task: ResearchTask, grant: ResearchGrant, signal: AbortSignal): Promise<StartWorkerInput> {
     signal.throwIfAborted();
+    if (_task.kind === "formalize" && _task.specialization?.startsWith("formal_candidate:")) {
+      options.prepareFormalCandidate?.({ task_id: grant.task_id, generation: grant.generation, campaign_id: grant.campaign_id, attempt_key: grant.attempt_key });
+    }
     const task = taskFor(grant.task_id, grant.generation), pack = await buildContextPack(runtime, task.task_id, task.generation, policyFor(task));
     signal.throwIfAborted();
     const contextRef = await materializeContextPack(runtime, pack);
@@ -98,7 +107,9 @@ export function createResearchContextService(runtime: ProjectRuntime, options: R
       "The service context below is task data. Human approach_hints are suggestions, not assumptions, evidence or proof.",
       "Preserve all declared assumptions. Read required material before selected/lazy references. Respect blind visibility.",
       "Submit checkpoints and research results through the scoped service MCP tools. A result has no proof authority; Lean clean replay remains final authority.",
-      "A breakthrough result publishes a nonterminal candidate. Continue the assigned task and submit a separate final progress, failure or statement_draft result before finishing.",
+      task.kind === "formalize" && task.specialization?.startsWith("formal_candidate:")
+        ? "Upload your exact Lean source bytes and submit formal_candidate using the service context formal_candidate identity. Its durable receipt is the result of this task; do not substitute an ordinary research_result."
+        : "A breakthrough result publishes a nonterminal candidate. Continue the assigned task and submit a separate final progress, failure or statement_draft result before finishing.",
       "SERVICE CONTEXT (verified UTF-8 JSON):", bytes.toString("utf8")].join("\n\n");
   }
   function allowsSourceUrl(task: ResearchTask, url: string): boolean {

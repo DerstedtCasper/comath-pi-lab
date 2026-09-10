@@ -5,7 +5,7 @@ import type { ProjectRuntime } from "../research/project-runtime.js";
 import { canonicalJson } from "../verification/runner-contracts.js";
 
 export type WorkerPrincipal = { task_id: string; generation: number; attempt_key: string; campaign_id: string };
-export function authenticateWorker(runtime: ProjectRuntime, authorization: string | undefined, checkpointOnly = false, acceptedCommandId?: string): WorkerPrincipal {
+export function authenticateWorker(runtime: ProjectRuntime, authorization: string | undefined, checkpointOnly = false, acceptedCommandId?: string, formalResultReplay = false): WorkerPrincipal {
   const token = /^Bearer ([A-Za-z0-9_-]{8,4096})$/.exec(authorization ?? "")?.[1];
   if (!token) throw new ComathError("Worker capability is required", { code: "WORKER_UNAUTHORIZED", statusCode: 403 });
   const hash = createHash("sha256").update(token).digest("hex");
@@ -17,6 +17,19 @@ export function authenticateWorker(runtime: ProjectRuntime, authorization: strin
   const grace = checkpointOnly && task?.status === "cancelling" && ["pause", "handoff", "checkpoint_overdue"].includes(String(attempt.stop_reason))
     && now < Date.parse(String(attempt.grace_deadline_at));
   let replay = false;
+  let formalReplay = false;
+  if (formalResultReplay && task && typeof acceptedCommandId === "string" && acceptedCommandId.length > 0 && acceptedCommandId.length <= 160) {
+    const operation = `formal-submission:${createHash("sha256").update(canonicalJson(acceptedCommandId)).digest("hex")}`;
+    const marker = runtime.store.get("SELECT response_json FROM commands WHERE command_id=? AND principal_id='service:formal-submission'", operation);
+    const commit = runtime.store.get("SELECT plan_json FROM trust_commits WHERE operation_id=?", operation);
+    if (marker && commit) {
+      const receipt = JSON.parse(String(marker.response_json)), saved = JSON.parse(String(commit.plan_json)).response;
+      formalReplay = receipt?.schema_version === "comath.formal_candidate_submission.v1" && receipt.command_id === acceptedCommandId
+        && receipt.operation_id === operation && receipt.task_id === task.task_id && receipt.generation === task.generation
+        && receipt.attempt_key === attempt.attempt_key && receipt.campaign_id === task.campaign_id && receipt.proof_authority === "none"
+        && saved?.operation_id === operation && saved.task_id === receipt.task_id && saved.generation === receipt.generation && saved.attempt_key === receipt.attempt_key;
+    }
+  }
   if (task?.status === "succeeded" && typeof acceptedCommandId === "string" && acceptedCommandId.length > 0 && acceptedCommandId.length <= 160) {
     const operation = `research-submission:${createHash("sha256").update(canonicalJson(acceptedCommandId)).digest("hex")}`;
     const committed = runtime.store.get("SELECT plan_json FROM trust_commits WHERE operation_id=? AND phase='committed'", operation);
@@ -27,11 +40,12 @@ export function authenticateWorker(runtime: ProjectRuntime, authorization: strin
         && receipt.campaign_id === task.campaign_id && receipt.result_ref?.artifact_id === task.accepted_result_id;
     }
   }
-  if (!task || task.generation !== Number(attempt.generation) || attempt.fenced_at || Number(attempt.termination_confirmed) !== 0
-    || !Number.isFinite(Date.parse(String(attempt.expires_at))) || now >= Date.parse(String(attempt.expires_at)) || (!grace && !replay && task.status !== "running")) {
+  if (!task || task.generation !== Number(attempt.generation) || (!formalReplay && (attempt.fenced_at || Number(attempt.termination_confirmed) !== 0
+    || !Number.isFinite(Date.parse(String(attempt.expires_at))) || now >= Date.parse(String(attempt.expires_at)) || (!grace && !replay && task.status !== "running")))) {
     throw new ComathError("Worker generation is no longer active", { code: "WORKER_GENERATION_FENCED", statusCode: 409 });
   }
-  assertProjectReadable(runtime.root, undefined, task.campaign_id);
+  // This exception only authorizes the already recorded result command; intake still checks exact request bytes.
+  if (!formalReplay) assertProjectReadable(runtime.root, undefined, task.campaign_id);
   return { task_id: task.task_id, generation: task.generation, campaign_id: task.campaign_id, attempt_key: String(attempt.attempt_key) };
 }
 export function requireWorkerIdentity(principal: WorkerPrincipal, body: { task_id?: unknown; generation?: unknown }): void {

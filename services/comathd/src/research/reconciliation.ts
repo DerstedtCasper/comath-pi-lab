@@ -12,6 +12,9 @@ export type AttemptLifecycleHooks = {
   requestCheckpoint: (attemptKey: string) => Promise<void>;
   stop: (attemptKey: string, reason: AttemptStopReason) => Promise<void>;
   inspect: (attemptKey: string) => Promise<AttemptTermination>;
+  hasPendingSubmission?: (attemptKey: string) => boolean;
+  recordSubmissionTermination?: (attemptKey: string) => void;
+  reconcileSubmissions?: () => unknown;
   max_fault_retries?: number; checkpoint_grace_ms?: number; lease_ttl_ms?: number;
   checkpoint?: { first_tool_calls: number; periodic_tool_calls: number; output_tokens: number; interval_ms: number };
 };
@@ -28,12 +31,13 @@ export class AttemptReconciler {
   constructor(readonly runtime: ProjectRuntime, private readonly scheduler: PortfolioScheduler, private readonly hooks: AttemptLifecycleHooks) {
     this.events = createResearchEventStore(runtime);
   }
-  private attempt(attemptKey: string) {
+  private attempt(attemptKey: string, submissionLifecycle = false) {
     const attempt = this.runtime.store.get("SELECT * FROM attempts WHERE attempt_key=?", attemptKey);
     if (!attempt) fail("RESEARCH_ATTEMPT_UNKNOWN", "Unknown worker attempt");
     const task = this.runtime.store.getTask(String(attempt.task_id));
     if (!task) fail("RESEARCH_TASK_NOT_FOUND", "Attempt task is missing");
-    assertProjectReadable(this.runtime.root, undefined, task.campaign_id);
+    // Pending source installation blocks business readers, but cannot block cancellation or owned-process settlement.
+    if (!submissionLifecycle || this.hooks.hasPendingSubmission?.(attemptKey) !== true) assertProjectReadable(this.runtime.root, undefined, task.campaign_id);
     return { attempt, task };
   }
   assertWorkerCapability(attemptKey: string, token: string, operation: "checkpoint" | "tool" | "result" | "heartbeat"): ResearchTask {
@@ -68,7 +72,7 @@ export class AttemptReconciler {
   async requestStop(attemptKey: string, reason: AttemptStopReason): Promise<void> {
     let checkpoint = false, stop = false;
     this.runtime.store.transaction(() => {
-      const { attempt, task } = this.attempt(attemptKey);
+      const { attempt, task } = this.attempt(attemptKey, true);
       if (attempt.state === "terminated") return;
       if (attempt.stop_reason && reason !== "user_cancel" && !(reason === "budget" && attempt.stop_reason !== "user_cancel")) return;
       const now = this.runtime.clock.now(), stamp = new Date(now).toISOString();
@@ -91,13 +95,16 @@ export class AttemptReconciler {
   confirmTermination(attemptKey: string, confirmation: AttemptTermination) {
     if (!confirmation.runtime_terminated || !confirmation.tools_terminated) fail("TERMINATION_UNCONFIRMED", "Worker and every service tool must terminate first");
     return this.runtime.store.transaction(() => {
-      const { attempt, task } = this.attempt(attemptKey);
+      const { attempt, task } = this.attempt(attemptKey, true);
       const reason = attempt.stop_reason as AttemptStopReason | null;
+      const submissionPending = this.hooks.hasPendingSubmission?.(attemptKey) === true;
+      if (submissionPending && !reason) this.hooks.recordSubmissionTermination?.(attemptKey);
       const result = this.scheduler.confirmTermination(attemptKey, { termination_confirmed: true, usage_complete: confirmation.usage_complete });
       this.runtime.store.run("UPDATE attempts SET termination_confirmed=1,fenced_at=COALESCE(fenced_at,?) WHERE attempt_key=?", new Date(this.runtime.clock.now()).toISOString(), attemptKey);
       if (attempt.state === "terminated" || task.generation !== Number(attempt.generation) || ["succeeded", "failed", "cancelled"].includes(task.status)) return result;
       const next: ResearchTask = { ...task, updated_at: new Date(this.runtime.clock.now()).toISOString() };
       if (reason === "user_cancel") { next.status = "cancelled"; delete next.blocked_reason; }
+      else if (submissionPending) { next.status = "blocked"; next.blocked_reason = "submission_pending"; }
       else if (reason === "pause") { next.status = "blocked"; next.blocked_reason = "paused"; }
       else if (reason === "supervisor_invalid") { next.status = "blocked"; next.blocked_reason = "supervisor_invalid_proposal"; }
       else if (reason === "handoff" || reason === "checkpoint_overdue") {
@@ -139,7 +146,7 @@ export class AttemptReconciler {
     }
   }
   async reconcileAttempt(attemptKey: string): Promise<{ health: string; next_action: string }> {
-    const { attempt, task } = this.attempt(attemptKey), now = this.runtime.clock.now();
+    const { attempt, task } = this.attempt(attemptKey, true), now = this.runtime.clock.now();
     if (attempt.state === "terminated") return { health: "terminated", next_action: "usage_reconciliation" };
     if (attempt.fenced_at) {
       // Stop is idempotent. A previous failed callback must not strand a live execution forever.
@@ -183,10 +190,11 @@ export class AttemptReconciler {
     for (const row of this.runtime.store.all("SELECT operation_id FROM trust_commits WHERE phase<>'committed' ORDER BY rowid")) {
       try { finalizeTrustCommit(this.runtime.root, String(row.operation_id)); } catch { blocked.push(String(row.operation_id)); }
     }
+    this.hooks.reconcileSubmissions?.();
     for (const row of this.runtime.store.all("SELECT attempt_key FROM attempts WHERE state<>'terminated'")) {
       const key = String(row.attempt_key);
       try {
-        const { attempt, task } = this.attempt(key);
+        const { attempt, task } = this.attempt(key, true);
         if (!attempt.stop_reason && !["succeeded", "failed", "cancelled"].includes(task.status)) await this.requestStop(key, "crash");
         else {
           this.runtime.store.run("UPDATE attempts SET fenced_at=? WHERE attempt_key=?", new Date(this.runtime.clock.now()).toISOString(), key);
@@ -204,6 +212,7 @@ export class AttemptReconciler {
     this.pollDrained = new Promise(resolve => { this.finishPoll = resolve; });
     const errors: { attempt_key: string; code: string }[] = [];
     try {
+      this.hooks.reconcileSubmissions?.();
       for (const row of this.runtime.store.all("SELECT attempt_key FROM attempts WHERE state<>'terminated'")) {
         const key = String(row.attempt_key);
         try { await this.reconcileAttempt(key); }

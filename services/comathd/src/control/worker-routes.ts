@@ -60,7 +60,9 @@ export function createWorkerGateway(runtime: ProjectRuntime, options: WorkerGate
       const submissionBody = submissionRoute ? await readBody(request) : undefined;
       const replayCommand = submissionBody && typeof submissionBody === "object" && "command_id" in submissionBody && typeof submissionBody.command_id === "string"
         ? submissionBody.command_id : undefined;
-      const principal = authenticateWorker(runtime, request.headers.authorization, checkpointRoute || artifactPut, replayCommand);
+      const formalReplay = url.pathname === "/worker/v1/results" && !!submissionBody && typeof submissionBody === "object" && "submission" in submissionBody
+        && !!submissionBody.submission && typeof submissionBody.submission === "object" && "kind" in submissionBody.submission && submissionBody.submission.kind === "formal_candidate";
+      const principal = authenticateWorker(runtime, request.headers.authorization, checkpointRoute || artifactPut, replayCommand, formalReplay);
       let data: unknown;
       if (get && url.pathname === "/worker/v1/context") data = options.context ? await options.context(principal) : unavailable();
       else if (get && artifactRead) {
@@ -77,7 +79,7 @@ export function createWorkerGateway(runtime: ProjectRuntime, options: WorkerGate
         const raw = submissionRoute ? submissionBody : await readBody(request);
         if (!raw || typeof raw !== "object") throw new ComathError("Expected worker request object", { statusCode: 400 });
         requireWorkerIdentity(principal, raw);
-        authenticateWorker(runtime, request.headers.authorization, checkpointRoute || artifactPut, replayCommand);
+        authenticateWorker(runtime, request.headers.authorization, checkpointRoute || artifactPut, replayCommand, formalReplay);
         if (checkpointRoute) {
           const body = checkpointRequest.parse(raw);
           data = await checkpoints.commitCheckpoint({ ...body, lease_token: request.headers.authorization!.slice(7) });
@@ -113,7 +115,10 @@ export function createWorkerGateway(runtime: ProjectRuntime, options: WorkerGate
           else data = options.proposal ? await options.proposal(principal, body) : unavailable();
         }
       }
-      response.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      const pending = url.pathname === "/worker/v1/results" && data !== null && typeof data === "object"
+        && "schema_version" in data && data.schema_version === "comath.formal_candidate_submission.v1"
+        && "commit_state" in data && data.commit_state === "pending";
+      response.writeHead(pending ? 202 : 200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
       response.end(JSON.stringify({ ok: true, data }));
     } catch (cause) {
       const error = toComathError(cause);

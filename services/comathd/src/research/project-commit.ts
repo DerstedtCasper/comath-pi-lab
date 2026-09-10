@@ -114,6 +114,16 @@ export function stageResearchMutation(root: string, sql: string, params: (string
   if (!/^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql) || /;|\b(trust_commits|commit_target_reservations|commands|id_counters)\b/i.test(sql)) throw new Error("Unsupported staged research mutation");
   context.mutations.push({ sql, params });
 }
+/** Narrow finalize operation for the current formal submission; generic command-table writes stay forbidden. */
+export function stageFormalSubmissionFinalized(root: string, operationId: string): void {
+  const context = contextFor(root);
+  if (!context || context.operation.operation_id !== operationId || !/^formal-submission:[a-f0-9]{64}$/.test(operationId)) {
+    throw new Error("Formal submission finalization requires its own project commit");
+  }
+  const marker = context.runtime.store.get("SELECT principal_id,status FROM commands WHERE command_id=?", operationId);
+  if (marker?.principal_id !== "service:formal-submission" || marker.status !== "prepared") throw new Error("Formal submission marker is missing");
+  context.mutations.push({ sql: "UPDATE commands SET status='committed' WHERE command_id=? AND principal_id='service:formal-submission' AND status='prepared'", params: [operationId] });
+}
 export function stageAuditEvent(root: string, event: AuditEvent): void {
   const context = contextFor(root); if (!context) throw new Error("Audit staging requires a project commit");
   // Match the old JSONL serialization semantics for optional undefined payload fields.

@@ -9,6 +9,7 @@ import { createCheckpointStore } from "./checkpoint-store.js";
 import { assertProjectReadable, resolveProjectCommitPath, withProjectCommit } from "./project-commit.js";
 import { prepareArtifact, commitArtifactReference } from "./research-artifacts.js";
 import type { ProjectRuntime } from "./project-runtime.js";
+import type { FormalCandidateReservation } from "./formal-candidate-dispatch.js";
 import { artifactPointerSchema, type ArtifactPointer, type ResearchTask, type ScopeBinding } from "./research-schemas.js";
 
 const kind = z.enum(["approved_lock", "assumption_ledger", "dependency", "checkpoint", "failure", "sibling", "statement", "definition", "public_lemma", "tool_instructions", "other"]);
@@ -18,6 +19,7 @@ export type ContextFailureRoute = { failure_id: string; sha256: string; route_fi
   retry_conditions: string[]; match: "exact" | "advisory" };
 export type ContextPackPolicy = {
   byte_cap: number; visibility: "task" | "blind";
+  formal_candidate?: FormalCandidateReservation;
   /** Host-selected sources and authorization; never deserialize this policy from worker input. */
   mandatory: readonly ContextSource[]; selected?: readonly ContextSource[]; lazy?: readonly ContextSource[];
   assumptions: readonly string[];
@@ -29,6 +31,7 @@ export type ContextPackPolicy = {
 };
 export type ContextPack = {
   schema_version: "comath.context_pack.v1"; task_id: string; generation: number; scope: ScopeBinding;
+  formal_candidate?: FormalCandidateReservation;
   budget: { unit: "utf8_bytes"; limit: number; used: number; token_count: null; tokenizer_available: false; estimate: true };
   objective: { question: string; acceptance: string[] }; charter?: { goal: string; approach_hints: string[]; constraints: string[]; success_criteria: string[]; sha256: string };
   guidance_authority: "strategy_only_not_assumptions_or_evidence" | "redacted_for_blind";
@@ -106,7 +109,13 @@ export async function buildContextPack(runtime: ProjectRuntime, taskId: string, 
     catch { fail("CONTEXT_SOURCE_NOT_TEXT", "Context source requires a text extraction artifact"); }
   };
   const blind = policy.visibility === "blind";
+  if (policy.formal_candidate && (blind || task.kind !== "formalize" || policy.formal_candidate.task_id !== task.task_id
+    || policy.formal_candidate.generation !== generation || policy.formal_candidate.campaign_id !== task.campaign_id
+    || policy.formal_candidate.proof_authority !== "none" || canonicalJson(policy.formal_candidate.scope) !== canonicalJson(task.scope))) {
+    fail("CONTEXT_FORMAL_CANDIDATE_MISMATCH", "Formal candidate identity must match the current nonblind task generation");
+  }
   const pack: ContextPack = { schema_version: "comath.context_pack.v1", task_id: task.task_id, generation, scope: task.scope,
+    ...(policy.formal_candidate ? { formal_candidate: structuredClone(policy.formal_candidate) } : {}),
     budget: { unit: "utf8_bytes", limit: policy.byte_cap, used: 0, token_count: null, tokenizer_available: false, estimate: true },
     objective: blind ? { question: "Independently reproduce the supplied statement using only the whitelisted prerequisites.", acceptance: ["Report a reproducible argument or explicit obstruction without original proof access"] }
       : { question: task.question, acceptance: [...task.acceptance] },

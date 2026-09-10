@@ -27,6 +27,9 @@ import { createValidationAggregation, type ValidationAggregationOptions } from "
 import { createValidationDriver } from "./validation-driver.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
 import { createFormalizationIntake } from "./formalization-intake.js";
+import { createFormalCandidateDispatch, type FormalCandidateDispatchProfile } from "./formal-candidate-dispatch.js";
+import { createFormalCandidateIntake } from "./formal-candidate-intake.js";
+import { createFormalSubmissionLifecycle } from "./formal-submission-lifecycle.js";
 import { listArtifactRefs } from "../artifacts/store.js";
 
 export type ResearchExecutionConsumer = {
@@ -55,6 +58,7 @@ export type ResearchDaemonOptions = {
   authorizeReaderUrl?: (task: ResearchTask, url: string) => boolean;
   validation?: Omit<ValidationFanoutOptions, "verifyPublishedCandidate">;
   validationAggregation?: Pick<ValidationAggregationOptions, "blindComparison" | "authorizeResolution">;
+  formalCandidateProfile?: FormalCandidateDispatchProfile;
 };
 const defaultDependencies: ProjectRuntimeDependencies = { clock: { now: () => Date.now() }, executor: {},
   migration: { quiesce: async root => verifyLegacyRuntimeQuiescence(root) } };
@@ -90,6 +94,9 @@ export class ResearchDaemon {
   readonly validationAggregation?: ReturnType<typeof createValidationAggregation>;
   readonly validationDriver?: ReturnType<typeof createValidationDriver>;
   readonly intake;
+  readonly formalCandidates;
+  readonly formalCandidateIntake;
+  readonly formalSubmissions;
   recovery: { blocked_operations: string[]; unconfirmed_attempts: string[] } = { blocked_operations: [], unconfirmed_attempts: [] };
   toolRecovery: { terminated: string[]; unconfirmed: string[] } = { terminated: [], unconfirmed: [] };
   private started = false;
@@ -106,7 +113,10 @@ export class ResearchDaemon {
   private resultService?: ReturnType<typeof createResearchResultService>;
   get isReleased(): boolean { return this.released; }
   private constructor(readonly runtime: ProjectRuntime, readonly config: ResearchConfig, private readonly options: ResearchDaemonOptions) {
-    this.contextService = createResearchContextService(runtime, { policyForTask: task => {
+    this.contextService = createResearchContextService(runtime, {
+      prepareFormalCandidate: principal => { this.formalCandidates.ensureCandidateReservationForAttempt(principal); },
+      formalCandidateForTask: task => this.formalCandidates.readTaskCandidateReservation(task.task_id, task.generation),
+      policyForTask: task => {
       const model = config.model_policies[task.model_policy_id], tools = config.tool_policies[task.tool_policy_id];
       if (!model || !tools) fail("RESEARCH_POLICY_UNKNOWN", "Context requires configured model and tool policies");
       const validation = this.validationFanout?.contextPolicyForTask(task);
@@ -160,6 +170,12 @@ export class ResearchDaemon {
       validateRoute: (draft, campaign) => {
       policies.validateRoute?.(draft, campaign); this.failureService?.validateRoute(draft, campaign);
     } });
+    this.formalCandidates = createFormalCandidateDispatch(this.app, { profile: options.formalCandidateProfile });
+    this.formalCandidateIntake = createFormalCandidateIntake(runtime, {
+      authorizeArtifact: options.workerGateway?.authorizeArtifact ?? this.contextService.gatewayOptions.authorizeArtifact,
+      readCandidateReservation: this.formalCandidates.readCandidateReservation
+    });
+    this.formalSubmissions = createFormalSubmissionLifecycle(runtime, { readSubmissionReceipt: this.formalCandidateIntake.readSubmissionReceipt });
     this.scheduler = createPortfolioScheduler(runtime, resourcesWithLegacy(config), {
       validateTask: task => {
         this.app.assertTaskPolicy(task);
@@ -195,6 +211,9 @@ export class ResearchDaemon {
         expectedRuntimeKind: runtimeId => config.runtimes[runtimeId]?.kind ?? fail("RESEARCH_POLICY_UNKNOWN", "Runtime selection is not configured"),
         inspectRecovered: options.inspectRecoveredWorker }) : undefined);
     this.reconciler = createAttemptReconciler(runtime, this.scheduler, {
+      hasPendingSubmission: this.formalSubmissions.hasPendingSubmission,
+      recordSubmissionTermination: this.formalSubmissions.recordNormalTermination,
+      reconcileSubmissions: this.formalSubmissions.resumePendingSubmissions,
       requestCheckpoint: key => (this.execution?.lifecycle ?? unavailable).requestCheckpoint(key),
       stop: (key, reason) => (this.execution?.lifecycle ?? unavailable).stop(key, reason),
       inspect: key => (this.execution?.lifecycle ?? unavailable).inspect(key),
@@ -271,7 +290,15 @@ export class ResearchDaemon {
     if (this.gatewayReady) return this.gatewayReady;
     this.gateway = createWorkerGateway(this.runtime, { ...(this.contextService?.gatewayOptions ?? { authorizeArtifact: () => false }),
       ...(this.failureService ? { failure: this.failureService.recordWorkerFailure } : {}),
-      result: this.resultService?.acceptWorkerResult, proposal: this.resultService?.acceptWorkerProposal,
+      result: async (principal, raw) => {
+        if (raw && typeof raw === "object" && "submission" in raw && raw.submission && typeof raw.submission === "object"
+          && "kind" in raw.submission && raw.submission.kind === "formal_candidate") {
+          const receipt = await this.formalCandidateIntake.ingestFormalCandidateSubmission(principal, raw);
+          this.formalSubmissions.reconcileSubmissions();
+          return receipt;
+        }
+        return this.resultService!.acceptWorkerResult(principal, raw);
+      }, proposal: this.resultService?.acceptWorkerProposal,
       tool: this.toolExecutor?.workerTool, ...this.options.workerGateway });
     this.gatewayReady = this.gateway.listen({ host: this.config.worker_gateway_host, port: this.config.worker_gateway_port });
     return this.gatewayReady;

@@ -3,7 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { researchCheckpointSchema } from "../research/checkpoint-store.js";
-import { researchSubmissionResultSchema } from "../research/research-result-service.js";
+import { workerResultSubmissionSchema } from "../research/research-result-service.js";
 
 export type WorkerMcpConfig = { gateway_url: string; token: string; task_id: string; generation: number };
 export function createWorkerMcp(config: WorkerMcpConfig): McpServer {
@@ -37,8 +37,7 @@ export function createWorkerMcp(config: WorkerMcpConfig): McpServer {
   server.registerTool("research_worker_artifact_put", { description: "Submit artifact bytes for scanning and immutable storage; host paths are never accepted.",
     inputSchema: { ...command, content_base64: z.string().max(900000), kind: z.literal("other").default("other") } }, args => call("/worker/v1/artifacts", { ...args, ...identity }));
   server.registerTool("research_worker_result", { description: "Submit research material or a formal candidate to the service's validating consumer. A breakthrough publishes a candidate while this task continues; submit a separate final progress/failure/statement_draft result when finished. Acceptance is not proof authority.",
-    inputSchema: { ...command, submission: z.discriminatedUnion("kind", [z.strictObject({ kind: z.literal("research_result"), value: researchSubmissionResultSchema }),
-      z.strictObject({ kind: z.literal("formal_candidate"), value: z.record(z.string(), z.json()) })]) } }, args => call("/worker/v1/results", { ...args, ...identity }));
+    inputSchema: { ...command, submission: workerResultSubmissionSchema } }, args => call("/worker/v1/results", { ...args, ...identity }));
   server.registerTool("research_worker_failure", { description: "Submit a structured failed route; infrastructure errors are separate from mathematical failure.", inputSchema: { ...command, payload: z.record(z.string(), z.json()) } },
     args => call("/worker/v1/failures", { ...args, ...identity }));
   server.registerTool("research_worker_propose", { description: "Propose changes to the research graph for service/supervisor review; this does not apply a graph mutation.", inputSchema: { ...command, payload: z.record(z.string(), z.json()) } },

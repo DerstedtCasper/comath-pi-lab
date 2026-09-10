@@ -11,6 +11,7 @@ import { createCheckpointStore, researchCheckpointSchema } from "./checkpoint-st
 import { failureMemorySchema } from "./failure-index.js";
 import { triageResultSchema } from "./supervisor-policy.js";
 import { validationAssessmentShape } from "./validation-contracts.js";
+import { formalCandidateSubmissionSchema } from "./formal-candidate-contracts.js";
 import { createResearchEventStore, notifyResearchEventsCommitted } from "./event-store.js";
 import { assertProjectReadable, resolveProjectCommitPath, stageResearchMutation, withProjectCommit, type ProjectCommitOperation } from "./project-commit.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "./project-runtime.js";
@@ -32,9 +33,14 @@ export const researchSubmissionResultSchema = z.union([
 export const researchResultJsonSchema = z.toJSONSchema(researchSubmissionResultSchema);
 export type ResearchResult = z.infer<typeof researchResultSchema>;
 const identity = { command_id: id, task_id: id, generation: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) };
+export const workerResultSubmissionSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("research_result"), value: researchSubmissionResultSchema }),
+  z.strictObject({ kind: z.literal("formal_candidate"), value: formalCandidateSubmissionSchema })
+]);
+export const workerResultRequestSchema = z.strictObject({ ...identity, submission: workerResultSubmissionSchema });
 const submissionSchema = z.union([
   z.strictObject({ ...identity, payload: z.json() }),
-  z.strictObject({ ...identity, submission: z.strictObject({ kind: z.enum(["research_result", "formal_candidate"]), value: z.json() }) })
+  workerResultRequestSchema
 ]);
 export type ResearchResultReceipt = { status: "accepted" | "rejected"; command_id: string; task_id: string; generation: number; campaign_id: string;
   attempt_key: string; scope_sha256: string; request_sha256: string; result_ref: ArtifactPointer; operation_id: string;
@@ -241,6 +247,7 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
   async function accept(principal: WorkerPrincipal, raw: unknown, isProposal: boolean): Promise<ResearchResultReceipt> {
     const initial = current(principal, true), request = parse(submissionSchema, raw);
     if (request.task_id !== principal.task_id || request.generation !== principal.generation) fail("RESEARCH_RESULT_IDENTITY_MISMATCH");
+    if (!isProposal && initial.kind === "formalize" && initial.specialization?.startsWith("formal_candidate:")) fail("FORMAL_SUBMISSION_REQUIRED");
     if (isProposal && !("payload" in request)) fail("RESEARCH_RESULT_INVALID");
     let payload: unknown = "payload" in request ? request.payload : request.submission, result: ResearchResult | undefined;
     if (!isProposal) {
