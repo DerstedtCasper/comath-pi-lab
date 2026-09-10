@@ -26,10 +26,13 @@ export class PortfolioScheduler {
   private config: ResearchResourceConfig;
   private running = false;
   private closed = false;
+  private admissionsStopped = false;
   private scheduled = false;
   private pumping = false;
   private timer?: ReturnType<typeof setInterval>;
   private unsubscribe: () => void;
+  private readonly dispatchHandlers = new Map<string, (grant: ResearchGrant) => void | Promise<void>>();
+  private readonly legacyValidators = new Map<string, (task: ResearchTask) => void>();
   constructor(readonly runtime: ProjectRuntime, config: ResearchResourceConfig, private readonly hooks: PortfolioSchedulerHooks) {
     validateResourceConfig(config); this.config = structuredClone(config);
     this.budget = createBudgetLedger(runtime); this.resources = createResourceAdmission(runtime, () => this.config);
@@ -38,9 +41,17 @@ export class PortfolioScheduler {
   updateConfig(config: ResearchResourceConfig): void {
     validateResourceConfig(config); this.config = structuredClone(config); this.wake();
   }
+  getResourceConfig(): ResearchResourceConfig { return structuredClone(this.config); }
+  registerDispatchHandler(taskId: string, handler: (grant: ResearchGrant) => void | Promise<void>, validateLegacyTask?: (task: ResearchTask) => void): () => void {
+    if (this.closed || this.dispatchHandlers.has(taskId)) fail("RESEARCH_DISPATCH_HANDLER_CONFLICT", "Task already has an execution handle or scheduler is closed");
+    this.dispatchHandlers.set(taskId, handler);
+    if (validateLegacyTask) this.legacyValidators.set(taskId, validateLegacyTask);
+    return () => { if (this.dispatchHandlers.get(taskId) === handler) { this.dispatchHandlers.delete(taskId); this.legacyValidators.delete(taskId); } };
+  }
   private eligible(task: ResearchTask): boolean {
     const campaign = this.runtime.store.getCampaign(task.campaign_id);
     if (task.status !== "queued" || campaign?.state !== "running" || task.kind === "proof_workflow") return false;
+    if (task.kind === "legacy_run" && !this.dispatchHandlers.has(task.task_id)) return false;
     if (task.retry_after && Date.parse(task.retry_after) > this.runtime.clock.now()) return false;
     return task.depends_on.every(id => this.runtime.store.getTask(id)?.status === "succeeded");
   }
@@ -64,13 +75,16 @@ export class PortfolioScheduler {
   }
   grantNext(taskId?: string): ResearchGrant | null {
     if (this.closed) fail("RESEARCH_SCHEDULER_CLOSED", "Scheduler is closed");
+    if (this.admissionsStopped) return null;
     const candidates = taskId ? [this.runtime.store.getTask(taskId)].filter((task): task is ResearchTask => !!task) : this.candidates();
     for (const candidate of candidates) {
       try {
         const grant = this.runtime.store.transaction(() => {
           const task = this.runtime.store.getTask(candidate.task_id)!;
           if (!this.eligible(task)) return null;
-          assertProjectReadable(this.runtime.root, undefined, task.campaign_id); this.hooks.validateTask(task);
+          assertProjectReadable(this.runtime.root, undefined, task.campaign_id);
+          const legacyValidator = task.kind === "legacy_run" && task.campaign_id.startsWith("LEGACY-") ? this.legacyValidators.get(task.task_id) : undefined;
+          (legacyValidator ?? this.hooks.validateTask)(task);
           const model = this.config.model_policies[task.model_policy_id];
           if (!model) fail("RESEARCH_POLICY_UNKNOWN", "No model runtime policy");
           if (task.budget.token_enforcement === "exact_output_cap" && !this.hooks.capabilities(model.runtime_id).exact_output_cap) fail("CAPABILITY_UNSUPPORTED", "Runtime cannot enforce exact output cap");
@@ -78,7 +92,7 @@ export class PortfolioScheduler {
           const generation = task.generation + 1, attemptKey = `${task.task_id}:g${generation}`;
           const token = randomBytes(32).toString("base64url");
           const now = this.runtime.clock.now(), expires = new Date(now + (this.config.lease_ttl_ms ?? 120000)).toISOString();
-          const runId = this.runtime.store.allocateId("ARUN");
+          const runId = task.kind === "legacy_run" && task.legacy_run_id ? task.legacy_run_id : this.runtime.store.allocateId("ARUN");
           const leased: ResearchTask = { ...task, status: "leased", generation, updated_at: new Date(now).toISOString() };
           this.runtime.store.putTask(leased);
           this.runtime.store.run("INSERT INTO attempts(task_id,generation,attempt_key,run_id,state,worker_id,lease_token_hash,expires_at,last_heartbeat_at,runtime_kind,start_deadline_at) VALUES (?,?,?,?,'leased',?,?,?,?,?,?)",
@@ -156,6 +170,7 @@ export class PortfolioScheduler {
   }
   start(): void {
     if (this.closed) fail("RESEARCH_SCHEDULER_CLOSED", "Scheduler is closed");
+    if (this.admissionsStopped) fail("RESEARCH_ADMISSIONS_STOPPED", "Scheduler is draining");
     if (this.running) return; this.running = true;
     if (this.hooks.auto_poll !== false) { this.timer = setInterval(() => this.wake(), 1000); this.timer.unref(); }
     this.wake();
@@ -172,16 +187,27 @@ export class PortfolioScheduler {
         const grant = this.grantNext(); if (!grant) break;
         const task = this.runtime.store.getTask(grant.task_id)!;
         try {
-          const pending = this.hooks.onDispatch?.(grant);
+          const pending = (this.dispatchHandlers.get(grant.task_id) ?? this.hooks.onDispatch)?.(grant);
           if (pending) void pending.catch(error => this.recordCallbackFailure(task, "DispatchCallbackFailed", error));
         } catch (error) { this.recordCallbackFailure(task, "DispatchCallbackFailed", error); }
       }
     } finally { this.pumping = false; }
   }
+  /** Permanently stop grants while keeping usage and termination settlement available. */
+  stopGrants(): void {
+    this.admissionsStopped = true; this.running = false;
+    if (this.timer) { clearInterval(this.timer); this.timer = undefined; }
+  }
   close(): void {
+    this.stopGrants();
     this.running = false; this.closed = true; if (this.timer) clearInterval(this.timer);
     this.unsubscribe(); this.events.close(); if (liveSchedulers.get(this.runtime) === this) liveSchedulers.delete(this.runtime);
+    this.dispatchHandlers.clear();
+    this.legacyValidators.clear();
   }
+}
+export function getCurrentResearchResourceConfig(runtime: ProjectRuntime): ResearchResourceConfig | undefined {
+  return liveSchedulers.get(runtime)?.getResourceConfig();
 }
 export function createPortfolioScheduler(runtime: ProjectRuntime, config: ResearchResourceConfig, hooks: PortfolioSchedulerHooks): PortfolioScheduler {
   const existing = liveSchedulers.get(runtime);

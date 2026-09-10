@@ -4,7 +4,7 @@ import { getAcquiredProjectRuntime, type ProjectRuntime } from "./project-runtim
 import { researchPoolSchema, taskBudgetSchema, usageSchema, type ResearchTask, type Usage } from "./research-schemas.js";
 
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const limitsSchema = z.strictObject({ output_tokens: count, tool_calls: count, wall_ms: count, cost_microusd: count.optional() });
+const limitsSchema = z.strictObject({ output_tokens: count, tool_calls: count, wall_ms: count, cost_microusd: count.optional(), enforcement: z.literal("legacy_wall_only").optional() });
 const amountsSchema = z.strictObject({ output_tokens: count, tool_calls: count, wall_ms: count, cost_microusd: count });
 const chargesSchema = amountsSchema.extend({ cost_microusd: count.nullable() });
 const poolNames = ["exploration", "deepening", "validation", "formalization"] as const;
@@ -42,6 +42,13 @@ const metadataSchema = z.strictObject({ version: z.literal(1), task_id: z.string
 type Metadata = z.infer<typeof metadataSchema>;
 type Reservation = { attemptKey: string; remaining: BudgetAmounts; metadata: Metadata; state: BudgetReservationView["state"]; epoch: number };
 type Account = { limits: BudgetLimits; charged: z.infer<typeof chargesSchema>; reserved: BudgetAmounts };
+function effectiveLimit(limits: BudgetLimits, dimension: Dimension): number | undefined {
+  if (limits.enforcement === "legacy_wall_only" && (dimension === "output_tokens" || dimension === "tool_calls" && limits.tool_calls === 0)) return undefined;
+  return limits[dimension];
+}
+function checkAccountMode(campaignId: string, limits: BudgetLimits): void {
+  if (limits.enforcement && !campaignId.startsWith("LEGACY-")) throw failure("BUDGET_LEGACY_SCOPE_REQUIRED", "Uncapped legacy dimensions are restricted to the internal compatibility campaign");
+}
 const zeroAmounts = (): BudgetAmounts => ({ output_tokens: 0, tool_calls: 0, wall_ms: 0, cost_microusd: 0 });
 const zeroUsage = (): Usage => ({ input_tokens: 0, cached_input_tokens: 0, output_tokens: 0, reasoning_output_tokens: 0, tool_calls: 0, wall_ms: 0, cost_microusd: 0 });
 const unknownUsage = (): Usage => ({ input_tokens: null, cached_input_tokens: null, output_tokens: null, reasoning_output_tokens: null, tool_calls: null, wall_ms: 0, cost_microusd: null });
@@ -97,7 +104,7 @@ export function createBudgetLedger(runtime: ProjectRuntime): BudgetLedger {
     const overrun = { ...zeroAmounts() } as z.infer<typeof chargesSchema>;
     const actualExcess = { ...zeroAmounts() } as z.infer<typeof chargesSchema>;
     for (const dimension of dimensions) {
-      const cap = value.limits[dimension];
+      const cap = effectiveLimit(value.limits, dimension);
       if (cap === undefined) { available[dimension] = null as never; overrun[dimension] = null as never; actualExcess[dimension] = null as never; continue; }
       const charged = value.charged[dimension] ?? 0, committed = add(charged, value.reserved[dimension]);
       available[dimension] = Math.max(0, cap - committed); overrun[dimension] = Math.max(0, committed - cap); actualExcess[dimension] = Math.max(0, charged - cap);
@@ -113,12 +120,13 @@ export function createBudgetLedger(runtime: ProjectRuntime): BudgetLedger {
   }
   function assertAffordable(value: Account, requested: BudgetAmounts, scope: string): void {
     for (const dimension of dimensions) {
-      const cap = value.limits[dimension];
+      const cap = effectiveLimit(value.limits, dimension);
       if (cap !== undefined && add(add(value.charged[dimension] ?? 0, value.reserved[dimension]), requested[dimension]) > cap) throw failure("RESEARCH_BUDGET_EXHAUSTED", `${scope} budget exhausted for ${dimension}`);
     }
   }
   function configure(campaignId: string, limits: BudgetLimits, pools: PoolBudgetLimits): BudgetAccountView {
     assertOwner(); const total = configured(limitsSchema, limits), allocations = configured(poolLimitsSchema, pools);
+    for (const limit of [total, ...Object.values(allocations)]) checkAccountMode(campaignId, limit);
     return store.transaction(() => {
       if (!store.getCampaign(campaignId)) throw failure("BUDGET_CAMPAIGN_NOT_FOUND", "Cannot configure a missing campaign");
       const existing = store.all("SELECT pool FROM budget_accounts WHERE campaign_id=?", campaignId);
@@ -140,6 +148,7 @@ export function createBudgetLedger(runtime: ProjectRuntime): BudgetLedger {
       || !["leased", "running"].includes(canonical.status)) throw failure("BUDGET_ATTEMPT_MISMATCH", "Reservation must bind the current task generation");
     const budget = taskBudgetSchema.parse(canonical.budget);
     const campaignAccount = account(canonical.campaign_id, "campaign"), poolAccount = account(canonical.campaign_id, canonical.pool);
+    if ((campaignAccount.limits.enforcement || poolAccount.limits.enforcement) && (canonical.kind !== "legacy_run" || budget.token_enforcement !== "wall_only_legacy")) throw failure("BUDGET_LEGACY_SCOPE_REQUIRED", "Research tasks cannot use an internal legacy account");
     const costRequired = budget.cost_microusd !== undefined || campaignAccount.limits.cost_microusd !== undefined || poolAccount.limits.cost_microusd !== undefined;
     if (costRequired && budget.cost_microusd === undefined) throw failure("BUDGET_COST_UNOBSERVABLE", "A finite cost cap requires an explicit task cost reservation");
     const requested: BudgetAmounts = { output_tokens: budget.token_enforcement === "wall_only_legacy" ? 0 : budget.output_tokens, tool_calls: budget.tool_calls, wall_ms: budget.wall_ms, cost_microusd: budget.cost_microusd ?? 0 };
@@ -150,7 +159,8 @@ export function createBudgetLedger(runtime: ProjectRuntime): BudgetLedger {
       return view(found);
     }
     assertAffordable(campaignAccount, requested, "campaign"); assertAffordable(poolAccount, requested, canonical.pool);
-    const required: Dimension[] = ["tool_calls", "wall_ms"];
+    const required: Dimension[] = ["wall_ms"];
+    if (budget.token_enforcement !== "wall_only_legacy" || budget.tool_calls > 0) required.push("tool_calls");
     if (budget.token_enforcement !== "wall_only_legacy") required.push("output_tokens");
     if (costRequired) required.push("cost_microusd");
     const metadata: Metadata = { version: 1, task_id: canonical.task_id, campaign_id: canonical.campaign_id, pool: canonical.pool,
@@ -239,7 +249,10 @@ export function createBudgetLedger(runtime: ProjectRuntime): BudgetLedger {
     assertOwner(); return store.transaction(() => { const value = reservation(attemptKey); value.state = "unreconciled"; value.metadata.manual_unreconciled = true; saveReservation(value); return view(value); });
   }
   function checkedLimits(value: Account, limits: BudgetLimits): Account {
-    for (const dimension of dimensions) if (limits[dimension] !== undefined && limits[dimension]! < add(value.charged[dimension] ?? 0, value.reserved[dimension])) throw failure("RESEARCH_BUDGET_COMMITTED", `Cannot reduce ${dimension} below charged plus reserved`);
+    for (const dimension of dimensions) {
+      const limit = effectiveLimit(limits, dimension);
+      if (limit !== undefined && limit < add(value.charged[dimension] ?? 0, value.reserved[dimension])) throw failure("RESEARCH_BUDGET_COMMITTED", `Cannot reduce ${dimension} below charged plus reserved`);
+    }
     return { ...value, limits };
   }
   function assertNewCostCap(campaignId: string, pool: BudgetPool | "campaign", previous: Account, next: BudgetLimits): void {
@@ -255,6 +268,7 @@ export function createBudgetLedger(runtime: ProjectRuntime): BudgetLedger {
   }
   function updateLimits(campaignId: string, limits: BudgetLimits, pools?: PoolBudgetLimits): BudgetAccountView {
     assertOwner(); const total = configured(limitsSchema, limits), allocations = pools === undefined ? undefined : configured(poolLimitsSchema, pools);
+    for (const limit of [total, ...Object.values(allocations ?? {})]) checkAccountMode(campaignId, limit);
     return store.transaction(() => {
       const previous = account(campaignId, "campaign"); assertNewCostCap(campaignId, "campaign", previous, total);
       const next = checkedLimits(previous, total);

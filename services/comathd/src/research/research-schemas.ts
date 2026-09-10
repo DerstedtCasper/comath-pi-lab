@@ -35,6 +35,7 @@ export const researchTaskDraftSchema = z.strictObject(draftFields).refine(validC
 export const researchTaskSchema = z.strictObject({ ...draftFields, campaign_id: id, status: taskStatusSchema,
   generation: count, fault_retry_count: count, blocked_reason: text.optional(), retry_after: z.iso.datetime().optional(),
   checkpoint_head: id.optional(), accepted_result_id: id.optional(), created_at: z.iso.datetime(), updated_at: z.iso.datetime()
+  , legacy_run_id: z.string().regex(/^ARUN-\d{4,}$/).optional()
 }).refine(validCharterScope, "Task kind requires formal scope");
 export const researchControlCampaignSchema = z.strictObject({ campaign_id: id, project_id: id, revision: count,
   state: z.enum(["preparing", "running", "pausing", "paused", "blocked", "completed", "cancelled"]),
