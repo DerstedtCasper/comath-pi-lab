@@ -5,6 +5,7 @@ import { canonicalJson } from "../verification/runner-contracts.js";
 import { createResearchEventStore } from "./event-store.js";
 import { assertProjectReadable, finalizeTrustCommit } from "./project-commit.js";
 import type { ProjectRuntime } from "./project-runtime.js";
+import { createBudgetLedger, type BudgetLimits, type BudgetPool, type PoolBudgetLimits } from "./budget-ledger.js";
 import { validateResearchDagPatch, validateResearchTaskGraph } from "./research-dag.js";
 import { artifactPointerSchema, parseResearchInput, researchControlCampaignSchema, researchDagPatchSchema,
   researchTaskSchema, sha256Schema, type ResearchControlCampaign, type ResearchDagPatch,
@@ -82,6 +83,26 @@ export class ResearchOrchestrator {
     if (draft.budget.token_enforcement === "exact_output_cap" && !this.policies.exact_output_cap_policy_ids?.includes(draft.model_policy_id)) {
       fail("CAPABILITY_UNSUPPORTED", "This model policy cannot enforce an exact output cap", 422);
     }
+  }
+  assertTaskPolicy(task: ResearchTask): void {
+    this.validateDraft(task, this.requireCampaign(task.campaign_id), task.kind === "legacy_run");
+  }
+  updateBudget(principal: ResearchPrincipal, request: { command_id: string; campaign_id: string; expected_revision: number;
+    new_limits: BudgetLimits; pools?: PoolBudgetLimits; pool_transfers?: { from: BudgetPool; to: BudgetPool; amounts: Partial<BudgetLimits> }[]; rationale: string }) {
+    if (principal.kind !== "operator" && principal.kind !== "internal") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only the operator can change budget limits", 403);
+    if (!request.command_id || !request.rationale?.trim() || (request.pool_transfers?.length ?? 0) > 100) fail("RESEARCH_BUDGET_REQUEST_INVALID", "Budget change needs command ID and rationale", 400);
+    return this.command(principal, request.command_id, { kind: "budget_update", request }, () => {
+      const campaign = this.requireCampaign(request.campaign_id);
+      if (campaign.revision !== request.expected_revision) fail("RESEARCH_REVISION_CONFLICT", "Research revision changed");
+      const ledger = createBudgetLedger(this.runtime);
+      ledger.updateLimits(campaign.campaign_id, request.new_limits, request.pools);
+      for (const transfer of request.pool_transfers ?? []) ledger.transferPool(campaign.campaign_id, transfer.from, transfer.to, transfer.amounts);
+      const revision = campaign.revision + 1;
+      const event = this.events.appendEvent({ campaign_id: campaign.campaign_id, type: "BudgetUpdated", actor: principal.id,
+        payload: { revision, rationale: request.rationale, limits: request.new_limits, transfers: request.pool_transfers ?? [] } });
+      this.runtime.store.putCampaign({ ...campaign, revision, snapshot_seq: event.seq });
+      return { revision, budget: ledger.read(campaign.campaign_id), snapshot_seq: event.seq };
+    });
   }
   private persistGraph(tasks: ResearchTask[]): void {
     // Insert all task IDs before FK-constrained edges, including mutually referring new IDs.

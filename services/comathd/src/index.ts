@@ -21,6 +21,12 @@ export { ResearchOrchestrator, createResearchOrchestrator, applyResearchCommand 
 export type { ResearchPrincipal, ResearchTaskPolicies, ResearchCommand } from "./research/research-orchestrator.js";
 export { validateResearchDagPatch, validateResearchTaskGraph } from "./research/research-dag.js";
 export { createResearchEventStore } from "./research/event-store.js";
+export { createBudgetLedger } from "./research/budget-ledger.js";
+export type { BudgetLedger, BudgetLimits, BudgetAccountView, BudgetReservationView, BudgetDebitResult } from "./research/budget-ledger.js";
+export { PortfolioScheduler, createPortfolioScheduler } from "./research/portfolio-scheduler.js";
+export type { ResearchGrant, PortfolioSchedulerHooks } from "./research/portfolio-scheduler.js";
+export { createResourceAdmission, validateResourceConfig } from "./research/resource-admission.js";
+export type { ResearchResourceConfig, ToolPermitRequest } from "./research/resource-admission.js";
 export { withProjectCommit, withTrustedWriter, prepareTrustCommit, finalizeTrustCommit, reconcileTrustCommits,
   assertProjectReadable, readCommittedFile, existsCommittedFile, writeCommittedFile, listCommittedDirectory,
   allocateProjectId, projectCommitTime, hasProjectCommit, stageResearchMutation, drainResearchAuditOutbox, getResearchAuditProjectionStatus } from "./research/project-commit.js";
