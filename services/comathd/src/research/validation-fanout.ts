@@ -43,6 +43,8 @@ export type ValidationFanoutOptions = {
   verifyPublishedCandidate: ResearchResultService["verifyPublishedCandidate"];
   resolveToolPolicy: (toolPolicyId: string) => ValidationToolPolicy | undefined;
   authorizeArtifact: (task: Readonly<ResearchTask>, ref: Readonly<ArtifactPointer>) => boolean;
+  /** Synchronous host classification of new blind prerequisites, inside the retry transaction. */
+  prepareReplacementSources?: (previous: ResearchTask, next: ResearchTask, newEvidenceRefs: ArtifactPointer[]) => ContextSource[];
   /** Host approval producer only. No worker booleans or reconstructed lemma locks. */
   resolveApprovedRoot?: (source: Readonly<ResearchTask>, candidate: Readonly<ResearchResult>) => ValidationApprovedRoot | null | Promise<ValidationApprovedRoot | null>;
   /** Produces/chooses already registered CAS material; fanout never guesses a brief from a ref. */
@@ -54,6 +56,11 @@ const bytesHash = (bytes: Buffer | string) => createHash("sha256").update(bytes)
 const key = (ref: Readonly<ArtifactPointer>) => `${ref.artifact_id}:${ref.sha256}`;
 const commandId = (candidate_id: string, policy_version: string) => `validation-fanout:${hash({ candidate_id, policy_version })}`;
 const contextId = (taskId: string) => `validation-context:${taskId}`;
+const replacementId = (taskId: string) => `validation-replacement:${taskId}`;
+type ReplacementReceipt = { schema_version: "comath.validation_replacement.v1"; candidate_id: string; policy_version: string;
+  role_slot: ValidationRoleSlot; previous_task_id: string; next_task_id: string; previous_context_sha256: string; next_context_sha256: string;
+  new_sources: ContextSource[]; proof_authority: "none" };
+const refSet = (refs: ArtifactPointer[]) => canonicalJson([...new Set(refs.map(ref => key(artifactPointerSchema.parse(ref))))].sort());
 const blind = (slot: ValidationRoleSlot) => slot === "reproduce_a" || slot === "reproduce_b";
 function fail(code: string): never { throw new ComathError(code, { code, statusCode: 409 }); }
 
@@ -195,6 +202,97 @@ export function createValidationFanout(app: ResearchOrchestrator, options: Valid
       return receipt;
     });
   }
+  function assertTaskContext(task: ResearchTask, context: StoredContext, role: ValidationRoleSlot): void {
+    const profile = context.profile;
+    if (canonicalJson(task.scope) !== canonicalJson(context.scope) || task.specialization !== `validation:${role}`
+      || task.model_policy_id !== profile.model_policy_id || task.tool_policy_id !== profile.tool_policy_id || task.role_template !== profile.role_template
+      || canonicalJson(task.budget) !== canonicalJson(profile.budget) || context.include_parent_checkpoint !== false
+      || context.visibility === "blind" && (!context.new_thread_required || !context.tool_policy.new_thread)) fail("VALIDATION_REPLACEMENT_PROFILE_MISMATCH");
+    if (refSet(task.input_refs) !== refSet([context.statement_brief, ...context.mandatory, ...context.selected, ...context.lazy].map(value => value.ref))) fail("VALIDATION_REPLACEMENT_INPUT_MISMATCH");
+  }
+  function replacementContext(previous: StoredContext, taskId: string, sources: ContextSource[]): StoredContext {
+    return { ...previous, task_id: taskId, selected: [...previous.selected, ...sources] };
+  }
+  function lineage(taskId: string, stored: StoredContext): { receipt: ValidationFanoutReceipt; role_slot: ValidationRoleSlot } {
+    const receipt = readValidationFanout(stored.candidate_id, stored.policy_version);
+    if (!receipt) fail("VALIDATION_CONTEXT_CORRUPT");
+    const task = app.getTask(taskId), role = task.specialization?.slice("validation:".length) as ValidationRoleSlot;
+    const slot = store.get("SELECT * FROM validation_tasks WHERE candidate_id=? AND policy_version=? AND role_slot=?", stored.candidate_id, stored.policy_version, role);
+    if (!slot) fail("VALIDATION_REPLACEMENT_SLOT_INVALID");
+    const history = z.array(id).parse(JSON.parse(String(slot.prior_task_ids_json))), ids = [...history, String(slot.current_task_id)];
+    let index = ids.indexOf(taskId), current = stored;
+    if (index < 0 || new Set(ids).size !== ids.length || ids[0] !== receipt.slots.find(value => value.role_slot === role)?.task_id) fail("VALIDATION_REPLACEMENT_SLOT_INVALID");
+    for (;;) {
+      const actual = app.getTask(ids[index]!);
+      if (actual.campaign_id !== receipt.campaign_id) fail("VALIDATION_CONTEXT_CORRUPT");
+      assertTaskContext(actual, current, role);
+      if (index === 0) {
+        if (!receipt.slots.some(value => value.role_slot === role && value.task_id === current.task_id && value.context_sha256 === hash(current))) fail("VALIDATION_CONTEXT_CORRUPT");
+        break;
+      }
+      const row = store.get("SELECT * FROM commands WHERE command_id=?", replacementId(actual.task_id));
+      if (!row) fail("VALIDATION_REPLACEMENT_CONTEXT_UNAVAILABLE");
+      const provenance = JSON.parse(String(row.response_json)) as ReplacementReceipt;
+      const previous = loadContext(ids[index - 1]!);
+      if (!previous || row.principal_id !== "service:validation-replacement" || row.status !== "committed" || row.request_sha256 !== hash(provenance)
+        || provenance.schema_version !== "comath.validation_replacement.v1" || provenance.proof_authority !== "none"
+        || provenance.candidate_id !== receipt.candidate_id || provenance.policy_version !== receipt.policy_version || provenance.role_slot !== role
+        || provenance.previous_task_id !== previous.task_id || provenance.next_task_id !== actual.task_id
+        || provenance.previous_context_sha256 !== hash(previous) || provenance.next_context_sha256 !== hash(current)
+        || canonicalJson(replacementContext(previous, actual.task_id, provenance.new_sources)) !== canonicalJson(current)
+        || refSet(actual.input_refs) !== refSet([...app.getTask(previous.task_id).input_refs, ...provenance.new_sources.map(value => value.ref)])) fail("VALIDATION_REPLACEMENT_RECEIPT_CORRUPT");
+      if (actual.parent_task_id !== previous.task_id || actual.depends_on.includes(previous.task_id) || actual.depends_on.includes(receipt.source_task_id)) fail("VALIDATION_REPLACEMENT_RECEIPT_CORRUPT");
+      current = previous; index--;
+    }
+    return { receipt, role_slot: role };
+  }
+  function recordReplacementContext(previous: ResearchTask, next: ResearchTask, newEvidenceRefs: ArtifactPointer[]): void {
+    owner();
+    if (!store.inTransaction) fail("VALIDATION_REPLACEMENT_TRANSACTION_REQUIRED");
+    if (canonicalJson(app.getTask(previous.task_id)) !== canonicalJson(previous) || canonicalJson(app.getTask(next.task_id)) !== canonicalJson(next)
+      || previous.task_id === next.task_id) fail("VALIDATION_REPLACEMENT_TASK_INVALID");
+    const stored = loadContext(previous.task_id); if (!stored) fail("VALIDATION_CONTEXT_MISSING");
+    const { receipt, role_slot } = lineage(previous.task_id, stored);
+    const slot = store.get("SELECT * FROM validation_tasks WHERE candidate_id=? AND policy_version=? AND role_slot=?", stored.candidate_id, stored.policy_version, role_slot)!;
+    const history = z.array(id).parse(JSON.parse(String(slot.prior_task_ids_json)));
+    if (slot.current_task_id !== next.task_id || history.at(-1) !== previous.task_id) fail("VALIDATION_REPLACEMENT_SLOT_INVALID");
+    assertTaskContext(next, replacementContext(stored, next.task_id, newEvidenceRefs.map(ref => ({ ref, kind: "other", source: "pending_validation" }))), role_slot);
+    for (const field of ["campaign_id", "scope", "kind", "specialization", "model_policy_id", "tool_policy_id", "role_template", "budget", "depends_on", "method_family", "problem_slice", "coupling_label"] as const) {
+      if (canonicalJson(previous[field] ?? null) !== canonicalJson(next[field] ?? null)) fail("VALIDATION_REPLACEMENT_PROFILE_MISMATCH");
+    }
+    if (next.parent_task_id !== previous.task_id || next.depends_on.includes(receipt.source_task_id) || next.depends_on.includes(previous.task_id)
+      || refSet(next.input_refs) !== refSet([...previous.input_refs, ...newEvidenceRefs])) fail("VALIDATION_REPLACEMENT_INPUT_MISMATCH");
+    let sources: ContextSource[];
+    const existing = loadContext(next.task_id);
+    if (existing) {
+      lineage(next.task_id, existing);
+      const row = store.get("SELECT response_json FROM commands WHERE command_id=?", replacementId(next.task_id))!;
+      const recorded = JSON.parse(String(row.response_json)) as ReplacementReceipt;
+      if (refSet(recorded.new_sources.map(value => value.ref)) !== refSet(newEvidenceRefs)) fail("VALIDATION_REPLACEMENT_CONFLICT");
+      return;
+    }
+    if (stored.visibility === "blind" && newEvidenceRefs.length) {
+      if (!options.prepareReplacementSources) fail("VALIDATION_REPLACEMENT_PRODUCER_UNAVAILABLE");
+      sources = z.array(contextSourceSchema).max(100).parse(options.prepareReplacementSources(previous, next, newEvidenceRefs));
+      if (sources.length !== newEvidenceRefs.length || new Set(sources.map(value => key(value.ref))).size !== sources.length
+        || refSet(sources.map(value => value.ref)) !== refSet(newEvidenceRefs)) fail("VALIDATION_REPLACEMENT_SOURCE_MISMATCH");
+      const published = publication({ candidate_id: receipt.candidate_id, policy_version: receipt.policy_version, source_event_seq: receipt.source_event_seq });
+      const protectedHashes = new Set([receipt.candidate_ref.sha256, receipt.root_material.approved_lock.ref.sha256, receipt.root_material.assumption_ledger.ref.sha256,
+        ...published.candidate.claims.flatMap(claim => claim.artifact_refs.map(ref => ref.sha256))]);
+      for (const row of store.all("SELECT payload_json FROM events WHERE campaign_id=? AND type='ResearchResultAccepted'", next.campaign_id)) {
+        const value = JSON.parse(String(row.payload_json)) as { result_ref?: ArtifactPointer };
+        if (value.result_ref) protectedHashes.add(value.result_ref.sha256);
+      }
+      for (const value of sources) if (!["definition", "public_lemma", "tool_instructions"].includes(value.kind) || protectedHashes.has(value.ref.sha256)) fail("VALIDATION_BLIND_SOURCE_DENIED");
+    } else sources = newEvidenceRefs.map(ref => ({ ref, kind: "other", source: "replacement_evidence" }));
+    sources = sources.map(value => material(next, value));
+    const context = replacementContext(stored, next.task_id, sources);
+    const provenance: ReplacementReceipt = { schema_version: "comath.validation_replacement.v1", candidate_id: stored.candidate_id, policy_version: stored.policy_version,
+      role_slot, previous_task_id: previous.task_id, next_task_id: next.task_id, previous_context_sha256: hash(stored), next_context_sha256: hash(context), new_sources: sources, proof_authority: "none" };
+    store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'service:validation-context',?,?,'committed')", contextId(next.task_id), hash(context), canonicalJson(context));
+    store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'service:validation-replacement',?,?,'committed')", replacementId(next.task_id), hash(provenance), canonicalJson(provenance));
+    if (stored.policy_version === options.policy_version) store.run("UPDATE candidates SET validation_state='waiting' WHERE candidate_id=?", stored.candidate_id);
+  }
   function contextPolicyForTask(task: ResearchTask): (ContextPackPolicy & { include_parent_checkpoint: false }) | undefined {
     owner(); const stored = loadContext(task.task_id); if (!stored) {
       if (task.specialization?.startsWith("validation:")) {
@@ -206,8 +304,7 @@ export function createValidationFanout(app: ResearchOrchestrator, options: Valid
     const actual = app.getTask(task.task_id);
     if (actual.generation !== task.generation || actual.campaign_id !== task.campaign_id || canonicalJson(actual.scope) !== canonicalJson(stored.scope)
       || canonicalJson(task.scope) !== canonicalJson(stored.scope) || task.tool_policy_id !== stored.profile.tool_policy_id) fail("VALIDATION_CONTEXT_SCOPE_MISMATCH");
-    const receipt = readValidationFanout(stored.candidate_id, stored.policy_version);
-    if (!receipt || !receipt.slots.some(slot => slot.task_id === task.task_id && slot.context_sha256 === hash(stored))) fail("VALIDATION_CONTEXT_CORRUPT");
+    lineage(task.task_id, stored);
     const currentPolicy = toolPolicySchema.safeParse(options.resolveToolPolicy(task.tool_policy_id));
     if (!currentPolicy.success || canonicalJson(currentPolicy.data) !== canonicalJson(stored.tool_policy)) fail("VALIDATION_TOOL_POLICY_CHANGED");
     const refs = new Set([stored.statement_brief, ...stored.mandatory, ...stored.selected, ...stored.lazy].map(source => key(source.ref)));
@@ -217,5 +314,5 @@ export function createValidationFanout(app: ResearchOrchestrator, options: Valid
       authorizeArtifact: (current, ref) => current.task_id === task.task_id && current.generation === task.generation
         && canonicalJson(current.scope) === canonicalJson(stored.scope) && refs.has(key(ref)) && options.authorizeArtifact(current, ref) === true };
   }
-  return { requestValidationFanout, readValidationFanout, contextPolicyForTask };
+  return { requestValidationFanout, readValidationFanout, contextPolicyForTask, recordReplacementContext };
 }

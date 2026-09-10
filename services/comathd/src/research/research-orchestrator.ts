@@ -9,7 +9,7 @@ import { createBudgetLedger, type BudgetLimits, type BudgetPool, type PoolBudget
 import { validateResearchDagPatch, validateResearchTaskGraph } from "./research-dag.js";
 import { artifactPointerSchema, parseResearchInput, researchControlCampaignSchema, researchDagPatchSchema,
   researchTaskSchema, sha256Schema, type ResearchControlCampaign, type ResearchDagPatch,
-  type ResearchTask, type ResearchTaskDraft, type ScopeBinding } from "./research-schemas.js";
+  type ResearchTask, type ResearchTaskDraft, type ScopeBinding, type ArtifactPointer } from "./research-schemas.js";
 
 export type ResearchPrincipal = { kind: "operator" | "internal"; id: string }
   | { kind: "supervisor"; id: string; campaign_id: string }
@@ -20,6 +20,9 @@ export type ResearchTaskPolicies = {
   /** Service-owned approval lookup; model-provided booleans never reach this callback. */
   validateFormalScope?: (scope: Extract<ScopeBinding, { kind: "formal" }>, campaign: ResearchControlCampaign) => boolean;
   validateRoute?: (draft: ResearchTaskDraft, campaign: ResearchControlCampaign) => void;
+  validateValidationRetry?: (previous: ResearchTask, newEvidenceRefs: ArtifactPointer[]) => void;
+  /** Synchronous, inside the same transaction after slot replacement. Any failure rolls back the retry. */
+  recordValidationRetry?: (previous: ResearchTask, next: ResearchTask, newEvidenceRefs: ArtifactPointer[]) => void;
 };
 const id = z.string().min(1).max(160);
 const retrySchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(),
@@ -169,7 +172,14 @@ export class ResearchOrchestrator {
       if (campaign.state === "completed" || campaign.state === "cancelled") fail("RESEARCH_CAMPAIGN_TERMINAL", "Terminal campaign cannot accept a retry");
       if (campaign.revision !== input.expected_revision) fail("RESEARCH_REVISION_CONFLICT", "Research revision changed");
       const previous = this.getTask(input.task_id);
-      if (previous.campaign_id !== campaign.campaign_id || !["failed", "cancelled"].includes(previous.status)) fail("RESEARCH_RETRY_STATE_CONFLICT", "Only a failed/cancelled task in this campaign can be retried");
+      const validationSlot = this.runtime.store.get("SELECT current_task_id FROM validation_tasks WHERE current_task_id=?", previous.task_id);
+      if (previous.campaign_id !== campaign.campaign_id || !["failed", "cancelled", ...(validationSlot ? ["succeeded"] : [])].includes(previous.status)) fail("RESEARCH_RETRY_STATE_CONFLICT", "Only a failed/cancelled task or verified completed validation can be retried");
+      if (validationSlot && !this.policies.recordValidationRetry) fail("VALIDATION_REPLACEMENT_CONTEXT_UNAVAILABLE", "A validation successor requires atomic host context materialization");
+      if (previous.status === "succeeded") {
+        if (!input.new_evidence_refs.length) fail("RESEARCH_RETRY_EVIDENCE_REQUIRED", "Completed validation needs new evidence");
+        if (!this.policies.validateValidationRetry) fail("VALIDATION_RETRY_CONSUMER_UNAVAILABLE", "Completed validation requires a verified result consumer");
+        this.policies.validateValidationRetry(previous, input.new_evidence_refs);
+      }
       if (new Set(input.rebind_dependents).size !== input.rebind_dependents.length) fail("RESEARCH_REBIND_DUPLICATE", "Repeated dependent in retry request");
       const taskId = `TASK-${randomUUID()}`;
       const stamp = new Date(this.runtime.clock.now()).toISOString();
@@ -196,6 +206,7 @@ export class ResearchOrchestrator {
         this.runtime.store.run("UPDATE validation_tasks SET current_task_id=?,prior_task_ids_json=? WHERE candidate_id=? AND policy_version=? AND role_slot=?",
           taskId, JSON.stringify(history), String(slot.candidate_id), String(slot.policy_version), String(slot.role_slot));
       }
+      if (validationSlot) this.policies.recordValidationRetry!(previous, next, input.new_evidence_refs);
       const revision = campaign.revision + 1;
       const event = this.events.appendEvent({ campaign_id: campaign.campaign_id, task_id: taskId, type: "TaskRetried", actor: principal.id,
         payload: { previous_task_id: previous.task_id, rebind_dependents: input.rebind_dependents, rationale: input.rationale, new_evidence_refs: input.new_evidence_refs } });

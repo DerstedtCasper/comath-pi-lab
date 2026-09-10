@@ -127,12 +127,21 @@ export class ResearchDaemon {
       }));
     }
     this.adapters = createRuntimeRegistry(suppliedAdapters ?? configuredAdapters);
-    const policies = options.policies ?? { model_policy_ids: Object.keys(config.model_policies), tool_policy_ids: Object.keys(config.tool_policies),
+    const policies: ResearchTaskPolicies = options.policies ?? { model_policy_ids: Object.keys(config.model_policies), tool_policy_ids: Object.keys(config.tool_policies),
       role_template_ids: listRoleTemplates().map(role => role.id) };
     if (config.supervisor && !policies.role_template_ids.includes(config.supervisor.role_template)) fail("SUPERVISOR_ROLE_UNKNOWN", "Supervisor role must be selected from the configured host role templates");
     if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.policyForTask,
       verifyRetryCondition: options.verifyRetryCondition, classifyHardBlocker: options.classifyHardBlocker });
-    this.app = createResearchOrchestrator(runtime, { ...policies, validateRoute: (draft, campaign) => {
+    this.app = createResearchOrchestrator(runtime, { ...policies,
+      validateValidationRetry: options.validation ? (previous, refs) => {
+        if (!this.resultService) fail("VALIDATION_RETRY_CONSUMER_UNAVAILABLE", "Validation result consumer is not ready");
+        this.resultService.validateValidationRetry(previous, refs, options.validation!.authorizeArtifact);
+      } : policies.validateValidationRetry,
+      recordValidationRetry: options.validation ? (previous, next, refs) => {
+        if (!this.validationFanout) fail("VALIDATION_REPLACEMENT_CONTEXT_UNAVAILABLE", "Validation context consumer is not ready");
+        this.validationFanout.recordReplacementContext(previous, next, refs);
+      } : policies.recordValidationRetry,
+      validateRoute: (draft, campaign) => {
       policies.validateRoute?.(draft, campaign); this.failureService?.validateRoute(draft, campaign);
     } });
     this.scheduler = createPortfolioScheduler(runtime, resourcesWithLegacy(config), {

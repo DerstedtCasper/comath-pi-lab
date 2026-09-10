@@ -58,6 +58,7 @@ export type ResearchResultService = {
   verifyRejectedProposal(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>): boolean;
   /** Historical publication provenance only; independent of a final-result head or mathematical validation state. */
   verifyPublishedCandidate(event: Readonly<ResearchEvent>, sourceTask: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>): boolean;
+  validateValidationRetry(task: Readonly<ResearchTask>, newEvidenceRefs: readonly ArtifactPointer[], authorizeEvidence: (task: Readonly<ResearchTask>, ref: Readonly<ArtifactPointer>) => boolean): void;
 };
 const digest = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
 const hash = (value: unknown) => digest(canonicalJson(value));
@@ -383,8 +384,32 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
       return true;
     } catch { return false; }
   }
+  function validateValidationRetry(task: Readonly<ResearchTask>, newEvidenceRefs: readonly ArtifactPointer[], authorizeEvidence: (task: Readonly<ResearchTask>, ref: Readonly<ArtifactPointer>) => boolean): void {
+    owner();
+    if (task.status !== "succeeded" || !task.accepted_result_id || !newEvidenceRefs.length) fail("VALIDATION_RETRY_RESULT_REQUIRED");
+    const row = store.get("SELECT * FROM events WHERE type='ResearchResultAccepted' AND task_id=? AND generation=? AND json_extract(payload_json,'$.result_ref.artifact_id')=? ORDER BY seq DESC LIMIT 1", task.task_id, task.generation, task.accepted_result_id);
+    if (!row) fail("VALIDATION_RETRY_RESULT_REQUIRED");
+    const event = eventFromRow(row), receipt = event.payload as ResearchResultReceipt;
+    if (!verifyReceipt(event, task, receipt.result_ref)) fail("VALIDATION_RETRY_RESULT_REQUIRED");
+    const result = validationResultSchema.safeParse(JSON.parse(cas(task, receipt.result_ref).toString("utf8")));
+    if (!result.success) fail("VALIDATION_RETRY_RESULT_REQUIRED");
+    validateValidationBinding(task, result.data);
+    const prior = new Set([receipt.result_ref, ...task.input_refs, ...result.data.claims.flatMap(claim => claim.artifact_refs),
+      ...result.data.evidence_refs, ...result.data.counterexample_refs, ...(result.data.resolved_issues ?? []).flatMap(issue => issue.evidence_refs)].map(ref => ref.sha256));
+    const checkpoint = store.get("SELECT artifact_ref FROM checkpoints WHERE checkpoint_id=?", result.data.checkpoint_id);
+    if (checkpoint) prior.add(artifactPointerSchema.parse(JSON.parse(String(checkpoint.artifact_ref))).sha256);
+    const seen = new Set<string>(); let total = 0;
+    for (const input of z.array(artifactPointerSchema).min(1).max(100).parse(newEvidenceRefs)) {
+      const ref = artifactPointerSchema.parse(input);
+      if (prior.has(ref.sha256) || seen.has(ref.sha256)) fail("VALIDATION_RETRY_NEW_EVIDENCE_REQUIRED");
+      seen.add(ref.sha256);
+      if (authorizeEvidence(task, ref) !== true) fail("VALIDATION_RETRY_EVIDENCE_DENIED");
+      total += cas(task, ref).length;
+      if (total > 64 * 1024 * 1024) fail("RESEARCH_RESULT_REFERENCE_LIMIT");
+    }
+  }
   return { acceptWorkerResult: (principal, raw) => accept(principal, raw, false), acceptWorkerProposal: (principal, raw) => accept(principal, raw, true),
     verifyAcceptedResult: (event, task, artifact, proposal) => verifyReceipt(event, task, artifact, proposal),
     verifyRejectedProposal: (event, task, artifact) => verifyReceipt(event, task, artifact, undefined, true),
-    verifyPublishedCandidate: (event, task, artifact) => verifyReceipt(event, task, artifact, undefined, false, true) };
+    verifyPublishedCandidate: (event, task, artifact) => verifyReceipt(event, task, artifact, undefined, false, true), validateValidationRetry };
 }
