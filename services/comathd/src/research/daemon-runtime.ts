@@ -25,6 +25,9 @@ import { createSupervisorDriver, defaultResearchContextPolicy } from "./supervis
 import { createValidationFanout, type ValidationFanoutOptions } from "./validation-fanout.js";
 import { createValidationAggregation, type ValidationAggregationOptions } from "./validation-aggregation.js";
 import { createValidationDriver } from "./validation-driver.js";
+import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
+import { createFormalizationIntake } from "./formalization-intake.js";
+import { listArtifactRefs } from "../artifacts/store.js";
 
 export type ResearchExecutionConsumer = {
   validate(task: ResearchTask): void;
@@ -86,6 +89,7 @@ export class ResearchDaemon {
   readonly validationFanout?: ReturnType<typeof createValidationFanout>;
   readonly validationAggregation?: ReturnType<typeof createValidationAggregation>;
   readonly validationDriver?: ReturnType<typeof createValidationDriver>;
+  readonly intake;
   recovery: { blocked_operations: string[]; unconfirmed_attempts: string[] } = { blocked_operations: [], unconfirmed_attempts: [] };
   toolRecovery: { terminated: string[]; unconfirmed: string[] } = { terminated: [], unconfirmed: [] };
   private started = false;
@@ -107,6 +111,16 @@ export class ResearchDaemon {
       if (!model || !tools) fail("RESEARCH_POLICY_UNKNOWN", "Context requires configured model and tool policies");
       const validation = this.validationFanout?.contextPolicyForTask(task);
       if (validation) return { ...validation, byte_cap: Math.min(validation.byte_cap, model.initial_context_bytes) };
+      if (!options.contextPolicy && task.scope.kind === "formal" && tools.visibility !== "blind") {
+        const approved = requireApprovedFormalScope(runtime, task.campaign_id, task.scope);
+        const refs = [approved.formal_spec_ref, approved.ledger_ref, ...task.input_refs];
+        return { byte_cap: model.initial_context_bytes, visibility: tools.visibility, assumptions: approved.assumptions,
+          mandatory: [{ ref: approved.formal_spec_ref, kind: "approved_lock", source: "committed_host_approval" },
+            { ref: approved.ledger_ref, kind: "assumption_ledger", source: "committed_host_approval" }],
+          lazy: task.input_refs.map(ref => ({ ref, kind: "other", source: "exact_task_input" })),
+          authorizeArtifact: (current, ref) => current.task_id === task.task_id && current.generation === task.generation
+            && refs.some(value => value.artifact_id === ref.artifact_id && value.sha256 === ref.sha256) };
+      }
       return { ...(options.contextPolicy ? options.contextPolicy(task) : defaultResearchContextPolicy(task, tools.visibility)), byte_cap: model.initial_context_bytes, visibility: tools.visibility };
     }, findFailures: (task, policy) => this.failureService?.index.findFailedRoutes({ scope: task.scope, problem_slice: task.problem_slice,
       method_family: task.method_family, route: this.failureService.routeFor(task, policy), limit: 20 }).map(record => ({
@@ -128,7 +142,9 @@ export class ResearchDaemon {
     }
     this.adapters = createRuntimeRegistry(suppliedAdapters ?? configuredAdapters);
     const policies: ResearchTaskPolicies = options.policies ?? { model_policy_ids: Object.keys(config.model_policies), tool_policy_ids: Object.keys(config.tool_policies),
-      role_template_ids: listRoleTemplates().map(role => role.id) };
+      role_template_ids: listRoleTemplates().map(role => role.id), validateFormalScope: (scope, campaign) => {
+        try { requireApprovedFormalScope(runtime, campaign.campaign_id, scope); return true; } catch { return false; }
+      } };
     if (config.supervisor && !policies.role_template_ids.includes(config.supervisor.role_template)) fail("SUPERVISOR_ROLE_UNKNOWN", "Supervisor role must be selected from the configured host role templates");
     if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.policyForTask,
       verifyRetryCondition: options.verifyRetryCondition, classifyHardBlocker: options.classifyHardBlocker });
@@ -195,6 +211,11 @@ export class ResearchDaemon {
     if (options.validation) {
       const host = options.validation;
       this.validationFanout = createValidationFanout(this.app, { ...host, verifyPublishedCandidate: this.resultService.verifyPublishedCandidate,
+        resolveApprovedRoot: host.resolveApprovedRoot ?? ((source) => {
+          const approved = requireApprovedFormalScope(runtime, source.campaign_id, source.scope);
+          return { scope: approved.scope, approved_lock: { ref: approved.formal_spec_ref, kind: "approved_lock", source: "committed_host_approval" },
+            assumption_ledger: { ref: approved.ledger_ref, kind: "assumption_ledger", source: "committed_host_approval" }, assumptions: approved.assumptions };
+        }),
         resolveToolPolicy: id => {
           const configured = config.tool_policies[id], declared = host.resolveToolPolicy(id);
           if (!configured || !declared || configured.visibility !== declared.visibility
@@ -208,6 +229,11 @@ export class ResearchDaemon {
         } });
       this.validationDriver = createValidationDriver(runtime, host.policy_version, this.validationFanout, this.validationAggregation);
     }
+    this.intake = createFormalizationIntake(runtime, { results: this.resultService,
+      authorizeArtifact: (_principal, ref, campaignId) => listArtifactRefs(runtime.root).some(record => record.id === ref.artifact_id && record.sha256 === ref.sha256
+        && record.project_id === runtime.store.getCampaign(campaignId)?.project_id),
+      verifyValidatedCandidate: candidateId => !!options.validation && this.validationAggregation?.aggregateValidation({ candidate_id: candidateId,
+        policy_version: options.validation.policy_version }).state === "research_validated" });
     if (config.supervisor) this.supervisor = createSupervisorDriver(this.app, this.scheduler, config, this.resultService, {
       steer: (key, instruction) => this.execution?.steer?.(key, instruction) ?? Promise.reject(new ComathError("Runtime cannot receive correction steering", { code: "WORKER_STEER_UNSUPPORTED" })),
       stop: key => this.reconciler.requestStop(key, "supervisor_invalid"),

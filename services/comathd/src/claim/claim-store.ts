@@ -1,4 +1,6 @@
-import { withTrustedWriter, existsCommittedFile, readCommittedFile, writeCommittedFile, allocateProjectId, projectCommitTime } from "../research/project-commit.js";
+import { withTrustedWriter, existsCommittedFile, readCommittedFile, writeCommittedFile, allocateProjectId, projectCommitTime, hasProjectCommit } from "../research/project-commit.js";
+import { getAcquiredProjectRuntime } from "../research/project-runtime.js";
+import { canonicalJson } from "../verification/runner-contracts.js";
 import { join } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
@@ -142,6 +144,69 @@ export function registerClaim(projectRoot: string, input: RegisterClaimInput): C
     return claim;
 
   });
+}
+
+function assertPreparedClaimCommit(projectRoot: string): void {
+  if (!getAcquiredProjectRuntime(projectRoot) || !hasProjectCommit(projectRoot)) {
+    throw new ComathError("Reserved claims require an acquired runtime and active project commit", { statusCode: 409, code: "RESERVED_CLAIM_COMMIT_REQUIRED" });
+  }
+}
+
+function preparedClaimBytes(value: Claim): Claim {
+  const claim = claimSchema.parse(value);
+  if (canonicalJson(claim) !== canonicalJson(value) || normalizeStatement(claim.statement) !== claim.statement
+    || statementHash(claim.statement) !== claim.statement_hash) {
+    throw new ComathError("Reserved claim bytes must already be normalized and complete", { statusCode: 400, code: "RESERVED_CLAIM_BYTES_INVALID" });
+  }
+  if (!createAllowedStatuses.has(claim.status) || claim.evidence_level !== 0 || claim.gate_result_id !== undefined
+    || claim.dependency_closure_status !== "unchecked" || claim.formalization_status !== "none" || claim.audit_state !== "not_audited") {
+    throw new ComathError("Reserved claims cannot carry privileged review state", { statusCode: 400, code: "RESERVED_CLAIM_STATE_INVALID" });
+  }
+  return claim;
+}
+
+/** Service-only writer for a fully prepared claim inside its owner's composite commit. */
+export function registerReservedClaim(projectRoot: string, input: { claim: Claim; actor: string }): Claim {
+  assertPreparedClaimCommit(projectRoot);
+  const claim = preparedClaimBytes(input.claim);
+  const claims = readClaims(projectRoot), existing = claims.filter(value => value.id === claim.id);
+  if (existing.length) {
+    if (existing.length === 1 && canonicalJson(existing[0]) === canonicalJson(claim)) return existing[0]!;
+    throw new ComathError("Reserved claim ID already has different content", { statusCode: 409, code: "RESERVED_CLAIM_CONFLICT" });
+  }
+  writeJsonl(projectRoot, claimsPath(projectRoot), [...claims, claim]);
+  appendAuditEvent(projectRoot, { project_id: claim.project_id, event_type: "claim.registered", actor: input.actor, target_id: claim.id,
+    payload: { status: claim.status, statement_hash: claim.statement_hash } });
+  return claim;
+}
+
+/** Service-only exact baseline replacement; formal intake owns the surrounding commit. */
+export function replacePreparedClaim(projectRoot: string, input: { expected: Claim; claim: Claim; actor: string }): Claim {
+  assertPreparedClaimCommit(projectRoot);
+  const claim = preparedClaimBytes(input.claim), expected = claimSchema.parse(input.expected);
+  if (canonicalJson(expected) !== canonicalJson(input.expected)) {
+    throw new ComathError("Prepared claim baseline must contain complete schema bytes", { statusCode: 400, code: "RESERVED_CLAIM_BYTES_INVALID" });
+  }
+  if (claim.status !== "formal_spec_locked") {
+    throw new ComathError("Prepared replacement must lock the formal specification", { statusCode: 400, code: "RESERVED_CLAIM_STATE_INVALID" });
+  }
+  if (claim.id !== expected.id || claim.project_id !== expected.project_id || claim.created_at !== expected.created_at) {
+    throw new ComathError("Prepared replacement cannot change claim identity", { statusCode: 409, code: "PREPARED_CLAIM_IDENTITY_INVALID" });
+  }
+  const claims = readClaims(projectRoot), matches = claims.map((value, index) => ({ value, index })).filter(({ value }) => value.id === claim.id);
+  const current = matches[0];
+  if (matches.length !== 1 || !current) {
+    throw new ComathError("Prepared claim baseline no longer matches", { statusCode: 409, code: "PREPARED_CLAIM_CONFLICT" });
+  }
+  if (canonicalJson(current.value) === canonicalJson(claim)) return current.value;
+  if (canonicalJson(current.value) !== canonicalJson(expected)) {
+    throw new ComathError("Prepared claim baseline no longer matches", { statusCode: 409, code: "PREPARED_CLAIM_CONFLICT" });
+  }
+  claims[current.index] = claim;
+  writeJsonl(projectRoot, claimsPath(projectRoot), claims);
+  appendAuditEvent(projectRoot, { project_id: claim.project_id, event_type: "claim.updated", actor: input.actor, target_id: claim.id,
+    payload: { status: claim.status, statement_hash: claim.statement_hash } });
+  return claim;
 }
 
 export function updateClaim(projectRoot: string, input: UpdateClaimInput): Claim {

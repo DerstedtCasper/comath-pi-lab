@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import { getAcquiredProjectRuntime } from "../../research/project-runtime.js";
+import { scopeBindingSchema } from "../../research/research-schemas.js";
+import { requireApprovedFormalScope } from "./formal-spec-store.js";
+import { createProofObligationFromFormalSpecLock } from "./formal-spec-lock.js";
+import { canonicalJson as canonicalScopeJson } from "../../verification/runner-contracts.js";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative } from "node:path";
 import {
@@ -640,23 +645,23 @@ function lockedStatement(goal: string): string {
   return classifyLockedProblem(goal).statement;
 }
 
-function needsFormalSpecLock(goal: string): boolean {
-  const trimmed = goal.trim();
-  return !/^(prove|show|formalize|theorem|lemma)\b/i.test(trimmed);
+function needsFormalSpecLock(): boolean {
+  // A newly allocated campaign cannot already have a committed host approval.
+  // Wording such as "Prove" is task data, never authority to enter formal search.
+  return true;
 }
 
 function createProblemLock(projectRoot: string, input: { claim_id: string; goal: string; domain: string }): void {
-  const problem = classifyLockedProblem(input.goal);
   writeRuntimeFile(
     projectRoot,
     join(".comath", "lock", "problem_lock.md"),
-    [`# Problem Lock`, "", `claim_id: ${input.claim_id}`, "", problem.statement, ""].join("\n")
+    [`# Problem Draft`, "", `claim_id: ${input.claim_id}`, "", input.goal, "", "Awaiting host-approved FormalSpecLock.", ""].join("\n")
   );
   writeRuntimeFile(projectRoot, join(".comath", "lock", "assumptions.md"), "# Assumptions\n\n");
   writeRuntimeFile(
     projectRoot,
     join(".comath", "lock", "notation.md"),
-    ["# Notation", "", "No notation conventions are locked until FormalSpecLock approval.", ...problem.notation_lines, ""].join("\n")
+    ["# Notation", "", "No notation conventions are locked until FormalSpecLock approval.", ""].join("\n")
   );
   writeRuntimeFile(
     projectRoot,
@@ -665,7 +670,7 @@ function createProblemLock(projectRoot: string, input: { claim_id: string; goal:
       `claim_id: ${input.claim_id}`,
       `domain: ${input.domain}`,
       "target_formal_system: Lean4",
-      `theorem_name: ${problem.theorem_name ?? "unresolved"}`,
+      "theorem_name: unresolved",
       ""
     ].join("\n")
   );
@@ -2400,10 +2405,10 @@ function writeGoalModeSkeletonBlueprint(input: {
 export function startCampaign(input: StartCampaignInput): CampaignTickResult {
   const actor = input.actor ?? "campaign";
   const { project } = initProject({ name: input.project_name ?? "CoMath Research Campaign", root_path: input.project_root });
-  const requiresFormalSpecLock = needsFormalSpecLock(input.user_goal);
+  const requiresFormalSpecLock = needsFormalSpecLock();
   const claim = registerClaim(input.project_root, {
     project_id: project.project_id,
-    statement: lockedStatement(input.user_goal),
+    statement: input.user_goal,
     assumptions: [],
     domain: input.domain ?? "elementary",
     actor,
@@ -5162,6 +5167,30 @@ async function completeCampaignAtFinalGlobalReplay(input: {
   };
 }
 
+function requireObligationApproval(projectRoot: string, campaign: ResearchCampaign, obligation: ProofObligation): void {
+  const runtime = getAcquiredProjectRuntime(projectRoot);
+  if (!runtime) throw new ComathError("Formal execution requires the service owner and committed host scope", { code: "FORMAL_SCOPE_NOT_APPROVED" });
+  const scope = scopeBindingSchema.parse(obligation.locked_statement_structured.approved_scope);
+  const approved = requireApprovedFormalScope(runtime, campaign.campaign_id, scope);
+  const expected = createProofObligationFromFormalSpecLock({ obligation_id: obligation.obligation_id, formal_spec_lock: approved.lock, assumption_ledger: approved.ledger });
+  const { approved_scope: _scope, ...locked } = obligation.locked_statement_structured;
+  if (approved.obligation_binding.obligation_id !== obligation.obligation_id || obligation.claim_id !== expected.claim_id
+    || obligation.statement_hash !== expected.statement_hash || obligation.locked_statement_nl !== expected.locked_statement_nl || obligation.lean_target !== expected.lean_target
+    || canonicalScopeJson(locked) !== canonicalScopeJson(expected.locked_statement_structured) || canonicalScopeJson(obligation.assumptions) !== canonicalScopeJson(expected.assumptions)
+    || canonicalScopeJson(obligation.dependencies) !== canonicalScopeJson(approved.obligation_binding.dependencies)
+    || obligation.parent_obligation_id !== approved.obligation_binding.parent_obligation_id) {
+    throw new ComathError("Proof obligation differs from its approved package", { code: "FORMAL_SCOPE_NOT_APPROVED" });
+  }
+}
+function blockUnapprovedObligation(input: CampaignTickInput, campaign: ResearchCampaign, error: unknown): CampaignTickResult {
+  if (error instanceof ComathError && error.code === "COMMIT_PENDING") throw error;
+  if (campaign.status === "terminal") return { campaign, blocker: "formal_scope_not_approved" };
+  const blocker = { code: "FORMAL_SCOPE_NOT_APPROVED", reason: "formal_scope_not_approved" };
+  return { campaign: writeCampaign(input.project_root, { ...campaign, status: "blocked", current_stage: "blocked",
+    blockers: [...campaign.blockers.filter(value => value.code !== blocker.code), blocker],
+    next_actions: ["Prepare and obtain host approval for the exact formal scope before formal execution"] }, input.actor ?? "campaign"), blocker: blocker.reason };
+}
+
 export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
   const actor = input.actor ?? "campaign";
   const campaign = getCampaign(input.project_root, input.campaign_id);
@@ -5169,6 +5198,9 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
   }
   if (campaign.status === "terminal") {
+    const obligation = campaign.open_obligations.find(value => value.obligation_id === campaign.active_obligation_id) ?? campaign.open_obligations[0];
+    if (!obligation) return { campaign };
+    try { requireObligationApproval(input.project_root, campaign, obligation); } catch (error) { return blockUnapprovedObligation(input, campaign, error); }
     const resumed = await resumeLeanRunnerRejectedAttemptsFromTerminal({
       projectRoot: input.project_root,
       campaign,
@@ -5193,10 +5225,11 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         .find((reason): reason is string => typeof reason === "string")
     };
   }
-  const obligation = campaign.open_obligations[0];
+  const obligation = campaign.open_obligations.find(value => value.obligation_id === campaign.active_obligation_id) ?? campaign.open_obligations[0];
   if (!obligation) {
     throw new ComathError("campaign has no open proof obligation", { statusCode: 400, code: "CAMPAIGN_NO_OBLIGATION" });
   }
+  try { requireObligationApproval(input.project_root, campaign, obligation); } catch (error) { return blockUnapprovedObligation(input, campaign, error); }
   const artifactBlocker = enforceRequiredArtifacts({ projectRoot: input.project_root, campaign, obligation, actor });
   if (artifactBlocker) {
     return artifactBlocker;
@@ -6387,10 +6420,11 @@ export async function replayCampaign(input: CampaignTickInput): Promise<Campaign
   if (!claim) {
     throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
   }
-  const obligation = campaign.open_obligations[0];
+  const obligation = campaign.open_obligations.find(value => value.obligation_id === campaign.active_obligation_id) ?? campaign.open_obligations[0];
   if (!obligation) {
     throw new ComathError("campaign has no open proof obligation", { statusCode: 400, code: "CAMPAIGN_NO_OBLIGATION" });
   }
+  try { requireObligationApproval(input.project_root, campaign, obligation); } catch (error) { return blockUnapprovedObligation(input, campaign, error); }
   if (campaign.terminal_state === "completed_refutation") {
     return {
       campaign,

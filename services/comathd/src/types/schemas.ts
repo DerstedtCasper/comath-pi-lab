@@ -775,6 +775,7 @@ export const researchCampaignSchema = z
     terminal_state: campaignTerminalStateSchema.optional(),
     stage_runs: z.array(stageRunRefSchema).default([]),
     open_obligations: z.array(proofObligationSchema).default([]),
+    active_obligation_id: stableId.optional(),
     accepted_artifacts: z.array(artifactRefSchema).default([]),
     blockers: z.array(z.record(z.string(), z.unknown())).default([]),
     next_actions: z.array(z.string()).default([]),
