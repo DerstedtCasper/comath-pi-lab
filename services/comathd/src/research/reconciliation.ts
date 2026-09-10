@@ -13,6 +13,7 @@ export type AttemptLifecycleHooks = {
   stop: (attemptKey: string, reason: AttemptStopReason) => Promise<void>;
   inspect: (attemptKey: string) => Promise<AttemptTermination>;
   max_fault_retries?: number; checkpoint_grace_ms?: number; lease_ttl_ms?: number;
+  checkpoint?: { first_tool_calls: number; periodic_tool_calls: number; output_tokens: number; interval_ms: number };
 };
 function fail(code: string, message: string): never { throw new ComathError(message, { code, statusCode: 409 }); }
 const faultReasons = new Set<AttemptStopReason>(["lease_expired", "start_deadline", "crash"]);
@@ -22,6 +23,8 @@ export class AttemptReconciler {
   private timer?: ReturnType<typeof setInterval>;
   private polling = false;
   private closed = false;
+  private pollDrained?: Promise<void>;
+  private finishPoll?: () => void;
   constructor(readonly runtime: ProjectRuntime, private readonly scheduler: PortfolioScheduler, private readonly hooks: AttemptLifecycleHooks) {
     this.events = createResearchEventStore(runtime);
   }
@@ -127,8 +130,9 @@ export class AttemptReconciler {
     const reservation = this.runtime.store.get("SELECT observed_json FROM reservations WHERE attempt_key=?", attemptKey);
     const output = reservation ? Number(JSON.parse(String(reservation.observed_json)).usage?.output_tokens ?? 0) : 0;
     const lastTime = attempt.last_checkpoint_at ? Date.parse(String(attempt.last_checkpoint_at)) : Date.parse(task.created_at);
-    if ((!task.checkpoint_head && calls >= 10) || calls - Number(attempt.last_checkpoint_tool_calls ?? 0) >= 15
-      || output - Number(attempt.last_checkpoint_output_tokens ?? 0) >= 12000 || this.runtime.clock.now() - lastTime >= 1200000) {
+    const policy = this.hooks.checkpoint ?? { first_tool_calls: 10, periodic_tool_calls: 15, output_tokens: 12000, interval_ms: 1200000 };
+    if ((!task.checkpoint_head && calls >= policy.first_tool_calls) || calls - Number(attempt.last_checkpoint_tool_calls ?? 0) >= policy.periodic_tool_calls
+      || output - Number(attempt.last_checkpoint_output_tokens ?? 0) >= policy.output_tokens || this.runtime.clock.now() - lastTime >= policy.interval_ms) {
       this.runtime.store.run("UPDATE attempts SET checkpoint_requested_at=? WHERE attempt_key=?", new Date(this.runtime.clock.now()).toISOString(), attemptKey);
       await this.hooks.requestCheckpoint(attemptKey);
     }
@@ -191,6 +195,7 @@ export class AttemptReconciler {
   async poll(): Promise<{ attempt_key: string; code: string }[]> {
     if (this.closed || this.polling) return [];
     this.polling = true;
+    this.pollDrained = new Promise(resolve => { this.finishPoll = resolve; });
     const errors: { attempt_key: string; code: string }[] = [];
     try {
       for (const row of this.runtime.store.all("SELECT attempt_key FROM attempts WHERE state<>'terminated'")) {
@@ -198,7 +203,7 @@ export class AttemptReconciler {
         try { await this.reconcileAttempt(key); }
         catch (error) { errors.push({ attempt_key: key, code: error instanceof ComathError ? error.code : "ATTEMPT_RECONCILIATION_FAILED" }); }
       }
-    } finally { this.polling = false; }
+    } finally { this.polling = false; this.finishPoll?.(); this.finishPoll = undefined; }
     return errors;
   }
   start(): void {
@@ -207,6 +212,11 @@ export class AttemptReconciler {
     this.timer = setInterval(() => { void this.poll(); }, 1000); this.timer.unref();
   }
   close(): void { this.closed = true; if (this.timer) clearInterval(this.timer); this.events.close(); }
+  async drain(): Promise<void> {
+    this.closed = true;
+    if (this.timer) { clearInterval(this.timer); this.timer = undefined; }
+    await this.pollDrained;
+  }
 }
 export function createAttemptReconciler(runtime: ProjectRuntime, scheduler: PortfolioScheduler, hooks: AttemptLifecycleHooks): AttemptReconciler {
   return new AttemptReconciler(runtime, scheduler, hooks);

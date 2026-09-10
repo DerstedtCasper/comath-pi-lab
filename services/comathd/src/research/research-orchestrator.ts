@@ -19,6 +19,7 @@ export type ResearchTaskPolicies = {
   exact_output_cap_policy_ids?: readonly string[];
   /** Service-owned approval lookup; model-provided booleans never reach this callback. */
   validateFormalScope?: (scope: Extract<ScopeBinding, { kind: "formal" }>, campaign: ResearchControlCampaign) => boolean;
+  validateRoute?: (draft: ResearchTaskDraft, campaign: ResearchControlCampaign) => void;
 };
 const id = z.string().min(1).max(160);
 const retrySchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(),
@@ -83,6 +84,7 @@ export class ResearchOrchestrator {
     if (draft.budget.token_enforcement === "exact_output_cap" && !this.policies.exact_output_cap_policy_ids?.includes(draft.model_policy_id)) {
       fail("CAPABILITY_UNSUPPORTED", "This model policy cannot enforce an exact output cap", 422);
     }
+    this.policies.validateRoute?.(draft, campaign);
   }
   assertTaskPolicy(task: ResearchTask): void {
     this.validateDraft(task, this.requireCampaign(task.campaign_id), task.kind === "legacy_run");
@@ -118,12 +120,14 @@ export class ResearchOrchestrator {
     const input = parseResearchInput(registrationSchema, request);
     return this.command(principal, input.command_id, { kind: "register_campaign", input }, () => {
       if (this.runtime.store.getCampaign(input.campaign.campaign_id)) fail("RESEARCH_CAMPAIGN_EXISTS", "Campaign is already bound");
+      // Make the proposed campaign available to service-owned validation inside this atomic transaction.
+      this.runtime.store.putCampaign(input.campaign);
       for (const task of input.tasks) {
         if (task.campaign_id !== input.campaign.campaign_id || this.runtime.store.getTask(task.task_id)) fail("RESEARCH_TASK_CAMPAIGN_MISMATCH", "Imported task has an invalid campaign or duplicate ID");
         this.validateDraft(task, input.campaign, true);
       }
       validateResearchTaskGraph(input.tasks);
-      this.runtime.store.putCampaign(input.campaign); this.persistGraph(input.tasks);
+      this.persistGraph(input.tasks);
       const event = this.events.appendEvent({ campaign_id: input.campaign.campaign_id, type: "CampaignBound", actor: principal.id, payload: { task_count: input.tasks.length, proof_authority: "none" } });
       this.runtime.store.putCampaign({ ...input.campaign, snapshot_seq: event.seq });
       return { campaign_id: input.campaign.campaign_id, revision: input.campaign.revision };

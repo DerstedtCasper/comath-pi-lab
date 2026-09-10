@@ -109,7 +109,7 @@ export class PortfolioScheduler {
         if (grant) return grant;
       } catch (error) {
         if (error instanceof ComathError && ["RESEARCH_BUDGET_EXHAUSTED", "RESEARCH_RESOURCE_WAIT", "COMMIT_PENDING"].includes(error.code)) continue;
-        if (!taskId && error instanceof ComathError && ["CAPABILITY_UNSUPPORTED", "RESEARCH_POLICY_UNKNOWN", "RESEARCH_SCOPE_UNAPPROVED", "RESEARCH_SCOPE_MISMATCH", "RESEARCH_BUDGET_CAPABILITY", "BUDGET_NOT_CONFIGURED"].includes(error.code)) {
+        if (!taskId && error instanceof ComathError && ["CAPABILITY_UNSUPPORTED", "RESEARCH_POLICY_UNKNOWN", "RESEARCH_SCOPE_UNAPPROVED", "RESEARCH_SCOPE_MISMATCH", "RESEARCH_BUDGET_CAPABILITY", "BUDGET_NOT_CONFIGURED", "RESEARCH_FAILED_ROUTE_BLOCKED"].includes(error.code)) {
           this.runtime.store.transaction(() => {
             const task = this.runtime.store.getTask(candidate.task_id)!;
             this.runtime.store.putTask({ ...task, status: "blocked", blocked_reason: error.code, updated_at: new Date(this.runtime.clock.now()).toISOString() });

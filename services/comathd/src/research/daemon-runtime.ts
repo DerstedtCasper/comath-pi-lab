@@ -1,0 +1,250 @@
+import { realpathSync } from "node:fs";
+import { ComathError } from "../errors.js";
+import { researchConfigSchema, type ResearchConfig } from "../config/config.js";
+import { listRoleTemplates } from "../agents/role-templates.js";
+import { configureLegacyRuntimeHost, shutdownLegacyRuntime, verifyLegacyRuntimeQuiescence, type LegacyRuntimeHostPolicy } from "../agents/runtime/legacy-runtime-facade.js";
+import { createRuntimeRegistry } from "../agents/runtime/runtime-registry.js";
+import type { AgentRuntimeAdapter, StartWorkerInput } from "../agents/runtime/agent-runtime-adapter.js";
+import { createWorkerExecutionHost, type WorkerExecutionHostOptions } from "../agents/runtime/worker-execution-host.js";
+import { ProjectRuntime, type ProjectRuntimeDependencies } from "./project-runtime.js";
+import { createPortfolioScheduler, type PortfolioScheduler, type ResearchGrant } from "./portfolio-scheduler.js";
+import { createResearchOrchestrator, type ResearchTaskPolicies } from "./research-orchestrator.js";
+import { createAttemptReconciler, type AttemptReconciler, type AttemptLifecycleHooks } from "./reconciliation.js";
+import { drainResearchAuditOutbox } from "./project-commit.js";
+import type { ResearchTask } from "./research-schemas.js";
+import type { ResearchResourceConfig } from "./resource-admission.js";
+import { createWorkerGateway, type WorkerGatewayOptions } from "../control/worker-routes.js";
+import { createResearchContextService } from "./context-service.js";
+import type { ContextPackPolicy } from "./context-pack-builder.js";
+import { createResearchFailureService } from "./failure-service.js";
+import type { FailureIndexOptions } from "./failure-index.js";
+
+export type ResearchExecutionConsumer = {
+  validate(task: ResearchTask): void;
+  dispatch(grant: ResearchGrant, adapter: AgentRuntimeAdapter): Promise<void>;
+  lifecycle: AttemptLifecycleHooks;
+  close?(): Promise<void>;
+};
+export type ResearchDaemonOptions = {
+  config: ResearchConfig;
+  dependencies?: ProjectRuntimeDependencies;
+  adapters?: ReadonlyMap<string, AgentRuntimeAdapter>;
+  createAdapters?: (runtime: ProjectRuntime, config: ResearchConfig, buildPrompt?: (input: StartWorkerInput) => Promise<string>) => ReadonlyMap<string, AgentRuntimeAdapter>;
+  policies?: ResearchTaskPolicies;
+  legacy?: LegacyRuntimeHostPolicy;
+  workerGateway?: WorkerGatewayOptions;
+  execution?: ResearchExecutionConsumer;
+  createExecution?: (runtime: ProjectRuntime, scheduler: PortfolioScheduler, reconciler: () => AttemptReconciler) => ResearchExecutionConsumer;
+  workerInput?: WorkerExecutionHostOptions["prepareInput"];
+  validateWorkerTask?: WorkerExecutionHostOptions["validateTask"];
+  inspectRecoveredWorker?: WorkerExecutionHostOptions["inspectRecovered"];
+  contextPolicy?: (task: ResearchTask) => Omit<ContextPackPolicy, "byte_cap" | "visibility">;
+  verifyRetryCondition?: FailureIndexOptions["verifyRetryCondition"];
+};
+const defaultDependencies: ProjectRuntimeDependencies = { clock: { now: () => Date.now() }, executor: {},
+  migration: { quiesce: async root => verifyLegacyRuntimeQuiescence(root) } };
+function resourcesWithLegacy(config: ResearchConfig): ResearchResourceConfig {
+  return { ...config, provider_policies: { legacy: { max_sessions: config.max_active_workers, launch_rpm: 4 }, ...config.provider_policies },
+    model_policies: {
+      "legacy-process": { provider_id: "legacy", runtime_id: "legacy-process", model: "legacy-host" },
+      "legacy-codex-api": { provider_id: "legacy", runtime_id: "legacy-codex-api", model: "legacy-api" },
+      ...config.model_policies
+    } };
+}
+function canonical(root: string): string { const path = realpathSync(root); return process.platform === "win32" ? path.toLowerCase() : path; }
+function fail(code: string, message: string): never { throw new ComathError(message, { code, statusCode: 409 }); }
+async function withinShutdownGrace<T>(work: Promise<T>, milliseconds: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([work, new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new ComathError("Execution drain exceeded shutdown deadline; project owner is retained", { code: "DAEMON_DRAIN_TIMEOUT", statusCode: 409 })), milliseconds);
+    })]);
+  } finally { if (timer) clearTimeout(timer); }
+}
+type Shared = { options: ResearchDaemonOptions; pending: Promise<ResearchDaemon>; references: number; closing: boolean };
+const shared = new Map<string, Shared>();
+
+/** One application/scheduler/reconciler per project, independent of its operator harness. */
+export class ResearchDaemon {
+  readonly adapters;
+  readonly app;
+  readonly scheduler;
+  readonly reconciler;
+  recovery: { blocked_operations: string[]; unconfirmed_attempts: string[] } = { blocked_operations: [], unconfirmed_attempts: [] };
+  private started = false;
+  private closing?: Promise<void>;
+  private readonly dispatched = new Set<Promise<void>>();
+  private readonly applicationWork = new Set<Promise<unknown>>();
+  private gateway?: ReturnType<typeof createWorkerGateway>;
+  private gatewayReady?: Promise<void>;
+  private released = false;
+  private execution?: ResearchExecutionConsumer;
+  private contextService?: ReturnType<typeof createResearchContextService>;
+  private failureService?: ReturnType<typeof createResearchFailureService>;
+  get isReleased(): boolean { return this.released; }
+  private constructor(readonly runtime: ProjectRuntime, readonly config: ResearchConfig, private readonly options: ResearchDaemonOptions) {
+    if (options.contextPolicy) this.contextService = createResearchContextService(runtime, { policyForTask: task => {
+      const model = config.model_policies[task.model_policy_id], tools = config.tool_policies[task.tool_policy_id];
+      if (!model || !tools) fail("RESEARCH_POLICY_UNKNOWN", "Context requires configured model and tool policies");
+      return { ...options.contextPolicy!(task), byte_cap: model.initial_context_bytes, visibility: tools.visibility };
+    }, findFailures: (task, policy) => this.failureService?.index.findFailedRoutes({ scope: task.scope, problem_slice: task.problem_slice,
+      method_family: task.method_family, route: this.failureService.routeFor(task, policy), limit: 20 }).map(record => ({
+        failure_id: record.failure.failure_id, sha256: record.sha256, route_fingerprint: record.failure.route_fingerprint,
+        failure_mode: record.failure.failure_mode, retry_conditions: record.failure.retry_conditions, match: record.match
+      })) ?? [] });
+    this.adapters = createRuntimeRegistry(options.createAdapters?.(runtime, config, this.contextService?.buildPrompt) ?? options.adapters);
+    const policies = options.policies ?? { model_policy_ids: Object.keys(config.model_policies), tool_policy_ids: Object.keys(config.tool_policies),
+      role_template_ids: listRoleTemplates().map(role => role.id) };
+    if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.policyForTask, verifyRetryCondition: options.verifyRetryCondition });
+    this.app = createResearchOrchestrator(runtime, { ...policies, validateRoute: (draft, campaign) => {
+      policies.validateRoute?.(draft, campaign); this.failureService?.validateRoute(draft, campaign);
+    } });
+    this.scheduler = createPortfolioScheduler(runtime, resourcesWithLegacy(config), {
+      validateTask: task => {
+        this.app.assertTaskPolicy(task);
+        if (!config.enabled) fail("RESEARCH_POLICY_UNKNOWN", "Research execution is disabled by host configuration");
+        const model = config.model_policies[task.model_policy_id], selection = model && config.runtimes[model.runtime_id];
+        if (!selection) fail("RESEARCH_POLICY_UNKNOWN", "Runtime policy is unavailable");
+        try { this.adapters.resolve(selection.kind); }
+        catch { fail("RESEARCH_POLICY_UNKNOWN", "No host implementation is registered for this runtime"); }
+        if (!this.execution) fail("RESEARCH_POLICY_UNKNOWN", "Worker execution consumer is not configured");
+        this.execution.validate(task);
+      },
+      capabilities: runtimeId => {
+        const selection = config.runtimes[runtimeId];
+        return selection ? this.adapters.capabilities(selection.kind) : { exact_output_cap: false };
+      },
+      onDispatch: grant => {
+        const work = this.execution!.dispatch(grant, this.adapters.resolve(config.runtimes[grant.runtime_id].kind));
+        this.dispatched.add(work);
+        void work.then(() => this.dispatched.delete(work), () => this.dispatched.delete(work));
+        return work;
+      },
+      onStopRequested: (key, reason) => this.execution?.lifecycle.stop(key, reason === "budget_threshold" ? "budget" : "user_cancel")
+    });
+    const unavailable: AttemptLifecycleHooks = {
+      requestCheckpoint: async () => { fail("RUNTIME_UNAVAILABLE", "No owned worker is available for checkpoint"); },
+      stop: async () => { fail("TERMINATION_UNCONFIRMED", "No execution owner can confirm termination"); },
+      inspect: async () => ({ runtime_terminated: false, tools_terminated: false, usage_complete: false })
+    };
+    const workerInput = options.workerInput ?? this.contextService?.workerInput;
+    this.execution = options.createExecution?.(runtime, this.scheduler, () => this.reconciler) ?? options.execution
+      ?? (workerInput ? createWorkerExecutionHost({ runtime, scheduler: this.scheduler, reconciler: () => this.reconciler,
+        validateTask: task => { this.app.assertTaskPolicy(task); options.validateWorkerTask?.(task); }, prepareInput: workerInput,
+        expectedRuntimeKind: runtimeId => config.runtimes[runtimeId]?.kind ?? fail("RESEARCH_POLICY_UNKNOWN", "Runtime selection is not configured"),
+        inspectRecovered: options.inspectRecoveredWorker }) : undefined);
+    this.reconciler = createAttemptReconciler(runtime, this.scheduler, {
+      requestCheckpoint: key => (this.execution?.lifecycle ?? unavailable).requestCheckpoint(key),
+      stop: (key, reason) => (this.execution?.lifecycle ?? unavailable).stop(key, reason),
+      inspect: key => (this.execution?.lifecycle ?? unavailable).inspect(key),
+      max_fault_retries: config.max_fault_retries, lease_ttl_ms: config.lease_ttl_ms,
+      checkpoint_grace_ms: config.checkpoint.grace_ms, checkpoint: config.checkpoint });
+  }
+  static async create(root: string, options: ResearchDaemonOptions): Promise<ResearchDaemon> {
+    const config = researchConfigSchema.parse(options.config);
+    configureLegacyRuntimeHost(root, { ...options.legacy, resources: resourcesWithLegacy(config) });
+    const runtime = await ProjectRuntime.acquire(root, options.dependencies ?? defaultDependencies);
+    let daemon: ResearchDaemon | undefined;
+    try {
+      runtime.store.run(`PRAGMA busy_timeout=${config.sqlite_busy_timeout_ms}`);
+      daemon = new ResearchDaemon(runtime, config, options);
+      daemon.recovery = await daemon.reconciler.recover();
+      drainResearchAuditOutbox(runtime.root);
+      return daemon;
+    } catch (error) {
+      daemon?.reconciler.close(); daemon?.scheduler.close(); daemon?.app.close();
+      try { await daemon?.adapters.close(); } finally { await runtime.release(); }
+      throw error;
+    }
+  }
+  /** Called after all required listeners are accepting requests. inject() does not start a loop. */
+  listenWorkerGateway(): Promise<void> {
+    if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
+    if (this.gatewayReady) return this.gatewayReady;
+    this.gateway = createWorkerGateway(this.runtime, { ...(this.contextService?.gatewayOptions ?? { authorizeArtifact: () => false }),
+      ...(this.failureService ? { failure: this.failureService.recordWorkerFailure } : {}), ...this.options.workerGateway });
+    this.gatewayReady = this.gateway.listen({ host: this.config.worker_gateway_host, port: this.config.worker_gateway_port });
+    return this.gatewayReady;
+  }
+  workerGatewayAddress() { return this.gateway?.address(); }
+  trackApplicationWork(work: Promise<unknown>): void {
+    if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
+    this.applicationWork.add(work);
+    void work.then(() => this.applicationWork.delete(work), () => this.applicationWork.delete(work));
+  }
+  start(): void {
+    if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
+    if (this.started) return;
+    this.started = true; this.reconciler.start(); this.scheduler.start();
+  }
+  close(): Promise<void> {
+    if (this.closing) return this.closing;
+    this.scheduler.stopGrants();
+    this.closing = Promise.resolve().then(async () => {
+      const errors: unknown[] = [];
+      const draining: Promise<unknown>[] = [this.reconciler.drain()];
+      // Persist handoff intents before attempting cancellation. Unconfirmed work retains permits.
+      for (const row of this.runtime.store.all("SELECT attempt_key,task_id FROM attempts WHERE state<>'terminated'")) {
+        if (this.runtime.store.getTask(String(row.task_id))?.kind === "legacy_run") continue;
+        draining.push(this.reconciler.requestStop(String(row.attempt_key), "handoff"));
+      }
+      draining.push(shutdownLegacyRuntime(this.runtime.root), this.execution?.close?.() ?? Promise.resolve(), this.adapters.close(), ...this.dispatched, ...this.applicationWork);
+      if (this.gateway) draining.push(this.gatewayReady!.then(() => this.gateway!.close()));
+      // If any code can still write to the store, never release ownership underneath it.
+      const settled = await withinShutdownGrace(Promise.allSettled(draining), this.config.stop_grace_ms);
+      for (const result of settled) if (result.status === "rejected") errors.push(result.reason);
+      if (errors.some(error => error instanceof ComathError && error.code === "LEGACY_RUNTIME_BUSY")) {
+        throw new AggregateError(errors, "Legacy application still owns active requests; project owner is retained");
+      }
+      for (const row of this.runtime.store.all("SELECT attempt_key FROM attempts WHERE state<>'terminated'")) {
+        try {
+          const key = String(row.attempt_key), lifecycle = this.execution?.lifecycle;
+          if (lifecycle) this.reconciler.confirmTermination(key, await withinShutdownGrace(lifecycle.inspect(key), this.config.stop_grace_ms));
+        } catch (error) {
+          if (error instanceof ComathError && error.code === "DAEMON_DRAIN_TIMEOUT") throw error;
+          errors.push(error);
+        }
+      }
+      this.reconciler.close(); this.scheduler.close(); this.app.close();
+      await this.runtime.release();
+      this.released = true;
+      if (errors.length) throw new AggregateError(errors, "Daemon closed with unresolved execution cleanup; reservations remain durable");
+    });
+    return this.closing;
+  }
+}
+
+export type ResearchDaemonReference = { daemon: ResearchDaemon; release(): Promise<void> };
+export async function acquireResearchDaemon(root: string, options: ResearchDaemonOptions): Promise<ResearchDaemonReference> {
+  const key = canonical(root);
+  let entry = shared.get(key);
+  if (entry) {
+    if (entry.closing) fail("DAEMON_CLOSING", "The project daemon is closing");
+    if (JSON.stringify(entry.options.config) !== JSON.stringify(options.config)
+      || entry.options.dependencies !== options.dependencies || entry.options.adapters !== options.adapters
+      || entry.options.execution !== options.execution || entry.options.policies !== options.policies || entry.options.legacy !== options.legacy
+      || entry.options.workerGateway !== options.workerGateway || entry.options.createExecution !== options.createExecution
+      || entry.options.workerInput !== options.workerInput || entry.options.validateWorkerTask !== options.validateWorkerTask
+      || entry.options.inspectRecoveredWorker !== options.inspectRecoveredWorker || entry.options.contextPolicy !== options.contextPolicy
+      || entry.options.verifyRetryCondition !== options.verifyRetryCondition || entry.options.createAdapters !== options.createAdapters) {
+      fail("DAEMON_CONFIG_CONFLICT", "Project daemon already has different host dependencies or configuration");
+    }
+  } else {
+    entry = { options, pending: ResearchDaemon.create(root, options), references: 0, closing: false };
+    shared.set(key, entry);
+  }
+  entry.references++;
+  const current = entry;
+  let daemon: ResearchDaemon;
+  try { daemon = await current.pending; }
+  catch (error) { current.references--; if (shared.get(key) === current) shared.delete(key); throw error; }
+  let released: Promise<void> | undefined;
+  return { daemon, release() {
+    if (released) return released;
+    current.references--;
+    if (current.references > 0) return released = Promise.resolve();
+    current.closing = true;
+    released = daemon.close().finally(() => { if (daemon.isReleased && shared.get(key) === current) shared.delete(key); });
+    return released;
+  } };
+}

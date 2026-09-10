@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -32,8 +32,31 @@ function migrationFile(root: string, name: "journal" | "receipt"): string {
   return resolveResearchControlPath(root, `migration-${name}.json`);
 }
 function blocked(message: string): ComathError { return new ComathError(message, { code: "MIGRATION_BLOCKED", statusCode: 409 }); }
-function readVersion(root: string): number {
+function readVersion(root: string, strictReadOnly = false): number {
   const path = researchDatabasePath(root); if (!existsSync(path)) return 0;
+  if (strictReadOnly) {
+    const wal = resolveResearchControlPath(root, "research.sqlite-wal");
+    const requireNoWalFrames = () => {
+      if (existsSync(wal) && statSync(wal).size > 0) throw new ComathError("An existing WAL requires a consistent snapshot before its schema can be inspected", { code: "LAYOUT_PROBE_REQUIRES_SNAPSHOT", statusCode: 409 });
+    };
+    requireNoWalFrames();
+    const before = statSync(path), header = Buffer.alloc(100), fd = openSync(path, "r");
+    let bytes: number;
+    try { bytes = readSync(fd, header, 0, header.length, 0); } finally { closeSync(fd); }
+    if (!before.isFile() || bytes !== 100 || !header.subarray(0, 16).equals(Buffer.from("SQLite format 3\0", "ascii"))) {
+      throw new ComathError("Research database does not have a valid SQLite header", { code: "LAYOUT_SQLITE_HEADER_INVALID", statusCode: 409 });
+    }
+    const encodedPageSize = header.readUInt16BE(16), pageSize = encodedPageSize === 1 ? 65536 : encodedPageSize;
+    if (pageSize < 512 || pageSize > 65536 || (pageSize & (pageSize - 1)) !== 0 || ![1, 2].includes(header[18]) || ![1, 2].includes(header[19])) {
+      throw new ComathError("Research database has invalid SQLite format metadata", { code: "LAYOUT_SQLITE_HEADER_INVALID", statusCode: 409 });
+    }
+    requireNoWalFrames();
+    const after = statSync(path);
+    if (before.ino !== after.ino || before.dev !== after.dev || before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
+      throw new ComathError("Research database changed during inspection", { code: "LAYOUT_PROBE_REQUIRES_SNAPSHOT", statusCode: 409 });
+    }
+    return header.readInt32BE(60);
+  }
   const db = new DatabaseSync(path, { readOnly: true });
   try { return Number(db.prepare("PRAGMA user_version").get()?.user_version); } finally { db.close(); }
 }
@@ -43,9 +66,9 @@ function writeAtomic(path: string, value: unknown): void {
   renameSync(temp, path);
 }
 /** Read-only, and deliberately called before owner acquisition creates .comath/control. */
-export function probeResearchLayout(projectRoot: string): ResearchLayout {
+export function probeResearchLayout(projectRoot: string, options: { strictReadOnly?: boolean } = {}): ResearchLayout {
   const root = realpathSync(projectRoot);
-  const schemaVersion = readVersion(root);
+  const schemaVersion = readVersion(root, options.strictReadOnly);
   const receiptPath = migrationFile(root, "receipt"), journalPath = migrationFile(root, "journal");
   try {
     if (existsSync(receiptPath)) {

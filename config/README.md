@@ -4,6 +4,16 @@ This directory contains non-secret configuration examples. Do not commit live cr
 
 Runtime configuration is owned by `comathd`; Pi may select declared options but must not receive secret values.
 
+## Durable research service
+
+Use absolute project/config paths with `comathd doctor --project-root <path> --config <path>` or `comathd serve --project-root <path> --config <path>`. The sample keeps research execution disabled, declares no paid provider or campaign budget, and uses separate loopback operator and worker listeners. `--host` and `--port` override the operator listener only.
+
+The doctor inspects configuration, runtime binary hashes, SQLite availability and explicitly configured credential environment-variable presence. It does not execute a runtime, start a model turn, provision a sandbox or modify Codex configuration. Active WAL data may require a consistent snapshot; that diagnostic is not a failed migration and must not be relabeled verified.
+
+Host-installed adapters resolve the `research.runtimes[*].kind` identifiers. Naming a kind does not install or authorize it. Missing execution consumers remain blocked before launch. Sandbox rollout is deferred; a process-management boundary does not certify isolation. Runtime/provider configuration is separate from operator access: the user's familiar harness can invoke the same Pi external commands used in the manual Pi workbench workflow.
+
+The daemon acquires one owner per canonical project, recovers durable state before starting listeners/scheduling, and stops new grants before draining shutdown. An unconfirmed process keeps its durable reservations; a still-running application callback prevents the owner/store from being released underneath it. `SIGINT`/`SIGTERM` and embedded `close()` share the shutdown path. Forced process termination requires recovery on the next start.
+
 ## Provider Helper Handles
 
 Adapter OS-isolation provider helpers are configured outside the sample with absolute service-owned executable paths. macOS is outside the current GA environment-adaptation scope.

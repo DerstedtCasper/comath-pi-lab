@@ -1,4 +1,5 @@
 import { realpathSync } from "node:fs";
+import { ComathError } from "../errors.js";
 import { acquireDaemonOwner, type DaemonOwner } from "./daemon-owner.js";
 import { ensureResearchControlReady, finalizeResearchMigration, probeResearchLayout,
   type ResearchMigrationOptions, type ResearchMigrationReceipt } from "./research-migration.js";
@@ -39,10 +40,14 @@ export class ProjectRuntime {
     return runtime;
   }
   private static async create(root: string, dependencies: ProjectRuntimeDependencies, key: string): Promise<ProjectRuntime> {
-    const layout = probeResearchLayout(root);
-    const owner = acquireDaemonOwner(layout.root);
+    // SQLite readOnly opens may still create WAL sidecars. Inspect bytes until the owner is acquired.
+    let layout: ReturnType<typeof probeResearchLayout> | undefined;
+    try { layout = probeResearchLayout(root, { strictReadOnly: true }); }
+    catch (error) { if (!(error instanceof ComathError) || error.code !== "LAYOUT_PROBE_REQUIRES_SNAPSHOT") throw error; }
+    const owner = acquireDaemonOwner(layout?.root ?? realpathSync(root));
     let store: ResearchStore | undefined;
     try {
+      layout ??= probeResearchLayout(root);
       const receipt = await ensureResearchControlReady(layout, owner, dependencies.clock, dependencies.migration);
       store = openResearchStore(layout.root, { clock: dependencies.clock });
       if (layout.kind !== "current") finalizeResearchMigration(layout.root, receipt);

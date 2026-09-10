@@ -1,7 +1,12 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { isAbsolute, relative, resolve } from "node:path";
 import { URL } from "node:url";
-import { toComathError } from "../errors.js";
+import { realpathSync } from "node:fs";
+import { ComathError, toComathError } from "../errors.js";
+import { loadConfig, researchConfigSchema } from "../config/config.js";
+import { acquireResearchDaemon, type ResearchDaemonOptions, type ResearchDaemonReference } from "../research/daemon-runtime.js";
+import { getAcquiredProjectRuntime } from "../research/project-runtime.js";
+import { shutdownLegacyRuntime } from "../agents/runtime/legacy-runtime-facade.js";
 import { getComathdStatus } from "../status.js";
 import { getProjectStatus, initProject, openProject } from "../project/project-store.js";
 import { getClaim, linkClaims, readClaims, registerClaim, updateClaim } from "../claim/claim-store.js";
@@ -173,6 +178,7 @@ type RouteHandler = (body: unknown, url: URL) => unknown | Promise<unknown>;
 
 type RouteContext = {
   memoryDbs: Map<string, InMemoryResearchMemoryDB>;
+  boundRoot?: string;
 };
 
 function memoryKey(projectRoot: string, projectId: string): string {
@@ -365,6 +371,17 @@ function routeSnapshotManifestPath(body: SnapshotManifestRouteBody): string {
 
 async function route(method: string, path: string, body: unknown, context: RouteContext): Promise<InjectResponse> {
   const url = new URL(path, "http://127.0.0.1");
+  if (context.boundRoot) {
+    const payload = body && typeof body === "object" ? body as Record<string, unknown> : {};
+    const roots = [payload.project_root, payload.root_path, url.searchParams.get("project_root"), url.searchParams.get("root_path")];
+    for (const candidate of roots) if (candidate !== undefined && candidate !== null) {
+      let matches = false;
+      try { matches = typeof candidate === "string" && isAbsolute(candidate) && canonicalServerRoot(candidate) === canonicalServerRoot(context.boundRoot); } catch { /* Unknown roots cannot match this service. */ }
+      if (!matches) {
+        return { status: 409, body: { ok: false, code: "PROJECT_ROOT_MISMATCH", error: "Request does not match the bound project" } };
+      }
+    }
+  }
 
   const handlers = new Map<string, RouteHandler>([
     [
@@ -2480,40 +2497,91 @@ export type ComathServer = {
   close(): Promise<void>;
 };
 
-export function createComathServer(): ComathServer {
+export type ComathServerOptions = { project_root?: string; config_path?: string; research?: ResearchDaemonOptions };
+function canonicalServerRoot(root: string): string {
+  const value = realpathSync(root); return process.platform === "win32" ? value.toLowerCase() : value;
+}
+function lifecycleRouteError(cause: unknown): InjectResponse {
+  const error = toComathError(cause);
+  return { status: error.statusCode, body: { ok: false, code: error.code, error: error.message } };
+}
+
+export function createComathServer(options: ComathServerOptions = {}): ComathServer {
   let server: Server | undefined;
+  let starting: Promise<ResearchDaemonReference> | undefined;
+  let closing: Promise<void> | undefined;
+  let listening = false;
+  if (options.project_root && !isAbsolute(options.project_root)) throw new Error("Bound project root must be absolute");
   const context: RouteContext = {
-    memoryDbs: new Map()
+    memoryDbs: new Map(), boundRoot: options.project_root ? realpathSync(options.project_root) : undefined
   };
+  function initialize(): Promise<ResearchDaemonReference> | undefined {
+    if (!context.boundRoot) return;
+    // Legacy embedders may already own the runtime. Their existing facade and queue stay authoritative.
+    if (!starting && !options.project_root && !options.research && !options.config_path && getAcquiredProjectRuntime(context.boundRoot)) return;
+    if (!starting) {
+      const config = options.research?.config ?? loadConfig(context.boundRoot, { config_path: options.config_path }).research ?? researchConfigSchema.parse({});
+      starting = acquireResearchDaemon(context.boundRoot, options.research ?? { config });
+    }
+    return starting;
+  }
+  async function dispatch(request: InjectRequest): Promise<InjectResponse> {
+    if (closing) return { status: 503, body: { ok: false, code: "DAEMON_CLOSING", error: "Service is closing" } };
+    try {
+      if (!context.boundRoot && request.method === "POST" && request.path !== "/project/init") {
+        const payload = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+        const root = payload.project_root ?? payload.root_path;
+        if (typeof root === "string" && isAbsolute(root)) context.boundRoot = realpathSync(root);
+      }
+      const reference = await initialize();
+      if (closing) return { status: 503, body: { ok: false, code: "DAEMON_CLOSING" } };
+      const work = route(request.method, request.path, request.body, context);
+      reference?.daemon.trackApplicationWork(work);
+      return await work;
+    } catch (error) { return lifecycleRouteError(error); }
+  }
 
   return {
-    inject(request) {
-      return route(request.method, request.path, request.body, context);
-    },
-    listen(port = 0, hostname = "127.0.0.1") {
+    inject: dispatch,
+    async listen(port = 0, hostname = "127.0.0.1") {
+      if (closing || listening) throw new ComathError("Server is already listening or closing", { code: "SERVER_LIFECYCLE_CONFLICT", statusCode: 409 });
+      listening = true;
+      const reference = await initialize();
+      await reference?.daemon.listenWorkerGateway();
       server = createServer(async (req, res) => {
-        const response = await route(req.method ?? "GET", req.url ?? "/", await readJson(req), context);
-        writeJson(res, response);
+        try {
+          if (req.method !== "GET" && req.method !== "POST") {
+            writeJson(res, { status: 405, body: { ok: false, code: "METHOD_NOT_ALLOWED" } }); return;
+          }
+          const response = await dispatch({ method: req.method === "POST" ? "POST" : "GET", path: req.url ?? "/", body: await readJson(req) });
+          writeJson(res, response);
+        } catch (error) { writeJson(res, lifecycleRouteError(error)); }
       });
 
-      return new Promise((resolve, reject) => {
-        server?.once("error", reject);
-        server?.listen(port, hostname, () => resolve(server as Server));
+      return new Promise<Server>((resolve, reject) => {
+        const onError = (error: Error) => { listening = false; reject(error); };
+        server!.once("error", onError);
+        server!.listen(port, hostname, () => {
+          server!.off("error", onError);
+          reference?.daemon.start(); resolve(server as Server);
+        });
       });
     },
     close() {
-      if (!server?.listening) {
-        return Promise.resolve();
-      }
-      return new Promise((resolve, reject) => {
-        server?.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
-        });
+      if (closing) return closing;
+      closing = Promise.resolve().then(async () => {
+        const errors: unknown[] = [];
+        try { const reference = await starting; await reference?.release(); } catch (error) { errors.push(error); }
+        try {
+          if (!starting && context.boundRoot) await shutdownLegacyRuntime(context.boundRoot);
+          if (server?.listening) await new Promise<void>((resolve, reject) => {
+            server!.close(error => error ? reject(error) : resolve()); server!.closeAllConnections();
+          });
+        } catch (error) { errors.push(error); }
+        context.memoryDbs.clear();
+        if (errors.length) throw new AggregateError(errors, "Service shutdown reported cleanup errors");
       });
+      return closing;
     }
   };
 }

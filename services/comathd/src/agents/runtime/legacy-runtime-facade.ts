@@ -110,7 +110,7 @@ function internalTask(context: RuntimeContext, input: LegacyExecutionInput, run:
     policy = host.resolveBoundCampaign(runtime, run, input.backend);
     if (policy.budget.token_enforcement === "wall_only_legacy" || policy.budget.token_enforcement === "exact_output_cap") fail("RESEARCH_BUDGET_CAPABILITY", "Legacy execution cannot bypass or guarantee a research token cap");
   } else {
-    const charter = { goal: "Run authorized legacy agents without mathematical proof authority", constraints: ["No proof promotion"], success_criteria: ["Record execution outcomes"], sha256: hash(`legacy:${input.project_id}`) };
+    const charter = { goal: "Run authorized legacy agents without mathematical proof authority", approach_hints: [], constraints: ["No proof promotion"], success_criteria: ["Record execution outcomes"], sha256: hash(`legacy:${input.project_id}`) };
     if (!runtime.store.getCampaign(campaignId)) {
       runtime.store.putCampaign({ campaign_id: campaignId, project_id: input.project_id, revision: 0, state: "running", charter,
         max_active_workers: scheduler.getResourceConfig().max_active_workers, budget_policy_id: "legacy-host-wall", supervisor: { dirty: false, last_event_seq: 0, ordinary_completed_since_trigger: 0, next_trigger_at: now }, snapshot_seq: 0 });
