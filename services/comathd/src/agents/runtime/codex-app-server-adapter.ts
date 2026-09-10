@@ -15,7 +15,7 @@ export type CodexAppServerOptions = {
 };
 type Session = { handle: WorkerHandle; transport: CodexOwnedTransport; rpc: ReturnType<typeof createCodexJsonRpc>;
   started: number; sequence: number; events: WorkerEvent[]; waiter?: () => void; ended: boolean; usage: UsageSnapshot | null;
-  tools: Set<string>; abort: () => void; signal: AbortSignal; stopping?: Promise<void>; turnStarted?: boolean; providerCompleted?: boolean };
+  tools: Set<string>; abort: () => void; signal: AbortSignal; stopping?: Promise<void>; turnStarted?: boolean; providerCompleted?: boolean; overflow?: boolean };
 type WithoutMeta<T> = T extends WorkerEvent ? Omit<T, "attempt_key" | "source_key" | "source_seq" | "observed_at"> : never;
 type EventValue = WithoutMeta<WorkerEvent>;
 function count(value: unknown): number | null { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null; }
@@ -31,10 +31,23 @@ export function createCodexAppServerAdapter(options: CodexAppServerOptions): Age
   }
   function emit(session: Session, value: EventValue): void {
     if (session.ended) return;
-    if (session.events.length >= 512) {
+    if (!session.overflow && session.events.length >= 512) {
+      session.overflow = true;
       session.rpc.close(new ComathError("Worker event consumer exceeded buffer", { code: "CODEX_EVENT_BACKPRESSURE" }));
-      session.ended = true; session.waiter?.();
-      void session.transport.terminate(); return;
+      emit(session, { type: "provider_error", code: "CODEX_EVENT_BACKPRESSURE", retryable: false });
+      void stop(session).catch(() => { /* stop records failure and retains owned state for retry. */ });
+      return;
+    }
+    if (session.overflow) {
+      // Reserve two control entries without discarding already queued accounting events.
+      if (value.type !== "provider_error" && value.type !== "termination_confirmed") return;
+      if (value.type === "provider_error" && session.events.some(event => event.type === "provider_error" && event.code === value.code)) return;
+      if (session.events.length >= 514) {
+        if (value.type !== "termination_confirmed") return;
+        const replace = session.events.findIndex(event => event.type === "provider_error" && event.code === "TERMINATION_UNCONFIRMED");
+        if (replace < 0) return;
+        session.events.splice(replace, 1);
+      }
     }
     session.events.push({ ...value, attempt_key: session.handle.attempt_key, source_key: `codex:${session.handle.owned_handle_id}`,
       source_seq: ++session.sequence, observed_at: new Date().toISOString() } as WorkerEvent);
@@ -81,9 +94,11 @@ export function createCodexAppServerAdapter(options: CodexAppServerOptions): Age
       try {
         const confirmed = await session.transport.terminate();
         if (confirmed) emit(session, { type: "termination_confirmed", owned_handle_ref: session.handle.owned_handle_id });
-        else emit(session, { type: "provider_error", code: "TERMINATION_UNCONFIRMED", retryable: true });
         session.ended = confirmed;
         if (!confirmed) throw new ComathError("Owned Codex process termination is unconfirmed", { code: "TERMINATION_UNCONFIRMED" });
+      } catch (error) {
+        emit(session, { type: "provider_error", code: "TERMINATION_UNCONFIRMED", retryable: true });
+        throw error;
       } finally { session.rpc.close(); session.signal.removeEventListener("abort", session.abort); session.waiter?.(); }
     }).finally(() => { session.stopping = undefined; });
     return session.stopping;
