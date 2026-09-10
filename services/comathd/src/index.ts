@@ -17,6 +17,10 @@ export * from "./artifacts/store.js";
 export * from "./artifacts/snapshot-manifest.js";
 export * from "./artifacts/snapshots.js";
 export { ProjectRuntime, getAcquiredProjectRuntime } from "./research/project-runtime.js";
+export { ResearchOrchestrator, createResearchOrchestrator, applyResearchCommand } from "./research/research-orchestrator.js";
+export type { ResearchPrincipal, ResearchTaskPolicies, ResearchCommand } from "./research/research-orchestrator.js";
+export { validateResearchDagPatch, validateResearchTaskGraph } from "./research/research-dag.js";
+export { createResearchEventStore } from "./research/event-store.js";
 export { withProjectCommit, withTrustedWriter, prepareTrustCommit, finalizeTrustCommit, reconcileTrustCommits,
   assertProjectReadable, readCommittedFile, existsCommittedFile, writeCommittedFile, listCommittedDirectory,
   allocateProjectId, projectCommitTime, hasProjectCommit, stageResearchMutation, drainResearchAuditOutbox, getResearchAuditProjectionStatus } from "./research/project-commit.js";

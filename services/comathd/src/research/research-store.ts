@@ -107,6 +107,7 @@ export class ResearchStore {
   private closed = false;
   private transactionDepth = 0;
   private transactionSequence = 0;
+  private readonly commitCallbacks: (() => void)[][] = [];
   private readonly context = new AsyncLocalStorage<{ active: boolean }>();
 
   constructor(root: string, options: ResearchStoreOptions) {
@@ -136,6 +137,13 @@ export class ResearchStore {
   all(sql: string, ...params: SQLInputValue[]): Record<string, unknown>[] {
     this.assertServiceSql(sql); return this.db.prepare(sql).all(...params);
   }
+  get inTransaction(): boolean { return this.transactionDepth > 0; }
+  afterCommit(callback: () => void): void {
+    this.assertOpen();
+    const current = this.commitCallbacks.at(-1);
+    if (current) current.push(callback);
+    else callback();
+  }
   transaction<T>(callback: () => T): T {
     this.assertOpen();
     if (callback.constructor.name === "AsyncFunction") throw new Error("Research transaction callback must be synchronous");
@@ -144,19 +152,26 @@ export class ResearchStore {
     this.db.exec(nested ? `SAVEPOINT ${savepoint}` : "BEGIN IMMEDIATE");
     this.transactionDepth++;
     const context = { active: true };
+    const callbacks: (() => void)[] = [];
+    this.commitCallbacks.push(callbacks);
+    let result: T;
     try {
-      const result = this.context.run(context, callback);
+      result = this.context.run(context, callback);
       if (result !== null && (typeof result === "object" || typeof result === "function") && typeof (result as { then?: unknown }).then === "function") {
         // Observe rejection without permitting a continuation to write after rollback.
         void Promise.resolve(result).catch(() => undefined);
         throw new Error("Research transaction callback must be synchronous, not Promise-returning");
       }
       this.db.exec(nested ? `RELEASE SAVEPOINT ${savepoint}` : "COMMIT");
-      return result;
     } catch (error) {
       this.db.exec(nested ? `ROLLBACK TO SAVEPOINT ${savepoint}; RELEASE SAVEPOINT ${savepoint}` : "ROLLBACK");
       throw error;
-    } finally { context.active = false; this.transactionDepth--; }
+    } finally { context.active = false; this.transactionDepth--; this.commitCallbacks.pop(); }
+    // A rolled-back savepoint never reaches here. Only the outer commit wakes consumers.
+    const parent = this.commitCallbacks.at(-1);
+    if (parent) parent.push(...callbacks);
+    else for (const notify of callbacks) notify();
+    return result;
   }
   migrateV1(): void {
     this.assertOpen();
