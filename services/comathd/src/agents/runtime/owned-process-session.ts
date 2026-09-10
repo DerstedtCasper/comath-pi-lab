@@ -24,6 +24,8 @@ export type OwnedProcessSession = { stdin: Writable; stdout: Readable; stderr: R
   completion: Promise<OwnedSessionCompletion>; terminate(): Promise<boolean> };
 /** Separate service-only injection surface. Never populated from command.env or worker input. */
 export type OwnedSessionServiceOptions = { environment?: Readonly<Record<string, string>> };
+export type OwnedToolProcessBinding = { execution_id: string; task_id: string; campaign_id: string; generation: number; attempt_key: string; command_ref: string };
+export type StartOwnedToolProcessSessionInput = Omit<StartOwnedProcessSessionInput, "grant"> & { ownership: OwnedToolProcessBinding };
 function fail(code: string, message = code): never { throw new ComathError(message, { code, statusCode: 409 }); }
 function programPath(program: string): string {
   if (!isAbsolute(program)) fail("AGENT_RUN_PROGRAM_NOT_ALLOWLISTED");
@@ -57,7 +59,17 @@ class BoundedInput extends Writable {
 
 /** Await ownership handshake, then return immediately with raw bidirectional streams. Not a sandbox. */
 export async function startOwnedProcessSession(input: StartOwnedProcessSessionInput, service: OwnedSessionServiceOptions = {}): Promise<OwnedProcessSession> {
-  const { runtime, grant } = input, store = runtime.store;
+  return startSession(input, { kind: "worker", binding: input.grant }, service);
+}
+
+/** Service-only tool admission binding; never supplies or borrows a worker deployment permit. */
+export async function startOwnedToolProcessSession(input: StartOwnedToolProcessSessionInput, service: OwnedSessionServiceOptions = {}): Promise<OwnedProcessSession> {
+  return startSession(input, { kind: "tool", binding: input.ownership }, service);
+}
+
+async function startSession(input: Omit<StartOwnedProcessSessionInput, "grant">,
+  ownership: { kind: "worker"; binding: ResearchGrant } | { kind: "tool"; binding: OwnedToolProcessBinding }, service: OwnedSessionServiceOptions): Promise<OwnedProcessSession> {
+  const { runtime } = input, grant = ownership.binding, store = runtime.store;
   const program = programPath(input.command.program), compare = (path: string) => process.platform === "win32" ? path.toLowerCase() : path;
   if (!input.allowed_programs.map(programPath).some(allowed => compare(allowed) === compare(program))) fail("AGENT_RUN_PROGRAM_NOT_ALLOWLISTED");
   for (const value of [input.startup_timeout_ms, input.stop_timeout_ms]) if (!Number.isSafeInteger(value) || value < 1 || value > 120000) fail("AGENT_PROCESS_TIMEOUT_INVALID");
@@ -72,17 +84,39 @@ export async function startOwnedProcessSession(input: StartOwnedProcessSessionIn
   }
   if ((input.command.args ?? []).some(value => typeof value !== "string" || value.includes("\0")) || Buffer.byteLength(JSON.stringify({ args: input.command.args ?? [], env })) > 262144) fail("AGENT_PROCESS_REQUEST_INVALID");
   const cwd = resolveProjectCommitPath(runtime.root, input.cwd === runtime.root ? ".tmp/comath/process-root" : input.cwd);
+  let toolClaimed = false;
   const verifyPermit = () => {
     if (getAcquiredProjectRuntime(runtime.root) !== runtime) fail("RESEARCH_OWNER_REQUIRED");
     assertProjectReadable(runtime.root, undefined, grant.campaign_id);
     const task = store.getTask(grant.task_id), attempt = store.get("SELECT * FROM attempts WHERE attempt_key=?", grant.attempt_key);
-    if (!task || !attempt || task.generation !== grant.generation || attempt.task_id !== task.task_id || Number(attempt.generation) !== grant.generation
-      || !["leased", "running"].includes(task.status) || attempt.fenced_at || !store.get("SELECT attempt_key FROM permits WHERE attempt_key=? AND resource_key='worker:deployment'", grant.attempt_key)) fail("AGENT_PROCESS_PERMIT_REQUIRED");
+    if (!task || !attempt || task.generation !== grant.generation || task.campaign_id !== grant.campaign_id || attempt.task_id !== task.task_id || Number(attempt.generation) !== grant.generation
+      || !["leased", "running"].includes(task.status) || attempt.fenced_at) fail("AGENT_PROCESS_PERMIT_REQUIRED");
+    if (ownership.kind === "worker") {
+      if (!store.get("SELECT attempt_key FROM permits WHERE attempt_key=? AND resource_key='worker:deployment'", grant.attempt_key)) fail("AGENT_PROCESS_PERMIT_REQUIRED");
+    } else {
+      const binding = ownership.binding, execution = store.get("SELECT * FROM tool_executions WHERE execution_id=?", binding.execution_id);
+      const permit = execution && store.get("SELECT * FROM permits WHERE attempt_key=? AND resource_key=?", binding.attempt_key, String(execution.permit_ref));
+      if (!execution || execution.attempt_key !== binding.attempt_key || execution.command_ref !== binding.command_ref
+        || execution.state !== (toolClaimed ? "starting" : "admitted") || execution.stop_intent || execution.handle_json
+        || execution.permit_ref !== `tool:${execution.kind}:${binding.execution_id}` || !permit || Number(permit.amount) < 1
+        || !["lean", "cas", "retrieval"].includes(String(execution.kind)) || !["leased", "running"].includes(String(attempt.state))
+        || attempt.stop_requested_at || attempt.stop_reason || Number(attempt.termination_confirmed ?? 0) !== 0
+        || !Number.isFinite(Date.parse(String(attempt.expires_at))) || runtime.clock.now() >= Date.parse(String(attempt.expires_at))
+        || !Number.isFinite(Date.parse(String(permit.deadline))) || runtime.clock.now() >= Date.parse(String(permit.deadline))) fail("AGENT_TOOL_PROCESS_PERMIT_REQUIRED");
+    }
   };
   verifyPermit(); input.signal.throwIfAborted(); const binaryHash = (await sha256File(program)).sha256; verifyPermit(); input.signal.throwIfAborted();
   mkdirSync(cwd, { recursive: true });
   const nonce = randomUUID(), handle: OwnedProcessHandle = { pid: 0, wrapper_pid: 0, creation_identity: null, wrapper_creation_identity: new Date().toISOString(), binary_path: program,
     binary_sha256: binaryHash, nonce, group_id: "unknown", isolation: "process_boundary_only" };
+  if (ownership.kind === "tool") {
+    store.transaction(() => {
+      verifyPermit();
+      const changed = store.run("UPDATE tool_executions SET state='starting' WHERE execution_id=? AND state='admitted' AND handle_json IS NULL", ownership.binding.execution_id);
+      if (Number(changed.changes) !== 1) fail("AGENT_TOOL_PROCESS_PERMIT_REQUIRED");
+    });
+    toolClaimed = true;
+  }
   const stdout = new Readable({ read() {} }), stderr = new Readable({ read() {} });
   let resolveReady!: () => void, rejectReady!: (error: Error) => void;
   const ready = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
@@ -112,8 +146,15 @@ export async function startOwnedProcessSession(input: StartOwnedProcessSessionIn
   const startedHandle = () => {
     verifyPermit();
     Object.freeze(handle);
-    store.transaction(() => { store.run("UPDATE attempts SET runtime_handle_json=?,state='running' WHERE attempt_key=?", JSON.stringify(handle), grant.attempt_key);
-      const task = store.getTask(grant.task_id)!; if (task.status === "leased") store.putTask({ ...task, status: "running", updated_at: new Date(runtime.clock.now()).toISOString() }); });
+    store.transaction(() => {
+      if (ownership.kind === "tool") {
+        const changed = store.run("UPDATE tool_executions SET handle_json=?,state='running' WHERE execution_id=? AND state='starting' AND handle_json IS NULL", JSON.stringify(handle), ownership.binding.execution_id);
+        if (Number(changed.changes) !== 1) fail("AGENT_TOOL_PROCESS_PERMIT_REQUIRED");
+      } else {
+        store.run("UPDATE attempts SET runtime_handle_json=?,state='running' WHERE attempt_key=?", JSON.stringify(handle), grant.attempt_key);
+        const task = store.getTask(grant.task_id)!; if (task.status === "leased") store.putTask({ ...task, status: "running", updated_at: new Date(runtime.clock.now()).toISOString() });
+      }
+    });
     started = true; clearTimeout(startupTimer);
     if (input.attempt_timeout_ms !== null) attemptTimer = setTimeout(() => stop("timeout"), input.attempt_timeout_ms);
     input.onStarted?.(handle); resolveReady();

@@ -30,6 +30,7 @@ import { createFormalizationIntake } from "./formalization-intake.js";
 import { createFormalCandidateDispatch, type FormalCandidateDispatchProfile } from "./formal-candidate-dispatch.js";
 import { createFormalCandidateIntake } from "./formal-candidate-intake.js";
 import { createFormalSubmissionLifecycle } from "./formal-submission-lifecycle.js";
+import { createFormalCandidateProjectService } from "./formal-candidate-project.js";
 import { listArtifactRefs } from "../artifacts/store.js";
 
 export type ResearchExecutionConsumer = {
@@ -97,6 +98,7 @@ export class ResearchDaemon {
   readonly formalCandidates;
   readonly formalCandidateIntake;
   readonly formalSubmissions;
+  readonly formalCandidateProjects;
   recovery: { blocked_operations: string[]; unconfirmed_attempts: string[] } = { blocked_operations: [], unconfirmed_attempts: [] };
   toolRecovery: { terminated: string[]; unconfirmed: string[] } = { terminated: [], unconfirmed: [] };
   private started = false;
@@ -176,6 +178,7 @@ export class ResearchDaemon {
       readCandidateReservation: this.formalCandidates.readCandidateReservation
     });
     this.formalSubmissions = createFormalSubmissionLifecycle(runtime, { readSubmissionReceipt: this.formalCandidateIntake.readSubmissionReceipt });
+    this.formalCandidateProjects = createFormalCandidateProjectService(runtime, { readSubmissionReceipt: this.formalCandidateIntake.readSubmissionReceipt });
     this.scheduler = createPortfolioScheduler(runtime, resourcesWithLegacy(config), {
       validateTask: task => {
         this.app.assertTaskPolicy(task);
