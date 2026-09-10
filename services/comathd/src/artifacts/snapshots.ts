@@ -12,6 +12,8 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
+import { assertProjectReadable } from "../research/project-commit.js";
+import { isDaemonMaintenanceAuditAllowed } from "../research/daemon-owner.js";
 import {
   sanitizePublicFormalAuthorityText,
   sanitizePublicFormalAuthorityVocabulary
@@ -437,6 +439,9 @@ function secretScanSummary(scans: SecretScanResult[]): SnapshotManifest["secret_
 
 export async function exportSnapshot(projectRoot: string, input: ExportSnapshotInput): Promise<ExportSnapshotResult> {
   const root = resolve(projectRoot);
+  // Reject ownerless control state before creating any snapshot files. Migration
+  // uses a live-owner maintenance scope after its explicit quiescence barrier.
+  if (!isDaemonMaintenanceAuditAllowed(root)) assertProjectReadable(root, ".comath", undefined, true);
   const snapshotKind = input.audience ?? "public_download";
   const snapshotBase = snapshotsDir(root);
   mkdirSync(snapshotBase, { recursive: true });

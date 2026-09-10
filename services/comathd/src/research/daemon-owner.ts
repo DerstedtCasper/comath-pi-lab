@@ -1,10 +1,26 @@
 import { lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { ComathError } from "../errors.js";
 import { assertPathAllowed } from "../security/path-policy.js";
 
 export type DaemonOwner = { readonly root: string; readonly path: string; release(): void };
+const liveOwners = new WeakSet<DaemonOwner>();
+const maintenance = new AsyncLocalStorage<{ owner: DaemonOwner; active: boolean }>();
+
+/** Migration-only audit authorization; the owner object must be a live instance issued here. */
+export async function withDaemonOwnerMaintenance<T>(owner: DaemonOwner, callback: () => Promise<T>): Promise<T> {
+  if (!liveOwners.has(owner)) throw new Error("Maintenance requires a live daemon owner");
+  const context = { owner, active: true };
+  try { return await maintenance.run(context, callback); } finally { context.active = false; }
+}
+export function isDaemonMaintenanceAuditAllowed(root: string): boolean {
+  const context = maintenance.getStore();
+  if (!context) return false;
+  if (!context.active || !liveOwners.has(context.owner)) throw new Error("Expired migration maintenance context");
+  return realpathSync(root) === context.owner.root;
+}
 
 /** Check every existing ancestor, including junctions, before SQLite can create a file. */
 export function resolveResearchControlPath(projectRoot: string, filename?: string): string {
@@ -34,8 +50,10 @@ export function acquireDaemonOwner(projectRoot: string): DaemonOwner {
     throw error;
   }
   let released = false;
-  return { root, path, release() {
+  const owner: DaemonOwner = { root, path, release() {
     if (released) return;
-    try { db.exec("ROLLBACK"); } finally { db.close(); released = true; }
+    try { db.exec("ROLLBACK"); } finally { db.close(); released = true; liveOwners.delete(owner); }
   } };
+  liveOwners.add(owner);
+  return owner;
 }

@@ -17,6 +17,12 @@ export * from "./artifacts/store.js";
 export * from "./artifacts/snapshot-manifest.js";
 export * from "./artifacts/snapshots.js";
 export { ProjectRuntime, getAcquiredProjectRuntime } from "./research/project-runtime.js";
+export { withProjectCommit, withTrustedWriter, prepareTrustCommit, finalizeTrustCommit, reconcileTrustCommits,
+  assertProjectReadable, readCommittedFile, existsCommittedFile, writeCommittedFile, listCommittedDirectory,
+  allocateProjectId, projectCommitTime, hasProjectCommit, stageResearchMutation, drainResearchAuditOutbox, getResearchAuditProjectionStatus } from "./research/project-commit.js";
+export type { ProjectCommitOperation, ProjectCommitFault, ResearchAuditProjectionStatus } from "./research/project-commit.js";
+export { prepareArtifact, commitArtifactReference } from "./research/research-artifacts.js";
+export type { PreparedArtifact } from "./research/research-artifacts.js";
 export type { ProjectRuntimeDependencies } from "./research/project-runtime.js";
 export { acquireDaemonOwner } from "./research/daemon-owner.js";
 export type { DaemonOwner } from "./research/daemon-owner.js";

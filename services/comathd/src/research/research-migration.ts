@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { exportSnapshot, restoreSnapshot, verifySnapshot } from "../artifacts/snapshots.js";
 import { ComathError } from "../errors.js";
-import { resolveResearchControlPath, type DaemonOwner } from "./daemon-owner.js";
+import { resolveResearchControlPath, withDaemonOwnerMaintenance, type DaemonOwner } from "./daemon-owner.js";
 import { researchDatabasePath, RESEARCH_SCHEMA_VERSION, type ResearchClock } from "./research-store.js";
 
 const receiptSchema = z.strictObject({ schema_version: z.literal(1), database_schema_version: z.literal(1),
@@ -133,7 +133,7 @@ export async function ensureResearchControlReady(layout: ResearchLayout, owner: 
       try {
         const metadata = JSON.parse(readFileSync(join(root, ".comath", "project.json"), "utf8")) as { project_id?: string };
         if (!metadata.project_id) throw blocked("Legacy project metadata is missing its project ID");
-        const snapshot = await exportSnapshot(root, { project_id: metadata.project_id, actor: "research-migration", audience: "internal_restore" });
+        const snapshot = await withDaemonOwnerMaintenance(owner, () => exportSnapshot(root, { project_id: metadata.project_id!, actor: "research-migration", audience: "internal_restore" }));
         journal.snapshot_manifest_path = snapshot.manifest_path;
         journal.snapshot_manifest_sha256 = snapshotHash(snapshot.manifest_path);
         journal.phase = "backup_created";
