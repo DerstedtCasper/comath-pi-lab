@@ -19,6 +19,7 @@ import type { ContextPackPolicy } from "./context-pack-builder.js";
 import { createResearchFailureService } from "./failure-service.js";
 import type { FailureIndexOptions } from "./failure-index.js";
 import { createResearchToolExecutor } from "./research-tool-executor.js";
+import { createConfiguredCodexAdapter } from "../agents/runtime/codex-owned-launcher.js";
 
 export type ResearchExecutionConsumer = {
   validate(task: ResearchTask): void;
@@ -96,7 +97,20 @@ export class ResearchDaemon {
         failure_id: record.failure.failure_id, sha256: record.sha256, route_fingerprint: record.failure.route_fingerprint,
         failure_mode: record.failure.failure_mode, retry_conditions: record.failure.retry_conditions, match: record.match
       })) ?? [] });
-    this.adapters = createRuntimeRegistry(options.createAdapters?.(runtime, config, this.contextService?.buildPrompt) ?? options.adapters);
+    const suppliedAdapters = options.createAdapters?.(runtime, config, this.contextService?.buildPrompt) ?? options.adapters;
+    const configuredAdapters = new Map<string, AgentRuntimeAdapter>();
+    if (!suppliedAdapters && Object.values(config.runtimes).some(host => host.kind === "codex-app-server")) {
+      configuredAdapters.set("codex-app-server", createConfiguredCodexAdapter(runtime, config, {
+        buildPrompt: input => this.contextService?.buildPrompt(input) ?? Promise.reject(new ComathError("A host context policy is required", { code: "CONTEXT_POLICY_REQUIRED" })),
+        gatewayUrl: () => {
+          const address = this.workerGatewayAddress();
+          if (!address || typeof address === "string") fail("WORKER_GATEWAY_UNAVAILABLE", "Worker gateway must be listening before launch");
+          const host = address.address === "0.0.0.0" ? "127.0.0.1" : address.address === "::" ? "::1" : address.address;
+          return `http://${host.includes(":") ? `[${host}]` : host}:${address.port}`;
+        }
+      }));
+    }
+    this.adapters = createRuntimeRegistry(suppliedAdapters ?? configuredAdapters);
     const policies = options.policies ?? { model_policy_ids: Object.keys(config.model_policies), tool_policy_ids: Object.keys(config.tool_policies),
       role_template_ids: listRoleTemplates().map(role => role.id) };
     if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.policyForTask, verifyRetryCondition: options.verifyRetryCondition });
