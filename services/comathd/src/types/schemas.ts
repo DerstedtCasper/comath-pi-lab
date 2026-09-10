@@ -759,6 +759,9 @@ export const stageRunRefSchema = z
     stage: campaignStageSchema,
     status: z.enum(["completed", "blocked", "failed"]),
     artifact_paths: z.array(z.string()).default([]),
+    obligation_id: stableId.optional(),
+    stage_attempt: z.number().int().positive().optional(),
+    scope_package_sha256: sha256.optional(),
     created_at: isoTimestamp
   })
   .strict();
@@ -776,6 +779,7 @@ export const researchCampaignSchema = z
     stage_runs: z.array(stageRunRefSchema).default([]),
     open_obligations: z.array(proofObligationSchema).default([]),
     active_obligation_id: stableId.optional(),
+    obligation_cursors: z.record(stableId, z.object({ current_stage: campaignStageSchema, stage_attempt: z.number().int().positive(), blocked_reason: z.string().min(1).optional() }).strict()).optional(),
     accepted_artifacts: z.array(artifactRefSchema).default([]),
     blockers: z.array(z.record(z.string(), z.unknown())).default([]),
     next_actions: z.array(z.string()).default([]),
