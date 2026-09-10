@@ -20,6 +20,8 @@ import { createResearchFailureService } from "./failure-service.js";
 import type { FailureIndexOptions } from "./failure-index.js";
 import { createResearchToolExecutor } from "./research-tool-executor.js";
 import { createConfiguredCodexAdapter } from "../agents/runtime/codex-owned-launcher.js";
+import { createResearchResultService } from "./research-result-service.js";
+import { createSupervisorDriver, defaultResearchContextPolicy } from "./supervisor-driver.js";
 
 export type ResearchExecutionConsumer = {
   validate(task: ResearchTask): void;
@@ -73,6 +75,7 @@ export class ResearchDaemon {
   readonly app;
   readonly scheduler;
   readonly reconciler;
+  readonly supervisor?: ReturnType<typeof createSupervisorDriver>;
   recovery: { blocked_operations: string[]; unconfirmed_attempts: string[] } = { blocked_operations: [], unconfirmed_attempts: [] };
   toolRecovery: { terminated: string[]; unconfirmed: string[] } = { terminated: [], unconfirmed: [] };
   private started = false;
@@ -86,12 +89,13 @@ export class ResearchDaemon {
   private contextService?: ReturnType<typeof createResearchContextService>;
   private failureService?: ReturnType<typeof createResearchFailureService>;
   private toolExecutor?: ReturnType<typeof createResearchToolExecutor>;
+  private resultService?: ReturnType<typeof createResearchResultService>;
   get isReleased(): boolean { return this.released; }
   private constructor(readonly runtime: ProjectRuntime, readonly config: ResearchConfig, private readonly options: ResearchDaemonOptions) {
-    if (options.contextPolicy) this.contextService = createResearchContextService(runtime, { policyForTask: task => {
+    this.contextService = createResearchContextService(runtime, { policyForTask: task => {
       const model = config.model_policies[task.model_policy_id], tools = config.tool_policies[task.tool_policy_id];
       if (!model || !tools) fail("RESEARCH_POLICY_UNKNOWN", "Context requires configured model and tool policies");
-      return { ...options.contextPolicy!(task), byte_cap: model.initial_context_bytes, visibility: tools.visibility };
+      return { ...(options.contextPolicy ? options.contextPolicy(task) : defaultResearchContextPolicy(task, tools.visibility)), byte_cap: model.initial_context_bytes, visibility: tools.visibility };
     }, findFailures: (task, policy) => this.failureService?.index.findFailedRoutes({ scope: task.scope, problem_slice: task.problem_slice,
       method_family: task.method_family, route: this.failureService.routeFor(task, policy), limit: 20 }).map(record => ({
         failure_id: record.failure.failure_id, sha256: record.sha256, route_fingerprint: record.failure.route_fingerprint,
@@ -113,6 +117,7 @@ export class ResearchDaemon {
     this.adapters = createRuntimeRegistry(suppliedAdapters ?? configuredAdapters);
     const policies = options.policies ?? { model_policy_ids: Object.keys(config.model_policies), tool_policy_ids: Object.keys(config.tool_policies),
       role_template_ids: listRoleTemplates().map(role => role.id) };
+    if (config.supervisor && !policies.role_template_ids.includes(config.supervisor.role_template)) fail("SUPERVISOR_ROLE_UNKNOWN", "Supervisor role must be selected from the configured host role templates");
     if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.policyForTask, verifyRetryCondition: options.verifyRetryCondition });
     this.app = createResearchOrchestrator(runtime, { ...policies, validateRoute: (draft, campaign) => {
       policies.validateRoute?.(draft, campaign); this.failureService?.validateRoute(draft, campaign);
@@ -161,6 +166,11 @@ export class ResearchDaemon {
       allowedTools: task => config.tool_policies[task.tool_policy_id]?.allowed_tools ?? [],
       authorizeReaderUrl: (task, url) => options.authorizeReaderUrl?.(task, url) ?? this.contextService?.allowsSourceUrl(task, url) ?? false,
       onArtifactCommitted: this.contextService?.gatewayOptions.onArtifactCommitted });
+    this.resultService = createResearchResultService(runtime, {
+      authorizeArtifact: options.workerGateway?.authorizeArtifact ?? this.contextService.gatewayOptions.authorizeArtifact,
+      onArtifactCommitted: options.workerGateway?.onArtifactCommitted ?? this.contextService.gatewayOptions.onArtifactCommitted
+    });
+    if (config.supervisor) this.supervisor = createSupervisorDriver(this.app, this.scheduler, config, this.resultService);
   }
   static async create(root: string, options: ResearchDaemonOptions): Promise<ResearchDaemon> {
     const config = researchConfigSchema.parse(options.config);
@@ -175,6 +185,7 @@ export class ResearchDaemon {
       drainResearchAuditOutbox(runtime.root);
       return daemon;
     } catch (error) {
+      await daemon?.supervisor?.close();
       daemon?.reconciler.close(); daemon?.scheduler.close(); daemon?.app.close();
       try { await daemon?.adapters.close(); } finally { await runtime.release(); }
       throw error;
@@ -185,7 +196,9 @@ export class ResearchDaemon {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     if (this.gatewayReady) return this.gatewayReady;
     this.gateway = createWorkerGateway(this.runtime, { ...(this.contextService?.gatewayOptions ?? { authorizeArtifact: () => false }),
-      ...(this.failureService ? { failure: this.failureService.recordWorkerFailure } : {}), tool: this.toolExecutor?.workerTool, ...this.options.workerGateway });
+      ...(this.failureService ? { failure: this.failureService.recordWorkerFailure } : {}),
+      result: this.resultService?.acceptWorkerResult, proposal: this.resultService?.acceptWorkerProposal,
+      tool: this.toolExecutor?.workerTool, ...this.options.workerGateway });
     this.gatewayReady = this.gateway.listen({ host: this.config.worker_gateway_host, port: this.config.worker_gateway_port });
     return this.gatewayReady;
   }
@@ -198,14 +211,15 @@ export class ResearchDaemon {
   start(): void {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     if (this.started) return;
-    this.started = true; this.reconciler.start(); this.scheduler.start();
+    this.started = true; this.reconciler.start(); this.supervisor?.start(); this.scheduler.start();
   }
   close(): Promise<void> {
     if (this.closing) return this.closing;
+    this.supervisor?.stop();
     this.scheduler.stopGrants();
     this.closing = Promise.resolve().then(async () => {
       const errors: unknown[] = [];
-      const draining: Promise<unknown>[] = [this.reconciler.drain()];
+      const draining: Promise<unknown>[] = [this.reconciler.drain(), this.supervisor?.close() ?? Promise.resolve()];
       // Persist handoff intents before attempting cancellation. Unconfirmed work retains permits.
       for (const row of this.runtime.store.all("SELECT attempt_key,task_id FROM attempts WHERE state<>'terminated'")) {
         if (this.runtime.store.getTask(String(row.task_id))?.kind === "legacy_run") continue;

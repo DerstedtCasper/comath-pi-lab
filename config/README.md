@@ -16,6 +16,12 @@ The daemon acquires one owner per canonical project, recovers durable state befo
 
 `research.live_tools` optionally configures `retrieval_search`, `retrieval_read` and `theorem_search` with an explicit endpoint, supported wire format, terms and optional credential environment-variable name. The sample configures none. Each worker call must also be listed in its tool policy and is admitted through the shared retrieval permit pool. Reader URLs must occur in task-readable source evidence or an explicit host authorization callback. Successful result artifacts and replayable receipts are committed together; repeating the same command does not repeat the HTTP request. A disconnected worker request cancels its HTTP tool, while operator command acceptance remains durable.
 
+An optional `research.supervisor` object requires explicit `model_policy_id`, `tool_policy_id`, `role_template` and `budget` values. It queues normal budget-managed synthesize tasks and reads complete service snapshots of the charter, frontier and budgets. It never grants its own budget or host approval. The default context policy permits only exact task input references; formal assumptions and blind statement briefs require an explicit host policy. An oversized required snapshot blocks rather than truncating research context.
+
+Configured Codex workers use a private generation-specific `CODEX_HOME`, strict configuration validation and environment-variable credentials. Worker MCP receives its scoped service capability, not the provider credential. The native readiness guard currently blocks actual launch before private configuration or credential materialization; installing a binary or selecting `sandbox_mode` does not bypass that guard.
+
+Worker research results and supervisor proposals enter the service's structure/provenance checks and immutable artifact commit. Accepted results retain `proof_authority=none`. A completed task can replay its exact committed submission while its capability remains current; new tool calls and changed submissions remain rejected. Validation aggregation and formal-candidate ingestion require their dedicated consumers and cannot be inferred from a generic accepted result.
+
 ## Provider Helper Handles
 
 Adapter OS-isolation provider helpers are configured outside the sample with absolute service-owned executable paths. macOS is outside the current GA environment-adaptation scope.

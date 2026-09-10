@@ -55,7 +55,12 @@ export function createWorkerGateway(runtime: ProjectRuntime, options: WorkerGate
         throw new ComathError("Route not found", { code: "NOT_FOUND", statusCode: 404 });
       }
       if (request.headers.origin) throw new ComathError("Browser origins are not accepted by worker transport", { code: "WORKER_ORIGIN_DENIED", statusCode: 403 });
-      const principal = authenticateWorker(runtime, request.headers.authorization, checkpointRoute || artifactPut);
+      // A completed task may only replay its already committed submission while the capability is current.
+      const submissionRoute = post && ["/worker/v1/results", "/worker/v1/proposals"].includes(url.pathname);
+      const submissionBody = submissionRoute ? await readBody(request) : undefined;
+      const replayCommand = submissionBody && typeof submissionBody === "object" && "command_id" in submissionBody && typeof submissionBody.command_id === "string"
+        ? submissionBody.command_id : undefined;
+      const principal = authenticateWorker(runtime, request.headers.authorization, checkpointRoute || artifactPut, replayCommand);
       let data: unknown;
       if (get && url.pathname === "/worker/v1/context") data = options.context ? await options.context(principal) : unavailable();
       else if (get && artifactRead) {
@@ -69,10 +74,10 @@ export function createWorkerGateway(runtime: ProjectRuntime, options: WorkerGate
         if (createHash("sha256").update(bytes).digest("hex") !== ref.sha256) throw new ComathError("Artifact integrity mismatch", { code: "WORKER_ARTIFACT_CORRUPT", statusCode: 409 });
         data = { artifact_id: ref.id, sha256: ref.sha256, content_base64: bytes.toString("base64") };
       } else {
-        const raw = await readBody(request);
+        const raw = submissionRoute ? submissionBody : await readBody(request);
         if (!raw || typeof raw !== "object") throw new ComathError("Expected worker request object", { statusCode: 400 });
         requireWorkerIdentity(principal, raw);
-        authenticateWorker(runtime, request.headers.authorization, checkpointRoute || artifactPut);
+        authenticateWorker(runtime, request.headers.authorization, checkpointRoute || artifactPut, replayCommand);
         if (checkpointRoute) {
           const body = checkpointRequest.parse(raw);
           data = await checkpoints.commitCheckpoint({ ...body, lease_token: request.headers.authorization!.slice(7) });

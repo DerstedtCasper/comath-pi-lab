@@ -3,6 +3,7 @@ import { isAbsolute, join } from "node:path";
 import { z } from "zod";
 import { assertPathAllowed } from "../security/path-policy.js";
 import { runtimeLayout } from "../project/runtime-layout.js";
+import { taskBudgetSchema } from "../research/research-schemas.js";
 
 export type ComathConfig = {
   version: number;
@@ -16,6 +17,8 @@ const wheelHttp = z.strictObject({ endpoint: z.url(), wire_format: z.enum(["quer
   timeout_ms: z.number().int().min(1).max(120000).optional(), max_response_bytes: z.number().int().min(1).max(2 * 1024 * 1024).optional(), terms: wheelTerms });
 export const researchConfigSchema = z.strictObject({
   enabled: z.boolean().default(false), max_active_workers: z.number().int().min(1).max(64).default(4),
+  supervisor: z.strictObject({ model_policy_id: z.string().min(1).max(160), tool_policy_id: z.string().min(1).max(160),
+    role_template: z.string().min(1).max(160), budget: taskBudgetSchema.refine(value => value.token_enforcement !== "wall_only_legacy", "Supervisor requires an explicit research budget") }).optional(),
   provider_policies: z.record(z.string(), z.strictObject({ launch_rpm: z.number().int().min(1).max(4).default(4), max_sessions: z.number().int().min(1).max(64).default(4) })).default({}),
   model_policies: z.record(z.string(), z.strictObject({ provider_id: z.string().min(1), runtime_id: z.string().min(1), model: z.string().min(1), initial_context_bytes: z.number().int().min(1024).max(16 * 1024 * 1024), max_sessions: z.number().int().min(1).max(64).optional() })).default({}),
   tool_policies: z.record(z.string(), z.strictObject({ allowed_tools: z.array(z.string().min(1)).max(100), visibility: z.enum(["task", "blind"]).default("task") })).default({}),
@@ -35,6 +38,10 @@ export const researchConfigSchema = z.strictObject({
       script: z.string().refine(isAbsolute), script_sha256: z.string().regex(/^[a-f0-9]{64}$/) }).optional() }).prefault({}),
   tool_limits: z.strictObject({ lean: z.number().int().min(1).max(64).default(1), cas: z.number().int().min(1).max(64).default(2), retrieval: z.number().int().min(1).max(64).default(4) }).prefault({})
 }).superRefine((config, ctx) => {
+  if (config.supervisor && (!config.enabled || !config.model_policies[config.supervisor.model_policy_id] || !config.tool_policies[config.supervisor.tool_policy_id])) {
+    ctx.addIssue({ code: "custom", message: "Supervisor requires research.enabled and existing host model/tool policies" });
+  }
+  if (config.supervisor && config.tool_policies[config.supervisor.tool_policy_id]?.visibility === "blind") ctx.addIssue({ code: "custom", message: "Supervisor needs the complete frontier and cannot use a blind tool policy" });
   if (config.lease_ttl_ms < 3 * config.heartbeat_ms) ctx.addIssue({ code: "custom", message: "Lease TTL must be at least three heartbeats" });
   for (const [id, policy] of Object.entries(config.model_policies)) if (!config.provider_policies[policy.provider_id] || !config.runtimes[policy.runtime_id]) ctx.addIssue({ code: "custom", message: `Model policy ${id} has an unknown provider/runtime` });
   for (const policy of Object.values(config.provider_policies)) if (policy.max_sessions > config.max_active_workers) ctx.addIssue({ code: "custom", message: "Provider session cap exceeds deployment cap" });

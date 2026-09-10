@@ -85,7 +85,7 @@ export function createConfiguredCodexAdapter(runtime: ProjectRuntime, config: Re
     const grant: ResearchGrant = { task_id: task.task_id, campaign_id: task.campaign_id, generation: task.generation,
       attempt_key: input.attempt_key, run_id: String(attempt.run_id), lease_token: input.lease_capability,
       expires_at: String(attempt.expires_at), provider_id: model.provider_id, runtime_id: model.runtime_id, model_policy_id: task.model_policy_id };
-    const session = await startOwnedProcessSession({ runtime, grant, command: { program: host.binary, args: ["app-server", "--listen", "stdio://"] },
+    const session = await startOwnedProcessSession({ runtime, grant, command: { program: host.binary, args: ["app-server", "--strict-config", "--listen", "stdio://"] },
       cwd: workspace.workspace, allowed_programs: [host.binary], signal: input.signal, interactive: true,
       startup_timeout_ms: 30000, attempt_timeout_ms: task.budget.wall_ms, stop_timeout_ms: Math.min(120000, config.stop_grace_ms),
       onStarted: handle => {
