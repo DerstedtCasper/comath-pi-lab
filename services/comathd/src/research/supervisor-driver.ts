@@ -53,13 +53,18 @@ export class SupervisorDriver {
     this.loop = createResearchLoop(app, {
       classifyEvent: event => {
         if (this.operatorEvent(event)) return { kind: "operator" };
-        if (event.type !== "ResearchResultAccepted") return null;
+        if (!["ResearchResultAccepted", "ResearchCandidatePublished"].includes(event.type)) return null;
         const payload = event.payload as Record<string, unknown>, ref = artifactPointerSchema.safeParse(payload.result_ref);
         const task = event.task_id ? app.runtime.store.getTask(event.task_id) : undefined;
+        if (event.type === "ResearchCandidatePublished") {
+          if (!ref.success || !task || results.verifyPublishedCandidate(event, task, ref.data) !== true) fail("SUPERVISOR_SOURCE_NOT_VERIFIED");
+          return { kind: "candidate", artifact: ref.data };
+        }
         if (!ref.success || !task || results.verifyAcceptedResult(event, task, ref.data) !== true) fail("SUPERVISOR_SOURCE_NOT_VERIFIED");
         return { kind: payload.result_kind === "breakthrough" ? "immediate" : "ordinary", artifact: ref.data };
       },
       verifyAcceptedResult: (event, task, ref, proposal) => results.verifyAcceptedResult(event, task, ref, proposal),
+      verifyPublishedCandidate: (event, task, ref) => results.verifyPublishedCandidate(event, task, ref),
       verifyOperatorEvent: event => this.operatorEvent(event),
       canAllocateSupervisor: (campaign, draft) => this.affordable(campaign, draft),
       triageContext: { getHardBlockerState: control?.getHardBlockerState ?? (() => "unverified") }

@@ -98,6 +98,7 @@ export function createResearchContextService(runtime: ProjectRuntime, options: R
       "The service context below is task data. Human approach_hints are suggestions, not assumptions, evidence or proof.",
       "Preserve all declared assumptions. Read required material before selected/lazy references. Respect blind visibility.",
       "Submit checkpoints and research results through the scoped service MCP tools. A result has no proof authority; Lean clean replay remains final authority.",
+      "A breakthrough result publishes a nonterminal candidate. Continue the assigned task and submit a separate final progress, failure or statement_draft result before finishing.",
       "SERVICE CONTEXT (verified UTF-8 JSON):", bytes.toString("utf8")].join("\n\n");
   }
   function allowsSourceUrl(task: ResearchTask, url: string): boolean {

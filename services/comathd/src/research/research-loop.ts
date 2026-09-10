@@ -13,6 +13,7 @@ const id = z.string().min(1).max(160);
 const triggerSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("ordinary"), artifact: artifactPointerSchema }),
   z.strictObject({ kind: z.literal("immediate"), artifact: artifactPointerSchema }),
+  z.strictObject({ kind: z.literal("candidate"), artifact: artifactPointerSchema }),
   z.strictObject({ kind: z.literal("operator") })
 ]);
 export type SupervisorTrigger = z.infer<typeof triggerSchema>;
@@ -22,6 +23,7 @@ export type ResearchLoopOptions = {
   /** Must synchronously verify accepted source bytes, scope and generation. When proposal is
    * supplied, it must additionally match the accepted artifact's actual parsed content. */
   verifyAcceptedResult(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>, proposal?: unknown): boolean;
+  verifyPublishedCandidate?: (event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>) => boolean;
   verifyOperatorEvent(event: Readonly<ResearchEvent>): boolean;
   /** Host ledger feasibility only; dispatch still acquires ordinary scheduler reservations. */
   canAllocateSupervisor(campaign: Readonly<ResearchControlCampaign>, draft: Readonly<ResearchTaskDraft>): boolean;
@@ -104,8 +106,14 @@ export class ResearchLoop {
           if (this.options.verifyOperatorEvent(event) !== true) fail("SUPERVISOR_OPERATOR_EVENT_UNVERIFIED");
           sourceKey = hash({ campaignId, seq: event.seq });
         } else {
-          const task = this.accepted(event, trigger.artifact);
-          sourceKey = hash({ campaignId, task_id: task.task_id, generation: task.generation, artifact: trigger.artifact });
+          let task: ResearchTask;
+          if (trigger.kind === "candidate") {
+            const source = event.task_id && store.getTask(event.task_id);
+            if (!source || event.type !== "ResearchCandidatePublished" || source.campaign_id !== campaignId
+              || this.options.verifyPublishedCandidate?.(event, source, trigger.artifact) !== true) fail("SUPERVISOR_SOURCE_NOT_VERIFIED");
+            task = source;
+          } else task = this.accepted(event, trigger.artifact);
+          sourceKey = hash({ campaignId, task_id: task.task_id, generation: event.generation, artifact: trigger.artifact });
         }
         const key = `supervisor-source:${sourceKey}`;
         if (store.get("SELECT command_id FROM commands WHERE command_id=?", key)) continue;

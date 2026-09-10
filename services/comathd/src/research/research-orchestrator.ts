@@ -211,8 +211,10 @@ export class ResearchOrchestrator {
       this.requireCampaign(input.campaign_id);
       const source = this.getTask(input.source_task_id), validator = this.getTask(input.task_id);
       if (source.campaign_id !== input.campaign_id || validator.campaign_id !== input.campaign_id) fail("RESEARCH_VALIDATION_SCOPE", "Validation binding crosses campaign");
-      const existing = this.runtime.store.get("SELECT payload_sha256,source_task_id FROM candidates WHERE candidate_id=?", input.candidate_id);
+      const existing = this.runtime.store.get("SELECT payload_sha256,source_task_id,scope_json FROM candidates WHERE candidate_id=?", input.candidate_id);
       if (existing && (existing.payload_sha256 !== input.payload_sha256 || existing.source_task_id !== source.task_id)) fail("RESEARCH_CANDIDATE_CONFLICT", "Candidate ID refers to different source material");
+      const candidateScope = existing ? JSON.parse(String(existing.scope_json)) : source.scope;
+      if (canonicalJson(validator.scope) !== canonicalJson(candidateScope)) fail("RESEARCH_VALIDATION_SCOPE", "Validator must retain the candidate's approved research scope");
       if (!existing) this.runtime.store.run("INSERT INTO candidates(candidate_id,source_task_id,scope_json,payload_sha256,validation_state,result_json) VALUES (?,?,?,?,'unvalidated',?)",
         input.candidate_id, source.task_id, JSON.stringify(source.scope), input.payload_sha256,
         JSON.stringify({ source_task_id: source.task_id, payload_sha256: input.payload_sha256, proof_authority: "none" }));
@@ -223,8 +225,8 @@ export class ResearchOrchestrator {
       return { candidate_id: input.candidate_id, current_task_id: validator.task_id };
     });
   }
-  validationSlots(candidateId: string): { role_slot: string; current_task_id: string; prior_task_ids: string[] }[] {
-    return this.runtime.store.all("SELECT role_slot,current_task_id,prior_task_ids_json FROM validation_tasks WHERE candidate_id=? ORDER BY role_slot", candidateId)
+  validationSlots(candidateId: string, policyVersion?: string): { role_slot: string; current_task_id: string; prior_task_ids: string[] }[] {
+    return this.runtime.store.all(`SELECT role_slot,current_task_id,prior_task_ids_json FROM validation_tasks WHERE candidate_id=?${policyVersion === undefined ? "" : " AND policy_version=?"} ORDER BY role_slot`, ...[candidateId, ...(policyVersion === undefined ? [] : [policyVersion])])
       .map(row => ({ role_slot: String(row.role_slot), current_task_id: String(row.current_task_id), prior_task_ids: JSON.parse(String(row.prior_task_ids_json)) as string[] }));
   }
   getTask(taskId: string): ResearchTask {

@@ -10,7 +10,7 @@ import { canonicalJson } from "../verification/runner-contracts.js";
 import { createCheckpointStore, researchCheckpointSchema } from "./checkpoint-store.js";
 import { failureMemorySchema } from "./failure-index.js";
 import { triageResultSchema } from "./supervisor-policy.js";
-import { notifyResearchEventsCommitted } from "./event-store.js";
+import { createResearchEventStore, notifyResearchEventsCommitted } from "./event-store.js";
 import { assertProjectReadable, resolveProjectCommitPath, stageResearchMutation, withProjectCommit, type ProjectCommitOperation } from "./project-commit.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "./project-runtime.js";
 import { commitArtifactReference, prepareArtifact } from "./research-artifacts.js";
@@ -32,19 +32,30 @@ const submissionSchema = z.union([
 ]);
 export type ResearchResultReceipt = { status: "accepted" | "rejected"; command_id: string; task_id: string; generation: number; campaign_id: string;
   attempt_key: string; scope_sha256: string; request_sha256: string; result_ref: ArtifactPointer; operation_id: string;
-  event_type: "ResearchResultAccepted" | "SupervisorProposalAccepted" | "SupervisorProposalRejected";
+  event_type: "ResearchResultAccepted" | "ResearchCandidatePublished" | "SupervisorProposalAccepted" | "SupervisorProposalRejected";
   result_id?: string; result_kind: ResearchResult["kind"] | "supervisor_proposal"; base_revision?: number;
-  rejection_code?: string; proof_authority: "none"; event_seq?: number };
+  candidate_id?: string; rejection_code?: string; proof_authority: "none"; event_seq?: number };
+export type ResearchCandidateReceipt = ResearchResultReceipt & { status: "accepted"; event_type: "ResearchCandidatePublished";
+  result_kind: "breakthrough"; result_id: string; candidate_id: string };
+/** Immutable producer metadata. Validation consumers may update validation_state, not this source binding. */
+export type ResearchCandidatePublication = { schema_version: "comath.research_candidate_publication.v1"; candidate_id: string; result_id: string;
+  source_task_id: string; source_generation: number; campaign_id: string; scope_sha256: string; checkpoint_id: string;
+  result_ref: ArtifactPointer; operation_id: string; proof_authority: "none" };
 export type ResearchResultServiceOptions = { authorizeArtifact: (attemptKey: string, ref: ArtifactPointer) => boolean;
-  onArtifactCommitted?: (principal: WorkerPrincipal, ref: ArtifactPointer) => void; commitFault?: ProjectCommitOperation["fault"] };
+  onArtifactCommitted?: (principal: WorkerPrincipal, ref: ArtifactPointer) => void;
+  /** At-least-once wakeup after durable publication; consumers must also read durable events and deduplicate. */
+  onCandidatePublished?: (receipt: Readonly<ResearchCandidateReceipt>) => void; commitFault?: ProjectCommitOperation["fault"] };
 export type ResearchResultService = {
   acceptWorkerResult(principal: WorkerPrincipal, raw: unknown): Promise<ResearchResultReceipt>;
   acceptWorkerProposal(principal: WorkerPrincipal, raw: unknown): Promise<ResearchResultReceipt>;
   verifyAcceptedResult(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>, proposal?: unknown): boolean;
   verifyRejectedProposal(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>): boolean;
+  /** Historical publication provenance only; independent of a final-result head or mathematical validation state. */
+  verifyPublishedCandidate(event: Readonly<ResearchEvent>, sourceTask: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>): boolean;
 };
 const digest = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
 const hash = (value: unknown) => digest(canonicalJson(value));
+const candidateId = (result: ResearchResult) => `RCAND-${hash({ source_task_id: result.task_id, source_generation: result.generation, result_id: result.result_id })}`;
 function fail(code: string): never { throw new ComathError(code, { code, statusCode: code.endsWith("UNAVAILABLE") ? 503 : 409 }); }
 function parse<T>(schema: z.ZodType<T>, raw: unknown): T {
   let bytes: string | undefined; try { bytes = JSON.stringify(raw); } catch { fail("RESEARCH_RESULT_INVALID"); }
@@ -161,10 +172,37 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
     if (!row || row.payload_sha256 !== hash(receipt) || canonicalJson(JSON.parse(String(row.payload_json))) !== canonicalJson(receipt)) fail("RESEARCH_RESULT_NOT_ACCEPTED");
     return row;
   }
+  function candidateMetadata(receipt: ResearchResultReceipt, result: ResearchResult): ResearchCandidatePublication {
+    return { schema_version: "comath.research_candidate_publication.v1", candidate_id: candidateId(result), result_id: result.result_id,
+      source_task_id: result.task_id, source_generation: result.generation, campaign_id: receipt.campaign_id,
+      scope_sha256: receipt.scope_sha256, checkpoint_id: result.checkpoint_id, result_ref: receipt.result_ref,
+      operation_id: receipt.operation_id, proof_authority: "none" };
+  }
+  function eventFromRow(row: Record<string, unknown>): ResearchEvent {
+    return { seq: Number(row.seq), campaign_id: String(row.campaign_id), task_id: String(row.task_id), generation: Number(row.generation),
+      type: String(row.type), actor: String(row.actor), payload: JSON.parse(String(row.payload_json)), payload_sha256: String(row.payload_sha256), created_at: String(row.created_at) };
+  }
+  function announce(principal: WorkerPrincipal, receipt: ResearchResultReceipt): void {
+    try {
+      options.onArtifactCommitted?.(principal, receipt.result_ref);
+      if (receipt.event_type === "ResearchCandidatePublished") {
+        try { options.onCandidatePublished?.(receipt as ResearchCandidateReceipt); }
+        catch {
+          const events = createResearchEventStore(runtime);
+          try { events.appendEvent({ campaign_id: receipt.campaign_id, task_id: receipt.task_id, generation: receipt.generation,
+            type: "CandidateNotificationFailed", actor: "service:research-results",
+            payload: { candidate_id: receipt.candidate_id!, operation_id: receipt.operation_id, code: "CANDIDATE_NOTIFICATION_FAILED", proof_authority: "none" } }); }
+          finally { events.close(); }
+        }
+      }
+    } finally { notifyResearchEventsCommitted(runtime); }
+  }
   function checkedReceipt(receipt: ResearchResultReceipt, task: ResearchTask): ResearchResultReceipt {
     const event = receiptEvent(receipt);
     if (receipt.task_id !== task.task_id || receipt.generation !== task.generation || receipt.scope_sha256 !== hash(task.scope)) fail("RESEARCH_RESULT_RECEIPT_INVALID");
-    if (receipt.status === "accepted" && (task.status !== "succeeded" || task.accepted_result_id !== receipt.result_ref.artifact_id)) fail("RESEARCH_RESULT_NOT_ACCEPTED");
+    if (receipt.event_type === "ResearchCandidatePublished") {
+      if (!verifyReceipt(eventFromRow(event), task, receipt.result_ref, undefined, false, true)) fail("RESEARCH_RESULT_NOT_ACCEPTED");
+    } else if (receipt.status === "accepted" && (task.status !== "succeeded" || task.accepted_result_id !== receipt.result_ref.artifact_id)) fail("RESEARCH_RESULT_NOT_ACCEPTED");
     cas(task, receipt.result_ref);
     return { ...receipt, event_seq: Number(event.seq) };
   }
@@ -189,12 +227,13 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
       const old = withProjectCommit<ResearchResultReceipt>(runtime.root, operation, () => fail("RESEARCH_RESULT_RECEIPT_INVALID"));
       if (isProposal !== (old.result_kind === "supervisor_proposal")) fail("RESEARCH_RESULT_COMMAND_CONFLICT");
       const receipt = checkedReceipt(old, current(principal, true));
-      try { options.onArtifactCommitted?.(principal, receipt.result_ref); } finally { notifyResearchEventsCommitted(runtime); }
+      announce(principal, receipt);
       return receipt;
     }
     if (isProposal) supervisor(initial);
     const checkBusinessId = () => {
-      if (result && store.get("SELECT operation_id FROM trust_commits WHERE json_extract(plan_json,'$.response.result_id')=? AND json_extract(plan_json,'$.response.event_type')='ResearchResultAccepted'", result.result_id)) fail("RESEARCH_RESULT_ID_CONFLICT");
+      if (result && store.get("SELECT operation_id FROM trust_commits WHERE json_extract(plan_json,'$.response.result_id')=? AND json_extract(plan_json,'$.response.event_type') IN ('ResearchResultAccepted','ResearchCandidatePublished')", result.result_id)) fail("RESEARCH_RESULT_ID_CONFLICT");
+      if (result?.kind === "breakthrough" && store.get("SELECT candidate_id FROM candidates WHERE candidate_id=?", candidateId(result))) fail("RESEARCH_RESULT_ID_CONFLICT");
     };
     checkBusinessId();
     if (initial.status === "succeeded" || initial.accepted_result_id) fail("RESEARCH_RESULT_ALREADY_ACCEPTED");
@@ -211,45 +250,55 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
         if (isProposal) supervisor(task);
         const proposal = isProposal ? proposalError(task, payload) : undefined;
         const artifact = commitArtifactReference(runtime.root, prepared), status = proposal?.code ? "rejected" : "accepted";
+        const publication = result?.kind === "breakthrough";
         const receipt: ResearchResultReceipt = { status, command_id: request.command_id, task_id: task.task_id, generation: task.generation,
           campaign_id: task.campaign_id, attempt_key: principal.attempt_key, scope_sha256: hash(task.scope), request_sha256: requestHash,
           result_ref: { artifact_id: artifact.id, sha256: artifact.sha256 }, operation_id: operationId,
-          event_type: isProposal ? status === "accepted" ? "SupervisorProposalAccepted" : "SupervisorProposalRejected" : "ResearchResultAccepted",
+          event_type: isProposal ? status === "accepted" ? "SupervisorProposalAccepted" : "SupervisorProposalRejected" : publication ? "ResearchCandidatePublished" : "ResearchResultAccepted",
           result_kind: result?.kind ?? "supervisor_proposal", ...(result ? { result_id: result.result_id } : {}),
+          ...(publication && result ? { candidate_id: candidateId(result) } : {}),
           ...(proposal?.patch ? { base_revision: proposal.patch.base_revision } : {}), ...(proposal?.code ? { rejection_code: proposal.code } : {}), proof_authority: "none" };
         const timestamp = new Date(runtime.clock.now()).toISOString();
         // Conditional mutations preserve a cancel/fence committed after preparation,
         // including when recovery later finalizes saved CAS after-images.
         const active = "EXISTS (SELECT 1 FROM attempts a WHERE a.attempt_key=? AND a.task_id=tasks.task_id AND a.generation=tasks.generation AND a.state='running' AND a.fenced_at IS NULL AND a.stop_requested_at IS NULL AND a.stop_reason IS NULL AND a.termination_confirmed=0)"
           + (isProposal ? " AND json_extract(tasks.task_json,'$.kind')='synthesize' AND EXISTS (SELECT 1 FROM campaigns c WHERE c.campaign_id=tasks.campaign_id AND json_extract(c.control_json,'$.supervisor.inflight_task_id')=tasks.task_id)" : "");
-        if (status === "accepted") stageResearchMutation(runtime.root,
+        if (publication && result) {
+          stageResearchMutation(runtime.root,
+            `INSERT INTO candidates(candidate_id,source_task_id,scope_json,payload_sha256,validation_state,result_json) SELECT ?,?,?,?,'unvalidated',? FROM tasks WHERE task_id=? AND generation=? AND status='running' AND ${active}`,
+            [candidateId(result), task.task_id, canonicalJson(task.scope), artifact.sha256, canonicalJson(candidateMetadata(receipt, result)), task.task_id, task.generation, principal.attempt_key]);
+        } else if (status === "accepted") stageResearchMutation(runtime.root,
           `UPDATE tasks SET status='succeeded',task_json=json_set(task_json,'$.status','succeeded','$.accepted_result_id',?,'$.updated_at',?) WHERE task_id=? AND generation=? AND status='running' AND ${active}`,
           [artifact.id, timestamp, task.task_id, task.generation, principal.attempt_key]);
-        const finalState = status === "accepted" ? "tasks.status='succeeded' AND json_extract(tasks.task_json,'$.accepted_result_id')=?" : "tasks.status='running'";
+        const finalState = publication
+          ? "tasks.status='running' AND EXISTS (SELECT 1 FROM candidates c WHERE c.candidate_id=? AND c.payload_sha256=? AND c.source_task_id=tasks.task_id)"
+          : status === "accepted" ? "tasks.status='succeeded' AND json_extract(tasks.task_json,'$.accepted_result_id')=?" : "tasks.status='running'";
         stageResearchMutation(runtime.root,
           `INSERT INTO events(campaign_id,task_id,generation,type,actor,payload_json,payload_sha256,created_at) SELECT ?,?,?,?,'service:research-results',?,?,? FROM tasks WHERE task_id=? AND generation=? AND ${finalState} AND ${active}`,
           [task.campaign_id, task.task_id, task.generation, receipt.event_type, canonicalJson(receipt), hash(receipt), timestamp,
-            task.task_id, task.generation, ...(status === "accepted" ? [artifact.id] : []), principal.attempt_key]);
+            task.task_id, task.generation, ...(publication ? [receipt.candidate_id!, artifact.sha256] : status === "accepted" ? [artifact.id] : []), principal.attempt_key]);
         return receipt;
       });
       const confirmed = checkedReceipt(receipt, store.getTask(principal.task_id)!);
-      try { options.onArtifactCommitted?.(principal, receipt.result_ref); } finally { notifyResearchEventsCommitted(runtime); }
+      announce(principal, confirmed);
       return confirmed;
     } finally { await unlink(path).catch(error => { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }); }
   }
-  function verifyReceipt(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>, proposal?: unknown, rejected = false): boolean {
+  function verifyReceipt(event: Readonly<ResearchEvent>, task: Readonly<ResearchTask>, artifact: Readonly<ArtifactPointer>, proposal?: unknown, rejected = false, publication = false): boolean {
     try {
       owner(); assertProjectReadable(runtime.root, undefined, task.campaign_id);
-      if (!Number.isSafeInteger(event.seq) || !(rejected ? event.type === "SupervisorProposalRejected" : ["ResearchResultAccepted", "SupervisorProposalAccepted"].includes(event.type)) || event.actor !== "service:research-results") return false;
+      if (!Number.isSafeInteger(event.seq) || !(publication ? event.type === "ResearchCandidatePublished" : rejected ? event.type === "SupervisorProposalRejected" : ["ResearchResultAccepted", "SupervisorProposalAccepted"].includes(event.type)) || event.actor !== "service:research-results") return false;
       const currentTask = store.getTask(task.task_id), storedEvent = store.get("SELECT * FROM events WHERE seq=?", event.seq);
       const expectedStatus = rejected ? "running" : "succeeded";
-      if (!currentTask || !storedEvent || currentTask.status !== expectedStatus || task.status !== expectedStatus || currentTask.generation !== task.generation
-        || event.task_id !== task.task_id || event.generation !== task.generation || event.campaign_id !== task.campaign_id || currentTask.campaign_id !== task.campaign_id
-        || !rejected && (currentTask.accepted_result_id !== artifact.artifact_id || task.accepted_result_id !== artifact.artifact_id) || canonicalJson(currentTask.scope) !== canonicalJson(task.scope)
+      const generationMatches = publication ? Number.isSafeInteger(event.generation) && Number(event.generation) > 0 && Number(event.generation) <= task.generation : event.generation === task.generation;
+      if (!currentTask || !storedEvent || currentTask.status !== task.status || !publication && task.status !== expectedStatus || currentTask.generation !== task.generation
+        || event.task_id !== task.task_id || !generationMatches || event.campaign_id !== task.campaign_id || currentTask.campaign_id !== task.campaign_id
+        || !rejected && !publication && (currentTask.accepted_result_id !== artifact.artifact_id || task.accepted_result_id !== artifact.artifact_id) || canonicalJson(currentTask.scope) !== canonicalJson(task.scope)
+        || storedEvent.task_id !== event.task_id || Number(storedEvent.generation) !== event.generation
         || event.type !== storedEvent.type || event.actor !== storedEvent.actor || event.created_at !== storedEvent.created_at
         || storedEvent.payload_sha256 !== event.payload_sha256 || event.payload_sha256 !== hash(event.payload) || canonicalJson(JSON.parse(String(storedEvent.payload_json))) !== canonicalJson(event.payload)) return false;
       const receipt = event.payload as unknown as ResearchResultReceipt;
-      if (receipt.status !== (rejected ? "rejected" : "accepted") || receipt.event_type !== event.type || receipt.task_id !== task.task_id || receipt.generation !== task.generation
+      if (receipt.status !== (rejected ? "rejected" : "accepted") || receipt.event_type !== event.type || receipt.task_id !== task.task_id || receipt.generation !== (publication ? event.generation : task.generation)
         || receipt.campaign_id !== task.campaign_id || receipt.scope_sha256 !== hash(task.scope) || canonicalJson(receipt.result_ref) !== canonicalJson(artifact) || receipt.proof_authority !== "none") return false;
       const row = store.get("SELECT * FROM trust_commits WHERE operation_id=?", receipt.operation_id);
       if (!row || row.phase !== "committed" || row.campaign_id !== task.campaign_id) return false;
@@ -261,10 +310,33 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
       const bytes = cas(task, artifact); if (bytes.length > 256 * 1024) return false;
       const payload = JSON.parse(bytes.toString("utf8"));
       if (canonicalJson(payload) !== bytes.toString("utf8")) return false;
-      if (event.type === "ResearchResultAccepted") {
+      if (event.type === "ResearchResultAccepted" || publication) {
         const result = researchResultSchema.parse(payload);
-        if (result.task_id !== task.task_id || result.generation !== task.generation || result.result_id !== receipt.result_id || result.kind !== receipt.result_kind
+        if (result.task_id !== task.task_id || result.generation !== (publication ? event.generation : task.generation) || result.result_id !== receipt.result_id || result.kind !== receipt.result_kind
           || canonicalJson(result.scope) !== canonicalJson(task.scope) || proposal !== undefined) return false;
+        if (publication) {
+          if (result.kind !== "breakthrough" || receipt.candidate_id !== candidateId(result)) return false;
+          const candidate = store.get("SELECT * FROM candidates WHERE candidate_id=?", receipt.candidate_id);
+          if (!candidate || candidate.source_task_id !== task.task_id || candidate.payload_sha256 !== artifact.sha256
+            || canonicalJson(JSON.parse(String(candidate.scope_json))) !== canonicalJson(task.scope)
+            || canonicalJson(JSON.parse(String(candidate.result_json))) !== canonicalJson(candidateMetadata(receipt, result))) return false;
+          // Verify the publication's immutable checkpoint, not today's mutable head.
+          // Later checkpoints, final results or retries cannot erase this source record.
+          const checkpointRow = store.get("SELECT c.*,a.task_id,a.generation FROM checkpoints c JOIN attempts a ON a.attempt_key=c.attempt_key WHERE c.checkpoint_id=?", result.checkpoint_id);
+          if (!checkpointRow || checkpointRow.task_id !== task.task_id || Number(checkpointRow.generation) > result.generation) return false;
+          const checkpointRef = artifactPointerSchema.parse(JSON.parse(String(checkpointRow.artifact_ref)));
+          const checkpointBytes = cas(task, checkpointRef), checkpoint = researchCheckpointSchema.parse(JSON.parse(checkpointBytes.toString("utf8")));
+          const sourceEvent = store.get("SELECT * FROM events WHERE type='CheckpointAccepted' AND json_extract(payload_json,'$.checkpoint_id')=? ORDER BY seq LIMIT 1", result.checkpoint_id);
+          if (!sourceEvent || Number(sourceEvent.seq) >= event.seq || sourceEvent.task_id !== task.task_id
+            || checkpoint.task_id !== task.task_id || checkpoint.checkpoint_id !== result.checkpoint_id || checkpoint.generation !== Number(checkpointRow.generation)
+            || checkpoint.seq !== Number(checkpointRow.seq) || canonicalJson(checkpoint.scope) !== canonicalJson(task.scope)
+            || digest(checkpointBytes) !== checkpointRow.payload_sha256 || (checkpoint.parent_checkpoint_sha256 ?? null) !== checkpointRow.parent_sha256) return false;
+          const sourceReceipt = JSON.parse(String(sourceEvent.payload_json));
+          if (sourceEvent.payload_sha256 !== hash(sourceReceipt) || sourceReceipt.payload_sha256 !== checkpointRow.payload_sha256
+            || canonicalJson(sourceReceipt.artifact_ref) !== canonicalJson(checkpointRef)) return false;
+          const sourceCommit = store.get("SELECT phase,plan_json FROM trust_commits WHERE operation_id=?", sourceReceipt.operation_id);
+          if (!sourceCommit || sourceCommit.phase !== "committed" || canonicalJson(JSON.parse(String(sourceCommit.plan_json)).response) !== canonicalJson(sourceReceipt)) return false;
+        }
       } else if (rejected) {
         if (task.kind !== "synthesize" || receipt.result_kind !== "supervisor_proposal" || !receipt.rejection_code
           || proposalError(task, payload).code !== receipt.rejection_code) return false;
@@ -278,5 +350,6 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
   }
   return { acceptWorkerResult: (principal, raw) => accept(principal, raw, false), acceptWorkerProposal: (principal, raw) => accept(principal, raw, true),
     verifyAcceptedResult: (event, task, artifact, proposal) => verifyReceipt(event, task, artifact, proposal),
-    verifyRejectedProposal: (event, task, artifact) => verifyReceipt(event, task, artifact, undefined, true) };
+    verifyRejectedProposal: (event, task, artifact) => verifyReceipt(event, task, artifact, undefined, true),
+    verifyPublishedCandidate: (event, task, artifact) => verifyReceipt(event, task, artifact, undefined, false, true) };
 }
