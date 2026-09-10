@@ -22,6 +22,8 @@ export type ContextPackPolicy = {
   mandatory: readonly ContextSource[]; selected?: readonly ContextSource[]; lazy?: readonly ContextSource[];
   assumptions: readonly string[];
   statement_brief?: ContextSource;
+  /** Host-only: immutable candidate fanout uses the parent solely for lineage. */
+  include_parent_checkpoint?: boolean;
   failed_routes?: readonly ContextFailureRoute[];
   authorizeArtifact: (task: ResearchTask, ref: ArtifactPointer) => boolean;
 };
@@ -78,7 +80,7 @@ export async function buildContextPack(runtime: ProjectRuntime, taskId: string, 
     const checkpoints = createCheckpointStore(runtime, { authorizeArtifact: (_attempt, ref) => policy.authorizeArtifact(task, ref) });
     const resume = checkpoints.getResumeMaterial(task.task_id);
     if (resume) mandatory.push({ ref: resume.receipt.artifact_ref, kind: "checkpoint", source: "accepted_task_checkpoint" });
-    if (task.parent_task_id) {
+    if (task.parent_task_id && policy.include_parent_checkpoint !== false) {
       const parent = runtime.store.getTask(task.parent_task_id);
       if (!parent || parent.campaign_id !== task.campaign_id) fail("CONTEXT_PARENT_MISMATCH", "Parent context is outside the campaign");
       parentHead = parent.checkpoint_head;
@@ -127,7 +129,7 @@ export async function buildContextPack(runtime: ProjectRuntime, taskId: string, 
   for (const source of lazySources) await read(source);
   const current = runtime.store.getTask(taskId);
   if (!current || current.generation !== task.generation || current.checkpoint_head !== task.checkpoint_head || canonicalJson(current.scope) !== canonicalJson(task.scope)) fail("CONTEXT_CHANGED", "Task context changed while materializing; rebuild from current state");
-  if (!blind && task.parent_task_id && runtime.store.getTask(task.parent_task_id)?.checkpoint_head !== parentHead) fail("CONTEXT_CHANGED", "Parent checkpoint changed while building context");
+  if (!blind && policy.include_parent_checkpoint !== false && task.parent_task_id && runtime.store.getTask(task.parent_task_id)?.checkpoint_head !== parentHead) fail("CONTEXT_CHANGED", "Parent checkpoint changed while building context");
   return seal(pack);
 }
 

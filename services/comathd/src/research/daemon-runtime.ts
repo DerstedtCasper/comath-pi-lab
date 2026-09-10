@@ -22,6 +22,9 @@ import { createResearchToolExecutor } from "./research-tool-executor.js";
 import { createConfiguredCodexAdapter } from "../agents/runtime/codex-owned-launcher.js";
 import { createResearchResultService } from "./research-result-service.js";
 import { createSupervisorDriver, defaultResearchContextPolicy } from "./supervisor-driver.js";
+import { createValidationFanout, type ValidationFanoutOptions } from "./validation-fanout.js";
+import { createValidationAggregation, type ValidationAggregationOptions } from "./validation-aggregation.js";
+import { createValidationDriver } from "./validation-driver.js";
 
 export type ResearchExecutionConsumer = {
   validate(task: ResearchTask): void;
@@ -47,6 +50,8 @@ export type ResearchDaemonOptions = {
   verifyRetryCondition?: FailureIndexOptions["verifyRetryCondition"];
   classifyHardBlocker?: ResearchFailureOptions["classifyHardBlocker"];
   authorizeReaderUrl?: (task: ResearchTask, url: string) => boolean;
+  validation?: Omit<ValidationFanoutOptions, "verifyPublishedCandidate">;
+  validationAggregation?: Pick<ValidationAggregationOptions, "blindComparison" | "authorizeResolution">;
 };
 const defaultDependencies: ProjectRuntimeDependencies = { clock: { now: () => Date.now() }, executor: {},
   migration: { quiesce: async root => verifyLegacyRuntimeQuiescence(root) } };
@@ -78,6 +83,9 @@ export class ResearchDaemon {
   readonly scheduler;
   readonly reconciler;
   readonly supervisor?: ReturnType<typeof createSupervisorDriver>;
+  readonly validationFanout?: ReturnType<typeof createValidationFanout>;
+  readonly validationAggregation?: ReturnType<typeof createValidationAggregation>;
+  readonly validationDriver?: ReturnType<typeof createValidationDriver>;
   recovery: { blocked_operations: string[]; unconfirmed_attempts: string[] } = { blocked_operations: [], unconfirmed_attempts: [] };
   toolRecovery: { terminated: string[]; unconfirmed: string[] } = { terminated: [], unconfirmed: [] };
   private started = false;
@@ -97,6 +105,8 @@ export class ResearchDaemon {
     this.contextService = createResearchContextService(runtime, { policyForTask: task => {
       const model = config.model_policies[task.model_policy_id], tools = config.tool_policies[task.tool_policy_id];
       if (!model || !tools) fail("RESEARCH_POLICY_UNKNOWN", "Context requires configured model and tool policies");
+      const validation = this.validationFanout?.contextPolicyForTask(task);
+      if (validation) return { ...validation, byte_cap: Math.min(validation.byte_cap, model.initial_context_bytes) };
       return { ...(options.contextPolicy ? options.contextPolicy(task) : defaultResearchContextPolicy(task, tools.visibility)), byte_cap: model.initial_context_bytes, visibility: tools.visibility };
     }, findFailures: (task, policy) => this.failureService?.index.findFailedRoutes({ scope: task.scope, problem_slice: task.problem_slice,
       method_family: task.method_family, route: this.failureService.routeFor(task, policy), limit: 20 }).map(record => ({
@@ -173,6 +183,22 @@ export class ResearchDaemon {
       authorizeArtifact: options.workerGateway?.authorizeArtifact ?? this.contextService.gatewayOptions.authorizeArtifact,
       onArtifactCommitted: options.workerGateway?.onArtifactCommitted ?? this.contextService.gatewayOptions.onArtifactCommitted
     });
+    if (options.validation) {
+      const host = options.validation;
+      this.validationFanout = createValidationFanout(this.app, { ...host, verifyPublishedCandidate: this.resultService.verifyPublishedCandidate,
+        resolveToolPolicy: id => {
+          const configured = config.tool_policies[id], declared = host.resolveToolPolicy(id);
+          if (!configured || !declared || configured.visibility !== declared.visibility
+            || JSON.stringify([...configured.allowed_tools].sort()) !== JSON.stringify([...declared.allowed_tools].sort())) return undefined;
+          return declared;
+        } });
+      this.validationAggregation = createValidationAggregation(runtime, { ...options.validationAggregation, results: this.resultService,
+        approvedPolicy: candidateId => {
+          const receipt = this.validationFanout!.readValidationFanout(candidateId, host.policy_version);
+          return receipt ? { policy_version: host.policy_version, approved_assumptions: receipt.approved_assumptions } : undefined;
+        } });
+      this.validationDriver = createValidationDriver(runtime, host.policy_version, this.validationFanout, this.validationAggregation);
+    }
     if (config.supervisor) this.supervisor = createSupervisorDriver(this.app, this.scheduler, config, this.resultService, {
       steer: (key, instruction) => this.execution?.steer?.(key, instruction) ?? Promise.reject(new ComathError("Runtime cannot receive correction steering", { code: "WORKER_STEER_UNSUPPORTED" })),
       stop: key => this.reconciler.requestStop(key, "supervisor_invalid"),
@@ -198,7 +224,7 @@ export class ResearchDaemon {
       drainResearchAuditOutbox(runtime.root);
       return daemon;
     } catch (error) {
-      await daemon?.supervisor?.close();
+      await daemon?.supervisor?.close(); await daemon?.validationDriver?.close();
       daemon?.reconciler.close(); daemon?.scheduler.close(); daemon?.app.close();
       try { await daemon?.adapters.close(); } finally { await runtime.release(); }
       throw error;
@@ -224,15 +250,16 @@ export class ResearchDaemon {
   start(): void {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     if (this.started) return;
-    this.started = true; this.reconciler.start(); this.supervisor?.start(); this.scheduler.start();
+    this.started = true; this.reconciler.start(); this.supervisor?.start(); this.validationDriver?.start(); this.scheduler.start();
   }
   close(): Promise<void> {
     if (this.closing) return this.closing;
     this.supervisor?.stop();
+    this.validationDriver?.stop();
     this.scheduler.stopGrants();
     this.closing = Promise.resolve().then(async () => {
       const errors: unknown[] = [];
-      const draining: Promise<unknown>[] = [this.reconciler.drain(), this.supervisor?.close() ?? Promise.resolve()];
+      const draining: Promise<unknown>[] = [this.reconciler.drain(), this.supervisor?.close() ?? Promise.resolve(), this.validationDriver?.close() ?? Promise.resolve()];
       // Persist handoff intents before attempting cancellation. Unconfirmed work retains permits.
       for (const row of this.runtime.store.all("SELECT attempt_key,task_id FROM attempts WHERE state<>'terminated'")) {
         if (this.runtime.store.getTask(String(row.task_id))?.kind === "legacy_run") continue;
@@ -277,7 +304,8 @@ export async function acquireResearchDaemon(root: string, options: ResearchDaemo
       || entry.options.workerInput !== options.workerInput || entry.options.validateWorkerTask !== options.validateWorkerTask
       || entry.options.inspectRecoveredWorker !== options.inspectRecoveredWorker || entry.options.contextPolicy !== options.contextPolicy
       || entry.options.verifyRetryCondition !== options.verifyRetryCondition || entry.options.classifyHardBlocker !== options.classifyHardBlocker || entry.options.createAdapters !== options.createAdapters
-      || entry.options.authorizeReaderUrl !== options.authorizeReaderUrl) {
+      || entry.options.authorizeReaderUrl !== options.authorizeReaderUrl || entry.options.validation !== options.validation
+      || entry.options.validationAggregation !== options.validationAggregation) {
       fail("DAEMON_CONFIG_CONFLICT", "Project daemon already has different host dependencies or configuration");
     }
   } else {

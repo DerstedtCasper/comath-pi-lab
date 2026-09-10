@@ -10,6 +10,7 @@ import { canonicalJson } from "../verification/runner-contracts.js";
 import { createCheckpointStore, researchCheckpointSchema } from "./checkpoint-store.js";
 import { failureMemorySchema } from "./failure-index.js";
 import { triageResultSchema } from "./supervisor-policy.js";
+import { validationAssessmentShape } from "./validation-contracts.js";
 import { createResearchEventStore, notifyResearchEventsCommitted } from "./event-store.js";
 import { assertProjectReadable, resolveProjectCommitPath, stageResearchMutation, withProjectCommit, type ProjectCommitOperation } from "./project-commit.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "./project-runtime.js";
@@ -23,7 +24,12 @@ export const researchResultSchema = z.strictObject({ result_id: id, task_id: id,
   claims: z.array(z.strictObject({ statement: text, assumptions: strings, artifact_refs: z.array(artifactPointerSchema).max(100) })).max(100),
   reproduction_steps: strings, failure_refs: z.array(id).max(100), requested_followups: strings, checkpoint_id: id,
   triage: z.array(triageResultSchema).min(1).max(10000).optional(), proof_authority: z.literal("none") });
-export const researchResultJsonSchema = z.toJSONSchema(researchResultSchema);
+export const validationResultSchema = researchResultSchema.extend({ ...validationAssessmentShape, kind: z.literal("validation") });
+export type ValidationResult = z.infer<typeof validationResultSchema>;
+export const researchSubmissionResultSchema = z.union([
+  researchResultSchema.extend({ kind: z.enum(["progress", "breakthrough", "failure", "statement_draft"]) }), validationResultSchema
+]);
+export const researchResultJsonSchema = z.toJSONSchema(researchSubmissionResultSchema);
 export type ResearchResult = z.infer<typeof researchResultSchema>;
 const identity = { command_id: id, task_id: id, generation: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) };
 const submissionSchema = z.union([
@@ -95,6 +101,12 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
   }
   function validateReferences(task: ResearchTask, principal: WorkerPrincipal, result: ResearchResult): void {
     const refs = result.claims.flatMap(claim => claim.artifact_refs);
+    if (result.kind === "validation") {
+      const assessment = validationResultSchema.parse(result);
+      validateValidationBinding(task, assessment);
+      refs.push(...assessment.evidence_refs, ...assessment.counterexample_refs,
+        ...(assessment.resolved_issues ?? []).flatMap(issue => issue.evidence_refs));
+    }
     if (result.triage) {
       if (task.kind !== "synthesize" || task.specialization !== "triage" || result.kind !== "progress") fail("RESEARCH_TRIAGE_TASK_REQUIRED");
       const seen = new Set<string>();
@@ -128,6 +140,25 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
       if (options.authorizeArtifact(principal.attempt_key, ref) !== true) fail("RESEARCH_RESULT_ARTIFACT_DENIED");
       bytes += cas(task, ref).length; if (bytes > 64 * 1024 * 1024) fail("RESEARCH_RESULT_REFERENCE_LIMIT");
     }
+  }
+  function validateValidationBinding(task: Readonly<ResearchTask>, result: ValidationResult, historical = false): void {
+    const slot = store.get("SELECT * FROM validation_tasks WHERE current_task_id=?", task.task_id)
+      ?? (historical ? store.get("SELECT v.* FROM validation_tasks v WHERE v.candidate_id=? AND v.role_slot=? AND EXISTS (SELECT 1 FROM json_each(v.prior_task_ids_json) h WHERE h.value=?)", result.candidate_id, result.role_slot, task.task_id) : undefined);
+    if (!slot) fail("RESEARCH_VALIDATION_CONSUMER_UNAVAILABLE");
+    if (slot.candidate_id !== result.candidate_id || slot.role_slot !== result.role_slot) fail("VALIDATION_SLOT_MISMATCH");
+    const candidate = store.get("SELECT * FROM candidates WHERE candidate_id=?", result.candidate_id);
+    if (!candidate || canonicalJson(JSON.parse(String(candidate.scope_json))) !== canonicalJson(task.scope)) fail("VALIDATION_CANDIDATE_SCOPE_MISMATCH");
+    const metadata = JSON.parse(String(candidate.result_json)) as ResearchCandidatePublication;
+    const source = store.getTask(String(candidate.source_task_id));
+    const event = store.get("SELECT * FROM events WHERE type='ResearchCandidatePublished' AND json_extract(payload_json,'$.candidate_id')=? ORDER BY seq LIMIT 1", result.candidate_id);
+    if (!source || source.task_id === task.task_id || source.campaign_id !== task.campaign_id || !event
+      || !verifyReceipt(eventFromRow(event), source, metadata.result_ref, undefined, false, true)) fail("VALIDATION_CANDIDATE_INVALID");
+    const published = researchResultSchema.parse(JSON.parse(cas(source, metadata.result_ref).toString("utf8")));
+    const statements = new Set(published.claims.map(claim => claim.statement));
+    if (result.claims_examined.some(statement => !statements.has(statement))
+      || new Set(result.claims_examined).size !== result.claims_examined.length) fail("VALIDATION_CLAIM_MISMATCH");
+    if (result.outcome === "supported" && (!result.claims_examined.length || !result.evidence_refs.length)) fail("VALIDATION_SUPPORT_EVIDENCE_REQUIRED");
+    if (result.outcome === "refuted" && !result.counterexample_refs.length && !result.evidence_refs.length) fail("VALIDATION_REFUTATION_EVIDENCE_REQUIRED");
   }
   function validateCheckpoint(task: ResearchTask, checkpointId: string): void {
     const resume = checkpoints.getResumeMaterial(task.task_id);
@@ -216,8 +247,11 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
       if (payload && typeof payload === "object" && "kind" in payload && payload.kind === "research_result") {
         payload = parse(z.strictObject({ kind: z.literal("research_result"), value: z.json() }), payload).value;
       }
-      if (payload && typeof payload === "object" && "kind" in payload && payload.kind === "validation") fail("RESEARCH_VALIDATION_CONSUMER_UNAVAILABLE");
-      result = parse(researchResultSchema, payload); payload = result;
+      if (payload && typeof payload === "object" && "kind" in payload && payload.kind === "validation") {
+        if (!store.get("SELECT current_task_id FROM validation_tasks WHERE current_task_id=?", initial.task_id)) fail("RESEARCH_VALIDATION_CONSUMER_UNAVAILABLE");
+        result = parse(validationResultSchema, payload);
+      } else result = parse(researchResultSchema, payload);
+      payload = result;
       if (result.task_id !== principal.task_id || result.generation !== principal.generation || canonicalJson(result.scope) !== canonicalJson(initial.scope)) fail("RESEARCH_RESULT_SCOPE_MISMATCH");
     }
     const requestHash = hash(request), operationId = `research-submission:${hash(request.command_id)}`;
@@ -311,9 +345,10 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
       const payload = JSON.parse(bytes.toString("utf8"));
       if (canonicalJson(payload) !== bytes.toString("utf8")) return false;
       if (event.type === "ResearchResultAccepted" || publication) {
-        const result = researchResultSchema.parse(payload);
+        const result = payload.kind === "validation" ? validationResultSchema.parse(payload) : researchResultSchema.parse(payload);
         if (result.task_id !== task.task_id || result.generation !== (publication ? event.generation : task.generation) || result.result_id !== receipt.result_id || result.kind !== receipt.result_kind
           || canonicalJson(result.scope) !== canonicalJson(task.scope) || proposal !== undefined) return false;
+        if (result.kind === "validation") validateValidationBinding(task, validationResultSchema.parse(result), true);
         if (publication) {
           if (result.kind !== "breakthrough" || receipt.candidate_id !== candidateId(result)) return false;
           const candidate = store.get("SELECT * FROM candidates WHERE candidate_id=?", receipt.candidate_id);
