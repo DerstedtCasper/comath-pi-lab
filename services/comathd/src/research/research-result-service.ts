@@ -9,6 +9,7 @@ import type { WorkerPrincipal } from "../control/worker-auth.js";
 import { canonicalJson } from "../verification/runner-contracts.js";
 import { createCheckpointStore, researchCheckpointSchema } from "./checkpoint-store.js";
 import { failureMemorySchema } from "./failure-index.js";
+import { triageResultSchema } from "./supervisor-policy.js";
 import { notifyResearchEventsCommitted } from "./event-store.js";
 import { assertProjectReadable, resolveProjectCommitPath, stageResearchMutation, withProjectCommit, type ProjectCommitOperation } from "./project-commit.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "./project-runtime.js";
@@ -20,7 +21,8 @@ const id = z.string().min(1).max(160), text = z.string().min(1).max(8192), strin
 export const researchResultSchema = z.strictObject({ result_id: id, task_id: id, generation: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   scope: scopeBindingSchema, kind: z.enum(["progress", "breakthrough", "failure", "validation", "statement_draft"]), summary: text,
   claims: z.array(z.strictObject({ statement: text, assumptions: strings, artifact_refs: z.array(artifactPointerSchema).max(100) })).max(100),
-  reproduction_steps: strings, failure_refs: z.array(id).max(100), requested_followups: strings, checkpoint_id: id, proof_authority: z.literal("none") });
+  reproduction_steps: strings, failure_refs: z.array(id).max(100), requested_followups: strings, checkpoint_id: id,
+  triage: z.array(triageResultSchema).min(1).max(10000).optional(), proof_authority: z.literal("none") });
 export const researchResultJsonSchema = z.toJSONSchema(researchResultSchema);
 export type ResearchResult = z.infer<typeof researchResultSchema>;
 const identity = { command_id: id, task_id: id, generation: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) };
@@ -82,6 +84,24 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
   }
   function validateReferences(task: ResearchTask, principal: WorkerPrincipal, result: ResearchResult): void {
     const refs = result.claims.flatMap(claim => claim.artifact_refs);
+    if (result.triage) {
+      if (task.kind !== "synthesize" || task.specialization !== "triage" || result.kind !== "progress") fail("RESEARCH_TRIAGE_TASK_REQUIRED");
+      const seen = new Set<string>();
+      for (const triage of result.triage) {
+        if (seen.has(triage.task_id)) fail("RESEARCH_TRIAGE_DUPLICATE"); seen.add(triage.task_id);
+        const target = store.getTask(triage.task_id);
+        if (!target || target.campaign_id !== task.campaign_id || target.status !== "succeeded" || !target.accepted_result_id || target.pool !== "exploration" || target.specialization === "triage"
+          || canonicalJson(target.scope) !== canonicalJson(triage.scope) || target.method_family !== triage.method_family) fail("RESEARCH_TRIAGE_SOURCE_INVALID");
+        const record = listArtifactRefs(runtime.root).find(ref => ref.id === target.accepted_result_id);
+        if (!record || !task.input_refs.some(ref => ref.artifact_id === record.id && ref.sha256 === record.sha256)) fail("RESEARCH_TRIAGE_SOURCE_DENIED");
+        const row = store.get("SELECT * FROM events WHERE task_id=? AND generation=? AND type='ResearchResultAccepted' AND json_extract(payload_json,'$.result_ref.artifact_id')=? ORDER BY seq DESC LIMIT 1", target.task_id, target.generation, record.id);
+        if (!row) fail("RESEARCH_TRIAGE_SOURCE_INVALID");
+        const source: ResearchEvent = { seq: Number(row.seq), campaign_id: String(row.campaign_id), task_id: String(row.task_id), generation: Number(row.generation),
+          type: String(row.type), actor: String(row.actor), created_at: String(row.created_at), payload_sha256: String(row.payload_sha256), payload: JSON.parse(String(row.payload_json)) };
+        if (!verifyReceipt(source, target, { artifact_id: record.id, sha256: record.sha256 })) fail("RESEARCH_TRIAGE_SOURCE_INVALID");
+        refs.push({ artifact_id: record.id, sha256: record.sha256 }, ...triage.progress_refs, ...triage.blocker_refs);
+      }
+    }
     for (const failureId of result.failure_refs) {
       const row = store.get("SELECT failure_json FROM failures WHERE failure_id=?", failureId);
       if (!row) fail("RESEARCH_RESULT_FAILURE_INVALID");

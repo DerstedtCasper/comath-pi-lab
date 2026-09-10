@@ -16,7 +16,7 @@ import type { ResearchResourceConfig } from "./resource-admission.js";
 import { createWorkerGateway, type WorkerGatewayOptions } from "../control/worker-routes.js";
 import { createResearchContextService } from "./context-service.js";
 import type { ContextPackPolicy } from "./context-pack-builder.js";
-import { createResearchFailureService } from "./failure-service.js";
+import { createResearchFailureService, type ResearchFailureOptions } from "./failure-service.js";
 import type { FailureIndexOptions } from "./failure-index.js";
 import { createResearchToolExecutor } from "./research-tool-executor.js";
 import { createConfiguredCodexAdapter } from "../agents/runtime/codex-owned-launcher.js";
@@ -45,6 +45,7 @@ export type ResearchDaemonOptions = {
   inspectRecoveredWorker?: WorkerExecutionHostOptions["inspectRecovered"];
   contextPolicy?: (task: ResearchTask) => Omit<ContextPackPolicy, "byte_cap" | "visibility">;
   verifyRetryCondition?: FailureIndexOptions["verifyRetryCondition"];
+  classifyHardBlocker?: ResearchFailureOptions["classifyHardBlocker"];
   authorizeReaderUrl?: (task: ResearchTask, url: string) => boolean;
 };
 const defaultDependencies: ProjectRuntimeDependencies = { clock: { now: () => Date.now() }, executor: {},
@@ -119,7 +120,8 @@ export class ResearchDaemon {
     const policies = options.policies ?? { model_policy_ids: Object.keys(config.model_policies), tool_policy_ids: Object.keys(config.tool_policies),
       role_template_ids: listRoleTemplates().map(role => role.id) };
     if (config.supervisor && !policies.role_template_ids.includes(config.supervisor.role_template)) fail("SUPERVISOR_ROLE_UNKNOWN", "Supervisor role must be selected from the configured host role templates");
-    if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.policyForTask, verifyRetryCondition: options.verifyRetryCondition });
+    if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.policyForTask,
+      verifyRetryCondition: options.verifyRetryCondition, classifyHardBlocker: options.classifyHardBlocker });
     this.app = createResearchOrchestrator(runtime, { ...policies, validateRoute: (draft, campaign) => {
       policies.validateRoute?.(draft, campaign); this.failureService?.validateRoute(draft, campaign);
     } });
@@ -173,7 +175,14 @@ export class ResearchDaemon {
     });
     if (config.supervisor) this.supervisor = createSupervisorDriver(this.app, this.scheduler, config, this.resultService, {
       steer: (key, instruction) => this.execution?.steer?.(key, instruction) ?? Promise.reject(new ComathError("Runtime cannot receive correction steering", { code: "WORKER_STEER_UNSUPPORTED" })),
-      stop: key => this.reconciler.requestStop(key, "supervisor_invalid")
+      stop: key => this.reconciler.requestStop(key, "supervisor_invalid"),
+      getHardBlockerState: (task, triage) => {
+        if (!this.failureService) return "unverified";
+        try {
+          const decision = this.failureService.blockers.inspect(task, triage.progress_refs);
+          return decision.blocked ? "unresolved" : triage.blocker_refs.length ? "unverified" : "clear";
+        } catch { return "unverified"; }
+      }
     });
   }
   static async create(root: string, options: ResearchDaemonOptions): Promise<ResearchDaemon> {
@@ -267,7 +276,7 @@ export async function acquireResearchDaemon(root: string, options: ResearchDaemo
       || entry.options.workerGateway !== options.workerGateway || entry.options.createExecution !== options.createExecution
       || entry.options.workerInput !== options.workerInput || entry.options.validateWorkerTask !== options.validateWorkerTask
       || entry.options.inspectRecoveredWorker !== options.inspectRecoveredWorker || entry.options.contextPolicy !== options.contextPolicy
-      || entry.options.verifyRetryCondition !== options.verifyRetryCondition || entry.options.createAdapters !== options.createAdapters
+      || entry.options.verifyRetryCondition !== options.verifyRetryCondition || entry.options.classifyHardBlocker !== options.classifyHardBlocker || entry.options.createAdapters !== options.createAdapters
       || entry.options.authorizeReaderUrl !== options.authorizeReaderUrl) {
       fail("DAEMON_CONFIG_CONFLICT", "Project daemon already has different host dependencies or configuration");
     }

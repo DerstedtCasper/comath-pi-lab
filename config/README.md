@@ -22,6 +22,10 @@ Configured Codex workers use a private generation-specific `CODEX_HOME`, strict 
 
 Worker research results and supervisor proposals enter the service's structure/provenance checks and immutable artifact commit. Accepted results retain `proof_authority=none`. A completed task can replay its exact committed submission while its capability remains current; new tool calls and changed submissions remain rejected. Validation aggregation and formal-candidate ingestion require their dedicated consumers and cannot be inferred from a generic accepted result.
 
+A `synthesize` task with `specialization: "triage"` may submit a progress result containing a `triage` array. Each target must be a completed exploration task whose accepted result is explicitly present in the triage task's input references. The service checks source provenance and applies the deterministic eligible-quarter policy, creating C4 deepening successors with the source policies, scope and budget. It does not rewrite completed tasks or increase pool limits; insufficient deepening balance leaves work queued.
+
+Repeated hard-blocker admission uses explicit shared immutable evidence. The default groups counterexample references within the same campaign, scope and problem slice; ten distinct task sources require structural synthesis rather than another ordinary route. Other hard-failure modes require the host's `classifyHardBlocker` callback. A new artifact hash alone never clears the cluster: resolution requires host-verified retry conditions. Existing exact failed-route checks continue to apply.
+
 ## Provider Helper Handles
 
 Adapter OS-isolation provider helpers are configured outside the sample with absolute service-owned executable paths. macOS is outside the current GA environment-adaptation scope.

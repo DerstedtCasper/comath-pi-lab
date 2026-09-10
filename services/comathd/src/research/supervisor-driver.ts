@@ -8,8 +8,10 @@ import { canonicalJson } from "../verification/runner-contracts.js";
 import type { ResearchOrchestrator } from "./research-orchestrator.js";
 import type { PortfolioScheduler } from "./portfolio-scheduler.js";
 import type { ResearchEvent } from "./research-store.js";
-import type { createResearchResultService } from "./research-result-service.js";
+import { researchResultJsonSchema, type createResearchResultService } from "./research-result-service.js";
 import { createResearchLoop } from "./research-loop.js";
+import { createTriageConsumer } from "./triage-consumer.js";
+import type { TriagePolicyContext } from "./supervisor-policy.js";
 import { artifactPointerSchema, researchJsonSchemas, type ResearchControlCampaign, type ResearchTask, type ResearchTaskDraft } from "./research-schemas.js";
 import type { ContextPackPolicy, ContextSource } from "./context-pack-builder.js";
 import { prepareArtifact, commitArtifactReference } from "./research-artifacts.js";
@@ -31,7 +33,8 @@ export function defaultResearchContextPolicy(task: ResearchTask, visibility: "ta
 }
 
 type ResultService = ReturnType<typeof createResearchResultService>;
-export type SupervisorWorkerControl = { steer(attemptKey: string, instruction: string): Promise<void>; stop(attemptKey: string): Promise<void> };
+export type SupervisorWorkerControl = { steer(attemptKey: string, instruction: string): Promise<void>; stop(attemptKey: string): Promise<void>;
+  getHardBlockerState?: TriagePolicyContext["getHardBlockerState"] };
 /** Host-owned event consumer. No provider calls, custom runtime, budget increases or proof promotion. */
 export class SupervisorDriver {
   private running = false;
@@ -42,6 +45,7 @@ export class SupervisorDriver {
   private unsubscribe?: () => void;
   private timer?: ReturnType<typeof setInterval>;
   readonly loop;
+  readonly triage;
   readonly blockers = new Map<string, string>();
   constructor(private readonly app: ResearchOrchestrator, private readonly scheduler: PortfolioScheduler,
     private readonly config: ResearchConfig, private readonly results: ResultService, private readonly control?: SupervisorWorkerControl) {
@@ -58,9 +62,9 @@ export class SupervisorDriver {
       verifyAcceptedResult: (event, task, ref, proposal) => results.verifyAcceptedResult(event, task, ref, proposal),
       verifyOperatorEvent: event => this.operatorEvent(event),
       canAllocateSupervisor: (campaign, draft) => this.affordable(campaign, draft),
-      // No triage acceptance consumer is connected here yet; never grant clearance by default.
-      triageContext: { getHardBlockerState: () => "unverified" }
+      triageContext: { getHardBlockerState: control?.getHardBlockerState ?? (() => "unverified") }
     });
+    this.triage = createTriageConsumer(app, results, { getHardBlockerState: control?.getHardBlockerState ?? (() => "unverified") });
   }
   private operatorEvent(event: Readonly<ResearchEvent>): boolean {
     if (!["DagPatched", "BudgetUpdated"].includes(event.type) || event.actor === "research-loop") return false;
@@ -116,12 +120,14 @@ export class SupervisorDriver {
       source_event_cursor: campaign.supervisor.last_event_seq, snapshot_event_seq: sourceSeq, charter: campaign.charter, operator_events: operatorEvents,
       guidance_authority: "strategy_only_not_assumptions_or_evidence", frontier,
       proposal_schema: researchJsonSchemas.ResearchDagPatch,
+      research_result_schema: researchResultJsonSchema,
       host_task_defaults: { model_policy_id: draft.model_policy_id, tool_policy_id: draft.tool_policy_id,
         role_template: draft.role_template, budget: draft.budget },
       budget: Object.fromEntries((["campaign", "exploration", "deepening", "validation", "formalization"] as const).map(pool => [pool, this.scheduler.budget.read(campaign.campaign_id, pool)])),
       instructions: ["Return one actual C4 patch with command_id/campaign_id/base_revision/create_tasks/add_dependencies/replace_dependencies/reprioritize/cancel_tasks/move_pool/rationale.",
         "Use proposal_base_revision for the initial proposal; a stale proposal requires rereading state and a new proposal, never blind rebasing.",
         "Follow the human approach_hints as optional strategy only. They are not assumptions or evidence.",
+        "For exploration triage, create a synthesize task with specialization=triage. Its input_refs must include every target's accepted result reference and this schema-bearing supervisor snapshot. Submit a progress ResearchResult containing a triage array conforming to research_result_schema; retain each target's exact scope and method_family. The service selects the eligible quarter and creates deepening successors under existing budgets.",
         "Respect cancelled tasks, fixed host policy IDs, available pool balances, and explicit formal scope approval.",
         "Submit via research_worker_propose. Provider completion is not accepted research and no result is a mathematical proof."], proof_authority: "none" };
     const bytes = canonicalJson(snapshot);
@@ -160,6 +166,18 @@ export class SupervisorDriver {
     const outcome = this.loop.finishSupervisorTurn({ command_id: `driver-finish:${seq}`, campaign_id: campaign.campaign_id,
       task_id: task.task_id, generation: task.generation, source_event_seq: seq, artifact: ref, proposal: JSON.parse(bytes.toString("utf8")) });
     if (outcome.status === "finished") this.scheduler.wake();
+    else if (outcome.code === "RESEARCH_REVISION_CONFLICT") {
+      runtime.store.transaction(() => {
+        const current = runtime.store.getCampaign(campaign.campaign_id)!;
+        if (current.supervisor.inflight_task_id !== task.task_id) return;
+        const { inflight_task_id: _inflight, ...supervisor } = current.supervisor;
+        const event = this.app.events.appendEvent({ campaign_id: current.campaign_id, task_id: task.task_id, generation: task.generation,
+          type: "SupervisorReplanRequested", actor: "research-loop", payload: { rejected_source_event_seq: seq, proposal_ref: ref,
+            current_revision: current.revision, reason: "stale_proposal_requires_new_snapshot", proof_authority: "none" } });
+        runtime.store.putCampaign({ ...current, snapshot_seq: event.seq, supervisor: { ...supervisor, dirty: true } });
+      });
+      this.requested = true;
+    }
   }
   private async correctRejectedProposal(task: ResearchTask): Promise<void> {
     const { store } = this.app.runtime;
@@ -217,6 +235,7 @@ export class SupervisorDriver {
     let page;
     do { page = this.loop.recordSupervisorTrigger(campaignId); } while (page.has_more && !this.closed);
     if (this.closed) return;
+    if (this.triage.consume(campaignId) > 0) this.scheduler.wake();
     const campaign = this.app.runtime.store.getCampaign(campaignId)!;
     if (campaign.state !== "running") return;
     if (campaign.supervisor.inflight_task_id) { await this.finish(campaign); return; }

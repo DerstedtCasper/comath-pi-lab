@@ -7,24 +7,27 @@ import type { ProjectRuntime } from "./project-runtime.js";
 import type { ContextPackPolicy } from "./context-pack-builder.js";
 import { createFailureIndex, failureMemorySchema, fingerprintRoute, type FailureIndexOptions, type RouteFingerprintInput } from "./failure-index.js";
 import type { ResearchControlCampaign, ResearchTask, ResearchTaskDraft } from "./research-schemas.js";
+import { createHardBlockerPolicy, type HardBlockerClassifier } from "./blocker-policy.js";
 
 export type ResearchFailureOptions = {
   policyForTask: (task: ResearchTask) => ContextPackPolicy;
   verifyRetryCondition?: FailureIndexOptions["verifyRetryCondition"];
+  classifyHardBlocker?: HardBlockerClassifier;
 };
 function fail(code: string, message: string): never { throw new ComathError(message, { code, statusCode: 409 }); }
 /** One route fingerprint source for DAG admission, runtime admission and worker failure records. */
 export function createResearchFailureService(runtime: ProjectRuntime, options: ResearchFailureOptions) {
   let validatingDraft: ResearchTask | undefined;
-  const index = createFailureIndex(runtime, {
-    authorizeArtifact: (taskId, ref, scope) => {
+  const authorizeArtifact: FailureIndexOptions["authorizeArtifact"] = (taskId, ref, scope) => {
       const task = validatingDraft?.task_id === taskId ? validatingDraft : runtime.store.getTask(taskId);
       if (!task || canonicalJson(task.scope) !== canonicalJson(scope)) return false;
       const projectId = runtime.store.getCampaign(task.campaign_id)?.project_id;
       const artifact = listArtifactRefs(runtime.root).find(value => value.id === ref.artifact_id && value.sha256 === ref.sha256 && value.project_id === projectId);
       return !!artifact && options.policyForTask(task).authorizeArtifact(task, ref);
-    }, verifyRetryCondition: options.verifyRetryCondition
-  });
+    };
+  const index = createFailureIndex(runtime, { authorizeArtifact, verifyRetryCondition: options.verifyRetryCondition });
+  const blockers = createHardBlockerPolicy(runtime, { authorizeArtifact, verifyRetryCondition: options.verifyRetryCondition,
+    classifyHardBlocker: options.classifyHardBlocker });
   function routeFor(task: ResearchTask, policy = options.policyForTask(task)): RouteFingerprintInput {
     const dependencies = [...policy.mandatory, ...(policy.selected ?? []), ...(policy.lazy ?? [])]
       .filter(source => ["dependency", "definition", "public_lemma"].includes(source.kind)).map(source => source.ref.sha256);
@@ -38,8 +41,15 @@ export function createResearchFailureService(runtime: ProjectRuntime, options: R
       created_at: timestamp, updated_at: timestamp };
     const previous = validatingDraft; validatingDraft = task;
     try {
-      const decision = index.checkRetryConditions({ task_id: task.task_id, route: routeFor(task), new_evidence_refs: task.input_refs });
+      const route = routeFor(task);
+      const decision = index.checkRetryConditions({ task_id: task.task_id, route, new_evidence_refs: task.input_refs });
       if (!decision.allowed) fail("RESEARCH_FAILED_ROUTE_BLOCKED", `Exact route is already failed: ${decision.blocking_failure_ids.join(", ")}`);
+      const shared = blockers.check(task, route);
+      if (!shared.allowed) throw Object.assign(new ComathError(
+        `Shared immutable blocker evidence recurred in ${shared.distinct_task_count} distinct tasks; only structural synthesis is admitted until the host verifies resolution. Failures: ${shared.blocking_failure_ids.join(", ")}. This is explicit evidence clustering, not a semantic proof judgment.`,
+        { code: "RESEARCH_SHARED_HARD_BLOCKER", statusCode: 409 }),
+      { details: { blocking_failure_ids: shared.blocking_failure_ids, distinct_task_count: shared.distinct_task_count,
+        cluster_ids: shared.clusters.map(cluster => cluster.cluster_id), required_task_kind: "synthesize", proof_authority: "none" } });
     } finally { validatingDraft = previous; }
   }
   function recordWorkerFailure(principal: WorkerPrincipal, request: unknown) {
@@ -63,10 +73,12 @@ export function createResearchFailureService(runtime: ProjectRuntime, options: R
       }
       const record = index.recordFailure(failure);
       const proposal = index.toGraphPatchProposal(record.failure.failure_id, { patch_id: runtime.store.allocateId("GP"), node_id: runtime.store.allocateId("FR"), created_by: "service:failure-index" });
-      const result = { ...record, graph_patch_proposal: proposal, proof_authority: "none" };
+      // Preserve the actual submitted source when the exact-route index reuses a canonical
+      // failure from another task. This is provenance for distinct-task blocker counting.
+      const result = { ...record, source_failure: failure, source_generation: task.generation, graph_patch_proposal: proposal, proof_authority: "none" };
       runtime.store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'service:worker-failure',?,?,'committed')", commandId, digest, JSON.stringify(result));
       return result;
     });
   }
-  return { index, routeFor, validateRoute, recordWorkerFailure };
+  return { index, blockers, routeFor, validateRoute, recordWorkerFailure };
 }
