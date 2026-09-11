@@ -20,7 +20,7 @@ import type { createFormalCandidateProjectService, FormalCandidateProjectReceipt
 import type { createProofToolAttemptService } from "./proof-tool-attempt.js";
 import { registerProofWorkflowBridge } from "./proof-workflow-bridge.js";
 import { createProofNativeVerification, type ProofNativeVerificationResult } from "./proof-native-verification.js";
-import { createAsyncCleanReplayExecutor, prepareAsyncCleanReplayWorkspace } from "../proof-kernel/lean/clean-replay-async.js";
+import { createAsyncCleanReplayExecutor, createAsyncFinalAuthorityReplayExecutor, prepareAsyncCleanReplayWorkspace } from "../proof-kernel/lean/clean-replay-async.js";
 
 type Configuration = NonNullable<ResearchConfig["proof_workflow"]>;
 type Lease = { incarnation: string; nonce: string; epoch: number; expires_at: string; state: "active" | "idle" | "blocked";
@@ -43,6 +43,7 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
   const controllers = new Map<string, AbortController>();
   const verifyNative = options.config ? createProofNativeVerification(app, options.tools, options.config) : undefined;
   const executeCleanReplay = options.config ? createAsyncCleanReplayExecutor(app, options.tools, options.config) : undefined;
+  const executeFinalAuthorityReplay = options.config ? createAsyncFinalAuthorityReplayExecutor(app, options.tools, options.config) : undefined;
   let running = false, closed = false, unsubscribe: (() => void) | undefined, timer: ReturnType<typeof setInterval> | undefined;
   function owner() { if (getAcquiredProjectRuntime(runtime.root) !== runtime || runtime.referenceCount < 1) fail("RESEARCH_OWNER_REQUIRED"); }
   function leaseKey(campaignId: string) { return `proof-workflow-owner:${campaignId}`; }
@@ -258,13 +259,15 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
           || result.dependency_evidence?.result !== "pass") return [];
         return [prepareAsyncCleanReplayWorkspace({ runtime, project, obligation_id: snapshot.obligation_id, stage_attempt: snapshot.stage_attempt })];
       });
-      const replay_executions = [];
+      const replay_executions = [], final_authority_executions = [];
       for (const preparation of replay_preparations) {
         const project = projects.find(value => value.candidate_id === preparation.candidate_id && value.claim_id === preparation.claim_id && value.obligation_id === preparation.obligation_id);
         if (!project) fail("ASYNC_CLEAN_REPLAY_PROJECT_MISSING");
-        replay_executions.push(await executeCleanReplay!.execute({ project, preparation }, { signal: controller.signal, assertCurrent }));
+        const replay = await executeCleanReplay!.execute({ project, preparation }, { signal: controller.signal, assertCurrent });
+        replay_executions.push(replay);
+        if (replay.legacy_final_input?.result === "ready") final_authority_executions.push(await executeFinalAuthorityReplay!.execute({ project, preparation }, { signal: controller.signal, assertCurrent }));
       }
-      commitStageResult(lease, snapshot, { schema_version: "comath.proof_native_results.v1", results, replay_preparations, replay_executions, proof_authority: "none" }, undefined, true);
+      commitStageResult(lease, snapshot, { schema_version: "comath.proof_native_results.v1", results, replay_preparations, replay_executions, final_authority_executions, proof_authority: "none" }, undefined, true);
       recordBlock(campaign.campaign_id, "PROOF_VERIFICATION_INTEGRITY_GATES_REQUIRED", snapshot);
       return false;
     }
