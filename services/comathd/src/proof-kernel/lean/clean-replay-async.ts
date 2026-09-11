@@ -49,7 +49,7 @@ export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; cl
   static_audit?: { schema_version: "comath.async_clean_replay_static_audit.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   axiom_profile?: { schema_version: "comath.async_clean_replay_axiom_profile.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   statement_comparison?: { schema_version: "comath.async_clean_replay_statement_comparison.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
-  clean_type_comparison?: { result: "pass" | "blocked"; hard_vetoes: string[]; proof_authority: "none" };
+  clean_type_comparison?: { schema_version: "comath.async_clean_replay_type_comparison.v1"; result: "pass" | "blocked"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   proof_authority: "none";
 };
 
@@ -271,7 +271,13 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
           generated_by_run_id: lockElaborationManifest.run_id, manifest_path: lockElaborationManifest.manifest_path
         });
         const typeComparison = compareStructuredLeanAuditToLock({ audit: structured_audit, lock: approved.lock, approved_lock_elaboration: lock_elaboration });
-        result.clean_type_comparison = { result: typeComparison.result, hard_vetoes: typeComparison.hard_vetoes, proof_authority: "none" };
+        const clean_type_comparison = { schema_version: "comath.async_clean_replay_type_comparison.v1" as const, result: typeComparison.result,
+          report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/clean-type-comparison.json`,
+          hard_vetoes: typeComparison.hard_vetoes, proof_authority: "none" as const };
+        save(`${operation_id}:clean-type-comparison`, clean_type_comparison.report_path, project.campaign_id, { ...clean_type_comparison,
+          structured_audit, lock_elaboration, comparison: typeComparison, audit_run_id: auditManifest.run_id,
+          lock_elaboration_run_id: lockElaborationManifest.run_id });
+        result.clean_type_comparison = clean_type_comparison;
         const axiomTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/axiom-profile.tmp.json`;
         const profile = checkAxiomProfileV2({ projectRoot: runtime.root, reportPath: axiomTemp, theoremName: project.project.theorem_name,
           theoremTypeHash: structured_audit.theorem_type_elaborated_hash, sourceFile: theoremPath, environmentFingerprint: environment_fingerprint,
