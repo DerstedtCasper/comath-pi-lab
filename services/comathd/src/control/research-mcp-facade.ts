@@ -43,6 +43,10 @@ export function createResearchOperatorMcp(config: OperatorMcpConfig): McpServer 
     inputSchema: { ...campaignMutation, reason: text } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/pause`, args));
   server.registerTool("research_campaign_resume", { description: "Resume a fully paused research campaign without changing its charter or formal scope.",
     inputSchema: campaignMutation }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/resume`, args));
+  server.registerTool("research_campaign_cancel", { description: "Cancel all owned research work in a campaign. This does not promote or alter formal proof authority.",
+    inputSchema: { ...campaignMutation, reason: text } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/cancel`, args));
+  server.registerTool("research_campaign_finish", { description: "Checkpoint and stop remaining research work, then complete the research campaign without claiming a formal proof.",
+    inputSchema: { ...campaignMutation, reason: text } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/finish`, args));
   return server;
 }
 
