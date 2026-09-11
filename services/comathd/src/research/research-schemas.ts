@@ -49,7 +49,7 @@ export const researchControlCampaignSchema = z.strictObject({ campaign_id: id, p
   charter: researchCharterSchema.extend({ sha256: sha256Schema }),
   max_active_workers: z.number().int().min(1).max(64), budget_policy_id: id,
   supervisor: z.strictObject({ dirty: z.boolean(), inflight_task_id: id.optional(), last_event_seq: count,
-    ordinary_completed_since_trigger: count, next_trigger_at: z.iso.datetime() }), snapshot_seq: count
+    ordinary_completed_since_trigger: count, next_trigger_at: z.iso.datetime() }), snapshot_seq: count, finish_requested: z.boolean().optional()
 });
 export const researchDagPatchSchema = z.strictObject({ command_id: id, campaign_id: id, base_revision: count,
   create_tasks: z.array(researchTaskDraftSchema).max(100),

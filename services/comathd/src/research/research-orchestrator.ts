@@ -39,6 +39,7 @@ export type CampaignBudgetConfigurer = (campaignId: string, limits: BudgetLimits
 const pauseCampaignSchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(), reason: z.string().trim().min(1).max(8192) });
 const resumeCampaignSchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative() });
 const cancelCampaignSchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(), reason: z.string().trim().min(1).max(8192) });
+const finishCampaignSchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(), reason: z.string().trim().min(1).max(8192) });
 const bindingSchema = z.strictObject({ command_id: id, campaign_id: id, candidate_id: id, source_task_id: id,
   payload_sha256: sha256Schema, policy_version: id, role_slot: z.enum(["referee", "counterexample", "reproduce_a", "reproduce_b", "novelty", "formalization_probe"]), task_id: id });
 type BindingRequest = z.infer<typeof bindingSchema>;
@@ -206,6 +207,14 @@ export class ResearchOrchestrator {
       if (campaign.state !== "pausing") return campaign;
       const active = this.runtime.store.get("SELECT attempt_key FROM attempts a JOIN tasks t ON t.task_id=a.task_id WHERE t.campaign_id=? AND a.state<>'terminated' LIMIT 1", campaignId);
       if (active) return campaign;
+      if (campaign.finish_requested) {
+        const stamp = new Date(this.runtime.clock.now()).toISOString();
+        for (const task of this.runtime.store.listTasks(campaignId)) if (!['succeeded', 'failed', 'cancelled'].includes(task.status)) {
+          this.runtime.store.putTask({ ...task, status: 'cancelled', updated_at: stamp });
+        }
+        const event = this.events.appendEvent({ campaign_id: campaignId, type: "CampaignFinished", actor: "service:finish-coordinator", payload: { revision: campaign.revision, proof_authority: "none" } });
+        return this.runtime.store.putCampaign({ ...campaign, state: "completed", snapshot_seq: event.seq });
+      }
       const event = this.events.appendEvent({ campaign_id: campaignId, type: "CampaignPaused", actor: "service:pause-coordinator", payload: { revision: campaign.revision, proof_authority: "none" } });
       return this.runtime.store.putCampaign({ ...campaign, state: "paused", snapshot_seq: event.seq });
     });
@@ -242,6 +251,21 @@ export class ResearchOrchestrator {
         payload: { revision, reason: input.reason, active_attempts: attempts.length, proof_authority: "none" } });
       this.runtime.store.putCampaign({ ...campaign, state: "cancelled", revision, snapshot_seq: event.seq });
       return { campaign_id: campaign.campaign_id, revision, state: "cancelled", attempt_keys: attempts.map(row => String(row.attempt_key)) };
+    });
+  }
+  beginFinishCampaign(principal: ResearchPrincipal, request: unknown): { campaign_id: string; revision: number; state: "pausing"; attempt_keys: string[] } {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may finish a research campaign", 403);
+    const input = parseResearchInput(finishCampaignSchema, request);
+    return this.command(principal, input.command_id, { kind: "campaign_finish", input }, () => {
+      const campaign = this.requireCampaign(input.campaign_id);
+      if (campaign.revision !== input.expected_revision) fail("RESEARCH_REVISION_CONFLICT", "Research revision changed");
+      if (['completed', 'cancelled', 'pausing'].includes(campaign.state)) fail("RESEARCH_FINISH_STATE_CONFLICT", "Campaign cannot be finished from its current state");
+      const attempts = this.runtime.store.all("SELECT a.attempt_key FROM attempts a JOIN tasks t ON t.task_id=a.task_id WHERE t.campaign_id=? AND a.state<>'terminated'", campaign.campaign_id).map(row => String(row.attempt_key));
+      const revision = campaign.revision + 1;
+      const event = this.events.appendEvent({ campaign_id: campaign.campaign_id, type: "CampaignFinishRequested", actor: principal.id,
+        payload: { revision, reason: input.reason, active_attempts: attempts.length, proof_authority: "none" } });
+      this.runtime.store.putCampaign({ ...campaign, state: "pausing", finish_requested: true, revision, snapshot_seq: event.seq });
+      return { campaign_id: campaign.campaign_id, revision, state: "pausing", attempt_keys: attempts };
     });
   }
   applyPatch(principal: ResearchPrincipal, request: ResearchDagPatch): { revision: number; created_task_ids: string[]; snapshot_seq: number } {
