@@ -17,7 +17,7 @@ import { approvedLockDeclaration, compareStructuredLeanAuditToLock, parseApprove
 import { checkStatementEquivalence } from "./statement-equivalence.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
-import { createFinalReplayManifestV3, stageFinalReplayRegistryEntryV3 } from "./final-replay-manifest-v3.js";
+import { createFinalReplayManifestV3, stageFinalReplayRegistryEntryV3, stageThirdPartyReplayPackV3 } from "./final-replay-manifest-v3.js";
 import { readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "../../research/project-commit.js";
 
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
@@ -59,7 +59,8 @@ export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; cl
 export type AsyncFinalAuthorityReplayExecution = { task_id: string; replay_id: string; claim_id: string; obligation_id: string;
   commands: Record<string, ReplayCommand>; result: "pass" | "blocked"; hard_vetoes: string[]; proof_authority: "none";
   can_promote_claim: false; promotion_requires_gate: true; final_replay_manifest_v3_path?: string;
-  final_replay_registry?: { registry_path: string; entry_sha256: string; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true } };
+  final_replay_registry?: { registry_path: string; entry_sha256: string; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true };
+  third_party_replay_pack?: { pack_path: string; expected_hashes_sha256: string; manifest_sha256: string; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true } };
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -488,6 +489,10 @@ export function createAsyncFinalAuthorityReplayExecutor(app: ResearchOrchestrato
             stageFinalReplayRegistryEntryV3({ projectRoot: runtime.root, manifest, project_id: controlCampaign.project_id,
               actor: "service:proof-workflow", source: "async_final_authority_replay" }));
           result.final_replay_registry = { ...registry, proof_authority: "none", can_promote_claim: false, promotion_requires_gate: true };
+          const pack = withProjectCommit(runtime.root, { operation_id: `${operation_id}:pack`, campaign_id: project.campaign_id,
+            request: { final_replay_manifest_v3_path, replay_id: preparation.replay_id, clean_workspace_sha256: manifest.clean_workspace_sha256 } }, () =>
+            stageThirdPartyReplayPackV3({ projectRoot: runtime.root, manifest }));
+          result.third_party_replay_pack = { ...pack, proof_authority: "none", can_promote_claim: false, promotion_requires_gate: true };
         }
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/final-authority-execution.json`, project.campaign_id, result);

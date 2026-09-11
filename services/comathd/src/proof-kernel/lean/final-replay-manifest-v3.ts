@@ -570,7 +570,8 @@ export function writeThirdPartyReplayPackV3(
     artifact_hashes: manifest.artifact_hashes,
     report_paths: manifest.report_paths,
     dependency_lock: manifest.dependency_lock,
-    lean_run_manifest_paths: manifest.lean_run_manifest_paths
+    lean_run_manifest_paths: manifest.lean_run_manifest_paths,
+    ...(manifest.replay_scope ? { replay_scope: manifest.replay_scope } : {})
   };
   const expectedText = `${JSON.stringify(expectedHashes, null, 2)}\n`;
   writeFileSync(join(packRoot, "FinalReplayManifest.json"), manifestText, "utf8");
@@ -607,4 +608,37 @@ export function writeThirdPartyReplayPackV3(
     expected_hashes_sha256: sha256Text(expectedText),
     manifest_sha256: sha256Text(manifestText)
   };
+}
+
+/** Stages a complete third-party replay pack from the immutable V3 workspace manifest. */
+export function stageThirdPartyReplayPackV3(input: {
+  projectRoot: string;
+  manifest: FinalReplayManifestV3;
+}): { pack_path: string; expected_hashes_sha256: string; manifest_sha256: string } {
+  const pack_path = join(".comath", "evidence", input.manifest.claim_id, "lean", "replay_pack", input.manifest.replay_id).replace(/\\/g, "/");
+  if (["FinalReplayManifest.json", "expected_hashes.json", "README_REPLAY.md"].some(file => existsCommittedFile(input.projectRoot, join(pack_path, file)))) {
+    throw new Error("third_party_replay_pack_append_only_violation");
+  }
+  const manifestText = `${JSON.stringify(input.manifest, null, 2)}\n`;
+  const expectedHashes = {
+    clean_workspace_sha256: input.manifest.clean_workspace_sha256,
+    source_hashes_after: input.manifest.source_hashes_after,
+    artifact_hashes: input.manifest.artifact_hashes,
+    report_paths: input.manifest.report_paths,
+    dependency_lock: input.manifest.dependency_lock,
+    lean_run_manifest_paths: input.manifest.lean_run_manifest_paths,
+    ...(input.manifest.replay_scope ? { replay_scope: input.manifest.replay_scope } : {})
+  };
+  const expectedText = `${JSON.stringify(expectedHashes, null, 2)}\n`;
+  writeCommittedFile(input.projectRoot, join(pack_path, "FinalReplayManifest.json"), manifestText);
+  writeCommittedFile(input.projectRoot, join(pack_path, "expected_hashes.json"), expectedText);
+  writeCommittedFile(input.projectRoot, join(pack_path, "README_REPLAY.md"), [
+    "# CoMath Final Replay Pack", "", `Replay id: ${input.manifest.replay_id}`, `Claim id: ${input.manifest.claim_id}`,
+    `Theorem: ${input.manifest.theorem_name}`, "", "## Replay", "", `Command: ${input.manifest.third_party_replay_command.join(" ")}`,
+    "Network policy: disabled for final proof replay.", "Verify `expected_hashes.json` against the clean workspace before trusting the result.", ""
+  ].join("\n"));
+  for (const relativePath of Object.keys(input.manifest.source_hashes_after)) {
+    writeCommittedFile(input.projectRoot, join(pack_path, "clean", relativePath), readCommittedFile(input.projectRoot, join(input.manifest.clean_workspace_path, relativePath)));
+  }
+  return { pack_path, expected_hashes_sha256: sha256Text(expectedText), manifest_sha256: sha256Text(manifestText) };
 }
