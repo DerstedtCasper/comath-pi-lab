@@ -29,6 +29,12 @@ function allowIntakeRead(daemon: ResearchDaemon, principal: IntakePrincipal, int
 export async function dispatchResearchRoute(daemon: ResearchDaemon, method: string, url: URL, body: unknown,
   principal: IntakePrincipal): Promise<ResearchRouteResponse | undefined> {
   const pathname = url.pathname;
+  const retryTaskId = pathId(/^\/research\/v1\/tasks\/([^/]+)\/retry$/.exec(pathname));
+  if (method === "POST" && retryTaskId) {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may retry a research task", 403);
+    requireBodyId(body, "task_id", retryTaskId);
+    return { status: 200, body: { ok: true, data: daemon.app.retryTask({ kind: "operator", id: principal.id }, body as never) } };
+  }
   const patchId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/patches$/.exec(pathname));
   if (method === "POST" && patchId) {
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may patch a campaign", 403);
