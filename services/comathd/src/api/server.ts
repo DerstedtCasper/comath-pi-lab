@@ -2641,13 +2641,28 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
             return;
           }
           if (req.method === "GET" && url.pathname === "/research/v1/campaigns" && reference) {
-            authenticateOperator(req.headers, reference.daemon.config);
+            const principal = authenticateOperator(req.headers, reference.daemon.config);
             const offset = Number(url.searchParams.get("offset") ?? "0");
             const limit = Number(url.searchParams.get("limit") ?? "50");
             if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
               writeJson(res, { status: 400, body: { ok: false, code: "INVALID_CAMPAIGN_PAGE" } }); return;
             }
-            const campaigns = reference.daemon.runtime.store.listCampaigns();
+            const commandId = url.searchParams.get("command_id");
+            let campaigns = reference.daemon.runtime.store.listCampaigns();
+            if (commandId !== null) {
+              if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/.test(commandId)) {
+                writeJson(res, { status: 400, body: { ok: false, code: "INVALID_START_COMMAND" } }); return;
+              }
+              const receipt = reference.daemon.runtime.store.get("SELECT principal_id,response_json,status FROM commands WHERE command_id=?", commandId);
+              if (!receipt || receipt.principal_id !== `operator:${principal.id}` || receipt.status !== "committed") campaigns = [];
+              else {
+                try {
+                  const response = JSON.parse(String(receipt.response_json)) as { campaign_id?: unknown };
+                  const campaignId = typeof response.campaign_id === "string" ? response.campaign_id : undefined;
+                  campaigns = campaignId ? campaigns.filter(campaign => campaign.campaign_id === campaignId) : [];
+                } catch { campaigns = []; }
+              }
+            }
             writeJson(res, { status: 200, body: { campaigns: campaigns.slice(offset, offset + limit), offset, limit, total: campaigns.length } });
             return;
           }
