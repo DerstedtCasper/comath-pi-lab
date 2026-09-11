@@ -4,10 +4,10 @@ export type ResearchOperatorClientOptions = { baseUrl: string; token: string; fe
 const id = (value: unknown): string => typeof value === "string" && value.length > 0 && value.length <= 160 ? value : "";
 const route = (tool: string, input: unknown): { method: "GET" | "POST"; path: string; body?: unknown } | undefined => {
   const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
-  const campaign = id(value.campaign_id), task = id(value.task_id), intake = id(value.intake_id), operation = id(value.operation_id);
+  const campaign = id(value.campaign_id), task = id(value.task_id), intake = id(value.intake_id), operation = id(value.operation_id), command = id(value.command_id);
   switch (tool) {
     case "research_capabilities_get": return { method: "GET", path: "/research/v1/capabilities" };
-    case "research_campaign_list": { const page = new URLSearchParams(); if (Number.isSafeInteger(value.offset)) page.set("offset", String(value.offset)); if (Number.isSafeInteger(value.limit)) page.set("limit", String(value.limit)); return { method: "GET", path: `/research/v1/campaigns${page.size ? `?${page}` : ""}` }; }
+    case "research_campaign_list": { const page = new URLSearchParams(); if (Number.isSafeInteger(value.offset)) page.set("offset", String(value.offset)); if (Number.isSafeInteger(value.limit)) page.set("limit", String(value.limit)); if (command) page.set("command_id", command); return { method: "GET", path: `/research/v1/campaigns${page.size ? `?${page}` : ""}` }; }
     case "research_campaign_start": return { method: "POST", path: "/research/v1/campaigns", body: input };
     case "research_campaign_get": return campaign ? { method: "GET", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}` } : undefined;
     case "research_frontier_get": return campaign ? { method: "GET", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}/frontier` } : undefined;
