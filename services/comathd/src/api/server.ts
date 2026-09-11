@@ -2626,6 +2626,20 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
             writeJson(res, { status: 202, body: { ok: true, data: result } });
             return;
           }
+          if (req.method === "GET" && url.pathname === "/research/v1/capabilities" && reference) {
+            authenticateOperator(req.headers, reference.daemon.config);
+            const campaign = reference.daemon.runtime.store.listCampaigns().at(0);
+            writeJson(res, { status: 200, body: { ok: true, data: { protocol_version: 1, project_id: campaign?.project_id ?? null,
+              control_ready: reference.daemon.config.enabled && reference.daemon.app.startup_blockers.length === 0,
+              missing_configuration: reference.daemon.config.enabled ? [] : ["research.enabled"], operator_tools: [
+                "research_capabilities_get", "research_campaign_list", "research_campaign_start", "research_campaign_get", "research_frontier_get",
+                "research_budget_get", "research_budget_update", "research_dag_patch", "research_campaign_pause", "research_campaign_resume",
+                "research_campaign_cancel", "research_campaign_finish", "research_task_get", "research_task_cancel", "research_task_retry",
+                "research_checkpoint_get", "research_artifact_read", "research_events_read", "research_intake_prepare", "research_intake_request_approval",
+                "research_operation_get"
+              ] } } });
+            return;
+          }
           if (req.method === "GET" && url.pathname === "/research/v1/campaigns" && reference) {
             authenticateOperator(req.headers, reference.daemon.config);
             const offset = Number(url.searchParams.get("offset") ?? "0");
