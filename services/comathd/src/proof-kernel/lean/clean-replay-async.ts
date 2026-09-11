@@ -51,6 +51,8 @@ export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; cl
   statement_comparison?: { schema_version: "comath.async_clean_replay_statement_comparison.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   formal_header_comparison?: { schema_version: "comath.async_clean_replay_formal_header_comparison.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   clean_type_comparison?: { schema_version: "comath.async_clean_replay_type_comparison.v1"; result: "pass" | "blocked"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
+  final_authority_replay?: { schema_version: "comath.async_clean_replay_final_authority_replay.v1"; result: "pass" | "blocked"; report_path: string;
+    run_id: string; manifest_path: string; hard_vetoes: string[]; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true };
   legacy_final_input?: { schema_version: "comath.async_clean_replay_legacy_final_input.v1"; result: "ready" | "blocked"; report_path: string; hard_vetoes: string[];
     proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true };
   proof_authority: "none";
@@ -313,7 +315,7 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         const buildManifest = result.commands.build?.manifest;
         if (!buildManifest) fail("ASYNC_CLEAN_REPLAY_BUILD_MANIFEST_MISSING");
         const evidence = (path: string) => ({ path, sha256: hash(readCommittedFile(runtime.root, path)) });
-        const command = (receipt: AsyncLeanCommandReceipt) => ({ run_id: receipt.run_id, manifest_path: receipt.manifest_path,
+        const commandReceipt = (receipt: AsyncLeanCommandReceipt) => ({ run_id: receipt.run_id, manifest_path: receipt.manifest_path,
           manifest_sha256: hash(readCommittedFile(runtime.root, receipt.manifest_path)) });
         const hard_vetoes = [
           ...(dependency_closure.result === "pass" ? [] : ["dependency_closure_failed"]),
@@ -322,6 +324,31 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
           ...(clean_type_comparison.result === "pass" ? [] : ["clean_type_comparison_failed"]),
           ...(formal_header_comparison.result === "pass" ? [] : ["formal_header_comparison_failed"])
         ];
+        let final_authority_replay: AsyncCleanReplayExecution["final_authority_replay"] | undefined;
+        let finalAuthorityReceipt: AsyncLeanCommandReceipt | undefined;
+        if (hard_vetoes.length === 0) {
+          const value = await command("final-authority-replay", async execution => {
+            const files = preparation.copied_files.map(file => join(cwd, file.path)).filter(existsSync);
+            if (existsSync(lakeManifest)) files.push(lakeManifest);
+            const receipt = await runServiceOwnedLeanCommandV3Async({ runtime, command_id: `${operation_id}:final-authority-replay:manifest`,
+              claim_id: project.claim_id, campaign_id: project.campaign_id, candidate_id: project.candidate_id, purpose: "final_replay",
+              command: ["lake", "build", ...project.project.build_targets], cwd, input_files: files, leanVersionOutput: versions.lean,
+              lakeVersionOutput: versions.lake, leanToolchain: config.lean_toolchain, network_policy: "disabled", proof_authority: "lean_kernel_check", execution });
+            return { exit_code: receipt.manifest.exit_code, manifest: receipt, proof_authority: "none" };
+          });
+          if (!value.manifest) fail("ASYNC_CLEAN_REPLAY_FINAL_AUTHORITY_MANIFEST_MISSING");
+          finalAuthorityReceipt = value.manifest;
+          const finalHardVetoes = value.exit_code === 0 && value.manifest.manifest.proof_authority === "lean_kernel_check" ? [] : ["final_authority_replay_failed"];
+          final_authority_replay = { schema_version: "comath.async_clean_replay_final_authority_replay.v1", result: finalHardVetoes.length ? "blocked" : "pass",
+            report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/final-authority-replay.json`, run_id: value.manifest.run_id,
+            manifest_path: value.manifest.manifest_path, hard_vetoes: finalHardVetoes, proof_authority: "none", can_promote_claim: false, promotion_requires_gate: true };
+          save(`${operation_id}:final-authority-replay`, final_authority_replay.report_path, project.campaign_id, { ...final_authority_replay,
+            manifest_proof_authority: value.manifest.manifest.proof_authority, command: value.manifest.manifest.command,
+            scope: { campaign_id: project.campaign_id, claim_id: project.claim_id, candidate_id: project.candidate_id, obligation_id: project.obligation_id,
+              stage_attempt: project.stage_attempt, scope_package_sha256: project.scope_package_sha256, replay_id: preparation.replay_id } });
+          result.final_authority_replay = final_authority_replay;
+          hard_vetoes.push(...finalHardVetoes);
+        }
         const legacy_final_input = { schema_version: "comath.async_clean_replay_legacy_final_input.v1" as const,
           result: hard_vetoes.length ? "blocked" as const : "ready" as const,
           report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/legacy-final-input.json`,
@@ -336,8 +363,10 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
           environment: evidence(environment_receipt_path), evidence: { dependency_closure: evidence(dependency_closure.report_path),
             static_audit: evidence(static_audit.report_path), axiom_profile: evidence(axiom_profile.report_path),
             statement_comparison: evidence(statement_comparison.report_path), formal_header_comparison: evidence(formal_header_comparison.report_path),
-            clean_type_comparison: evidence(clean_type_comparison.report_path) },
-          commands: { build: command(buildManifest), audit: command(auditManifest), lock_elaboration: command(lockElaborationManifest) } });
+            clean_type_comparison: evidence(clean_type_comparison.report_path),
+            ...(final_authority_replay ? { final_authority_replay: evidence(final_authority_replay.report_path) } : {}) },
+          commands: { build: commandReceipt(buildManifest), audit: commandReceipt(auditManifest), lock_elaboration: commandReceipt(lockElaborationManifest),
+            ...(finalAuthorityReceipt ? { final_authority_replay: commandReceipt(finalAuthorityReceipt) } : {}) } });
         result.legacy_final_input = legacy_final_input;
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/async-execution.json`, project.campaign_id, result);
