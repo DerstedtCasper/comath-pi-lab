@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { isAbsolute, relative, resolve } from "node:path";
 import { URL } from "node:url";
-import { realpathSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { realpathSync, readFileSync, statSync } from "node:fs";
 import { ComathError, toComathError } from "../errors.js";
 import { loadConfig, researchConfigSchema } from "../config/config.js";
 import { acquireResearchDaemon, type ResearchDaemonOptions, type ResearchDaemonReference } from "../research/daemon-runtime.js";
@@ -10,6 +11,7 @@ import { dispatchResearchRoute } from "../control/research-routes.js";
 import { getAcquiredProjectRuntime } from "../research/project-runtime.js";
 import { getProofWorkflowBridge } from "../research/proof-workflow-bridge.js";
 import { shutdownLegacyRuntime } from "../agents/runtime/legacy-runtime-facade.js";
+import { artifactPathForHash, listArtifactRefs } from "../artifacts/store.js";
 import { getComathdStatus } from "../status.js";
 import { getProjectStatus, initProject, openProject } from "../project/project-store.js";
 import { getClaim, linkClaims, readClaims, registerClaim, updateClaim } from "../claim/claim-store.js";
@@ -2515,6 +2517,35 @@ function lifecycleRouteError(cause: unknown): InjectResponse {
   const error = toComathError(cause);
   return { status: error.statusCode, body: { ok: false, code: error.code, error: error.message } };
 }
+function readOperatorArtifact(reference: ResearchDaemonReference, artifactId: string): { bytes: Buffer; sha256: string } {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/.test(artifactId)) throw new ComathError("Invalid artifact ID", { code: "RESEARCH_ARTIFACT_ID_INVALID", statusCode: 400 });
+  const record = listArtifactRefs(reference.daemon.runtime.root).find(value => value.id === artifactId);
+  if (!record) throw new ComathError("Artifact does not exist", { code: "RESEARCH_ARTIFACT_NOT_FOUND", statusCode: 404 });
+  const taskReference = reference.daemon.runtime.store.all("SELECT task_json FROM tasks").some(row => {
+    const task = JSON.parse(String(row.task_json)) as { input_refs?: { artifact_id: string; sha256: string }[]; accepted_result_id?: string; campaign_id: string };
+    return task.accepted_result_id === record.id || task.input_refs?.some(value => value.artifact_id === record.id && value.sha256 === record.sha256) === true;
+  });
+  const checkpointReference = reference.daemon.runtime.store.all("SELECT artifact_ref FROM checkpoints").some(row => {
+    try { const value = JSON.parse(String(row.artifact_ref)) as { artifact_id: string; sha256: string }; return value.artifact_id === record.id && value.sha256 === record.sha256; } catch { return false; }
+  });
+  if (!taskReference && !checkpointReference) throw new ComathError("Artifact is not referenced by readable research state", { code: "RESEARCH_ARTIFACT_FORBIDDEN", statusCode: 404 });
+  const target = artifactPathForHash(reference.daemon.runtime.root, record.sha256);
+  if (record.path.replace(/\\/g, "/") !== target.relative_path.replace(/\\/g, "/")) throw new ComathError("Artifact CAS path is invalid", { code: "RESEARCH_ARTIFACT_CORRUPT", statusCode: 409 });
+  const info = statSync(target.absolute_path);
+  if (!info.isFile() || info.size !== record.size_bytes || info.size > 16 * 1024 * 1024) throw new ComathError("Artifact bytes are unavailable", { code: "RESEARCH_ARTIFACT_UNAVAILABLE", statusCode: 413 });
+  const bytes = readFileSync(target.absolute_path);
+  if (createHash("sha256").update(bytes).digest("hex") !== record.sha256) throw new ComathError("Artifact hash is invalid", { code: "RESEARCH_ARTIFACT_CORRUPT", statusCode: 409 });
+  return { bytes, sha256: record.sha256 };
+}
+function parseByteRange(header: string | string[] | undefined, size: number): { start: number; end: number; partial: boolean } {
+  const value = Array.isArray(header) ? header[0] : header;
+  if (!value) return { start: 0, end: Math.max(0, size - 1), partial: false };
+  const match = /^bytes=(\d+)-(\d*)$/.exec(value);
+  if (!match) throw new ComathError("Only a single bytes=start-end range is supported", { code: "RESEARCH_ARTIFACT_RANGE_INVALID", statusCode: 416 });
+  const start = Number(match[1]), end = match[2] ? Number(match[2]) : size - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || start >= size) throw new ComathError("Artifact byte range is unsatisfied", { code: "RESEARCH_ARTIFACT_RANGE_INVALID", statusCode: 416 });
+  return { start, end: Math.min(end, size - 1), partial: true };
+}
 
 export function createComathServer(options: ComathServerOptions = {}): ComathServer {
   let server: Server | undefined;
@@ -2562,6 +2593,15 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
       server = createServer(async (req, res) => {
         try {
           const url = new URL(req.url ?? "/", "http://localhost");
+          const artifactMatch = /^\/research\/v1\/artifacts\/([^/]+)$/.exec(url.pathname);
+          if (req.method === "GET" && artifactMatch && reference) {
+            authenticateOperator(req.headers, reference.daemon.config);
+            const artifact = readOperatorArtifact(reference, decodeURIComponent(artifactMatch[1]!)), range = parseByteRange(req.headers.range, artifact.bytes.length);
+            const body = artifact.bytes.subarray(range.start, range.end + 1);
+            res.writeHead(range.partial ? 206 : 200, { "content-type": "application/octet-stream", "content-length": String(body.length), "accept-ranges": "bytes",
+              etag: `\"sha256-${artifact.sha256}\"`, ...(range.partial ? { "content-range": `bytes ${range.start}-${range.end}/${artifact.bytes.length}` } : {}) });
+            res.end(body); return;
+          }
           const hostMutation = req.method === "POST" && /^\/host\/v1\/intakes\/[^/]+\/(tickets|approve)$/.test(url.pathname);
           const operatorMutation = req.method === "POST" && (/^\/research\/v1\/campaigns\/[^/]+\/intakes$/.test(url.pathname)
             || /^\/research\/v1\/intakes\/[^/]+\/approval-requests$/.test(url.pathname)
