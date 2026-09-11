@@ -29,6 +29,21 @@ function allowIntakeRead(daemon: ResearchDaemon, principal: IntakePrincipal, int
 export async function dispatchResearchRoute(daemon: ResearchDaemon, method: string, url: URL, body: unknown,
   principal: IntakePrincipal): Promise<ResearchRouteResponse | undefined> {
   const pathname = url.pathname;
+  const taskDetailId = pathId(/^\/research\/v1\/tasks\/([^/]+)$/.exec(pathname));
+  if (method === "GET" && taskDetailId) {
+    const task = daemon.app.getTask(taskDetailId);
+    const attempts = daemon.runtime.store.all("SELECT attempt_key,generation,run_id,state,expires_at,last_heartbeat_at,runtime_kind,fault_reason,stop_reason,stop_requested_at,termination_confirmed,last_checkpoint_at FROM attempts WHERE task_id=? ORDER BY generation", task.task_id)
+      .map(row => ({ attempt_key: String(row.attempt_key), generation: Number(row.generation), run_id: String(row.run_id), state: String(row.state),
+        expires_at: row.expires_at === null ? null : String(row.expires_at), last_heartbeat_at: row.last_heartbeat_at === null ? null : String(row.last_heartbeat_at),
+        runtime_kind: row.runtime_kind === null ? null : String(row.runtime_kind), fault_reason: row.fault_reason === null ? null : String(row.fault_reason),
+        stop_reason: row.stop_reason === null ? null : String(row.stop_reason), stop_requested_at: row.stop_requested_at === null ? null : String(row.stop_requested_at),
+        termination_confirmed: Number(row.termination_confirmed) === 1, last_checkpoint_at: row.last_checkpoint_at === null ? null : String(row.last_checkpoint_at) }));
+    const checkpoint = task.checkpoint_head ? daemon.runtime.store.get("SELECT checkpoint_id,seq,payload_sha256,artifact_ref,created_at FROM checkpoints WHERE checkpoint_id=?", task.checkpoint_head) : undefined;
+    const validation = daemon.runtime.store.all("SELECT candidate_id,policy_version,role_slot,current_task_id,prior_task_ids_json FROM validation_tasks WHERE current_task_id=?", task.task_id)
+      .map(row => ({ candidate_id: String(row.candidate_id), policy_version: String(row.policy_version), role_slot: String(row.role_slot), current_task_id: String(row.current_task_id), prior_task_ids: JSON.parse(String(row.prior_task_ids_json)) }));
+    return { status: 200, body: { ok: true, data: { task, attempts, checkpoint: checkpoint ? { checkpoint_id: String(checkpoint.checkpoint_id), seq: Number(checkpoint.seq),
+      payload_sha256: String(checkpoint.payload_sha256), artifact_ref: JSON.parse(String(checkpoint.artifact_ref)), created_at: String(checkpoint.created_at) } : null, validation } } };
+  }
   const pauseCampaignId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/pause$/.exec(pathname));
   if (method === "POST" && pauseCampaignId) {
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may pause a research campaign", 403);
