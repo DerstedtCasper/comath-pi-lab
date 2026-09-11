@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ComathError } from "../errors.js";
 import { canonicalJson } from "../verification/runner-contracts.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
+import { buildStructuredLeanAuditSource } from "../proof-kernel/lean/structured-audit.js";
 import type { GaAgentReplayProject } from "../proof-kernel/ensemble/ga-agent-stage-runner.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "./project-runtime.js";
 import { assertProjectReadable, existsCommittedFile, readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "./project-commit.js";
@@ -84,7 +85,7 @@ export function createFormalCandidateProjectService(runtime: ProjectRuntime, opt
       { path: project.formal_spec_file, bytes: lockBytes }, { path: project.assumption_ledger_file, bytes: ledgerBytes },
       { path: project.toolchain_file, bytes: input.lean_toolchain + "\n" },
       { path: project.lakefile, bytes: `import Lake\nopen Lake DSL\npackage ComathCandidate where\nlean_lib ComathCandidate where\n  srcDir := "source"\n  roots := #[${moduleNames.map(name => "`" + name).join(", ")}]\n` },
-      { path: project.audit_file_rel, bytes: `import ${targetModule}\n#check ${theorem}\n#print axioms ${theorem}\n` }
+      { path: project.audit_file_rel, bytes: buildStructuredLeanAuditSource({ target_module: targetModule, target: theorem }) }
     ];
     const operationId = `formal-project:${configuration}`, descriptorPath = `${base}/candidate_replay_project_descriptor.json`;
     const receipt: FormalCandidateProjectReceipt = { schema_version: "comath.formal_candidate_project.v1", operation_id: operationId,

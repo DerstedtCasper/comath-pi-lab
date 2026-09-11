@@ -8,6 +8,7 @@ import { canonicalJson } from "../verification/runner-contracts.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
 import { runLeanToolCommandAsync, directElanTool, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "../proof-kernel/lean/lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, verifyLeanRunManifestV3Evidence, type AsyncLeanCommandReceipt } from "../proof-kernel/lean/lean-run-manifest-v3.js";
+import { compareStructuredLeanAuditToLock, parseStructuredLeanAuditOutput, type StructuredAuditStatementComparison, type StructuredLeanAudit } from "../proof-kernel/lean/structured-audit.js";
 import type { OwnedSessionCompletion } from "../agents/runtime/owned-process-session.js";
 import type { ResearchOrchestrator } from "./research-orchestrator.js";
 import type { FormalCandidateProjectReceipt } from "./formal-candidate-project.js";
@@ -16,8 +17,9 @@ import { readCommittedFile, withProjectCommit, writeCommittedFile } from "./proj
 
 type Config = NonNullable<ResearchConfig["proof_workflow"]>;
 type CommandResult = { exit_code: number; stdout?: string; stderr?: string; manifest?: AsyncLeanCommandReceipt; proof_authority: "none" };
+type StructuredAuditEvidence = { report_path: string; report: StructuredLeanAudit; statement_comparison: StructuredAuditStatementComparison };
 export type ProofNativeVerificationResult = { task_id: string; candidate_id: string; obligation_id: string;
-  commands: Record<string, CommandResult>; native_checks_passed: boolean; error_code?: string; proof_authority: "none" };
+  commands: Record<string, CommandResult>; native_checks_passed: boolean; structured_audit?: StructuredAuditEvidence; error_code?: string; proof_authority: "none" };
 const hash = (value: unknown) => createHash("sha256").update(canonicalJson(value)).digest("hex");
 function fail(code: string): never { throw new ComathError(code, { code, statusCode: 409 }); }
 
@@ -44,6 +46,11 @@ export function createProofNativeVerification(app: ResearchOrchestrator, tools: 
       const receipt = command.manifest;
       if (receipt.commit_state !== "committed" || !verifyLeanRunManifestV3Evidence(runtime.root, receipt.manifest).ok
         || readCommittedFile(runtime.root, receipt.manifest_path) !== canonicalJson(receipt.manifest)) fail("PROOF_NATIVE_EVIDENCE_CHANGED");
+    }
+    if (result.structured_audit) {
+      const bytes = readCommittedFile(runtime.root, result.structured_audit.report_path);
+      const expected = canonicalJson({ audit: result.structured_audit.report, statement_comparison: result.structured_audit.statement_comparison });
+      if (bytes !== expected) fail("PROOF_NATIVE_EVIDENCE_CHANGED");
     }
     return result;
   }
@@ -165,7 +172,26 @@ export function createProofNativeVerification(app: ResearchOrchestrator, tools: 
           if (value.exit_code !== 0) break;
         }
       }
-      result.native_checks_passed = ["lean-version", "lake-version", "check", "build", "audit"].every(name => result.commands[name]?.exit_code === 0);
+      const audit = result.commands.audit;
+      if (audit?.exit_code === 0 && audit.manifest) {
+        const auditSourcePath = `${project.project.lean_root}/${project.project.audit_file_rel}`;
+        const theoremSourcePath = `${project.project.lean_root}/${project.project.theorem_file_rel}`;
+        const auditSource = readCommittedFile(runtime.root, auditSourcePath), theoremSource = readCommittedFile(runtime.root, theoremSourcePath);
+        const environmentFingerprint = hash({ toolchain: config.lean_toolchain, lean_version: audit.manifest.manifest.lean_version,
+          lake_version: audit.manifest.manifest.lake_version, lean_binary_sha256: audit.manifest.manifest.lean_binary_sha256,
+          lake_binary_sha256: audit.manifest.manifest.lake_binary_sha256, toolchain_file_sha256: audit.manifest.manifest.lean_toolchain_file_sha256,
+          source_sha256: createHash("sha256").update(theoremSource).digest("hex"), audit_source_sha256: createHash("sha256").update(auditSource).digest("hex") });
+        const report = parseStructuredLeanAuditOutput({ stdout: readCommittedFile(runtime.root, audit.manifest.manifest.stdout_path),
+          expected_target: project.project.theorem_name, source_file: project.project.theorem_file_rel,
+          source_file_sha256: createHash("sha256").update(theoremSource).digest("hex"), audit_source_sha256: createHash("sha256").update(auditSource).digest("hex"),
+          environment_fingerprint: environmentFingerprint, generated_by_run_id: audit.manifest.run_id, audit_manifest_path: audit.manifest.manifest_path });
+        const statement_comparison = compareStructuredLeanAuditToLock({ audit: report, lock: approved.lock });
+        const report_path = `${base}.structured-audit.json`;
+        save(`${operationId}:structured-audit`, report_path, project.campaign_id, { audit: report, statement_comparison });
+        result.structured_audit = { report_path, report, statement_comparison };
+      }
+      result.native_checks_passed = ["lean-version", "lake-version", "check", "build", "audit"].every(name => result.commands[name]?.exit_code === 0)
+        && result.structured_audit?.report.result === "pass";
       verify(result); save(operationId, `${base}.result.json`, project.campaign_id, result);
       return result;
     } catch (error) {
