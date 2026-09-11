@@ -26,8 +26,36 @@ function allowIntakeRead(daemon: ResearchDaemon, principal: IntakePrincipal, int
  * Thin C8 transport adapter. It has no approval state of its own: all
  * preparation/ticket/commit operations stay in ResearchDaemon.intake.
  */
-export async function dispatchResearchRoute(daemon: ResearchDaemon, method: string, pathname: string, body: unknown,
+export async function dispatchResearchRoute(daemon: ResearchDaemon, method: string, url: URL, body: unknown,
   principal: IntakePrincipal): Promise<ResearchRouteResponse | undefined> {
+  const pathname = url.pathname;
+  const campaignDetailId = pathId(/^\/research\/v1\/campaigns\/([^/]+)$/.exec(pathname));
+  if (method === "GET" && campaignDetailId) {
+    const frontier = daemon.app.frontier(campaignDetailId, { limit: 1 });
+    return { status: 200, body: { ok: true, data: { campaign: daemon.runtime.store.getCampaign(campaignDetailId),
+      proof_status: "research_unproven", proof_authority: "none", snapshot_seq: frontier.snapshot_seq } } };
+  }
+  const frontierId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/frontier$/.exec(pathname));
+  if (method === "GET" && frontierId) {
+    const after = url.searchParams.get("after_task_id") ?? undefined, rawLimit = url.searchParams.get("limit");
+    return { status: 200, body: { ok: true, data: daemon.app.frontier(frontierId, { ...(after ? { after_task_id: after } : {}), ...(rawLimit === null ? {} : { limit: Number(rawLimit) }) }) } };
+  }
+  const budgetId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/budget$/.exec(pathname));
+  if (method === "GET" && budgetId) {
+    // Read through the application graph first so a pending trust commit cannot
+    // expose a budget for an inconsistent campaign snapshot.
+    daemon.app.frontier(budgetId, { limit: 1 });
+    return { status: 200, body: { ok: true, data: daemon.scheduler.budget.read(budgetId) } };
+  }
+  const eventsId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/events$/.exec(pathname));
+  if (method === "GET" && eventsId) {
+    daemon.app.frontier(eventsId, { limit: 1 });
+    const rawAfter = url.searchParams.get("after_seq"), rawLimit = url.searchParams.get("limit");
+    const events = daemon.app.events.readEventsAfter({ campaign_id: eventsId, ...(rawAfter === null ? {} : { after_seq: Number(rawAfter) }), ...(rawLimit === null ? {} : { limit: Number(rawLimit) }) });
+    const snapshotSeq = Number(daemon.runtime.store.get("SELECT COALESCE(MAX(seq),0) AS seq FROM events")?.seq ?? 0);
+    return { status: 200, body: { ok: true, data: { campaign_id: eventsId, events, snapshot_seq: snapshotSeq,
+      next_cursor: events.length && rawLimit !== null && events.length === Number(rawLimit) ? events.at(-1)!.seq : null } } };
+  }
   const campaignId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/intakes$/.exec(pathname));
   if (method === "POST" && campaignId) {
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may prepare formalization", 403);

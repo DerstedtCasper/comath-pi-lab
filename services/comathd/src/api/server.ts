@@ -2566,10 +2566,11 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
           const operatorMutation = req.method === "POST" && (/^\/research\/v1\/campaigns\/[^/]+\/intakes$/.test(url.pathname)
             || /^\/research\/v1\/intakes\/[^/]+\/approval-requests$/.test(url.pathname));
           const intakeRead = req.method === "GET" && /^\/research\/v1\/intakes\/[^/]+$/.test(url.pathname);
-          if (reference && (hostMutation || operatorMutation || intakeRead)) {
+          const operatorRead = req.method === "GET" && /^\/research\/v1\/campaigns\/[^/]+(?:\/(frontier|budget|events))?$/.test(url.pathname);
+          if (reference && (hostMutation || operatorMutation || intakeRead || operatorRead)) {
             const principal = hostMutation ? authenticateHost(req.headers, reference.daemon.config)
               : intakeRead ? authenticateResearchReader(req.headers, reference.daemon.config) : authenticateOperator(req.headers, reference.daemon.config);
-            const response = await dispatchResearchRoute(reference.daemon, req.method ?? "GET", url.pathname,
+            const response = await dispatchResearchRoute(reference.daemon, req.method ?? "GET", url,
               req.method === "GET" ? undefined : await readJson(req), principal);
             if (response) { writeJson(res, response); return; }
           }
