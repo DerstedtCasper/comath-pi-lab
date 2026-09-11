@@ -50,6 +50,8 @@ export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; cl
   axiom_profile?: { schema_version: "comath.async_clean_replay_axiom_profile.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   statement_comparison?: { schema_version: "comath.async_clean_replay_statement_comparison.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   clean_type_comparison?: { schema_version: "comath.async_clean_replay_type_comparison.v1"; result: "pass" | "blocked"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
+  legacy_final_input?: { schema_version: "comath.async_clean_replay_legacy_final_input.v1"; result: "ready" | "blocked"; report_path: string; hard_vetoes: string[];
+    proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true };
   proof_authority: "none";
 };
 
@@ -296,6 +298,34 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         save(`${operation_id}:statement-comparison`, statement_comparison.report_path, project.campaign_id, { ...statement_comparison, report: statement,
           structured_audit_run_id: auditManifest.run_id, theorem_type_elaborated_hash: structured_audit.theorem_type_elaborated_hash });
         result.statement_comparison = statement_comparison;
+        const buildManifest = result.commands.build?.manifest;
+        if (!buildManifest) fail("ASYNC_CLEAN_REPLAY_BUILD_MANIFEST_MISSING");
+        const evidence = (path: string) => ({ path, sha256: hash(readCommittedFile(runtime.root, path)) });
+        const command = (receipt: AsyncLeanCommandReceipt) => ({ run_id: receipt.run_id, manifest_path: receipt.manifest_path,
+          manifest_sha256: hash(readCommittedFile(runtime.root, receipt.manifest_path)) });
+        const hard_vetoes = [
+          ...(dependency_closure.result === "pass" ? [] : ["dependency_closure_failed"]),
+          ...(static_audit.result === "pass" ? [] : ["static_audit_failed"]),
+          ...(axiom_profile.result === "pass" ? [] : ["axiom_profile_failed"]),
+          ...(clean_type_comparison.result === "pass" ? [] : ["clean_type_comparison_failed"]),
+          ...(statement_comparison.result === "pass" ? [] : ["legacy_statement_comparison_failed"])
+        ];
+        const legacy_final_input = { schema_version: "comath.async_clean_replay_legacy_final_input.v1" as const,
+          result: hard_vetoes.length ? "blocked" as const : "ready" as const,
+          report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/legacy-final-input.json`,
+          hard_vetoes, proof_authority: "none" as const, can_promote_claim: false as const, promotion_requires_gate: true as const };
+        save(`${operation_id}:legacy-final-input`, legacy_final_input.report_path, project.campaign_id, { ...legacy_final_input,
+          scope: { campaign_id: project.campaign_id, claim_id: project.claim_id, candidate_id: project.candidate_id,
+            obligation_id: project.obligation_id, stage_attempt: project.stage_attempt, scope_package_sha256: project.scope_package_sha256,
+            replay_id: preparation.replay_id },
+          preparation: { operation_id: preparation.operation_id, preparation_manifest_path: preparation.preparation_manifest_path,
+            obligation_receipt_path: preparation.obligation_receipt_path, source_project_operation_id: preparation.source_project_operation_id,
+            source_project_sha256: preparation.source_project_sha256 },
+          environment: evidence(environment_receipt_path), evidence: { dependency_closure: evidence(dependency_closure.report_path),
+            static_audit: evidence(static_audit.report_path), axiom_profile: evidence(axiom_profile.report_path),
+            statement_comparison: evidence(statement_comparison.report_path), clean_type_comparison: evidence(clean_type_comparison.report_path) },
+          commands: { build: command(buildManifest), audit: command(auditManifest), lock_elaboration: command(lockElaborationManifest) } });
+        result.legacy_final_input = legacy_final_input;
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/async-execution.json`, project.campaign_id, result);
       return result;
