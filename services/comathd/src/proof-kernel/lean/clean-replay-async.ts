@@ -13,7 +13,7 @@ import { requireApprovedFormalScope } from "../campaign/formal-spec-store.js";
 import { checkDependencyClosureV2 } from "./dependency-closure.js";
 import { runStaticCheatScan } from "./static-cheat-scan.js";
 import { checkAxiomProfileV2 } from "./axiom-profile.js";
-import { parseStructuredLeanAuditOutput, type StructuredLeanAudit } from "./structured-audit.js";
+import { compareStructuredLeanAuditToLock, parseApprovedLockElaborationOutput, parseStructuredLeanAuditOutput, type StructuredLeanAudit } from "./structured-audit.js";
 import { checkStatementEquivalence } from "./statement-equivalence.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
@@ -48,7 +48,10 @@ export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; cl
   dependency_closure?: { schema_version: "comath.async_clean_replay_dependency_closure.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   static_audit?: { schema_version: "comath.async_clean_replay_static_audit.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   axiom_profile?: { schema_version: "comath.async_clean_replay_axiom_profile.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
-  statement_comparison?: { schema_version: "comath.async_clean_replay_statement_comparison.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" }; proof_authority: "none" };
+  statement_comparison?: { schema_version: "comath.async_clean_replay_statement_comparison.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
+  clean_type_comparison?: { result: "pass" | "blocked"; hard_vetoes: string[]; proof_authority: "none" };
+  proof_authority: "none";
+};
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -202,7 +205,8 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
       if (versions.lean && versions.lake) for (const step of [
         { name: "check", purpose: "check" as const, command: ["lake", "env", "lean", project.project.theorem_file_rel] as ["lake", ...string[]] },
         { name: "build", purpose: "final_replay" as const, command: ["lake", "build", ...project.project.build_targets] as ["lake", ...string[]] },
-        { name: "audit", purpose: "audit" as const, command: ["lake", "env", "lean", project.project.audit_file_rel] as ["lake", ...string[]] }
+        { name: "audit", purpose: "audit" as const, command: ["lake", "env", "lean", project.project.audit_file_rel] as ["lake", ...string[]] },
+        { name: "lock-elaboration", purpose: "audit" as const, command: ["lake", "env", "lean", project.approved_lock_elaboration_file] as ["lake", ...string[]] }
       ]) {
         const value = await command(step.name, async execution => {
           const files = preparation.copied_files.map(file => join(cwd, file.path)).filter(existsSync);
@@ -214,7 +218,7 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         });
         if (value.exit_code !== 0) break;
       }
-      result.executed = ["check", "build", "audit"].every(name => result.commands[name]?.exit_code === 0);
+      result.executed = ["check", "build", "audit", "lock-elaboration"].every(name => result.commands[name]?.exit_code === 0);
       if (result.executed) {
         const lakeManifest = join(cwd, "lake-manifest.json");
         if (!existsSync(lakeManifest)) fail("ASYNC_CLEAN_REPLAY_LAKE_MANIFEST_MISSING");
@@ -251,6 +255,23 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         const structured_audit: StructuredLeanAudit = parseStructuredLeanAuditOutput({ stdout: readCommittedFile(runtime.root, auditManifest.manifest.stdout_path),
           expected_target: project.project.theorem_name, source_file: project.project.theorem_file_rel, source_file_sha256: hash(readFileSync(theoremPath)),
           audit_source_sha256: hash(readFileSync(auditPath)), environment_fingerprint, generated_by_run_id: auditManifest.run_id, audit_manifest_path: auditManifest.manifest_path });
+        const lockElaborationManifest = result.commands["lock-elaboration"]?.manifest;
+        if (!lockElaborationManifest) fail("ASYNC_CLEAN_REPLAY_LOCK_ELABORATION_MANIFEST_MISSING");
+        const bridgePath = join(cwd, project.approved_lock_elaboration_file), bridgeSource = readFileSync(bridgePath);
+        const lock_elaboration = parseApprovedLockElaborationOutput({
+          stdout: readCommittedFile(runtime.root, lockElaborationManifest.manifest.stdout_path), claim_id: project.claim_id,
+          campaign_id: project.campaign_id, obligation_id: project.obligation_id, approval_id: approved.scope.approval_id,
+          scope_package_sha256: project.scope_package_sha256, statement_hash: approved.scope.statement_hash,
+          formal_spec_artifact: approved.formal_spec_ref, expected_target: `${approved.lock.namespace}.${approved.lock.theorem_name}`,
+          bridge_source_path: project.approved_lock_elaboration_file, bridge_source_sha256: hash(bridgeSource),
+          environment_fingerprint: hash(canonicalJson({ toolchain: config.lean_toolchain, lean_version: lockElaborationManifest.manifest.lean_version,
+            lake_version: lockElaborationManifest.manifest.lake_version, lean_binary_sha256: lockElaborationManifest.manifest.lean_binary_sha256,
+            lake_binary_sha256: lockElaborationManifest.manifest.lake_binary_sha256, toolchain_file_sha256: lockElaborationManifest.manifest.lean_toolchain_file_sha256,
+            formal_spec_sha256: approved.formal_spec_ref.sha256, bridge_source_sha256: hash(bridgeSource), lake_manifest_sha256 })),
+          generated_by_run_id: lockElaborationManifest.run_id, manifest_path: lockElaborationManifest.manifest_path
+        });
+        const typeComparison = compareStructuredLeanAuditToLock({ audit: structured_audit, lock: approved.lock, approved_lock_elaboration: lock_elaboration });
+        result.clean_type_comparison = { result: typeComparison.result, hard_vetoes: typeComparison.hard_vetoes, proof_authority: "none" };
         const axiomTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/axiom-profile.tmp.json`;
         const profile = checkAxiomProfileV2({ projectRoot: runtime.root, reportPath: axiomTemp, theoremName: project.project.theorem_name,
           theoremTypeHash: structured_audit.theorem_type_elaborated_hash, sourceFile: theoremPath, environmentFingerprint: environment_fingerprint,
