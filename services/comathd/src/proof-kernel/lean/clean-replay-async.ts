@@ -6,6 +6,7 @@ import { ComathError } from "../../errors.js";
 import type { ResearchConfig } from "../../config/config.js";
 import type { FinalReplayManifestV3 } from "../../types/schemas.js";
 import { canonicalJson } from "../../verification/runner-contracts.js";
+import { importArtifact } from "../../artifacts/store.js";
 import type { FormalCandidateProjectReceipt } from "../../research/formal-candidate-project.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "../../research/project-runtime.js";
 import type { ResearchOrchestrator } from "../../research/research-orchestrator.js";
@@ -63,7 +64,7 @@ export type AsyncFinalAuthorityReplayExecution = { task_id: string; replay_id: s
   final_replay_registry?: { registry_path: string; entry_sha256: string; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true };
   third_party_replay_pack?: { pack_path: string; expected_hashes_sha256: string; manifest_sha256: string; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true };
   final_authority_packaging?: { packaging_path: string; derived_bindings_path: string; result: "pass" | "blocked";
-    proof_authority: "none" | "lean_kernel_clean_replay"; can_promote_claim: false; promotion_requires_gate: true } };
+    artifact_id?: string; proof_authority: "none" | "lean_kernel_clean_replay"; can_promote_claim: false; promotion_requires_gate: true } };
 
 type ScopedEvidenceRef = { path: string; sha256: string };
 type ScopedFinalAuthorityScope = { campaign_id: string; claim_id: string; candidate_id: string; obligation_id: string;
@@ -660,9 +661,12 @@ export function createAsyncFinalAuthorityReplayExecutor(app: ResearchOrchestrato
             request: { final_replay_manifest_v3_path, replay_id: preparation.replay_id, clean_workspace_sha256: manifest.clean_workspace_sha256 } }, () =>
             stageThirdPartyReplayPackV3({ projectRoot: runtime.root, manifest }));
           result.third_party_replay_pack = { ...pack, proof_authority: "none", can_promote_claim: false, promotion_requires_gate: true };
-          result.final_authority_packaging = stageScopedFinalAuthorityPackagingV1({ runtime, operation_id, project, preparation, approved,
+          const scopedPackaging = stageScopedFinalAuthorityPackagingV1({ runtime, operation_id, project, preparation, approved,
             manifest_path: final_replay_manifest_v3_path, manifest, final_authority_lrun_path: value.manifest.manifest_path,
             replay, registry, pack });
+          const packagingArtifact = await importArtifact({ projectRoot: runtime.root, project_id: controlCampaign.project_id,
+            source_path: scopedPackaging.packaging_path, kind: "runner_output", actor: "service:proof-workflow" });
+          result.final_authority_packaging = { ...scopedPackaging, artifact_id: packagingArtifact.id };
         }
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/final-authority-execution.json`, project.campaign_id, result);
