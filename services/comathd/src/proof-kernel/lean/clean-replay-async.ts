@@ -14,6 +14,7 @@ import { checkDependencyClosureV2 } from "./dependency-closure.js";
 import { runStaticCheatScan } from "./static-cheat-scan.js";
 import { checkAxiomProfileV2 } from "./axiom-profile.js";
 import { parseStructuredLeanAuditOutput, type StructuredLeanAudit } from "./structured-audit.js";
+import { checkStatementEquivalence } from "./statement-equivalence.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
 import { readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "../../research/project-commit.js";
@@ -46,7 +47,8 @@ export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; cl
   commands: Record<string, ReplayCommand>; executed: boolean; lake_manifest_sha256?: string; environment_receipt_path?: string;
   dependency_closure?: { schema_version: "comath.async_clean_replay_dependency_closure.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   static_audit?: { schema_version: "comath.async_clean_replay_static_audit.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
-  axiom_profile?: { schema_version: "comath.async_clean_replay_axiom_profile.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" }; proof_authority: "none" };
+  axiom_profile?: { schema_version: "comath.async_clean_replay_axiom_profile.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
+  statement_comparison?: { schema_version: "comath.async_clean_replay_statement_comparison.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" }; proof_authority: "none" };
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -258,6 +260,15 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         save(`${operation_id}:axiom-profile`, axiom_profile.report_path, project.campaign_id, { ...axiom_profile, report: profile, structured_audit,
           audit_run_id: auditManifest.run_id, environment_fingerprint });
         result.axiom_profile = axiom_profile;
+        const statementTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/statement-comparison.tmp.json`;
+        const statement = checkStatementEquivalence({ projectRoot: runtime.root, campaign_id: project.campaign_id, claim_id: project.claim_id, candidate_id: project.candidate_id,
+          reportPath: statementTemp, locked_statement_hash: project.project.formal_spec.locked_statement_hash, formal_spec_statement: project.project.canonical_proposition,
+          lean_check_output: "", lean_source: readFileSync(theoremPath, "utf8"), theorem_name: project.project.theorem_name });
+        const statement_comparison = { schema_version: "comath.async_clean_replay_statement_comparison.v1" as const, result: statement.result,
+          report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/statement-comparison.json`, hard_vetoes: statement.hard_vetoes, proof_authority: "none" as const };
+        save(`${operation_id}:statement-comparison`, statement_comparison.report_path, project.campaign_id, { ...statement_comparison, report: statement,
+          structured_audit_run_id: auditManifest.run_id, theorem_type_elaborated_hash: structured_audit.theorem_type_elaborated_hash });
+        result.statement_comparison = statement_comparison;
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/async-execution.json`, project.campaign_id, result);
       return result;
