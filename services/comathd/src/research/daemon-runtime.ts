@@ -330,6 +330,18 @@ export class ResearchDaemon {
       this.scheduler.budget.configure(campaignId, limits, pools);
     });
   }
+  /** Route a cancellation through the graph command, then the reconciler that owns every runtime/tool stop. */
+  async cancelTask(principal: ResearchPrincipal, taskId: string, input: { command_id: string; reason: string }) {
+    if (!input.command_id || !input.reason?.trim()) throw new ComathError("Task cancellation needs a command ID and reason", { code: "RESEARCH_CANCEL_REQUEST_INVALID", statusCode: 400 });
+    const task = this.app.getTask(taskId), campaign = this.runtime.store.getCampaign(task.campaign_id);
+    if (!campaign) throw new ComathError("Research campaign does not exist", { code: "RESEARCH_CAMPAIGN_NOT_FOUND", statusCode: 404 });
+    const result = this.app.applyPatch(principal, { command_id: input.command_id, campaign_id: campaign.campaign_id, base_revision: campaign.revision,
+      create_tasks: [], add_dependencies: [], replace_dependencies: [], reprioritize: [], move_pool: [],
+      cancel_tasks: [{ task_id: task.task_id, reason: input.reason.trim() }], rationale: input.reason.trim() });
+    const attempts = this.runtime.store.all("SELECT attempt_key FROM attempts WHERE task_id=? AND generation=? AND state<>'terminated'", task.task_id, task.generation);
+    await Promise.all(attempts.map(row => this.reconciler.requestStop(String(row.attempt_key), "user_cancel")));
+    return { ...result, task_id: task.task_id };
+  }
   trackApplicationWork(work: Promise<unknown>): void {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     this.applicationWork.add(work);

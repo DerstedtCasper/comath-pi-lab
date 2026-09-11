@@ -29,6 +29,13 @@ function allowIntakeRead(daemon: ResearchDaemon, principal: IntakePrincipal, int
 export async function dispatchResearchRoute(daemon: ResearchDaemon, method: string, url: URL, body: unknown,
   principal: IntakePrincipal): Promise<ResearchRouteResponse | undefined> {
   const pathname = url.pathname;
+  const cancelTaskId = pathId(/^\/research\/v1\/tasks\/([^/]+)\/cancel$/.exec(pathname));
+  if (method === "POST" && cancelTaskId) {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may cancel a research task", 403);
+    const input = record(body);
+    return { status: 202, body: { ok: true, data: await daemon.cancelTask({ kind: "operator", id: principal.id }, cancelTaskId, {
+      command_id: typeof input.command_id === "string" ? input.command_id : "", reason: typeof input.reason === "string" ? input.reason : "" }) } };
+  }
   const retryTaskId = pathId(/^\/research\/v1\/tasks\/([^/]+)\/retry$/.exec(pathname));
   if (method === "POST" && retryTaskId) {
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may retry a research task", 403);
