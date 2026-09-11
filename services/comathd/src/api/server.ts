@@ -2636,24 +2636,49 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
             writeJson(res, { status: 200, body: { campaigns: campaigns.slice(offset, offset + limit), offset, limit, total: campaigns.length } });
             return;
           }
-          if (req.method === "GET" && url.pathname === "/research/v1/events" && reference) {
+          const campaignStream = /^\/research\/v1\/campaigns\/([^/]+)\/events\/stream$/.exec(url.pathname);
+          if (req.method === "GET" && (url.pathname === "/research/v1/events" || campaignStream) && reference) {
             authenticateOperator(req.headers, reference.daemon.config);
-            const campaignId = url.searchParams.get("campaign_id") ?? undefined;
+            const campaignId = campaignStream ? decodeURIComponent(campaignStream[1]!) : url.searchParams.get("campaign_id") ?? undefined;
+            if (campaignId) reference.daemon.app.frontier(campaignId, { limit: 1 });
             const header = req.headers["last-event-id"];
             let cursor = header === undefined ? 0 : Number(Array.isArray(header) ? header[0] : header);
-            if (!Number.isSafeInteger(cursor) || cursor < 0) cursor = -1;
+            if (!Number.isSafeInteger(cursor) || cursor < 0) {
+              writeJson(res, { status: 400, body: { ok: false, code: "INVALID_EVENT_CURSOR", error: "Last-Event-ID must be a nonnegative durable event sequence" } }); return;
+            }
             const events = reference.daemon.app.events;
+            // Validate both malformed and future cursors before committing HTTP 200.
+            events.readEventsAfter({ ...(campaignId ? { campaign_id: campaignId } : {}), after_seq: cursor, limit: 1 });
+            let draining = false, closed = false, heartbeat: ReturnType<typeof setInterval> | undefined, unsubscribe: (() => void) | undefined;
+            const MAX_SSE_FRAME_BYTES = 240 * 1024;
+            const closeStream = () => {
+              if (closed) return;
+              closed = true; if (heartbeat) clearInterval(heartbeat); unsubscribe?.(); sseClosers.delete(closeStream);
+              res.off("drain", onDrain); if (!res.writableEnded) res.end();
+            };
+            const onDrain = () => { draining = false; write(); };
+            const emit = (frame: string) => {
+              if (Buffer.byteLength(frame, "utf8") > MAX_SSE_FRAME_BYTES) { closeStream(); return false; }
+              if (!res.write(frame)) { draining = true; res.once("drain", onDrain); return false; }
+              return true;
+            };
             const write = () => {
-              if (res.writableEnded || cursor < 0) return;
-              for (const event of events.readEventsAfter({ ...(campaignId ? { campaign_id: campaignId } : {}), after_seq: cursor, limit: 200 })) {
-                res.write(`id: ${event.seq}\nevent: research.event\ndata: ${JSON.stringify(event)}\n\n`);
-                cursor = event.seq;
-              }
+              if (closed || res.writableEnded || draining) return;
+              try {
+                for (const event of events.readEventsAfter({ ...(campaignId ? { campaign_id: campaignId } : {}), after_seq: cursor, limit: 200 })) {
+                  const frame = `id: ${event.seq}\nevent: research.event\ndata: ${JSON.stringify(event)}\n\n`;
+                  if (!emit(frame)) return;
+                  cursor = event.seq;
+                }
+              } catch { closeStream(); }
             };
             res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
             write();
-            const unsubscribe = events.subscribe(write);
-            const closeStream = () => { unsubscribe(); sseClosers.delete(closeStream); if (!res.writableEnded) res.end(); };
+            unsubscribe = events.subscribe(write);
+            // Re-read after the subscription is installed: this closes the snapshot/tail race.
+            write();
+            heartbeat = setInterval(() => { if (!closed && !draining) emit(": heartbeat\n\n"); }, 15000);
+            heartbeat.unref();
             sseClosers.add(closeStream);
             req.once("close", closeStream);
             return;
