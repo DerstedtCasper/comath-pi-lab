@@ -19,7 +19,8 @@ import type { createFormalCandidateIntake, FormalCandidateSubmissionReceipt } fr
 import type { createFormalCandidateProjectService, FormalCandidateProjectReceipt } from "./formal-candidate-project.js";
 import type { createProofToolAttemptService } from "./proof-tool-attempt.js";
 import { registerProofWorkflowBridge } from "./proof-workflow-bridge.js";
-import { createProofNativeVerification } from "./proof-native-verification.js";
+import { createProofNativeVerification, type ProofNativeVerificationResult } from "./proof-native-verification.js";
+import { prepareAsyncCleanReplayWorkspace } from "../proof-kernel/lean/clean-replay-async.js";
 
 type Configuration = NonNullable<ResearchConfig["proof_workflow"]>;
 type Lease = { incarnation: string; nonce: string; epoch: number; expires_at: string; state: "active" | "idle" | "blocked";
@@ -234,7 +235,7 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
         submission_command_id: source.command_id, lean_toolchain: options.config!.lean_toolchain }));
       if (!savedResult(operation(snapshot, "prepared"))) commitStageResult(lease, snapshot, { schema_version: "comath.proof_verification_inputs.v1", projects, proof_authority: "none" });
       const controller = controllers.get(campaign.campaign_id)!;
-      const results = [];
+      const results: ProofNativeVerificationResult[] = [];
       for (const project of projects) {
         const result = await verifyNative!(project, { signal: controller.signal, assertCurrent: () => {
           assertLease(lease);
@@ -248,7 +249,14 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
         } });
         results.push(result);
       }
-      commitStageResult(lease, snapshot, { schema_version: "comath.proof_native_results.v1", results, proof_authority: "none" }, undefined, true);
+      const replay_preparations = projects.flatMap((project, index) => {
+        const result = results[index];
+        if (!result?.native_checks_passed || result.structured_audit?.report.result !== "pass"
+          || result.structured_audit.lock_elaboration.result !== "pass" || result.structured_audit.statement_comparison.result !== "pass"
+          || result.dependency_evidence?.result !== "pass") return [];
+        return [prepareAsyncCleanReplayWorkspace({ runtime, project, obligation_id: snapshot.obligation_id, stage_attempt: snapshot.stage_attempt })];
+      });
+      commitStageResult(lease, snapshot, { schema_version: "comath.proof_native_results.v1", results, replay_preparations, proof_authority: "none" }, undefined, true);
       recordBlock(campaign.campaign_id, "PROOF_VERIFICATION_INTEGRITY_GATES_REQUIRED", snapshot);
       return false;
     }
