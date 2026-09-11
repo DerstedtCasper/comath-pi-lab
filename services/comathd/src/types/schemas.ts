@@ -672,6 +672,15 @@ export const finalReplayManifestV3Schema = z
     replay_id: stableId,
     campaign_id: stableId,
     claim_id: stableId,
+    replay_scope: z
+      .object({
+        candidate_id: stableId,
+        obligation_id: stableId,
+        stage_attempt: z.number().int().positive(),
+        scope_package_sha256: sha256
+      })
+      .strict()
+      .optional(),
     theorem_name: z.string().min(1),
     runner: z.literal("comathd.LeanAuthority"),
     proof_authority: z.literal("lean_kernel_clean_replay"),

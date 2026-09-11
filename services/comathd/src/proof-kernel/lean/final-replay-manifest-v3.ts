@@ -231,6 +231,12 @@ export function createFinalReplayManifestV3(input: {
   replay_id: string;
   campaign_id: string;
   claim_id: string;
+  replay_scope?: {
+    candidate_id: string;
+    obligation_id: string;
+    stage_attempt: number;
+    scope_package_sha256: string;
+  };
   theorem_name: string;
   clean_workspace_path: string;
   command: string[];
@@ -294,6 +300,7 @@ export function createFinalReplayManifestV3(input: {
     replay_id: input.replay_id,
     campaign_id: input.campaign_id,
     claim_id: input.claim_id,
+    ...(input.replay_scope ? { replay_scope: input.replay_scope } : {}),
     theorem_name: input.theorem_name,
     runner: "comathd.LeanAuthority",
     proof_authority: "lean_kernel_clean_replay",

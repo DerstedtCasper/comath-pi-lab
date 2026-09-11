@@ -10,13 +10,14 @@ import { getAcquiredProjectRuntime, type ProjectRuntime } from "../../research/p
 import type { ResearchOrchestrator } from "../../research/research-orchestrator.js";
 import type { createProofToolAttemptService } from "../../research/proof-tool-attempt.js";
 import { requireApprovedFormalScope } from "../campaign/formal-spec-store.js";
-import { checkDependencyClosureV2 } from "./dependency-closure.js";
+import { checkDependencyClosureV2, dependencyClosureV2PackagesToExternalRevisions, type DependencyClosureV2Report } from "./dependency-closure.js";
 import { runStaticCheatScan } from "./static-cheat-scan.js";
 import { checkAxiomProfileV2 } from "./axiom-profile.js";
 import { approvedLockDeclaration, compareStructuredLeanAuditToLock, parseApprovedLockElaborationOutput, parseStructuredLeanAuditOutput, type StructuredLeanAudit } from "./structured-audit.js";
 import { checkStatementEquivalence } from "./statement-equivalence.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
+import { createFinalReplayManifestV3 } from "./final-replay-manifest-v3.js";
 import { readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "../../research/project-commit.js";
 
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
@@ -57,7 +58,7 @@ export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; cl
 };
 export type AsyncFinalAuthorityReplayExecution = { task_id: string; replay_id: string; claim_id: string; obligation_id: string;
   commands: Record<string, ReplayCommand>; result: "pass" | "blocked"; hard_vetoes: string[]; proof_authority: "none";
-  can_promote_claim: false; promotion_requires_gate: true };
+  can_promote_claim: false; promotion_requires_gate: true; final_replay_manifest_v3_path?: string };
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -457,6 +458,29 @@ export function createAsyncFinalAuthorityReplayExecutor(app: ResearchOrchestrato
         });
         result.hard_vetoes = value.exit_code === 0 && value.manifest?.manifest.proof_authority === "lean_kernel_check" ? [] : ["final_authority_replay_failed"];
         result.result = result.hard_vetoes.length ? "blocked" : "pass";
+        if (result.result === "pass" && value.manifest) {
+          const finalManifest = value.manifest.manifest, leanHash = finalManifest.lean_binary_sha256, lakeHash = finalManifest.lake_binary_sha256;
+          if (!leanHash || !lakeHash) fail("ASYNC_FINAL_AUTHORITY_BINARY_PROVENANCE_MISSING");
+          const closure = JSON.parse(readCommittedFile(runtime.root, replay.dependency_closure!.report_path)) as DependencyClosureV2Report;
+          if (closure.schema_version !== "comath.dependency_closure.v2" || closure.result !== "pass" || !Array.isArray(closure.packages)) fail("ASYNC_FINAL_AUTHORITY_DEPENDENCY_CLOSURE_INVALID");
+          const source_hashes_before = Object.fromEntries(finalManifest.input_files.map(file => [
+            relative(cwd, join(runtime.root, file.path)).replace(/\\/g, "/"), { sha256: file.sha256, size_bytes: file.size_bytes }
+          ]));
+          const final_replay_manifest_v3_path = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/final-replay-manifest-v3.json`;
+          const manifest = createFinalReplayManifestV3({ projectRoot: runtime.root, replay_id: preparation.replay_id, campaign_id: project.campaign_id,
+            claim_id: project.claim_id, replay_scope: { candidate_id: project.candidate_id, obligation_id: project.obligation_id,
+              stage_attempt: project.stage_attempt, scope_package_sha256: project.scope_package_sha256 }, theorem_name: project.project.theorem_name,
+            clean_workspace_path: cwd, command: finalManifest.command, exit_code: finalManifest.exit_code, result: "pass", source_hashes_before,
+            stdout_path: finalManifest.stdout_path, stderr_path: finalManifest.stderr_path, report_paths: { static_audit: replay.static_audit!.report_path,
+              axiom_profile: replay.axiom_profile!.report_path, dependency_closure: replay.dependency_closure!.report_path,
+              statement_equivalence: replay.formal_header_comparison!.report_path }, lean_run_manifest_paths: [value.manifest.manifest_path],
+            dependency_lock: { lean_toolchain_path: join(cwd, "lean-toolchain"), lake_manifest_path: join(cwd, "lake-manifest.json"), lakefile_path: join(cwd, "lakefile.lean"),
+              external_revisions: dependencyClosureV2PackagesToExternalRevisions(closure.packages) }, network_policy: "disabled",
+            sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" }, resource_budget: { timeout_ms: config.tool_timeout_ms,
+              max_stdout_bytes: 2 * 1024 * 1024, max_stderr_bytes: 2 * 1024 * 1024 }, binary_hashes: { lean: leanHash, lake: lakeHash } });
+          save(`${operation_id}:final-replay-manifest-v3`, final_replay_manifest_v3_path, project.campaign_id, manifest);
+          result.final_replay_manifest_v3_path = final_replay_manifest_v3_path;
+        }
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/final-authority-execution.json`, project.campaign_id, result);
       return result;
