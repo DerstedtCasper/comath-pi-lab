@@ -13,7 +13,7 @@ import { requireApprovedFormalScope } from "../campaign/formal-spec-store.js";
 import { checkDependencyClosureV2 } from "./dependency-closure.js";
 import { runStaticCheatScan } from "./static-cheat-scan.js";
 import { checkAxiomProfileV2 } from "./axiom-profile.js";
-import { compareStructuredLeanAuditToLock, parseApprovedLockElaborationOutput, parseStructuredLeanAuditOutput, type StructuredLeanAudit } from "./structured-audit.js";
+import { approvedLockDeclaration, compareStructuredLeanAuditToLock, parseApprovedLockElaborationOutput, parseStructuredLeanAuditOutput, type StructuredLeanAudit } from "./structured-audit.js";
 import { checkStatementEquivalence } from "./statement-equivalence.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
@@ -49,6 +49,7 @@ export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; cl
   static_audit?: { schema_version: "comath.async_clean_replay_static_audit.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   axiom_profile?: { schema_version: "comath.async_clean_replay_axiom_profile.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   statement_comparison?: { schema_version: "comath.async_clean_replay_statement_comparison.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
+  formal_header_comparison?: { schema_version: "comath.async_clean_replay_formal_header_comparison.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   clean_type_comparison?: { schema_version: "comath.async_clean_replay_type_comparison.v1"; result: "pass" | "blocked"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
   legacy_final_input?: { schema_version: "comath.async_clean_replay_legacy_final_input.v1"; result: "ready" | "blocked"; report_path: string; hard_vetoes: string[];
     proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true };
@@ -298,6 +299,21 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         save(`${operation_id}:statement-comparison`, statement_comparison.report_path, project.campaign_id, { ...statement_comparison, report: statement,
           structured_audit_run_id: auditManifest.run_id, theorem_type_elaborated_hash: structured_audit.theorem_type_elaborated_hash });
         result.statement_comparison = statement_comparison;
+        const approvedDeclaration = approvedLockDeclaration({ theorem_name: approved.lock.theorem_name, theorem_header: approved.lock.theorem_header });
+        const approvedPrefix = approvedDeclaration.declaration.startsWith(`theorem ${approvedDeclaration.theorem_name}`)
+          ? `theorem ${approvedDeclaration.theorem_name}` : `lemma ${approvedDeclaration.theorem_name}`;
+        const formalHeaderTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/formal-header-comparison.tmp.json`;
+        const formalHeader = checkStatementEquivalence({ projectRoot: runtime.root, campaign_id: project.campaign_id, claim_id: project.claim_id, candidate_id: project.candidate_id,
+          reportPath: formalHeaderTemp, locked_statement_hash: project.project.formal_spec.locked_statement_hash,
+          formal_spec_statement: `${project.project.theorem_name}${approvedDeclaration.declaration.slice(approvedPrefix.length)}`, lean_check_output: "",
+          lean_source: readFileSync(theoremPath, "utf8"), theorem_name: project.project.theorem_name });
+        const formal_header_comparison = { schema_version: "comath.async_clean_replay_formal_header_comparison.v1" as const, result: formalHeader.result,
+          report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/formal-header-comparison.json`,
+          hard_vetoes: formalHeader.hard_vetoes, proof_authority: "none" as const };
+        save(`${operation_id}:formal-header-comparison`, formal_header_comparison.report_path, project.campaign_id, { ...formal_header_comparison,
+          report: formalHeader, approved_theorem_header: approved.lock.theorem_header, actual_target: project.project.theorem_name,
+          structured_type_comparison_path: clean_type_comparison.report_path });
+        result.formal_header_comparison = formal_header_comparison;
         const buildManifest = result.commands.build?.manifest;
         if (!buildManifest) fail("ASYNC_CLEAN_REPLAY_BUILD_MANIFEST_MISSING");
         const evidence = (path: string) => ({ path, sha256: hash(readCommittedFile(runtime.root, path)) });
@@ -308,7 +324,7 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
           ...(static_audit.result === "pass" ? [] : ["static_audit_failed"]),
           ...(axiom_profile.result === "pass" ? [] : ["axiom_profile_failed"]),
           ...(clean_type_comparison.result === "pass" ? [] : ["clean_type_comparison_failed"]),
-          ...(statement_comparison.result === "pass" ? [] : ["legacy_statement_comparison_failed"])
+          ...(formal_header_comparison.result === "pass" ? [] : ["formal_header_comparison_failed"])
         ];
         const legacy_final_input = { schema_version: "comath.async_clean_replay_legacy_final_input.v1" as const,
           result: hard_vetoes.length ? "blocked" as const : "ready" as const,
@@ -323,7 +339,8 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
             source_project_sha256: preparation.source_project_sha256 },
           environment: evidence(environment_receipt_path), evidence: { dependency_closure: evidence(dependency_closure.report_path),
             static_audit: evidence(static_audit.report_path), axiom_profile: evidence(axiom_profile.report_path),
-            statement_comparison: evidence(statement_comparison.report_path), clean_type_comparison: evidence(clean_type_comparison.report_path) },
+            statement_comparison: evidence(statement_comparison.report_path), formal_header_comparison: evidence(formal_header_comparison.report_path),
+            clean_type_comparison: evidence(clean_type_comparison.report_path) },
           commands: { build: command(buildManifest), audit: command(auditManifest), lock_elaboration: command(lockElaborationManifest) } });
         result.legacy_final_input = legacy_final_input;
       }

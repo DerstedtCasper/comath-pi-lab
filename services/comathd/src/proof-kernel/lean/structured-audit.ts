@@ -266,7 +266,8 @@ export function buildStructuredLeanAuditSource(input: { target_module: string; t
 `;
 }
 
-function approvedLockDeclaration(input: { theorem_name: string; theorem_header: string }): { declaration: string; theorem_name: string } {
+/** Normalizes the only approved declaration header allowed in an elaboration sidecar. */
+export function approvedLockDeclaration(input: { theorem_name: string; theorem_header: string }): { declaration: string; theorem_name: string } {
   const theorem = z.string().regex(/^[A-Za-z_][A-Za-z0-9_']*$/).parse(input.theorem_name);
   const header = z.string().min(1).max(16384).parse(input.theorem_header).trim();
   const declaration = header.replace(/\s*:=\s*by\s*$/u, "").trim();
