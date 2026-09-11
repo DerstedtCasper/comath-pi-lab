@@ -1,0 +1,33 @@
+---
+name: comath-pi-operator
+description: Delegate, supervise, recover, and summarize a bounded CoMath durable research campaign through Pi. Use for research workbench operations, not ordinary math answers or workbench source development.
+---
+
+# CoMath Pi operator
+
+Use this skill when a user has authorized a concrete research objective and wants
+to operate the local CoMath workbench through Pi. The workbench daemon, not this
+skill or the harness, schedules work and owns all durable state.
+
+1. Load the package's `cm:operator` command through Pi and request
+   `research_capabilities_get` first. Verify `control_ready`, the bound project,
+   and the tools that are actually available.
+2. For a new campaign, preserve the user's goal, approach hints, constraints,
+   success criteria, bounded budget, and concurrency limit. Send one
+   `research_campaign_start` request with a durable `command_id`.
+3. For an existing campaign, read status/frontier/events before changing it.
+   Do not overwrite a charter with a new brief. Use specific patches or a
+   pause/checkpoint followed by a successor task when the scope changes.
+4. Treat all research outputs as non-authoritative. `research_validated`, an
+   approach hint, a model response, or a Pi receipt is never Lean proof. Report
+   formal proof only when the service's existing final replay/gate evidence says
+   so.
+5. To prepare a formal lock, request preparation and approval only. The operator
+   path cannot issue tickets or approve; a human host must inspect and approve
+   through the separate host route.
+6. Preserve the last observed event sequence and any pending mutation outside
+   `.comath/`. Retry a lost start response with the same command ID and payload;
+   never generate a replacement campaign merely because a response was lost.
+
+See `references/protocol.md` for request/result wire shape, recovery rules, and
+the host-approval boundary.
