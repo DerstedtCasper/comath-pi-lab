@@ -29,6 +29,7 @@ import {
   hasLeanRunManifestProvenanceIndexV1,
   verifyLeanRunManifestV3Evidence
 } from "../proof-kernel/lean/lean-run-manifest-v3.js";
+import { verifyScopedFinalAuthorityPackagingV1 } from "../proof-kernel/lean/clean-replay-async.js";
 import { runnerResultSha256, sha256Text } from "./runner-contracts.js";
 
 export type ClaimPromotionRequest = {
@@ -708,12 +709,26 @@ function hasVerifiedFinalAuthorityPackagingV3(
   return false;
 }
 
+function hasVerifiedScopedFinalAuthorityPackagingV1(projectRoot: string, request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string }, artifacts: ArtifactRef[]): boolean {
+  return artifacts.some(artifact => {
+    if (artifact.kind !== "runner_output") return false;
+    const packaging = readJsonArtifact(projectRoot, artifact);
+    if (!packaging || typeof packaging !== "object") return false;
+    const record = packaging as Record<string, unknown>;
+    if (record.schema_version !== "comath.scoped_final_authority_packaging.v1" || (record.scope as Record<string, unknown> | undefined)?.claim_id !== request.claim_id
+      || !verifyScopedFinalAuthorityPackagingV1(projectRoot, packaging).ok) return false;
+    const approved = (record.evidence as Record<string, unknown> | undefined)?.approved_scope as Record<string, unknown> | undefined;
+    const lock = approved?.clean_formal_spec as Record<string, unknown> | undefined;
+    return typeof lock?.path === "string" && projectJsonStringField(projectRoot, lock.path, "statement_hash") === request.locked_statement_hash;
+  });
+}
+
 function hasPromotionGradeLeanAuthorityEvidence(
   projectRoot: string,
   request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
   artifacts: ArtifactRef[]
 ): boolean {
-  return hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts);
+  return hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts) || hasVerifiedScopedFinalAuthorityPackagingV1(projectRoot, request, artifacts);
 }
 
 function finalAuthorityDerivedBindingVetoes(
