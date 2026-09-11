@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { readFile } from 'node:fs/promises';
-import { isAbsolute, resolve } from 'node:path';
+import { readFile, writeFile, rename, mkdir, unlink } from 'node:fs/promises';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 const MAX_LINE = 1024 * 1024;
 function requireRequest(value) {
@@ -55,13 +55,47 @@ export async function runOperatorRequest(raw, options) {
   return result;
 }
 
+function safeHandoffPath(file, project) {
+  if (!file || !isAbsolute(file)) throw Error('handoffFile must be absolute');
+  const target = resolve(file), control = resolve(project, '.comath'), inside = relative(control, target);
+  if (inside === '' || (!inside.startsWith('..') && !isAbsolute(inside))) throw Error('handoffFile must not be inside .comath');
+  return target;
+}
+async function readHandoff(path) {
+  try { const value = JSON.parse(await readFile(path, 'utf8')); return value && value.version === 1 ? value : {}; } catch (error) { if (error?.code === 'ENOENT') return {}; throw Error('PI_OPERATOR_HANDOFF_INVALID'); }
+}
+async function writeHandoff(path, state) {
+  await mkdir(dirname(path), { recursive: true }); const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(state)}\n`, { encoding: 'utf8', flag: 'wx' }); await rename(temporary, path);
+}
+async function withHandoffLock(path, work) {
+  const lock = `${path}.lock`; await mkdir(dirname(path), { recursive: true });
+  try { await writeFile(lock, `${process.pid}\n`, { encoding: 'utf8', flag: 'wx' }); }
+  catch (error) { if (error?.code === 'EEXIST') throw Error('PI_OPERATOR_HANDOFF_BUSY'); throw error; }
+  try { return await work(); } finally { await unlink(lock).catch(error => { if (error?.code !== 'ENOENT') throw error; }); }
+}
+/** Persist a non-authoritative recovery hint around exactly one operator request. */
+export async function runWithHandoff(raw, options) {
+  const request = requireRequest(raw), handoff = safeHandoffPath(options?.handoffFile, options?.project);
+  return withHandoffLock(handoff, async () => {
+    const prior = await readHandoff(handoff), pending = { tool: request.tool, input: request.input, request_id: request.request_id };
+    await writeHandoff(handoff, { version: 1, project_root: resolve(options.project), project_id: prior.project_id ?? null, campaign_id: prior.campaign_id ?? null,
+      start_command_id: prior.start_command_id ?? null, last_event_seq: prior.last_event_seq ?? 0, last_request_id: prior.last_request_id ?? null, pending_mutation: pending });
+    const result = await runOperatorRequest(request, options), data = result.result.ok && result.result.data && typeof result.result.data === 'object' ? result.result.data : {};
+    await writeHandoff(handoff, { version: 1, project_root: resolve(options.project), project_id: data.project_id ?? prior.project_id ?? null,
+      campaign_id: data.campaign_id ?? prior.campaign_id ?? null, start_command_id: request.tool === 'research_campaign_start' ? request.input?.command_id ?? null : prior.start_command_id ?? null,
+      last_event_seq: Number.isSafeInteger(data.snapshot_seq) ? data.snapshot_seq : prior.last_event_seq ?? 0, last_request_id: request.request_id, pending_mutation: null });
+    return result;
+  });
+}
+
 function parseArgs(args) {
   const value = { piArgs: [] };
   for (let i = 0; i < args.length; i++) {
     const key = args[i];
     if (key === '--stdio') value.stdio = true;
     else if (key === '--pi-arg') value.piArgs.push(args[++i]);
-    else if (['--pi', '--extension', '--project', '--request-file'].includes(key)) value[key.slice(2).replace('-', '_')] = args[++i];
+    else if (['--pi', '--extension', '--project', '--request-file', '--handoff-file'].includes(key)) value[key.slice(2).replace(/-/g, '_')] = args[++i];
     else if (key === '--timeout-ms') value.timeout_ms = Number(args[++i]);
     else throw Error(`Unknown argument: ${key}`);
   }
@@ -69,14 +103,15 @@ function parseArgs(args) {
 }
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const common = { pi: options.pi, piArgs: options.piArgs, extension: options.extension, project: options.project, timeout_ms: options.timeout_ms };
+  const common = { pi: options.pi, piArgs: options.piArgs, extension: options.extension, project: options.project, timeout_ms: options.timeout_ms, ...(options.handoff_file ? { handoffFile: options.handoff_file } : {}) };
+  const execute = request => options.handoff_file ? runWithHandoff(request, common) : runOperatorRequest(request, common);
   if (options.request_file) {
-    const request = JSON.parse(await readFile(resolve(options.request_file), 'utf8')); process.stdout.write(`${JSON.stringify(await runOperatorRequest(request, common))}\n`); return;
+    const request = JSON.parse(await readFile(resolve(options.request_file), 'utf8')); process.stdout.write(`${JSON.stringify(await execute(request))}\n`); return;
   }
   if (!options.stdio) throw Error('Use --request-file or --stdio');
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
   for await (const line of lines) {
-    try { process.stdout.write(`${JSON.stringify(await runOperatorRequest(JSON.parse(line), common))}\n`); }
+    try { process.stdout.write(`${JSON.stringify(await execute(JSON.parse(line)))}\n`); }
     catch (error) { process.stdout.write(`${JSON.stringify({ version: 1, request_id: 'invalid', tool: 'invalid', result: { ok: false, code: 'PI_OPERATOR_ERROR', error: error instanceof Error ? error.message : String(error) } })}\n`); }
   }
 }
