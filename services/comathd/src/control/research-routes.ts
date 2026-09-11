@@ -29,6 +29,20 @@ function allowIntakeRead(daemon: ResearchDaemon, principal: IntakePrincipal, int
 export async function dispatchResearchRoute(daemon: ResearchDaemon, method: string, url: URL, body: unknown,
   principal: IntakePrincipal): Promise<ResearchRouteResponse | undefined> {
   const pathname = url.pathname;
+  const pauseCampaignId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/pause$/.exec(pathname));
+  if (method === "POST" && pauseCampaignId) {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may pause a research campaign", 403);
+    const input = record(body);
+    return { status: 202, body: { ok: true, data: await daemon.pauseCampaign({ kind: "operator", id: principal.id }, pauseCampaignId, {
+      command_id: typeof input.command_id === "string" ? input.command_id : "", expected_revision: input.expected_revision as number, reason: typeof input.reason === "string" ? input.reason : "" }) } };
+  }
+  const resumeCampaignId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/resume$/.exec(pathname));
+  if (method === "POST" && resumeCampaignId) {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may resume a research campaign", 403);
+    const input = record(body);
+    return { status: 200, body: { ok: true, data: daemon.resumeCampaign({ kind: "operator", id: principal.id }, resumeCampaignId, {
+      command_id: typeof input.command_id === "string" ? input.command_id : "", expected_revision: input.expected_revision as number }) } };
+  }
   const cancelTaskId = pathId(/^\/research\/v1\/tasks\/([^/]+)\/cancel$/.exec(pathname));
   if (method === "POST" && cancelTaskId) {
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may cancel a research task", 403);

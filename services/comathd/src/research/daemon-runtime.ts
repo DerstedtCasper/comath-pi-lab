@@ -113,6 +113,7 @@ export class ResearchDaemon {
   private readonly applicationWork = new Set<Promise<unknown>>();
   private gateway?: ReturnType<typeof createWorkerGateway>;
   private gatewayReady?: Promise<void>;
+  private pauseUnsubscribe?: () => void;
   private released = false;
   private execution?: ResearchExecutionConsumer;
   private contextService?: ReturnType<typeof createResearchContextService>;
@@ -342,6 +343,19 @@ export class ResearchDaemon {
     await Promise.all(attempts.map(row => this.reconciler.requestStop(String(row.attempt_key), "user_cancel")));
     return { ...result, task_id: task.task_id };
   }
+  private settlePausingCampaigns(): void {
+    for (const campaign of this.runtime.store.listCampaigns()) if (campaign.state === "pausing") this.app.completePauseCampaign(campaign.campaign_id);
+  }
+  async pauseCampaign(principal: ResearchPrincipal, campaignId: string, input: { command_id: string; expected_revision: number; reason: string }) {
+    const pending = this.app.beginPauseCampaign(principal, { ...input, campaign_id: campaignId });
+    await Promise.all(pending.attempt_keys.map(attemptKey => this.reconciler.requestStop(attemptKey, "pause")));
+    this.settlePausingCampaigns();
+    const campaign = this.runtime.store.getCampaign(campaignId)!;
+    return { campaign_id: campaign.campaign_id, revision: campaign.revision, state: campaign.state, snapshot_seq: campaign.snapshot_seq };
+  }
+  resumeCampaign(principal: ResearchPrincipal, campaignId: string, input: { command_id: string; expected_revision: number }) {
+    return this.app.resumeCampaign(principal, { ...input, campaign_id: campaignId });
+  }
   trackApplicationWork(work: Promise<unknown>): void {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     this.applicationWork.add(work);
@@ -350,13 +364,15 @@ export class ResearchDaemon {
   start(): void {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     if (this.started) return;
-    this.started = true; this.reconciler.start(); this.supervisor?.start(); this.validationDriver?.start(); this.proofWorkflow.start(); this.scheduler.start();
+    this.started = true; this.pauseUnsubscribe = this.app.events.subscribe(() => this.settlePausingCampaigns());
+    this.reconciler.start(); this.supervisor?.start(); this.validationDriver?.start(); this.proofWorkflow.start(); this.scheduler.start();
   }
   close(): Promise<void> {
     if (this.closing) return this.closing;
     this.supervisor?.stop();
     this.validationDriver?.stop();
     this.proofWorkflow.stop();
+    this.pauseUnsubscribe?.(); this.pauseUnsubscribe = undefined;
     this.scheduler.stopGrants();
     this.closing = Promise.resolve().then(async () => {
       const errors: unknown[] = [];
