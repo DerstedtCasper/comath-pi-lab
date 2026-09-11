@@ -2519,6 +2519,7 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
   let starting: Promise<ResearchDaemonReference> | undefined;
   let closing: Promise<void> | undefined;
   let listening = false;
+  const sseClosers = new Set<() => void>();
   if (options.project_root && !isAbsolute(options.project_root)) throw new Error("Bound project root must be absolute");
   const context: RouteContext = {
     memoryDbs: new Map(), boundRoot: options.project_root ? realpathSync(options.project_root) : undefined
@@ -2558,6 +2559,28 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
       await reference?.daemon.listenWorkerGateway();
       server = createServer(async (req, res) => {
         try {
+          const url = new URL(req.url ?? "/", "http://localhost");
+          if (req.method === "GET" && url.pathname === "/research/v1/events" && reference) {
+            const campaignId = url.searchParams.get("campaign_id") ?? undefined;
+            const header = req.headers["last-event-id"];
+            let cursor = header === undefined ? 0 : Number(Array.isArray(header) ? header[0] : header);
+            if (!Number.isSafeInteger(cursor) || cursor < 0) cursor = -1;
+            const events = reference.daemon.app.events;
+            const write = () => {
+              if (res.writableEnded || cursor < 0) return;
+              for (const event of events.readEventsAfter({ ...(campaignId ? { campaign_id: campaignId } : {}), after_seq: cursor, limit: 200 })) {
+                res.write(`id: ${event.seq}\nevent: research.event\ndata: ${JSON.stringify(event)}\n\n`);
+                cursor = event.seq;
+              }
+            };
+            res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+            write();
+            const unsubscribe = events.subscribe(write);
+            const closeStream = () => { unsubscribe(); sseClosers.delete(closeStream); if (!res.writableEnded) res.end(); };
+            sseClosers.add(closeStream);
+            req.once("close", closeStream);
+            return;
+          }
           if (req.method !== "GET" && req.method !== "POST") {
             writeJson(res, { status: 405, body: { ok: false, code: "METHOD_NOT_ALLOWED" } }); return;
           }
@@ -2580,6 +2603,7 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
       closing = Promise.resolve().then(async () => {
         const errors: unknown[] = [];
         try { const reference = await starting; await reference?.release(); } catch (error) { errors.push(error); }
+        for (const closeStream of [...sseClosers]) closeStream();
         try {
           if (!starting && context.boundRoot) await shutdownLegacyRuntime(context.boundRoot);
           if (server?.listening) await new Promise<void>((resolve, reject) => {
