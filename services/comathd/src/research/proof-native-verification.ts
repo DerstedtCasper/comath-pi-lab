@@ -18,8 +18,14 @@ import { readCommittedFile, withProjectCommit, writeCommittedFile } from "./proj
 type Config = NonNullable<ResearchConfig["proof_workflow"]>;
 type CommandResult = { exit_code: number; stdout?: string; stderr?: string; manifest?: AsyncLeanCommandReceipt; proof_authority: "none" };
 type StructuredAuditEvidence = { report_path: string; report: StructuredLeanAudit; lock_elaboration: ApprovedLockElaboration; statement_comparison: StructuredAuditStatementComparison };
+type AsyncDependencyEvidence = { schema_version: "comath.async_dependency_evidence.v1"; result: "pass" | "blocked"; proof_authority: "none";
+  source_file_sha256: string; audit_source_sha256: string; scope_package_sha256: string; formal_spec_sha256: string; lean_toolchain_file_sha256: string;
+  lakefile_sha256: string | null; lake_manifest_sha256: string | null;
+  environment_fingerprint: string; theorem: { generated_by_run_id: string; manifest_path: string; stdout_sha256: string; stderr_sha256: string };
+  audit: { generated_by_run_id: string; manifest_path: string; stdout_sha256: string; stderr_sha256: string }; hard_vetoes: string[] };
 export type ProofNativeVerificationResult = { task_id: string; candidate_id: string; obligation_id: string;
-  commands: Record<string, CommandResult>; native_checks_passed: boolean; structured_audit?: StructuredAuditEvidence; error_code?: string; proof_authority: "none" };
+  commands: Record<string, CommandResult>; native_checks_passed: boolean; structured_audit?: StructuredAuditEvidence; dependency_evidence?: AsyncDependencyEvidence;
+  error_code?: string; proof_authority: "none" };
 const hash = (value: unknown) => createHash("sha256").update(canonicalJson(value)).digest("hex");
 function fail(code: string): never { throw new ComathError(code, { code, statusCode: 409 }); }
 
@@ -158,7 +164,9 @@ export function createProofNativeVerification(app: ResearchOrchestrator, tools: 
           { name: "build", purpose: "build", command: ["lake", "build", ...project.project.build_targets] },
           { name: "check", purpose: "check", command: ["lake", "env", "lean", project.project.theorem_file_rel] },
           { name: "audit", purpose: "audit", command: ["lake", "env", "lean", project.project.audit_file_rel] },
-          { name: "lock-elaboration", purpose: "audit", command: ["lake", "env", "lean", project.approved_lock_elaboration_file] }
+          { name: "lock-elaboration", purpose: "audit", command: ["lake", "env", "lean", project.approved_lock_elaboration_file] },
+          { name: "deps-theorem", purpose: "audit", command: ["lake", "env", "lean", "--deps", project.project.theorem_file_rel] },
+          { name: "deps-audit", purpose: "audit", command: ["lake", "env", "lean", "--deps", project.project.audit_file_rel] }
         ];
         for (const step of steps) {
           const value = await command(step.name, async execution => {
@@ -206,10 +214,46 @@ export function createProofNativeVerification(app: ResearchOrchestrator, tools: 
         const report_path = `${base}.structured-audit.json`;
         save(`${operationId}:structured-audit`, report_path, project.campaign_id, { audit: report, lock_elaboration, statement_comparison });
         result.structured_audit = { report_path, report, lock_elaboration, statement_comparison };
+        const theoremDependencies = result.commands["deps-theorem"], auditDependencies = result.commands["deps-audit"];
+        if (theoremDependencies?.manifest && auditDependencies?.manifest) {
+          const path = (value: string) => value.replaceAll("\\", "/");
+          const input = (receipt: AsyncLeanCommandReceipt, suffix: string) => receipt.manifest.input_files.find(file => path(file.path).endsWith(suffix));
+          const theoremSourceInput = input(theoremDependencies.manifest, `/${project.project.theorem_file_rel}`);
+          const auditSourceInput = input(auditDependencies.manifest, `/${project.project.audit_file_rel}`);
+          const theoremLakefile = input(theoremDependencies.manifest, "/lakefile.lean"), auditLakefile = input(auditDependencies.manifest, "/lakefile.lean");
+          const theoremLakeManifest = input(theoremDependencies.manifest, "/lake-manifest.json"), auditLakeManifest = input(auditDependencies.manifest, "/lake-manifest.json");
+          const vetoes = [
+            ...(theoremDependencies.exit_code === 0 ? [] : ["theorem_dependency_command_failed"]),
+            ...(auditDependencies.exit_code === 0 ? [] : ["audit_dependency_command_failed"]),
+            ...(!theoremSourceInput || theoremSourceInput.sha256 !== createHash("sha256").update(theoremSource).digest("hex") ? ["theorem_dependency_source_binding_invalid"] : []),
+            ...(!auditSourceInput || auditSourceInput.sha256 !== createHash("sha256").update(auditSource).digest("hex") ? ["audit_dependency_source_binding_invalid"] : []),
+            ...(theoremDependencies.manifest.manifest.lean_toolchain_file_sha256 !== auditDependencies.manifest.manifest.lean_toolchain_file_sha256 ? ["dependency_toolchain_binding_invalid"] : []),
+            ...(!theoremLakefile || !auditLakefile || theoremLakefile.sha256 !== auditLakefile.sha256 ? ["dependency_lakefile_binding_invalid"] : []),
+            ...(!theoremLakeManifest || !auditLakeManifest || theoremLakeManifest.sha256 !== auditLakeManifest.sha256 ? ["dependency_lake_manifest_binding_invalid"] : [])
+          ];
+          try { if (!readCommittedFile(runtime.root, theoremDependencies.manifest.manifest.stdout_path).trim()) vetoes.push("theorem_dependency_output_empty"); }
+          catch { vetoes.push("theorem_dependency_output_missing"); }
+          try { if (!readCommittedFile(runtime.root, auditDependencies.manifest.manifest.stdout_path).trim()) vetoes.push("audit_dependency_output_empty"); }
+          catch { vetoes.push("audit_dependency_output_missing"); }
+          result.dependency_evidence = { schema_version: "comath.async_dependency_evidence.v1", result: vetoes.length ? "blocked" : "pass", proof_authority: "none",
+            source_file_sha256: createHash("sha256").update(theoremSource).digest("hex"), audit_source_sha256: createHash("sha256").update(auditSource).digest("hex"),
+            scope_package_sha256: project.scope_package_sha256, formal_spec_sha256: approved.formal_spec_ref.sha256,
+            lean_toolchain_file_sha256: theoremDependencies.manifest.manifest.lean_toolchain_file_sha256,
+            lakefile_sha256: theoremLakefile?.sha256 ?? null, lake_manifest_sha256: theoremLakeManifest?.sha256 ?? null,
+            environment_fingerprint: hash({ theorem_manifest: theoremDependencies.manifest.manifest, audit_manifest: auditDependencies.manifest.manifest,
+              scope_package_sha256: project.scope_package_sha256, formal_spec_sha256: approved.formal_spec_ref.sha256,
+              lean_toolchain_file_sha256: theoremDependencies.manifest.manifest.lean_toolchain_file_sha256,
+              lakefile_sha256: theoremLakefile?.sha256 ?? null, lake_manifest_sha256: theoremLakeManifest?.sha256 ?? null }),
+            theorem: { generated_by_run_id: theoremDependencies.manifest.run_id, manifest_path: theoremDependencies.manifest.manifest_path,
+              stdout_sha256: theoremDependencies.manifest.manifest.stdout_sha256, stderr_sha256: theoremDependencies.manifest.manifest.stderr_sha256 },
+            audit: { generated_by_run_id: auditDependencies.manifest.run_id, manifest_path: auditDependencies.manifest.manifest_path,
+              stdout_sha256: auditDependencies.manifest.manifest.stdout_sha256, stderr_sha256: auditDependencies.manifest.manifest.stderr_sha256 },
+            hard_vetoes: [...new Set(vetoes)].sort() };
+        }
       }
-      result.native_checks_passed = ["lean-version", "lake-version", "check", "build", "audit", "lock-elaboration"].every(name => result.commands[name]?.exit_code === 0)
+      result.native_checks_passed = ["lean-version", "lake-version", "check", "build", "audit", "lock-elaboration", "deps-theorem", "deps-audit"].every(name => result.commands[name]?.exit_code === 0)
         && result.structured_audit?.report.result === "pass" && result.structured_audit.lock_elaboration.result === "pass"
-        && result.structured_audit.statement_comparison.result === "pass";
+        && result.structured_audit.statement_comparison.result === "pass" && result.dependency_evidence?.result === "pass";
       verify(result); save(operationId, `${base}.result.json`, project.campaign_id, result);
       return result;
     } catch (error) {
