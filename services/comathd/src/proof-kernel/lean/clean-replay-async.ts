@@ -238,15 +238,13 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
           allowedImportPrefixes: [...new Set(["Mathlib", "Std", "Init", "Lake", "FormalSpec", "Audit", project.project.theorem_name.split(".")[0]!])], trustedExternalDependencies: ["mathlib"], buildStatus: "checked" });
         const dependency_closure = { schema_version: "comath.async_clean_replay_dependency_closure.v1" as const, result: closure.result,
           report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/dependency-closure.json`, hard_vetoes: closure.hard_vetoes, proof_authority: "none" as const };
-        save(`${operation_id}:dependency-closure`, dependency_closure.report_path, project.campaign_id, { ...dependency_closure, report: closure,
-          lake_manifest_sha256, audit_run_id: result.commands.audit?.manifest?.run_id ?? null });
+        save(`${operation_id}:dependency-closure`, dependency_closure.report_path, project.campaign_id, closure);
         result.dependency_closure = dependency_closure;
         const staticTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/static-audit.tmp.json`;
         const staticReport = runStaticCheatScan({ projectRoot: runtime.root, leanRoot: join(cwd, "source"), reportPath: staticTemp });
         const static_audit = { schema_version: "comath.async_clean_replay_static_audit.v1" as const, result: staticReport.result,
           report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/static-audit.json`, hard_vetoes: staticReport.hard_vetoes, proof_authority: "none" as const };
-        save(`${operation_id}:static-audit`, static_audit.report_path, project.campaign_id, { ...static_audit, report: staticReport,
-          dependency_closure_path: dependency_closure.report_path, audit_run_id: result.commands.audit?.manifest?.run_id ?? null });
+        save(`${operation_id}:static-audit`, static_audit.report_path, project.campaign_id, staticReport);
         result.static_audit = static_audit;
         const auditManifest = result.commands.audit?.manifest;
         if (!auditManifest) fail("ASYNC_CLEAN_REPLAY_AUDIT_MANIFEST_MISSING");
@@ -287,8 +285,7 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
           leanRunManifestId: auditManifest.run_id, structuredAudit: structured_audit });
         const axiom_profile = { schema_version: "comath.async_clean_replay_axiom_profile.v1" as const, result: profile.result,
           report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/axiom-profile.json`, hard_vetoes: profile.hard_vetoes, proof_authority: "none" as const };
-        save(`${operation_id}:axiom-profile`, axiom_profile.report_path, project.campaign_id, { ...axiom_profile, report: profile, structured_audit,
-          audit_run_id: auditManifest.run_id, environment_fingerprint });
+        save(`${operation_id}:axiom-profile`, axiom_profile.report_path, project.campaign_id, profile);
         result.axiom_profile = axiom_profile;
         const statementTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/statement-comparison.tmp.json`;
         const statement = checkStatementEquivalence({ projectRoot: runtime.root, campaign_id: project.campaign_id, claim_id: project.claim_id, candidate_id: project.candidate_id,
@@ -296,8 +293,7 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
           lean_check_output: "", lean_source: readFileSync(theoremPath, "utf8"), theorem_name: project.project.theorem_name });
         const statement_comparison = { schema_version: "comath.async_clean_replay_statement_comparison.v1" as const, result: statement.result,
           report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/statement-comparison.json`, hard_vetoes: statement.hard_vetoes, proof_authority: "none" as const };
-        save(`${operation_id}:statement-comparison`, statement_comparison.report_path, project.campaign_id, { ...statement_comparison, report: statement,
-          structured_audit_run_id: auditManifest.run_id, theorem_type_elaborated_hash: structured_audit.theorem_type_elaborated_hash });
+        save(`${operation_id}:statement-comparison`, statement_comparison.report_path, project.campaign_id, statement);
         result.statement_comparison = statement_comparison;
         const approvedDeclaration = approvedLockDeclaration({ theorem_name: approved.lock.theorem_name, theorem_header: approved.lock.theorem_header });
         const approvedPrefix = approvedDeclaration.declaration.startsWith(`theorem ${approvedDeclaration.theorem_name}`)
