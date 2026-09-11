@@ -39,7 +39,7 @@ export type AsyncCleanReplayPreparation = {
 type Config = NonNullable<ResearchConfig["proof_workflow"]>;
 type ReplayCommand = { exit_code: number; stdout?: string; stderr?: string; manifest?: AsyncLeanCommandReceipt; proof_authority: "none" };
 export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; claim_id: string; obligation_id: string;
-  commands: Record<string, ReplayCommand>; executed: boolean; proof_authority: "none" };
+  commands: Record<string, ReplayCommand>; executed: boolean; lake_manifest_sha256?: string; environment_receipt_path?: string; proof_authority: "none" };
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -197,6 +197,7 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
       ]) {
         const value = await command(step.name, async execution => {
           const files = preparation.copied_files.map(file => join(cwd, file.path)).filter(existsSync);
+          const lakeManifest = join(cwd, "lake-manifest.json"); if (existsSync(lakeManifest)) files.push(lakeManifest);
           const receipt = await runServiceOwnedLeanCommandV3Async({ runtime, command_id: `${operation_id}:${step.name}:manifest`, claim_id: project.claim_id, campaign_id: project.campaign_id,
             candidate_id: project.candidate_id, purpose: step.purpose, command: step.command, cwd, input_files: files, leanVersionOutput: versions.lean, lakeVersionOutput: versions.lake,
             leanToolchain: config.lean_toolchain, network_policy: "disabled", proof_authority: "none", execution });
@@ -205,6 +206,17 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         if (value.exit_code !== 0) break;
       }
       result.executed = ["check", "build", "audit"].every(name => result.commands[name]?.exit_code === 0);
+      if (result.executed) {
+        const lakeManifest = join(cwd, "lake-manifest.json");
+        if (!existsSync(lakeManifest)) fail("ASYNC_CLEAN_REPLAY_LAKE_MANIFEST_MISSING");
+        const bytes = readFileSync(lakeManifest), lake_manifest_sha256 = hash(bytes);
+        const environment_receipt_path = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/environment.json`;
+        save(`${operation_id}:environment`, environment_receipt_path, project.campaign_id, { schema_version: "comath.async_clean_replay_environment.v1",
+          replay_id: preparation.replay_id, campaign_id: project.campaign_id, claim_id: project.claim_id, obligation_id: project.obligation_id,
+          stage_attempt: project.stage_attempt, scope_package_sha256: project.scope_package_sha256, lake_manifest_path: `${preparation.clean_workspace_path}/lake-manifest.json`,
+          lake_manifest_sha256, audit_run_id: result.commands.audit?.manifest?.run_id ?? null, proof_authority: "none" });
+        result.lake_manifest_sha256 = lake_manifest_sha256; result.environment_receipt_path = environment_receipt_path;
+      }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/async-execution.json`, project.campaign_id, result);
       return result;
     } catch (error) {
