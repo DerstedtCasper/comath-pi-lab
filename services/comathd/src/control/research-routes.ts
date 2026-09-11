@@ -1,6 +1,7 @@
 import { ComathError } from "../errors.js";
 import type { ResearchDaemon } from "../research/daemon-runtime.js";
 import type { IntakePrincipal } from "../research/formalization-intake.js";
+import { createCheckpointStore } from "../research/checkpoint-store.js";
 
 export type ResearchRouteResponse = { status: number; body: { ok: true; data: unknown } };
 const noRoute = () => undefined;
@@ -29,6 +30,13 @@ function allowIntakeRead(daemon: ResearchDaemon, principal: IntakePrincipal, int
 export async function dispatchResearchRoute(daemon: ResearchDaemon, method: string, url: URL, body: unknown,
   principal: IntakePrincipal): Promise<ResearchRouteResponse | undefined> {
   const pathname = url.pathname;
+  const checkpointTaskId = pathId(/^\/research\/v1\/tasks\/([^/]+)\/checkpoint$/.exec(pathname));
+  if (method === "GET" && checkpointTaskId) {
+    daemon.app.getTask(checkpointTaskId);
+    const material = createCheckpointStore(daemon.runtime, { authorizeArtifact: () => false }).getResumeMaterial(checkpointTaskId);
+    if (!material) fail("CHECKPOINT_NOT_FOUND", "Task has no committed checkpoint", 404);
+    return { status: 200, body: { ok: true, data: material } };
+  }
   const taskDetailId = pathId(/^\/research\/v1\/tasks\/([^/]+)$/.exec(pathname));
   if (method === "GET" && taskDetailId) {
     const task = daemon.app.getTask(taskDetailId);
