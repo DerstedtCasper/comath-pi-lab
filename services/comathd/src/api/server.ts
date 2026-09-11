@@ -5,6 +5,7 @@ import { realpathSync } from "node:fs";
 import { ComathError, toComathError } from "../errors.js";
 import { loadConfig, researchConfigSchema } from "../config/config.js";
 import { acquireResearchDaemon, type ResearchDaemonOptions, type ResearchDaemonReference } from "../research/daemon-runtime.js";
+import { authenticateOperator } from "../control/operator-auth.js";
 import { getAcquiredProjectRuntime } from "../research/project-runtime.js";
 import { getProofWorkflowBridge } from "../research/proof-workflow-bridge.js";
 import { shutdownLegacyRuntime } from "../agents/runtime/legacy-runtime-facade.js";
@@ -2560,7 +2561,13 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
       server = createServer(async (req, res) => {
         try {
           const url = new URL(req.url ?? "/", "http://localhost");
+          if (req.method === "POST" && url.pathname === "/research/v1/campaigns" && reference) {
+            const result = reference.daemon.startCampaign(authenticateOperator(req.headers, reference.daemon.config), await readJson(req));
+            writeJson(res, { status: 202, body: { ok: true, data: result } });
+            return;
+          }
           if (req.method === "GET" && url.pathname === "/research/v1/campaigns" && reference) {
+            authenticateOperator(req.headers, reference.daemon.config);
             const offset = Number(url.searchParams.get("offset") ?? "0");
             const limit = Number(url.searchParams.get("limit") ?? "50");
             if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
@@ -2571,6 +2578,7 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
             return;
           }
           if (req.method === "GET" && url.pathname === "/research/v1/events" && reference) {
+            authenticateOperator(req.headers, reference.daemon.config);
             const campaignId = url.searchParams.get("campaign_id") ?? undefined;
             const header = req.headers["last-event-id"];
             let cursor = header === undefined ? 0 : Number(Array.isArray(header) ? header[0] : header);

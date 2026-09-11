@@ -8,7 +8,7 @@ import type { ProjectRuntime } from "./project-runtime.js";
 import { createBudgetLedger, type BudgetLimits, type BudgetPool, type PoolBudgetLimits } from "./budget-ledger.js";
 import { validateResearchDagPatch, validateResearchTaskGraph } from "./research-dag.js";
 import { artifactPointerSchema, parseResearchInput, researchControlCampaignSchema, researchDagPatchSchema,
-  researchTaskSchema, sha256Schema, type ResearchControlCampaign, type ResearchDagPatch,
+  researchTaskSchema, researchCharterSchema, sha256Schema, taskBudgetSchema, normalizeResearchCharter, type ResearchControlCampaign, type ResearchDagPatch,
   type ResearchTask, type ResearchTaskDraft, type ScopeBinding, type ArtifactPointer } from "./research-schemas.js";
 
 export type ResearchPrincipal = { kind: "operator" | "internal"; id: string }
@@ -31,6 +31,11 @@ const retrySchema = z.strictObject({ command_id: id, campaign_id: id, expected_r
 type RetryRequest = z.infer<typeof retrySchema>;
 const registrationSchema = z.strictObject({ command_id: id, campaign: researchControlCampaignSchema, tasks: z.array(researchTaskSchema).max(10000) });
 type RegistrationRequest = z.infer<typeof registrationSchema>;
+const startCampaignSchema = z.strictObject({ command_id: id, charter: researchCharterSchema,
+  budget: taskBudgetSchema.refine(value => value.token_enforcement !== "wall_only_legacy", "New research campaigns require an explicit token enforcement mode"),
+  max_active_workers: z.number().int().min(1).max(64), model_policy_id: id, tool_policy_id: id, role_template: id });
+export type StartCampaignRequest = z.infer<typeof startCampaignSchema>;
+export type CampaignBudgetConfigurer = (campaignId: string, limits: BudgetLimits) => void;
 const bindingSchema = z.strictObject({ command_id: id, campaign_id: id, candidate_id: id, source_task_id: id,
   payload_sha256: sha256Schema, policy_version: id, role_slot: z.enum(["referee", "counterexample", "reproduce_a", "reproduce_b", "novelty", "formalization_probe"]), task_id: id });
 type BindingRequest = z.infer<typeof bindingSchema>;
@@ -134,6 +139,46 @@ export class ResearchOrchestrator {
       const event = this.events.appendEvent({ campaign_id: input.campaign.campaign_id, type: "CampaignBound", actor: principal.id, payload: { task_count: input.tasks.length, proof_authority: "none" } });
       this.runtime.store.putCampaign({ ...input.campaign, snapshot_seq: event.seq });
       return { campaign_id: input.campaign.campaign_id, revision: input.campaign.revision };
+    });
+  }
+  /**
+   * The public bootstrap is deliberately narrower than registerCampaign: an
+   * operator supplies a charter and configured policy names, while this service
+   * allocates every control/task identifier and creates only charter-scoped
+   * intake work. Formal scopes and proof authority cannot cross this boundary.
+   */
+  startCampaign(principal: ResearchPrincipal, request: unknown, configureBudget: CampaignBudgetConfigurer): {
+    campaign_id: string; revision: number; state: "running"; initial_task_id: string; snapshot_seq: number;
+  } {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator can start a research campaign", 403);
+    const input = parseResearchInput(startCampaignSchema, request);
+    return this.command(principal, input.command_id, { kind: "campaign_start", input }, () => {
+      const charter = normalizeResearchCharter(input.charter), stamp = new Date(this.runtime.clock.now()).toISOString();
+      const allocateUnused = (namespace: string, exists: (value: string) => boolean) => {
+        let value: string;
+        do { value = this.runtime.store.allocateId(namespace); } while (exists(value));
+        return value;
+      };
+      const campaignId = allocateUnused("CAM", value => !!this.runtime.store.getCampaign(value));
+      const taskId = allocateUnused("TASK", value => !!this.runtime.store.getTask(value));
+      const projectId = this.runtime.store.listCampaigns().at(0)?.project_id ?? this.runtime.store.allocateId("P");
+      const campaign: ResearchControlCampaign = { campaign_id: campaignId, project_id: projectId, revision: 0, state: "running", charter,
+        max_active_workers: input.max_active_workers, budget_policy_id: "operator_explicit", supervisor: { dirty: true, last_event_seq: 0,
+          ordinary_completed_since_trigger: 0, next_trigger_at: stamp }, snapshot_seq: 0 };
+      const task = researchTaskSchema.parse({ task_id: taskId, campaign_id: campaignId, depends_on: [], kind: "intake", question: charter.goal,
+        acceptance: charter.success_criteria, role_template: input.role_template, model_policy_id: input.model_policy_id, tool_policy_id: input.tool_policy_id,
+        scope: { kind: "charter", charter_sha256: charter.sha256 }, pool: "exploration", priority: 2, budget: input.budget,
+        method_family: "intake", problem_slice: "campaign_bootstrap", coupling_label: "campaign_bootstrap", input_refs: [], exclusions: [],
+        status: "queued", generation: 0, fault_retry_count: 0, created_at: stamp, updated_at: stamp });
+      // Route validators may inspect the canonical campaign, but this entire
+      // bootstrap remains one command transaction and rolls back on rejection.
+      this.runtime.store.putCampaign(campaign); this.validateDraft(task, campaign); this.persistGraph([task]);
+      const { token_enforcement: _mode, ...limits } = input.budget;
+      configureBudget(campaignId, limits);
+      const event = this.events.appendEvent({ campaign_id: campaignId, task_id: taskId, type: "CampaignStarted", actor: principal.id,
+        payload: { command_id: input.command_id, initial_task_id: taskId, proof_authority: "none" }, created_at: stamp });
+      this.runtime.store.putCampaign({ ...campaign, snapshot_seq: event.seq });
+      return { campaign_id: campaignId, revision: 0, state: "running", initial_task_id: taskId, snapshot_seq: event.seq };
     });
   }
   applyPatch(principal: ResearchPrincipal, request: ResearchDagPatch): { revision: number; created_task_ids: string[]; snapshot_seq: number } {

@@ -9,7 +9,8 @@ import type { AgentRuntimeAdapter, StartWorkerInput } from "../agents/runtime/ag
 import { createWorkerExecutionHost, type WorkerExecutionHostOptions } from "../agents/runtime/worker-execution-host.js";
 import { ProjectRuntime, type ProjectRuntimeDependencies } from "./project-runtime.js";
 import { createPortfolioScheduler, type PortfolioScheduler, type ResearchGrant } from "./portfolio-scheduler.js";
-import { createResearchOrchestrator, type ResearchTaskPolicies } from "./research-orchestrator.js";
+import { createResearchOrchestrator, type ResearchOrchestrator, type ResearchPrincipal, type ResearchTaskPolicies } from "./research-orchestrator.js";
+import type { PoolBudgetLimits } from "./budget-ledger.js";
 import { createAttemptReconciler, type AttemptReconciler, type AttemptLifecycleHooks } from "./reconciliation.js";
 import { drainResearchAuditOutbox } from "./project-commit.js";
 import type { ResearchTask } from "./research-schemas.js";
@@ -318,6 +319,17 @@ export class ResearchDaemon {
     return this.gatewayReady;
   }
   workerGatewayAddress() { return this.gateway?.address(); }
+  /** Service-owned bridge for the narrow operator bootstrap; it reuses this daemon's sole scheduler. */
+  startCampaign(principal: ResearchPrincipal, request: Parameters<ResearchOrchestrator["startCampaign"]>[1]) {
+    const requestedWorkers = request && typeof request === "object" ? (request as { max_active_workers?: unknown }).max_active_workers : undefined;
+    if (typeof requestedWorkers === "number" && Number.isInteger(requestedWorkers) && requestedWorkers > this.config.max_active_workers) {
+      throw new ComathError("Campaign worker limit exceeds the configured deployment capacity", { code: "CAMPAIGN_WORKER_CAPABILITY", statusCode: 422 });
+    }
+    return this.app.startCampaign(principal, request, (campaignId, limits) => {
+      const pools = Object.fromEntries(["exploration", "deepening", "validation", "formalization"].map(pool => [pool, { ...limits }])) as PoolBudgetLimits;
+      this.scheduler.budget.configure(campaignId, limits, pools);
+    });
+  }
   trackApplicationWork(work: Promise<unknown>): void {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     this.applicationWork.add(work);

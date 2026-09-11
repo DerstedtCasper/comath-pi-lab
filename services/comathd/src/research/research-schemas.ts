@@ -39,14 +39,14 @@ export const researchTaskSchema = z.strictObject({ ...draftFields, campaign_id: 
   checkpoint_head: id.optional(), accepted_result_id: id.optional(), created_at: z.iso.datetime(), updated_at: z.iso.datetime()
   , legacy_run_id: z.string().regex(/^ARUN-\d{4,}$/).optional()
 }).refine(validCharterScope, "Task kind requires formal scope");
-const charterInputSchema = z.strictObject({ goal: text, approach_hints: strings.default([]), constraints: strings, success_criteria: z.array(text).min(1).max(100) });
-export function normalizeResearchCharter(input: z.input<typeof charterInputSchema>) {
-  const charter = charterInputSchema.parse(input);
+export const researchCharterSchema = z.strictObject({ goal: text, approach_hints: strings.default([]), constraints: strings, success_criteria: z.array(text).min(1).max(100) });
+export function normalizeResearchCharter(input: z.input<typeof researchCharterSchema>) {
+  const charter = researchCharterSchema.parse(input);
   return { ...charter, sha256: createHash("sha256").update(canonicalJson(charter)).digest("hex") };
 }
 export const researchControlCampaignSchema = z.strictObject({ campaign_id: id, project_id: id, revision: count,
   state: z.enum(["preparing", "running", "pausing", "paused", "blocked", "completed", "cancelled"]),
-  charter: charterInputSchema.extend({ sha256: sha256Schema }),
+  charter: researchCharterSchema.extend({ sha256: sha256Schema }),
   max_active_workers: z.number().int().min(1).max(64), budget_policy_id: id,
   supervisor: z.strictObject({ dirty: z.boolean(), inflight_task_id: id.optional(), last_event_seq: count,
     ordinary_completed_since_trigger: count, next_trigger_at: z.iso.datetime() }), snapshot_seq: count
