@@ -10,6 +10,7 @@ import { getAcquiredProjectRuntime, type ProjectRuntime } from "../../research/p
 import type { ResearchOrchestrator } from "../../research/research-orchestrator.js";
 import type { createProofToolAttemptService } from "../../research/proof-tool-attempt.js";
 import { requireApprovedFormalScope } from "../campaign/formal-spec-store.js";
+import { checkDependencyClosureV2 } from "./dependency-closure.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
 import { readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "../../research/project-commit.js";
@@ -39,7 +40,8 @@ export type AsyncCleanReplayPreparation = {
 type Config = NonNullable<ResearchConfig["proof_workflow"]>;
 type ReplayCommand = { exit_code: number; stdout?: string; stderr?: string; manifest?: AsyncLeanCommandReceipt; proof_authority: "none" };
 export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; claim_id: string; obligation_id: string;
-  commands: Record<string, ReplayCommand>; executed: boolean; lake_manifest_sha256?: string; environment_receipt_path?: string; proof_authority: "none" };
+  commands: Record<string, ReplayCommand>; executed: boolean; lake_manifest_sha256?: string; environment_receipt_path?: string;
+  dependency_closure?: { schema_version: "comath.async_clean_replay_dependency_closure.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" }; proof_authority: "none" };
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -216,6 +218,15 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
           stage_attempt: project.stage_attempt, scope_package_sha256: project.scope_package_sha256, lake_manifest_path: `${preparation.clean_workspace_path}/lake-manifest.json`,
           lake_manifest_sha256, audit_run_id: result.commands.audit?.manifest?.run_id ?? null, proof_authority: "none" });
         result.lake_manifest_sha256 = lake_manifest_sha256; result.environment_receipt_path = environment_receipt_path;
+        const closureTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/dependency-closure.tmp.json`;
+        const closure = checkDependencyClosureV2({ projectRoot: runtime.root, leanRoot: join(cwd, "source"), toolchainFile: join(cwd, "lean-toolchain"),
+          lakefile: join(cwd, "lakefile.lean"), lakeManifestFile: lakeManifest, reportPath: closureTemp,
+          allowedImportPrefixes: [...new Set(["Mathlib", "Std", "Init", "Lake", "FormalSpec", "Audit", project.project.theorem_name.split(".")[0]!])], trustedExternalDependencies: ["mathlib"], buildStatus: "checked" });
+        const dependency_closure = { schema_version: "comath.async_clean_replay_dependency_closure.v1" as const, result: closure.result,
+          report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/dependency-closure.json`, hard_vetoes: closure.hard_vetoes, proof_authority: "none" as const };
+        save(`${operation_id}:dependency-closure`, dependency_closure.report_path, project.campaign_id, { ...dependency_closure, report: closure,
+          lake_manifest_sha256, audit_run_id: result.commands.audit?.manifest?.run_id ?? null });
+        result.dependency_closure = dependency_closure;
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/async-execution.json`, project.campaign_id, result);
       return result;
