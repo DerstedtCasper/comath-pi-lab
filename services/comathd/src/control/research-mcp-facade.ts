@@ -31,6 +31,7 @@ export function createResearchOperatorMcp(config: OperatorMcpConfig): McpServer 
     } catch { return { isError: true, content: [{ type: "text", text: "RESEARCH_OPERATOR_UNAVAILABLE" }] }; }
   }
   const id = z.string().min(1).max(160), text = z.string().trim().min(1).max(8192);
+  const campaignMutation = { command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative() };
   const charter = z.object({ goal: text, approach_hints: z.array(text).max(100).default([]), constraints: z.array(text).max(100), success_criteria: z.array(text).min(1).max(100) }).strict();
   const budget = z.object({ output_tokens: z.number().int().nonnegative(), tool_calls: z.number().int().nonnegative(), wall_ms: z.number().int().positive(),
     cost_microusd: z.number().int().nonnegative().optional(), token_enforcement: z.enum(["observed_stop", "exact_output_cap"]) }).strict();
@@ -38,6 +39,10 @@ export function createResearchOperatorMcp(config: OperatorMcpConfig): McpServer 
   server.registerTool("research_campaign_get", { description: "Read a durable research campaign and its non-authoritative proof status.", inputSchema: { campaign_id: id }, annotations: { readOnlyHint: true } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}`));
   server.registerTool("research_campaign_start", { description: "Start a bounded charter-scoped research campaign. This does not grant formal proof authority.",
     inputSchema: { command_id: id, charter, budget, max_active_workers: z.number().int().min(1).max(64), model_policy_id: id, tool_policy_id: id, role_template: id } }, args => call("/research/v1/campaigns", args));
+  server.registerTool("research_campaign_pause", { description: "Checkpoint and stop active work, then pause the campaign after owned attempts terminate.",
+    inputSchema: { ...campaignMutation, reason: text } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/pause`, args));
+  server.registerTool("research_campaign_resume", { description: "Resume a fully paused research campaign without changing its charter or formal scope.",
+    inputSchema: campaignMutation }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/resume`, args));
   return server;
 }
 
