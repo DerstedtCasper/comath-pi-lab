@@ -29,6 +29,18 @@ function allowIntakeRead(daemon: ResearchDaemon, principal: IntakePrincipal, int
 export async function dispatchResearchRoute(daemon: ResearchDaemon, method: string, url: URL, body: unknown,
   principal: IntakePrincipal): Promise<ResearchRouteResponse | undefined> {
   const pathname = url.pathname;
+  const patchId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/patches$/.exec(pathname));
+  if (method === "POST" && patchId) {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may patch a campaign", 403);
+    requireBodyId(body, "campaign_id", patchId);
+    return { status: 200, body: { ok: true, data: daemon.app.applyPatch({ kind: "operator", id: principal.id }, body as never) } };
+  }
+  const budgetMutationId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/budget$/.exec(pathname));
+  if (method === "POST" && budgetMutationId) {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may change a campaign budget", 403);
+    requireBodyId(body, "campaign_id", budgetMutationId);
+    return { status: 200, body: { ok: true, data: daemon.app.updateBudget({ kind: "operator", id: principal.id }, body as never) } };
+  }
   const campaignDetailId = pathId(/^\/research\/v1\/campaigns\/([^/]+)$/.exec(pathname));
   if (method === "GET" && campaignDetailId) {
     const frontier = daemon.app.frontier(campaignDetailId, { limit: 1 });
