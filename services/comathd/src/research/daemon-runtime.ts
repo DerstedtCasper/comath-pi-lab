@@ -1,4 +1,5 @@
 import { realpathSync } from "node:fs";
+import { canonicalJson } from "../verification/runner-contracts.js";
 import { ComathError } from "../errors.js";
 import { researchConfigSchema, type ResearchConfig } from "../config/config.js";
 import { listRoleTemplates } from "../agents/role-templates.js";
@@ -31,6 +32,8 @@ import { createFormalCandidateDispatch, type FormalCandidateDispatchProfile } fr
 import { createFormalCandidateIntake } from "./formal-candidate-intake.js";
 import { createFormalSubmissionLifecycle } from "./formal-submission-lifecycle.js";
 import { createFormalCandidateProjectService } from "./formal-candidate-project.js";
+import { createProofToolAttemptService } from "./proof-tool-attempt.js";
+import { createProofWorkflowRunner } from "./proof-workflow-runner.js";
 import { listArtifactRefs } from "../artifacts/store.js";
 
 export type ResearchExecutionConsumer = {
@@ -99,6 +102,8 @@ export class ResearchDaemon {
   readonly formalCandidateIntake;
   readonly formalSubmissions;
   readonly formalCandidateProjects;
+  readonly proofTools;
+  readonly proofWorkflow;
   recovery: { blocked_operations: string[]; unconfirmed_attempts: string[] } = { blocked_operations: [], unconfirmed_attempts: [] };
   toolRecovery: { terminated: string[]; unconfirmed: string[] } = { terminated: [], unconfirmed: [] };
   private started = false;
@@ -158,7 +163,7 @@ export class ResearchDaemon {
         try { requireApprovedFormalScope(runtime, campaign.campaign_id, scope); return true; } catch { return false; }
       } };
     if (config.supervisor && !policies.role_template_ids.includes(config.supervisor.role_template)) fail("SUPERVISOR_ROLE_UNKNOWN", "Supervisor role must be selected from the configured host role templates");
-    if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.policyForTask,
+    if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.routePolicyForTask,
       verifyRetryCondition: options.verifyRetryCondition, classifyHardBlocker: options.classifyHardBlocker });
     this.app = createResearchOrchestrator(runtime, { ...policies,
       validateValidationRetry: options.validation ? (previous, refs) => {
@@ -172,13 +177,15 @@ export class ResearchDaemon {
       validateRoute: (draft, campaign) => {
       policies.validateRoute?.(draft, campaign); this.failureService?.validateRoute(draft, campaign);
     } });
-    this.formalCandidates = createFormalCandidateDispatch(this.app, { profile: options.formalCandidateProfile });
+    if (options.formalCandidateProfile && config.proof_workflow && canonicalJson(options.formalCandidateProfile) !== canonicalJson(config.proof_workflow.candidate)) fail("PROOF_PROFILE_CONFLICT", "Host proof workflow and candidate profiles disagree");
+    this.formalCandidates = createFormalCandidateDispatch(this.app, { profile: options.formalCandidateProfile ?? config.proof_workflow?.candidate });
     this.formalCandidateIntake = createFormalCandidateIntake(runtime, {
       authorizeArtifact: options.workerGateway?.authorizeArtifact ?? this.contextService.gatewayOptions.authorizeArtifact,
       readCandidateReservation: this.formalCandidates.readCandidateReservation
     });
     this.formalSubmissions = createFormalSubmissionLifecycle(runtime, { readSubmissionReceipt: this.formalCandidateIntake.readSubmissionReceipt });
     this.formalCandidateProjects = createFormalCandidateProjectService(runtime, { readSubmissionReceipt: this.formalCandidateIntake.readSubmissionReceipt });
+    this.proofTools = createProofToolAttemptService(runtime, { resourceConfig: () => resourcesWithLegacy(config) });
     this.scheduler = createPortfolioScheduler(runtime, resourcesWithLegacy(config), {
       validateTask: task => {
         this.app.assertTaskPolicy(task);
@@ -256,6 +263,10 @@ export class ResearchDaemon {
         && record.project_id === runtime.store.getCampaign(campaignId)?.project_id),
       verifyValidatedCandidate: candidateId => !!options.validation && this.validationAggregation?.aggregateValidation({ candidate_id: candidateId,
         policy_version: options.validation.policy_version }).state === "research_validated" });
+    if (config.proof_workflow && !policies.role_template_ids.includes(config.proof_workflow.candidate.role_template)) fail("PROOF_ROLE_UNKNOWN", "Proof candidate role must be a configured host role");
+    this.proofWorkflow = createProofWorkflowRunner(this.app, { config: config.proof_workflow, candidates: this.formalCandidates,
+      intake: this.formalCandidateIntake, projects: this.formalCandidateProjects, tools: this.proofTools,
+      stopWorker: key => this.reconciler.requestStop(key, "user_cancel") });
     if (config.supervisor) this.supervisor = createSupervisorDriver(this.app, this.scheduler, config, this.resultService, {
       steer: (key, instruction) => this.execution?.steer?.(key, instruction) ?? Promise.reject(new ComathError("Runtime cannot receive correction steering", { code: "WORKER_STEER_UNSUPPORTED" })),
       stop: key => this.reconciler.requestStop(key, "supervisor_invalid"),
@@ -281,7 +292,7 @@ export class ResearchDaemon {
       drainResearchAuditOutbox(runtime.root);
       return daemon;
     } catch (error) {
-      await daemon?.supervisor?.close(); await daemon?.validationDriver?.close();
+      await daemon?.supervisor?.close(); await daemon?.validationDriver?.close(); await daemon?.proofWorkflow?.close();
       daemon?.reconciler.close(); daemon?.scheduler.close(); daemon?.app.close();
       try { await daemon?.adapters.close(); } finally { await runtime.release(); }
       throw error;
@@ -315,19 +326,20 @@ export class ResearchDaemon {
   start(): void {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     if (this.started) return;
-    this.started = true; this.reconciler.start(); this.supervisor?.start(); this.validationDriver?.start(); this.scheduler.start();
+    this.started = true; this.reconciler.start(); this.supervisor?.start(); this.validationDriver?.start(); this.proofWorkflow.start(); this.scheduler.start();
   }
   close(): Promise<void> {
     if (this.closing) return this.closing;
     this.supervisor?.stop();
     this.validationDriver?.stop();
+    this.proofWorkflow.stop();
     this.scheduler.stopGrants();
     this.closing = Promise.resolve().then(async () => {
       const errors: unknown[] = [];
-      const draining: Promise<unknown>[] = [this.reconciler.drain(), this.supervisor?.close() ?? Promise.resolve(), this.validationDriver?.close() ?? Promise.resolve()];
+      const draining: Promise<unknown>[] = [this.reconciler.drain(), this.supervisor?.close() ?? Promise.resolve(), this.validationDriver?.close() ?? Promise.resolve(), this.proofWorkflow.close()];
       // Persist handoff intents before attempting cancellation. Unconfirmed work retains permits.
       for (const row of this.runtime.store.all("SELECT attempt_key,task_id FROM attempts WHERE state<>'terminated'")) {
-        if (this.runtime.store.getTask(String(row.task_id))?.kind === "legacy_run") continue;
+        if (["legacy_run", "proof_workflow"].includes(this.runtime.store.getTask(String(row.task_id))?.kind ?? "")) continue;
         draining.push(this.reconciler.requestStop(String(row.attempt_key), "handoff"));
       }
       draining.push(shutdownLegacyRuntime(this.runtime.root), this.execution?.close?.() ?? Promise.resolve(), this.toolExecutor?.close() ?? Promise.resolve(), this.adapters.close(), ...this.dispatched, ...this.applicationWork);
@@ -335,11 +347,12 @@ export class ResearchDaemon {
       // If any code can still write to the store, never release ownership underneath it.
       const settled = await withinShutdownGrace(Promise.allSettled(draining), this.config.stop_grace_ms);
       for (const result of settled) if (result.status === "rejected") errors.push(result.reason);
-      if (errors.some(error => error instanceof ComathError && error.code === "LEGACY_RUNTIME_BUSY")) {
+      if (errors.some(error => error instanceof ComathError && ["LEGACY_RUNTIME_BUSY", "PROOF_OWNED_TOOLS_UNRECONCILED"].includes(error.code))) {
         throw new AggregateError(errors, "Legacy application still owns active requests; project owner is retained");
       }
       for (const row of this.runtime.store.all("SELECT attempt_key FROM attempts WHERE state<>'terminated'")) {
         try {
+          if (this.runtime.store.get("SELECT runtime_kind FROM attempts WHERE attempt_key=?", String(row.attempt_key))?.runtime_kind === "service-proof-tool") continue;
           const key = String(row.attempt_key), lifecycle = this.execution?.lifecycle;
           if (lifecycle) this.reconciler.confirmTermination(key, await withinShutdownGrace(lifecycle.inspect(key), this.config.stop_grace_ms));
         } catch (error) {
@@ -370,7 +383,7 @@ export async function acquireResearchDaemon(root: string, options: ResearchDaemo
       || entry.options.inspectRecoveredWorker !== options.inspectRecoveredWorker || entry.options.contextPolicy !== options.contextPolicy
       || entry.options.verifyRetryCondition !== options.verifyRetryCondition || entry.options.classifyHardBlocker !== options.classifyHardBlocker || entry.options.createAdapters !== options.createAdapters
       || entry.options.authorizeReaderUrl !== options.authorizeReaderUrl || entry.options.validation !== options.validation
-      || entry.options.validationAggregation !== options.validationAggregation) {
+      || entry.options.validationAggregation !== options.validationAggregation || entry.options.formalCandidateProfile !== options.formalCandidateProfile) {
       fail("DAEMON_CONFIG_CONFLICT", "Project daemon already has different host dependencies or configuration");
     }
   } else {

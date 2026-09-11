@@ -6,6 +6,7 @@ import { ComathError, toComathError } from "../errors.js";
 import { loadConfig, researchConfigSchema } from "../config/config.js";
 import { acquireResearchDaemon, type ResearchDaemonOptions, type ResearchDaemonReference } from "../research/daemon-runtime.js";
 import { getAcquiredProjectRuntime } from "../research/project-runtime.js";
+import { getProofWorkflowBridge } from "../research/proof-workflow-bridge.js";
 import { shutdownLegacyRuntime } from "../agents/runtime/legacy-runtime-facade.js";
 import { getComathdStatus } from "../status.js";
 import { getProjectStatus, initProject, openProject } from "../project/project-store.js";
@@ -2265,13 +2266,13 @@ async function route(method: string, path: string, body: unknown, context: Route
     const tickMatch = /^\/campaign\/([^/]+)\/tick$/.exec(url.pathname);
     if (tickMatch) {
       try {
-        const request = body as { project_root: string; actor?: string };
+        const request = body as { project_root: string; actor?: string; command_id?: string };
         return success(
           withPublicExternalV3CampaignResult(
             await tickCampaign({
               project_root: request.project_root,
               campaign_id: decodeURIComponent(tickMatch[1] ?? ""),
-              actor: request.actor
+              actor: request.actor, command_id: request.command_id
             }),
             { projectRoot: request.project_root }
           )
@@ -2399,6 +2400,13 @@ async function route(method: string, path: string, body: unknown, context: Route
         const campaign = getCampaignOr404(request.project_root, decodeURIComponent(cancelMatch[1] ?? ""));
         if (!campaign) {
           return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
+        }
+        const runtime = getAcquiredProjectRuntime(request.project_root);
+        if (runtime?.store.getCampaign(campaign.campaign_id)) {
+          const bridge = getProofWorkflowBridge(runtime);
+          if (!bridge) throw new ComathError("Proof workflow owner is unavailable", { code: "PROOF_WORKFLOW_OWNER_UNAVAILABLE", statusCode: 503 });
+          await bridge.cancel(campaign.campaign_id, request.actor);
+          return success({ campaign: withPublicExternalV3TerminalState(getCampaignOr404(request.project_root, campaign.campaign_id)!, { projectRoot: request.project_root }) });
         }
         if (campaign.status === "terminal") {
           return success({ campaign: withPublicExternalV3TerminalState(campaign, { projectRoot: request.project_root }) });

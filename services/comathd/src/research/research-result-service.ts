@@ -247,7 +247,10 @@ export function createResearchResultService(runtime: ProjectRuntime, options: Re
   async function accept(principal: WorkerPrincipal, raw: unknown, isProposal: boolean): Promise<ResearchResultReceipt> {
     const initial = current(principal, true), request = parse(submissionSchema, raw);
     if (request.task_id !== principal.task_id || request.generation !== principal.generation) fail("RESEARCH_RESULT_IDENTITY_MISMATCH");
-    if (!isProposal && initial.kind === "formalize" && initial.specialization?.startsWith("formal_candidate:")) fail("FORMAL_SUBMISSION_REQUIRED");
+    if (!isProposal && initial.kind === "formalize" && initial.specialization?.startsWith("formal_candidate:")) {
+      const value = "payload" in request ? request.payload : request.submission.value;
+      if (!value || typeof value !== "object" || !("kind" in value) || value.kind !== "failure") fail("FORMAL_SUBMISSION_REQUIRED");
+    }
     if (isProposal && !("payload" in request)) fail("RESEARCH_RESULT_INVALID");
     let payload: unknown = "payload" in request ? request.payload : request.submission, result: ResearchResult | undefined;
     if (!isProposal) {

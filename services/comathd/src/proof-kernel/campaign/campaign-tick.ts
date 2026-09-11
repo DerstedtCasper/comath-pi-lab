@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { getAcquiredProjectRuntime } from "../../research/project-runtime.js";
+import { getProofWorkflowBridge } from "../../research/proof-workflow-bridge.js";
 import { scopeBindingSchema } from "../../research/research-schemas.js";
 import { requireApprovedFormalScope } from "./formal-spec-store.js";
 import { createProofObligationFromFormalSpecLock } from "./formal-spec-lock.js";
@@ -99,6 +100,7 @@ export type StartCampaignInput = {
 };
 
 export type CampaignTickInput = {
+  command_id?: string;
   project_root: string;
   campaign_id: string;
   actor?: string;
@@ -5294,26 +5296,9 @@ function consumeApprovedPlanning(input: CampaignTickInput, rawCampaign: Research
   return result;
 }
 
-export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
+/** Shared approved-state preparation; this never invokes a legacy candidate or Lean execution. */
+function prepareApprovedCampaignStage(input: CampaignTickInput, campaign: ResearchCampaign): CampaignTickResult {
   const actor = input.actor ?? "campaign";
-  let campaign = getCampaign(input.project_root, input.campaign_id);
-  if (!campaign) {
-    throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
-  }
-  if (campaign.status === "terminal") {
-    const obligation = resolveActiveObligation(campaign);
-    if (!obligation) return { campaign };
-    try { requireObligationApproval(input.project_root, campaign, obligation); } catch (error) { return blockUnapprovedObligation(input, campaign, error); }
-    const resumed = await resumeLeanRunnerRejectedAttemptsFromTerminal({
-      projectRoot: input.project_root,
-      campaign,
-      actor
-    });
-    if (resumed) {
-      return resumed;
-    }
-    return { campaign };
-  }
   if (campaign.status === "paused") {
     throw new ComathError("campaign is paused; resume it before ticking", {
       statusCode: 409,
@@ -5344,6 +5329,54 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
   }
   campaign = advanceObligationStage(campaign, campaign.current_stage, { obligation_id: obligation.obligation_id });
   try { requireObligationApproval(input.project_root, campaign, obligation); } catch (error) { return blockUnapprovedObligation(input, campaign, error); }
+  return { campaign, obligation };
+}
+export function inspectApprovedProofStage(input: CampaignTickInput): CampaignTickResult {
+  const campaign = getCampaign(input.project_root, input.campaign_id);
+  if (!campaign) throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
+  if (campaign.status === "terminal") return { campaign };
+  return prepareApprovedCampaignStage(input, campaign);
+}
+/** Internal owner stage entry. Public tick/replay use the registered owner instead. */
+export function advanceApprovedProofPlanning(input: CampaignTickInput): CampaignTickResult {
+  const prepared = inspectApprovedProofStage(input);
+  if (prepared.blocker || !prepared.obligation) return prepared;
+  if (prepared.campaign.current_stage !== "planning") return { ...prepared, blocker: "formal_candidate_consumer_unavailable" };
+  return consumeApprovedPlanning(input, getCampaign(input.project_root, input.campaign_id)!, prepared.obligation);
+}
+
+export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
+  const runtime = getAcquiredProjectRuntime(input.project_root);
+  if (runtime?.store.getCampaign(input.campaign_id)) {
+    const bridge = getProofWorkflowBridge(runtime);
+    if (bridge) return bridge.requestAdvance(input);
+    const current = getCampaign(input.project_root, input.campaign_id);
+    if (!current) throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
+    return { campaign: current, blocker: "proof_workflow_owner_unavailable" };
+  }
+  const actor = input.actor ?? "campaign";
+  let campaign = getCampaign(input.project_root, input.campaign_id);
+  if (!campaign) {
+    throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
+  }
+  if (campaign.status === "terminal") {
+    const obligation = resolveActiveObligation(campaign);
+    if (!obligation) return { campaign };
+    try { requireObligationApproval(input.project_root, campaign, obligation); } catch (error) { return blockUnapprovedObligation(input, campaign, error); }
+    const resumed = await resumeLeanRunnerRejectedAttemptsFromTerminal({
+      projectRoot: input.project_root,
+      campaign,
+      actor
+    });
+    if (resumed) {
+      return resumed;
+    }
+    return { campaign };
+  }
+  const prepared = prepareApprovedCampaignStage(input, campaign);
+  if (prepared.blocker || !prepared.obligation) return prepared;
+  campaign = prepared.campaign;
+  let obligation = prepared.obligation;
   const serviceOwnedScope = obligation.locked_statement_structured.approved_scope !== undefined;
   if (serviceOwnedScope && campaign.current_stage === "planning") {
     const stored = getCampaign(input.project_root, campaign.campaign_id)!;
@@ -6532,6 +6565,14 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
 }
 
 export async function replayCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
+  const runtime = getAcquiredProjectRuntime(input.project_root);
+  if (runtime?.store.getCampaign(input.campaign_id)) {
+    const bridge = getProofWorkflowBridge(runtime);
+    if (bridge) return bridge.requestReplay(input);
+    const current = getCampaign(input.project_root, input.campaign_id);
+    if (!current) throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
+    return { campaign: current, blocker: "proof_workflow_owner_unavailable" };
+  }
   const campaign = getCampaign(input.project_root, input.campaign_id);
   if (!campaign) {
     throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });

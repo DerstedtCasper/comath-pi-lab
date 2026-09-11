@@ -146,6 +146,7 @@ export class AttemptReconciler {
     }
   }
   async reconcileAttempt(attemptKey: string): Promise<{ health: string; next_action: string }> {
+    if (this.runtime.store.get("SELECT runtime_kind FROM attempts WHERE attempt_key=?", attemptKey)?.runtime_kind === "service-proof-tool") return { health: "service_owned", next_action: "proof_workflow_owner" };
     const { attempt, task } = this.attempt(attemptKey, true), now = this.runtime.clock.now();
     if (attempt.state === "terminated") return { health: "terminated", next_action: "usage_reconciliation" };
     if (attempt.fenced_at) {
@@ -193,6 +194,7 @@ export class AttemptReconciler {
     this.hooks.reconcileSubmissions?.();
     for (const row of this.runtime.store.all("SELECT attempt_key FROM attempts WHERE state<>'terminated'")) {
       const key = String(row.attempt_key);
+      if (this.runtime.store.get("SELECT runtime_kind FROM attempts WHERE attempt_key=?", key)?.runtime_kind === "service-proof-tool") continue;
       try {
         const { attempt, task } = this.attempt(key, true);
         if (!attempt.stop_reason && !["succeeded", "failed", "cancelled"].includes(task.status)) await this.requestStop(key, "crash");

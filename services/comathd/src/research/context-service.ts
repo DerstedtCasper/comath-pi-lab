@@ -133,5 +133,7 @@ export function createResearchContextService(runtime: ProjectRuntime, options: R
     }
     return false;
   }
-  return { gatewayOptions, workerInput, buildPrompt, policyForTask: policyFor, allowsSourceUrl };
+  // Admission fingerprints drafts before any execution generation or candidate reservation exists.
+  // Worker materialization still requires the fully bound policy above.
+  return { gatewayOptions, workerInput, buildPrompt, policyForTask: policyFor, routePolicyForTask: options.policyForTask, allowsSourceUrl };
 }

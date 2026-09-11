@@ -17,6 +17,15 @@ const wheelHttp = z.strictObject({ endpoint: z.url(), wire_format: z.enum(["quer
   timeout_ms: z.number().int().min(1).max(120000).optional(), max_response_bytes: z.number().int().min(1).max(2 * 1024 * 1024).optional(), terms: wheelTerms });
 export const researchConfigSchema = z.strictObject({
   enabled: z.boolean().default(false), max_active_workers: z.number().int().min(1).max(64).default(4),
+  proof_workflow: z.strictObject({
+    candidate: z.strictObject({ model_policy_id: z.string().min(1).max(160), tool_policy_id: z.string().min(1).max(160),
+      role_template: z.string().min(1).max(160), budget: taskBudgetSchema.refine(value => value.token_enforcement !== "wall_only_legacy"),
+      priority: z.union([z.literal(0),z.literal(1),z.literal(2),z.literal(3),z.literal(4)]).default(2) }),
+    tool_budget: taskBudgetSchema.refine(value => value.output_tokens === 0 && value.tool_calls >= 5 && value.token_enforcement !== "wall_only_legacy",
+      "Proof tools need zero LLM tokens and an explicit budget for version/check/build/audit calls"),
+    lean_toolchain: z.string().regex(/^leanprover\/lean4:v\d+\.\d+\.\d+$/),
+    tool_timeout_ms: boundedMs.default(30000), advancement_lease_ms: boundedMs.default(120000)
+  }).optional(),
   supervisor: z.strictObject({ model_policy_id: z.string().min(1).max(160), tool_policy_id: z.string().min(1).max(160),
     role_template: z.string().min(1).max(160), budget: taskBudgetSchema.refine(value => value.token_enforcement !== "wall_only_legacy", "Supervisor requires an explicit research budget") }).optional(),
   provider_policies: z.record(z.string(), z.strictObject({ launch_rpm: z.number().int().min(1).max(4).default(4), max_sessions: z.number().int().min(1).max(64).default(4) })).default({}),
@@ -38,6 +47,12 @@ export const researchConfigSchema = z.strictObject({
       script: z.string().refine(isAbsolute), script_sha256: z.string().regex(/^[a-f0-9]{64}$/) }).optional() }).prefault({}),
   tool_limits: z.strictObject({ lean: z.number().int().min(1).max(64).default(1), cas: z.number().int().min(1).max(64).default(2), retrieval: z.number().int().min(1).max(64).default(4) }).prefault({})
 }).superRefine((config, ctx) => {
+  if (config.proof_workflow) {
+    const profile = config.proof_workflow.candidate;
+    if (!config.enabled || !config.model_policies[profile.model_policy_id] || !config.tool_policies[profile.tool_policy_id]
+      || config.tool_policies[profile.tool_policy_id]?.visibility !== "task") ctx.addIssue({ code: "custom", message: "Proof workflow requires enabled research and nonblind configured model/tool policies" });
+    if (config.proof_workflow.tool_timeout_ms > config.proof_workflow.tool_budget.wall_ms) ctx.addIssue({ code: "custom", message: "Proof tool timeout exceeds stage wall budget" });
+  }
   if (config.supervisor && (!config.enabled || !config.model_policies[config.supervisor.model_policy_id] || !config.tool_policies[config.supervisor.tool_policy_id])) {
     ctx.addIssue({ code: "custom", message: "Supervisor requires research.enabled and existing host model/tool policies" });
   }

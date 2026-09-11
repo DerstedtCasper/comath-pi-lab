@@ -11,7 +11,9 @@ export type LeanHostCommandResult = {
   stderr: string;
 };
 
-export type LeanHostAsyncCommandOptions = Omit<Parameters<typeof executeOwnedToolProcess>[0], "command" | "cwd">;
+export type LeanHostAsyncCommandOptions = Omit<Parameters<typeof executeOwnedToolProcess>[0], "command" | "cwd"> & {
+  onCompleted?: (completion: OwnedSessionCompletion) => void;
+};
 export type LeanHostAsyncCommandResult = LeanHostCommandResult & {
   completion: OwnedSessionCompletion; executable: string; output_truncated: boolean;
 };
@@ -37,6 +39,7 @@ export async function runLeanToolCommandAsync(command: "lean" | "lake", args: st
     }
   } catch { streamError = true; await execution.terminate(); }
   const completion = await execution.completion;
+  options.onCompleted?.(completion);
   const unsafe = streamError || truncated || completion.cancelled || completion.timed_out || !completion.termination_confirmed || !!completion.error_code;
   return { executable: completion.handle.binary_path, completion, output_truncated: truncated,
     exit_code: unsafe ? (completion.exit_code && completion.exit_code !== 0 ? completion.exit_code : 1) : completion.exit_code ?? 1,
