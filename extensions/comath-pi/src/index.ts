@@ -5,6 +5,8 @@ import {
   issueCampaignLoopCapability,
   runResearchCampaignLoop
 } from "./research-loop.js";
+import { createDefaultResearchOperatorClient, type ResearchOperatorClient } from "./research-client.js";
+import { dispatchResearchOperatorRequest } from "./research-tools.js";
 
 export * from "./subagents.js";
 export * from "./widgets.js";
@@ -12,6 +14,8 @@ export * from "./renderers.js";
 export * from "./research-loop.js";
 export * from "./runtime-registration.js";
 export * from "./tools/review.js";
+export * from "./research-client.js";
+export * from "./research-tools.js";
 
 export type ParsedComathCommand = {
   namespace: "cm";
@@ -60,6 +64,7 @@ type PiExtensionApi = {
     description?: string;
     handler(args: string, ctx: unknown): Promise<void> | void;
   }): void;
+  sendMessage?(message: { customType: string; content: string; details: unknown; display: boolean }, options: { triggerTurn: false }): void;
   on(event: "resources_discover", handler: (event: unknown, ctx: unknown) => unknown): void;
 };
 
@@ -76,6 +81,7 @@ type RegisterComathPiRuntimeOptions = {
   project_root?: string;
   project_name?: string;
   max_ticks?: number;
+  researchClient?: ResearchOperatorClient;
 };
 
 export type ToolDescriptor = {
@@ -9081,8 +9087,9 @@ export function createDefaultComathClient(): ComathClient {
   });
 }
 
-export default function registerComathPiRuntime(pi: PiExtensionApi, options: RegisterComathPiRuntimeOptions = {}): void {
+export function registerComathPiRuntime(pi: PiExtensionApi, options: RegisterComathPiRuntimeOptions = {}): void {
   const client = options.client ?? createDefaultComathClient();
+  const researchClient = options.researchClient ?? createDefaultResearchOperatorClient();
 
   for (const tool of createComathTools().filter((descriptor) => PI_RUNTIME_EXECUTABLE_TOOL_NAMES.has(descriptor.name))) {
     pi.registerTool({
@@ -9114,6 +9121,18 @@ export default function registerComathPiRuntime(pi: PiExtensionApi, options: Reg
     description: "Start or continue a goal-mode CoMath ResearchCampaign through comathd.",
     handler: async (args, ctx) => {
       await handleResearchCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.registerCommand("cm:operator", {
+    description: "Execute one allowlisted durable-research operator request and emit a non-turn custom response.",
+    handler: async (args, ctx) => {
+      let raw: unknown;
+      try { raw = JSON.parse(args); } catch { raw = undefined; }
+      const result = await dispatchResearchOperatorRequest(researchClient, raw);
+      pi.sendMessage?.({ customType: "comath.operator.response.v1", content: "CoMath operator response", details: result, display: false }, { triggerTurn: false });
+      const ui = (ctx as PiRuntimeContext | undefined)?.ui;
+      if (!pi.sendMessage && ui?.notify) await ui.notify(JSON.stringify(result), result.result.ok ? "info" : "error");
     }
   });
 
@@ -9164,6 +9183,7 @@ export default function registerComathPiRuntime(pi: PiExtensionApi, options: Reg
     promptPaths: ["prompts"]
   }));
 }
+export default registerComathPiRuntime;
 
 export function renderTextDashboard(input: DashboardInput): string {
   const projectLabel = input.project
