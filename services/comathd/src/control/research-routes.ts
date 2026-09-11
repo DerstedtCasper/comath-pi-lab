@@ -30,6 +30,13 @@ function allowIntakeRead(daemon: ResearchDaemon, principal: IntakePrincipal, int
 export async function dispatchResearchRoute(daemon: ResearchDaemon, method: string, url: URL, body: unknown,
   principal: IntakePrincipal): Promise<ResearchRouteResponse | undefined> {
   const pathname = url.pathname;
+  const operationId = pathId(/^\/research\/v1\/operations\/([^/]+)$/.exec(pathname));
+  if (method === "GET" && operationId) {
+    const operation = daemon.runtime.store.get("SELECT operation_id,campaign_id,phase,expected_revision,witness_ref FROM trust_commits WHERE operation_id=?", operationId);
+    if (!operation) fail("RESEARCH_OPERATION_NOT_FOUND", "Research operation does not exist", 404);
+    return { status: 200, body: { ok: true, data: { operation_id: String(operation.operation_id), campaign_id: operation.campaign_id === null ? null : String(operation.campaign_id),
+      phase: String(operation.phase), expected_revision: Number(operation.expected_revision), has_witness: operation.witness_ref !== null } } };
+  }
   const checkpointTaskId = pathId(/^\/research\/v1\/tasks\/([^/]+)\/checkpoint$/.exec(pathname));
   if (method === "GET" && checkpointTaskId) {
     daemon.app.getTask(checkpointTaskId);

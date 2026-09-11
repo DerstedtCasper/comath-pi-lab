@@ -2611,7 +2611,8 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
           const intakeRead = req.method === "GET" && /^\/research\/v1\/intakes\/[^/]+$/.test(url.pathname);
           const operatorRead = req.method === "GET" && /^\/research\/v1\/campaigns\/[^/]+(?:\/(frontier|budget|events))?$/.test(url.pathname);
           const taskRead = req.method === "GET" && /^\/research\/v1\/tasks\/[^/]+(?:\/checkpoint)?$/.test(url.pathname);
-          if (reference && (hostMutation || operatorMutation || intakeRead || operatorRead || taskRead)) {
+          const operationRead = req.method === "GET" && /^\/research\/v1\/operations\/[^/]+$/.test(url.pathname);
+          if (reference && (hostMutation || operatorMutation || intakeRead || operatorRead || taskRead || operationRead)) {
             const principal = hostMutation ? authenticateHost(req.headers, reference.daemon.config)
               : intakeRead ? authenticateResearchReader(req.headers, reference.daemon.config) : authenticateOperator(req.headers, reference.daemon.config);
             const work = dispatchResearchRoute(reference.daemon, req.method ?? "GET", url,
