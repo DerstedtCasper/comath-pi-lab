@@ -12,6 +12,8 @@ import type { createProofToolAttemptService } from "../../research/proof-tool-at
 import { requireApprovedFormalScope } from "../campaign/formal-spec-store.js";
 import { checkDependencyClosureV2 } from "./dependency-closure.js";
 import { runStaticCheatScan } from "./static-cheat-scan.js";
+import { checkAxiomProfileV2 } from "./axiom-profile.js";
+import { parseStructuredLeanAuditOutput, type StructuredLeanAudit } from "./structured-audit.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
 import { readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "../../research/project-commit.js";
@@ -43,7 +45,8 @@ type ReplayCommand = { exit_code: number; stdout?: string; stderr?: string; mani
 export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; claim_id: string; obligation_id: string;
   commands: Record<string, ReplayCommand>; executed: boolean; lake_manifest_sha256?: string; environment_receipt_path?: string;
   dependency_closure?: { schema_version: "comath.async_clean_replay_dependency_closure.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
-  static_audit?: { schema_version: "comath.async_clean_replay_static_audit.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" }; proof_authority: "none" };
+  static_audit?: { schema_version: "comath.async_clean_replay_static_audit.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
+  axiom_profile?: { schema_version: "comath.async_clean_replay_axiom_profile.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" }; proof_authority: "none" };
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -236,6 +239,25 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         save(`${operation_id}:static-audit`, static_audit.report_path, project.campaign_id, { ...static_audit, report: staticReport,
           dependency_closure_path: dependency_closure.report_path, audit_run_id: result.commands.audit?.manifest?.run_id ?? null });
         result.static_audit = static_audit;
+        const auditManifest = result.commands.audit?.manifest;
+        if (!auditManifest) fail("ASYNC_CLEAN_REPLAY_AUDIT_MANIFEST_MISSING");
+        const theoremPath = join(cwd, project.project.theorem_file_rel), auditPath = join(cwd, project.project.audit_file_rel);
+        const environment_fingerprint = hash(canonicalJson({ toolchain: config.lean_toolchain, lean_version: auditManifest.manifest.lean_version,
+          lake_version: auditManifest.manifest.lake_version, lean_binary_sha256: auditManifest.manifest.lean_binary_sha256,
+          lake_binary_sha256: auditManifest.manifest.lake_binary_sha256, toolchain_file_sha256: auditManifest.manifest.lean_toolchain_file_sha256,
+          source_sha256: hash(readFileSync(theoremPath)), audit_source_sha256: hash(readFileSync(auditPath)), lake_manifest_sha256 }));
+        const structured_audit: StructuredLeanAudit = parseStructuredLeanAuditOutput({ stdout: readCommittedFile(runtime.root, auditManifest.manifest.stdout_path),
+          expected_target: project.project.theorem_name, source_file: project.project.theorem_file_rel, source_file_sha256: hash(readFileSync(theoremPath)),
+          audit_source_sha256: hash(readFileSync(auditPath)), environment_fingerprint, generated_by_run_id: auditManifest.run_id, audit_manifest_path: auditManifest.manifest_path });
+        const axiomTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/axiom-profile.tmp.json`;
+        const profile = checkAxiomProfileV2({ projectRoot: runtime.root, reportPath: axiomTemp, theoremName: project.project.theorem_name,
+          theoremTypeHash: structured_audit.theorem_type_elaborated_hash, sourceFile: theoremPath, environmentFingerprint: environment_fingerprint,
+          leanRunManifestId: auditManifest.run_id, structuredAudit: structured_audit });
+        const axiom_profile = { schema_version: "comath.async_clean_replay_axiom_profile.v1" as const, result: profile.result,
+          report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/axiom-profile.json`, hard_vetoes: profile.hard_vetoes, proof_authority: "none" as const };
+        save(`${operation_id}:axiom-profile`, axiom_profile.report_path, project.campaign_id, { ...axiom_profile, report: profile, structured_audit,
+          audit_run_id: auditManifest.run_id, environment_fingerprint });
+        result.axiom_profile = axiom_profile;
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/async-execution.json`, project.campaign_id, result);
       return result;
