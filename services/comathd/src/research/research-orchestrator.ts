@@ -38,6 +38,7 @@ export type StartCampaignRequest = z.infer<typeof startCampaignSchema>;
 export type CampaignBudgetConfigurer = (campaignId: string, limits: BudgetLimits) => void;
 const pauseCampaignSchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(), reason: z.string().trim().min(1).max(8192) });
 const resumeCampaignSchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative() });
+const cancelCampaignSchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(), reason: z.string().trim().min(1).max(8192) });
 const bindingSchema = z.strictObject({ command_id: id, campaign_id: id, candidate_id: id, source_task_id: id,
   payload_sha256: sha256Schema, policy_version: id, role_slot: z.enum(["referee", "counterexample", "reproduce_a", "reproduce_b", "novelty", "formalization_probe"]), task_id: id });
 type BindingRequest = z.infer<typeof bindingSchema>;
@@ -221,6 +222,26 @@ export class ResearchOrchestrator {
       const event = this.events.appendEvent({ campaign_id: campaign.campaign_id, type: "CampaignResumed", actor: principal.id, payload: { revision, proof_authority: "none" } });
       this.runtime.store.putCampaign({ ...campaign, state: "running", revision, snapshot_seq: event.seq });
       return { campaign_id: campaign.campaign_id, revision, state: "running", snapshot_seq: event.seq };
+    });
+  }
+  beginCancelCampaign(principal: ResearchPrincipal, request: unknown): { campaign_id: string; revision: number; state: "cancelled"; attempt_keys: string[] } {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may cancel a research campaign", 403);
+    const input = parseResearchInput(cancelCampaignSchema, request);
+    return this.command(principal, input.command_id, { kind: "campaign_cancel", input }, () => {
+      const campaign = this.requireCampaign(input.campaign_id);
+      if (campaign.revision !== input.expected_revision) fail("RESEARCH_REVISION_CONFLICT", "Research revision changed");
+      if (['completed', 'cancelled'].includes(campaign.state)) fail("RESEARCH_CANCEL_STATE_CONFLICT", "Terminal campaign cannot be cancelled again");
+      const attempts = this.runtime.store.all("SELECT a.attempt_key,a.task_id,a.generation FROM attempts a JOIN tasks t ON t.task_id=a.task_id WHERE t.campaign_id=? AND a.state<>'terminated'", campaign.campaign_id);
+      const active = new Set(attempts.map(row => `${row.task_id}:${row.generation}`)), stamp = new Date(this.runtime.clock.now()).toISOString();
+      for (const task of this.runtime.store.listTasks(campaign.campaign_id)) {
+        if (['succeeded', 'failed', 'cancelled'].includes(task.status)) continue;
+        this.runtime.store.putTask({ ...task, status: active.has(`${task.task_id}:${task.generation}`) ? "cancelling" : "cancelled", updated_at: stamp });
+      }
+      const revision = campaign.revision + 1;
+      const event = this.events.appendEvent({ campaign_id: campaign.campaign_id, type: "CampaignCancelRequested", actor: principal.id,
+        payload: { revision, reason: input.reason, active_attempts: attempts.length, proof_authority: "none" } });
+      this.runtime.store.putCampaign({ ...campaign, state: "cancelled", revision, snapshot_seq: event.seq });
+      return { campaign_id: campaign.campaign_id, revision, state: "cancelled", attempt_keys: attempts.map(row => String(row.attempt_key)) };
     });
   }
   applyPatch(principal: ResearchPrincipal, request: ResearchDagPatch): { revision: number; created_task_ids: string[]; snapshot_seq: number } {

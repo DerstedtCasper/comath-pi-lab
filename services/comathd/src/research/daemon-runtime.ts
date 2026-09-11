@@ -356,6 +356,12 @@ export class ResearchDaemon {
   resumeCampaign(principal: ResearchPrincipal, campaignId: string, input: { command_id: string; expected_revision: number }) {
     return this.app.resumeCampaign(principal, { ...input, campaign_id: campaignId });
   }
+  async cancelCampaign(principal: ResearchPrincipal, campaignId: string, input: { command_id: string; expected_revision: number; reason: string }) {
+    const pending = this.app.beginCancelCampaign(principal, { ...input, campaign_id: campaignId });
+    await Promise.all(pending.attempt_keys.map(attemptKey => this.reconciler.requestStop(attemptKey, "user_cancel")));
+    const campaign = this.runtime.store.getCampaign(campaignId)!;
+    return { campaign_id: campaign.campaign_id, revision: campaign.revision, state: campaign.state, snapshot_seq: campaign.snapshot_seq };
+  }
   trackApplicationWork(work: Promise<unknown>): void {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     this.applicationWork.add(work);

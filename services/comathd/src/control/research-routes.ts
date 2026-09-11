@@ -43,6 +43,13 @@ export async function dispatchResearchRoute(daemon: ResearchDaemon, method: stri
     return { status: 200, body: { ok: true, data: daemon.resumeCampaign({ kind: "operator", id: principal.id }, resumeCampaignId, {
       command_id: typeof input.command_id === "string" ? input.command_id : "", expected_revision: input.expected_revision as number }) } };
   }
+  const cancelCampaignId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/cancel$/.exec(pathname));
+  if (method === "POST" && cancelCampaignId) {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may cancel a research campaign", 403);
+    const input = record(body);
+    return { status: 202, body: { ok: true, data: await daemon.cancelCampaign({ kind: "operator", id: principal.id }, cancelCampaignId, {
+      command_id: typeof input.command_id === "string" ? input.command_id : "", expected_revision: input.expected_revision as number, reason: typeof input.reason === "string" ? input.reason : "" }) } };
+  }
   const cancelTaskId = pathId(/^\/research\/v1\/tasks\/([^/]+)\/cancel$/.exec(pathname));
   if (method === "POST" && cancelTaskId) {
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may cancel a research task", 403);
