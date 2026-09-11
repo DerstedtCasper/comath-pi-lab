@@ -16,7 +16,7 @@ import { writeCommittedFile } from "./project-commit.js";
 import type { ResearchOrchestrator } from "./research-orchestrator.js";
 import type { createFormalCandidateDispatch, FormalCandidateDispatchReceipt } from "./formal-candidate-dispatch.js";
 import type { createFormalCandidateIntake, FormalCandidateSubmissionReceipt } from "./formal-candidate-intake.js";
-import type { createFormalCandidateProjectService } from "./formal-candidate-project.js";
+import type { createFormalCandidateProjectService, FormalCandidateProjectReceipt } from "./formal-candidate-project.js";
 import type { createProofToolAttemptService } from "./proof-tool-attempt.js";
 import { registerProofWorkflowBridge } from "./proof-workflow-bridge.js";
 import { createProofNativeVerification } from "./proof-native-verification.js";
@@ -56,15 +56,46 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'service:proof-workflow-owner',?,?,'committed') ON CONFLICT(command_id) DO UPDATE SET request_sha256=excluded.request_sha256,response_json=excluded.response_json",
       key, hash(value), canonicalJson(value));
   }
-  function claim(campaignId: string): Lease {
+  function recoverKnownNativeCompletions(campaignId: string): Set<string> {
+    const recovered = new Set<string>();
+    if (!verifyNative) return recovered;
+    try {
+      const snapshot = prepareStageWork(campaignId);
+      if (!snapshot || snapshot.campaign.current_stage !== "candidate_verification") return recovered;
+      const prepared = savedResult(operation(snapshot, "prepared"));
+      if (!prepared || !Array.isArray(prepared.projects)) return recovered;
+      for (const candidate of prepared.projects) {
+        if (!candidate || typeof candidate !== "object") continue;
+        const project = candidate as FormalCandidateProjectReceipt;
+        if (!verifyNative.recoverCommittedNativeCommand(project)) continue;
+        const task = store.listTasks(campaignId).filter(value => value.kind === "proof_workflow"
+          && value.method_family === "service_native_lean" && value.coupling_label === project.candidate_id);
+        for (const value of task) {
+          const attempt = store.get("SELECT attempt_key FROM attempts WHERE task_id=? AND runtime_kind='service-proof-tool' AND state<>'terminated'", value.task_id);
+          if (attempt) recovered.add(String(attempt.attempt_key));
+        }
+      }
+    } catch {
+      // Any incomplete or mismatched recovery candidate remains on the generic fail-closed path.
+    }
+    return recovered;
+  }
+  async function claim(campaignId: string): Promise<Lease> {
     owner();
+    const recovered = recoverKnownNativeCompletions(campaignId);
+    const stale = store.all("SELECT a.attempt_key FROM attempts a JOIN tasks t ON t.task_id=a.task_id WHERE t.campaign_id=? AND a.runtime_kind='service-proof-tool' AND a.state<>'terminated'", campaignId)
+      .map(row => String(row.attempt_key)).filter(attemptKey => !recovered.has(attemptKey));
+    // Recovery marks its own durable state. Do not roll that safety write back by throwing from an outer lease transaction.
+    if (stale.length) {
+      for (const attemptKey of stale) options.tools.recoverAttempt(attemptKey);
+      fail("PROOF_OWNED_TOOLS_UNRECONCILED");
+    }
     return store.transaction(() => {
       const previous = readLease(campaignId);
       if (previous?.state === "active" && previous.incarnation === incarnation) fail("PROOF_ADVANCEMENT_BUSY");
       const unfinished = store.all("SELECT a.attempt_key FROM attempts a JOIN tasks t ON t.task_id=a.task_id WHERE t.campaign_id=? AND a.runtime_kind='service-proof-tool' AND a.state<>'terminated'", campaignId);
       if (unfinished.length) {
-        for (const row of unfinished) options.tools.recoverAttempt(String(row.attempt_key));
-        fail("PROOF_OWNED_TOOLS_UNRECONCILED");
+        if (unfinished.some(row => !recovered.has(String(row.attempt_key)))) fail("PROOF_OWNED_TOOLS_UNRECONCILED");
       }
       const value: Lease = { incarnation, nonce: randomUUID(), epoch: (previous?.epoch ?? 0) + 1,
         expires_at: new Date(runtime.clock.now() + (options.config?.advancement_lease_ms ?? 120000)).toISOString(),
@@ -229,7 +260,7 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
       const control = store.getCampaign(campaignId), campaign = getCampaign(runtime.root, campaignId);
       if (!control || control.state !== "running" || !campaign || campaign.status === "terminal") return;
       if (!options.config) { recordBlock(campaignId, "PROOF_WORKFLOW_NOT_CONFIGURED"); return; }
-      lease = claim(campaignId);
+      lease = await claim(campaignId);
       controllers.set(campaignId, new AbortController());
       for (let step = 0; step < 8 && running && !closed; step++) {
         assertLease(lease); snapshot = prepareStageWork(campaignId); if (!snapshot) break;

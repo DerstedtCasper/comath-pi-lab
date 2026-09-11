@@ -7,7 +7,7 @@ import type { ResearchConfig } from "../config/config.js";
 import { canonicalJson } from "../verification/runner-contracts.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
 import { runLeanToolCommandAsync, directElanTool, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "../proof-kernel/lean/lean-host-tools.js";
-import { runServiceOwnedLeanCommandV3Async, verifyLeanRunManifestV3Evidence, type AsyncLeanCommandReceipt } from "../proof-kernel/lean/lean-run-manifest-v3.js";
+import { readCommittedAsyncLeanCommandV3Receipt, runServiceOwnedLeanCommandV3Async, verifyLeanRunManifestV3Evidence, type AsyncLeanCommandReceipt } from "../proof-kernel/lean/lean-run-manifest-v3.js";
 import { compareStructuredLeanAuditToLock, parseApprovedLockElaborationOutput, parseStructuredLeanAuditOutput, type ApprovedLockElaboration, type StructuredAuditStatementComparison, type StructuredLeanAudit } from "../proof-kernel/lean/structured-audit.js";
 import type { OwnedSessionCompletion } from "../agents/runtime/owned-process-session.js";
 import type { ResearchOrchestrator } from "./research-orchestrator.js";
@@ -28,6 +28,16 @@ export type ProofNativeVerificationResult = { task_id: string; candidate_id: str
   error_code?: string; proof_authority: "none" };
 const hash = (value: unknown) => createHash("sha256").update(canonicalJson(value)).digest("hex");
 function fail(code: string): never { throw new ComathError(code, { code, statusCode: 409 }); }
+function nativeAsyncSteps(project: FormalCandidateProjectReceipt): { name: string; purpose: "check" | "build" | "audit"; command: ["lean" | "lake", ...string[]] }[] {
+  return [
+    { name: "build", purpose: "build", command: ["lake", "build", ...project.project.build_targets] },
+    { name: "check", purpose: "check", command: ["lake", "env", "lean", project.project.theorem_file_rel] },
+    { name: "audit", purpose: "audit", command: ["lake", "env", "lean", project.project.audit_file_rel] },
+    { name: "lock-elaboration", purpose: "audit", command: ["lake", "env", "lean", project.approved_lock_elaboration_file] },
+    { name: "deps-theorem", purpose: "audit", command: ["lake", "env", "lean", "--deps", project.project.theorem_file_rel] },
+    { name: "deps-audit", purpose: "audit", command: ["lake", "env", "lean", "--deps", project.project.audit_file_rel] }
+  ];
+}
 
 /** Executes accepted source, records actual native evidence, and deliberately leaves proof gates to the proof kernel. */
 export function createProofNativeVerification(app: ResearchOrchestrator, tools: ReturnType<typeof createProofToolAttemptService>, config: Config) {
@@ -61,7 +71,45 @@ export function createProofNativeVerification(app: ResearchOrchestrator, tools: 
     }
     return result;
   }
-  return async function execute(project: FormalCandidateProjectReceipt, control: { signal: AbortSignal; assertCurrent: () => void }): Promise<ProofNativeVerificationResult> {
+  function recoverCommittedNativeCommand(project: FormalCandidateProjectReceipt): boolean {
+    try {
+      const identity = hash({ project, config }), taskId = `PTASK-${identity.slice(0, 40)}`, operationId = `proof-native:${identity}`;
+      if (store.get("SELECT operation_id FROM trust_commits WHERE operation_id=?", operationId)) return false;
+      const task = store.getTask(taskId), attempt = store.get("SELECT * FROM attempts WHERE task_id=?", taskId);
+      if (!task || !attempt || task.kind !== "proof_workflow" || task.scope.kind !== "formal" || task.method_family !== "service_native_lean" || task.coupling_label !== project.candidate_id
+        || task.status !== "running" || attempt.runtime_kind !== "service-proof-tool" || attempt.state !== "running" || attempt.fenced_at || attempt.stop_requested_at
+        || attempt.stop_reason || Number(attempt.termination_confirmed) !== 0 || Date.parse(String(attempt.expires_at)) <= runtime.clock.now()) return false;
+      const approved = requireApprovedFormalScope(runtime, project.campaign_id, task.scope);
+      if (task.campaign_id !== project.campaign_id || task.scope.claim_id !== project.claim_id || approved.obligation_binding.obligation_id !== project.obligation_id
+        || hash(task.scope) !== hash(approved.scope) || hash(task.budget) !== hash(config.tool_budget)) return false;
+      const taskReceipt = store.get("SELECT principal_id,status,response_json FROM commands WHERE command_id=?", `${operationId}:task`);
+      if (!taskReceipt || taskReceipt.principal_id !== "internal:service:proof-workflow" || taskReceipt.status !== "committed"
+        || !JSON.parse(String(taskReceipt.response_json)).created_task_ids?.includes(taskId)) return false;
+      const state = tools.readAttempt(String(attempt.attempt_key));
+      if (!state || state.state !== "running" || state.binding.task_id !== taskId || state.binding.campaign_id !== project.campaign_id
+        || state.binding.obligation_id !== project.obligation_id || hash(state.binding.scope) !== hash(approved.scope)) return false;
+      const pending = store.all("SELECT execution_id,command_ref,handle_json,state FROM tool_executions WHERE attempt_key=? AND state<>'terminated'", String(attempt.attempt_key));
+      if (pending.length !== 1) return false;
+      const execution = pending[0], commandRef = String(execution.command_ref), step = nativeAsyncSteps(project).find(value => `${operationId}:${value.name}` === commandRef);
+      if (!step || !execution.handle_json || store.get("SELECT operation_id FROM trust_commits WHERE operation_id=?", commandRef)) return false;
+      const executionId = `PTEX-${hash(commandRef).slice(0, 40)}`, usage = state.tools[executionId];
+      if (execution.execution_id !== executionId || !usage || usage.kind !== "lean" || usage.command_ref !== commandRef || !usage.called || usage.termination_confirmed) return false;
+      const receipt = readCommittedAsyncLeanCommandV3Receipt(runtime, `${commandRef}:manifest`);
+      if (!receipt || receipt.manifest.claim_id !== project.claim_id || receipt.manifest.campaign_id !== project.campaign_id
+        || receipt.manifest.candidate_id !== project.candidate_id || receipt.manifest.purpose !== step.purpose
+        || canonicalJson(receipt.manifest.command) !== canonicalJson(step.command) || receipt.execution.termination_confirmed !== true
+        || canonicalJson(JSON.parse(String(execution.handle_json))) !== canonicalJson(receipt.execution.handle)) return false;
+      const completed = tools.completeTool({ attempt_key: String(attempt.attempt_key), execution_id: executionId,
+        cumulative_wall_ms: Math.max(usage.wall_ms, receipt.wall_ms), termination_confirmed: true, handle: receipt.execution.handle });
+      if (!completed.released) return false;
+      const base = `.comath/evidence/${project.claim_id}/lean/${taskId}`;
+      save(commandRef, `${base}.${step.name}.json`, project.campaign_id, { exit_code: receipt.manifest.exit_code, manifest: receipt, proof_authority: "none" } satisfies CommandResult);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  async function execute(project: FormalCandidateProjectReceipt, control: { signal: AbortSignal; assertCurrent: () => void }): Promise<ProofNativeVerificationResult> {
     control.assertCurrent();
     const identity = hash({ project, config }), taskId = `PTASK-${identity.slice(0, 40)}`, operationId = `proof-native:${identity}`;
     const old = saved<ProofNativeVerificationResult>(operationId);
@@ -160,15 +208,7 @@ export function createProofNativeVerification(app: ResearchOrchestrator, tools: 
         if (tool === "lean") leanVersion = `${value.stdout}\n${value.stderr}`; else lakeVersion = `${value.stdout}\n${value.stderr}`;
       }
       if (leanVersion && lakeVersion) {
-        const steps: { name: string; purpose: "check" | "build" | "audit"; command: ["lean" | "lake", ...string[]] }[] = [
-          { name: "build", purpose: "build", command: ["lake", "build", ...project.project.build_targets] },
-          { name: "check", purpose: "check", command: ["lake", "env", "lean", project.project.theorem_file_rel] },
-          { name: "audit", purpose: "audit", command: ["lake", "env", "lean", project.project.audit_file_rel] },
-          { name: "lock-elaboration", purpose: "audit", command: ["lake", "env", "lean", project.approved_lock_elaboration_file] },
-          { name: "deps-theorem", purpose: "audit", command: ["lake", "env", "lean", "--deps", project.project.theorem_file_rel] },
-          { name: "deps-audit", purpose: "audit", command: ["lake", "env", "lean", "--deps", project.project.audit_file_rel] }
-        ];
-        for (const step of steps) {
+        for (const step of nativeAsyncSteps(project)) {
           const value = await command(step.name, async execution => {
             const inputs = project.input_files.map(path => join(runtime.root, path));
             if (existsSync(join(cwd, "lake-manifest.json"))) inputs.push(join(cwd, "lake-manifest.json"));
@@ -266,5 +306,6 @@ export function createProofNativeVerification(app: ResearchOrchestrator, tools: 
       const settled = tools.finishAttempt({ attempt_key: binding.attempt_key, outcome: control.signal.aborted ? "cancelled" : result.native_checks_passed ? "succeeded" : "failed", usage_complete: usageComplete });
       if (!settled.released) fail("PROOF_OWNED_TOOLS_UNRECONCILED");
     }
-  };
+  }
+  return Object.assign(execute, { recoverCommittedNativeCommand });
 }

@@ -414,7 +414,39 @@ export type AsyncLeanCommandInput = {
 };
 export type AsyncLeanCommandReceipt = { schema_version: "comath.async_lean_command.v1"; operation_id: string; run_id: string;
   manifest_path: string; manifest: LeanRunManifestV3; execution: LeanHostAsyncCommandResult["completion"];
-  input_changed: boolean; commit_state: "pending" | "committed"; proof_authority: "none" };
+  input_changed: boolean; wall_ms: number; commit_state: "pending" | "committed"; proof_authority: "none" };
+
+/**
+ * Returns an LRUN receipt only when its reservation, immutable commit, manifest bytes and
+ * append-only index still agree. Callers must separately bind it to their task/handle before
+ * treating it as a known completed process; pending and reservation-only commands are opaque.
+ */
+export function readCommittedAsyncLeanCommandV3Receipt(runtime: ProjectRuntime, commandId: string): AsyncLeanCommandReceipt | undefined {
+  if (!commandId || commandId.length > 160) return undefined;
+  const store = runtime.store, key = sha256Buffer(canonicalJson(commandId));
+  const reservationId = `lean-command:${key}`, operationId = `lean-command-result:${key}`;
+  try {
+    const reservation = store.get("SELECT principal_id,request_sha256,response_json,status FROM commands WHERE command_id=?", reservationId);
+    if (!reservation || reservation.principal_id !== "service:lean-command-reservation" || reservation.status !== "committed") return undefined;
+    const reserved = JSON.parse(String(reservation.response_json));
+    if (!reserved || typeof reserved !== "object" || typeof reserved.run_id !== "string" || !reserved.request
+      || reserved.request.command_id !== commandId || reservation.request_sha256 !== sha256Buffer(canonicalJson(reserved.request))) return undefined;
+    const committed = store.get("SELECT phase,plan_json FROM trust_commits WHERE operation_id=?", operationId);
+    if (!committed || committed.phase !== "committed") return undefined;
+    const receipt = JSON.parse(String(committed.plan_json)).response as AsyncLeanCommandReceipt;
+    if (!receipt || receipt.schema_version !== "comath.async_lean_command.v1" || receipt.operation_id !== operationId
+      || receipt.run_id !== reserved.run_id || receipt.commit_state !== "committed" || receipt.proof_authority !== "none"
+      || !receipt.manifest || receipt.manifest.run_id !== receipt.run_id || typeof receipt.manifest_path !== "string"
+      || !receipt.execution || receipt.execution.termination_confirmed !== true
+      || !Number.isSafeInteger(receipt.wall_ms) || receipt.wall_ms < 0) return undefined;
+    if (!verifyLeanRunManifestV3Evidence(runtime.root, receipt.manifest).ok
+      || readCommittedFile(runtime.root, receipt.manifest_path) !== canonicalJson(receipt.manifest)
+      || !hasLeanRunManifestProvenanceIndexV1({ projectRoot: runtime.root, manifest: receipt.manifest, manifest_path: receipt.manifest_path })) return undefined;
+    return receipt;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Prepare immutable identity and hashes, execute outside a writer transaction, then commit actual evidence. */
 export async function runServiceOwnedLeanCommandV3Async(input: AsyncLeanCommandInput): Promise<AsyncLeanCommandReceipt> {
@@ -464,8 +496,10 @@ export async function runServiceOwnedLeanCommandV3Async(input: AsyncLeanCommandI
       reservationId, requestHash, canonicalJson(value));
     return value;
   });
+  const wallStarted = performance.now();
   const result = await runLeanToolCommandAsync(input.command[0], input.command.slice(1), cwd, input.leanToolchain, input.execution,
     { COMATH_RUNNER_NETWORK: input.network_policy === "disabled" ? "disabled" : "unknown" });
+  const wallMs = Math.ceil(performance.now() - wallStarted);
   const endedAt = new Date(runtime.clock.now()).toISOString();
   let changed = false;
   try { changed = sourceSnapshot.some((snapshot, index) => sha256FileSync(files[index]!).sha256 !== snapshot.sha256)
@@ -491,7 +525,7 @@ export async function runServiceOwnedLeanCommandV3Async(input: AsyncLeanCommandI
     stdout_path: stdoutPath, stderr_path: stderrPath, stdout_sha256: sha256Buffer(result.stdout), stderr_sha256: sha256Buffer(result.stderr),
     started_at: reserved.started_at, ended_at: endedAt, runner: "comathd.LeanRunner", proof_authority: authority });
   const receipt: AsyncLeanCommandReceipt = { schema_version: "comath.async_lean_command.v1", operation_id: operationId, run_id: reserved.run_id,
-    manifest_path: manifestPath, manifest, execution: result.completion, input_changed: changed, commit_state: "committed", proof_authority: "none" };
+    manifest_path: manifestPath, manifest, execution: result.completion, input_changed: changed, wall_ms: wallMs, commit_state: "committed", proof_authority: "none" };
   try {
     return withProjectCommit(root, { operation_id: operationId, campaign_id: input.campaign_id, request: { request_sha256: requestHash }, fault: input.commitFault }, () => {
       for (const path of [stdoutPath, stderrPath, manifestPath]) if (existsCommittedFile(root, path)) fail("LEAN_EVIDENCE_APPEND_ONLY_VIOLATION");
