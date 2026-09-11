@@ -11,6 +11,7 @@ import type { ResearchOrchestrator } from "../../research/research-orchestrator.
 import type { createProofToolAttemptService } from "../../research/proof-tool-attempt.js";
 import { requireApprovedFormalScope } from "../campaign/formal-spec-store.js";
 import { checkDependencyClosureV2 } from "./dependency-closure.js";
+import { runStaticCheatScan } from "./static-cheat-scan.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
 import { readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "../../research/project-commit.js";
@@ -41,7 +42,8 @@ type Config = NonNullable<ResearchConfig["proof_workflow"]>;
 type ReplayCommand = { exit_code: number; stdout?: string; stderr?: string; manifest?: AsyncLeanCommandReceipt; proof_authority: "none" };
 export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; claim_id: string; obligation_id: string;
   commands: Record<string, ReplayCommand>; executed: boolean; lake_manifest_sha256?: string; environment_receipt_path?: string;
-  dependency_closure?: { schema_version: "comath.async_clean_replay_dependency_closure.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" }; proof_authority: "none" };
+  dependency_closure?: { schema_version: "comath.async_clean_replay_dependency_closure.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" };
+  static_audit?: { schema_version: "comath.async_clean_replay_static_audit.v1"; result: "pass" | "fail"; report_path: string; hard_vetoes: string[]; proof_authority: "none" }; proof_authority: "none" };
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -227,6 +229,13 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         save(`${operation_id}:dependency-closure`, dependency_closure.report_path, project.campaign_id, { ...dependency_closure, report: closure,
           lake_manifest_sha256, audit_run_id: result.commands.audit?.manifest?.run_id ?? null });
         result.dependency_closure = dependency_closure;
+        const staticTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/static-audit.tmp.json`;
+        const staticReport = runStaticCheatScan({ projectRoot: runtime.root, leanRoot: join(cwd, "source"), reportPath: staticTemp });
+        const static_audit = { schema_version: "comath.async_clean_replay_static_audit.v1" as const, result: staticReport.result,
+          report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/static-audit.json`, hard_vetoes: staticReport.hard_vetoes, proof_authority: "none" as const };
+        save(`${operation_id}:static-audit`, static_audit.report_path, project.campaign_id, { ...static_audit, report: staticReport,
+          dependency_closure_path: dependency_closure.report_path, audit_run_id: result.commands.audit?.manifest?.run_id ?? null });
+        result.static_audit = static_audit;
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/async-execution.json`, project.campaign_id, result);
       return result;
