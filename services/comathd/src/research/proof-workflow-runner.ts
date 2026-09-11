@@ -20,7 +20,7 @@ import type { createFormalCandidateProjectService, FormalCandidateProjectReceipt
 import type { createProofToolAttemptService } from "./proof-tool-attempt.js";
 import { registerProofWorkflowBridge } from "./proof-workflow-bridge.js";
 import { createProofNativeVerification, type ProofNativeVerificationResult } from "./proof-native-verification.js";
-import { prepareAsyncCleanReplayWorkspace } from "../proof-kernel/lean/clean-replay-async.js";
+import { createAsyncCleanReplayExecutor, prepareAsyncCleanReplayWorkspace } from "../proof-kernel/lean/clean-replay-async.js";
 
 type Configuration = NonNullable<ResearchConfig["proof_workflow"]>;
 type Lease = { incarnation: string; nonce: string; epoch: number; expires_at: string; state: "active" | "idle" | "blocked";
@@ -42,6 +42,7 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
   const pending = new Map<string, Promise<void>>(), requested = new Set<string>();
   const controllers = new Map<string, AbortController>();
   const verifyNative = options.config ? createProofNativeVerification(app, options.tools, options.config) : undefined;
+  const executeCleanReplay = options.config ? createAsyncCleanReplayExecutor(app, options.tools, options.config) : undefined;
   let running = false, closed = false, unsubscribe: (() => void) | undefined, timer: ReturnType<typeof setInterval> | undefined;
   function owner() { if (getAcquiredProjectRuntime(runtime.root) !== runtime || runtime.referenceCount < 1) fail("RESEARCH_OWNER_REQUIRED"); }
   function leaseKey(campaignId: string) { return `proof-workflow-owner:${campaignId}`; }
@@ -235,18 +236,19 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
         submission_command_id: source.command_id, lean_toolchain: options.config!.lean_toolchain }));
       if (!savedResult(operation(snapshot, "prepared"))) commitStageResult(lease, snapshot, { schema_version: "comath.proof_verification_inputs.v1", projects, proof_authority: "none" });
       const controller = controllers.get(campaign.campaign_id)!;
+      const assertCurrent = () => {
+        assertLease(lease);
+        if (store.getCampaign(campaign.campaign_id)?.state !== "running") fail("PROOF_ADVANCEMENT_FENCED");
+        const latest = prepareStageWork(campaign.campaign_id);
+        if (!latest || latest.binding_hash !== snapshot.binding_hash) fail("PROOF_STAGE_BINDING_CHANGED");
+        const current = readLease(campaign.campaign_id)!, duration = options.config!.advancement_lease_ms;
+        if (Date.parse(current.expires_at) - runtime.clock.now() < duration / 2) {
+          store.transaction(() => { assertLease(lease); saveLease({ ...readLease(campaign.campaign_id)!, expires_at: new Date(runtime.clock.now() + duration).toISOString() }); });
+        }
+      };
       const results: ProofNativeVerificationResult[] = [];
       for (const project of projects) {
-        const result = await verifyNative!(project, { signal: controller.signal, assertCurrent: () => {
-          assertLease(lease);
-          if (store.getCampaign(campaign.campaign_id)?.state !== "running") fail("PROOF_ADVANCEMENT_FENCED");
-          const latest = prepareStageWork(campaign.campaign_id);
-          if (!latest || latest.binding_hash !== snapshot.binding_hash) fail("PROOF_STAGE_BINDING_CHANGED");
-          const current = readLease(campaign.campaign_id)!, duration = options.config!.advancement_lease_ms;
-          if (Date.parse(current.expires_at) - runtime.clock.now() < duration / 2) {
-            store.transaction(() => { assertLease(lease); saveLease({ ...readLease(campaign.campaign_id)!, expires_at: new Date(runtime.clock.now() + duration).toISOString() }); });
-          }
-        } });
+        const result = await verifyNative!(project, { signal: controller.signal, assertCurrent });
         results.push(result);
       }
       const replay_preparations = projects.flatMap((project, index) => {
@@ -256,7 +258,13 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
           || result.dependency_evidence?.result !== "pass") return [];
         return [prepareAsyncCleanReplayWorkspace({ runtime, project, obligation_id: snapshot.obligation_id, stage_attempt: snapshot.stage_attempt })];
       });
-      commitStageResult(lease, snapshot, { schema_version: "comath.proof_native_results.v1", results, replay_preparations, proof_authority: "none" }, undefined, true);
+      const replay_executions = [];
+      for (const preparation of replay_preparations) {
+        const project = projects.find(value => value.candidate_id === preparation.candidate_id && value.claim_id === preparation.claim_id && value.obligation_id === preparation.obligation_id);
+        if (!project) fail("ASYNC_CLEAN_REPLAY_PROJECT_MISSING");
+        replay_executions.push(await executeCleanReplay!.execute({ project, preparation }, { signal: controller.signal, assertCurrent }));
+      }
+      commitStageResult(lease, snapshot, { schema_version: "comath.proof_native_results.v1", results, replay_preparations, replay_executions, proof_authority: "none" }, undefined, true);
       recordBlock(campaign.campaign_id, "PROOF_VERIFICATION_INTEGRITY_GATES_REQUIRED", snapshot);
       return false;
     }

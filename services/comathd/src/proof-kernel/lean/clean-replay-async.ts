@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { relative } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { ComathError } from "../../errors.js";
+import type { ResearchConfig } from "../../config/config.js";
 import { canonicalJson } from "../../verification/runner-contracts.js";
 import type { FormalCandidateProjectReceipt } from "../../research/formal-candidate-project.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "../../research/project-runtime.js";
+import type { ResearchOrchestrator } from "../../research/research-orchestrator.js";
+import type { createProofToolAttemptService } from "../../research/proof-tool-attempt.js";
+import { requireApprovedFormalScope } from "../campaign/formal-spec-store.js";
+import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
+import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
 import { readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "../../research/project-commit.js";
 
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
@@ -16,6 +23,7 @@ export type AsyncCleanReplayPreparation = {
   replay_id: string;
   campaign_id: string;
   claim_id: string;
+  candidate_id: string;
   obligation_id: string;
   stage_attempt: number;
   scope_package_sha256: string;
@@ -28,6 +36,10 @@ export type AsyncCleanReplayPreparation = {
   proof_authority: "none";
   can_promote_claim: false;
 };
+type Config = NonNullable<ResearchConfig["proof_workflow"]>;
+type ReplayCommand = { exit_code: number; stdout?: string; stderr?: string; manifest?: AsyncLeanCommandReceipt; proof_authority: "none" };
+export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; claim_id: string; obligation_id: string;
+  commands: Record<string, ReplayCommand>; executed: boolean; proof_authority: "none" };
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -79,7 +91,7 @@ export function prepareAsyncCleanReplayWorkspace(input: {
   const operation_id = `async-clean-replay-prepare:${configuration}`;
   const receipt: AsyncCleanReplayPreparation = {
     schema_version: "comath.async_clean_replay_preparation.v1", operation_id, replay_id, campaign_id: project.campaign_id,
-    claim_id: project.claim_id, obligation_id: project.obligation_id, stage_attempt: project.stage_attempt,
+    claim_id: project.claim_id, candidate_id: project.candidate_id, obligation_id: project.obligation_id, stage_attempt: project.stage_attempt,
     scope_package_sha256: project.scope_package_sha256, clean_workspace_path, preparation_manifest_path, obligation_receipt_path,
     source_project_operation_id: project.operation_id, source_project_sha256: hash(canonicalJson(project)),
     copied_files: sourceFiles.map(file => ({ path: file.path, sha256: file.sha256 })), proof_authority: "none", can_promote_claim: false
@@ -99,4 +111,109 @@ export function prepareAsyncCleanReplayWorkspace(input: {
     writeCommittedFile(runtime.root, obligation_receipt_path, manifest);
     return receipt;
   });
+}
+
+/** Executes the prepared copy through a new service-only task; final gates remain a separate consumer. */
+export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools: ReturnType<typeof createProofToolAttemptService>, config: Config) {
+  const runtime = app.runtime, store = runtime.store;
+  function save(operation_id: string, path: string, campaign_id: string, value: unknown) {
+    withProjectCommit(runtime.root, { operation_id, campaign_id, request: value }, () => { writeCommittedFile(runtime.root, path, canonicalJson(value)); return { report_path: path }; });
+  }
+  function saved<T>(operation_id: string): T | undefined {
+    const row = store.get("SELECT phase,plan_json FROM trust_commits WHERE operation_id=?", operation_id); if (!row) return undefined;
+    if (row.phase !== "committed") fail("COMMIT_PENDING");
+    const plan = JSON.parse(String(row.plan_json)), path = plan.response.report_path;
+    if (typeof path !== "string") fail("ASYNC_CLEAN_REPLAY_RECEIPT_INVALID");
+    const bytes = readFileSync(resolveProjectCommitPath(runtime.root, path));
+    const target = plan.targets.find((value: { relative_path: string }) => value.relative_path === path);
+    if (!target || hash(bytes) !== target.after_sha256) fail("ASYNC_CLEAN_REPLAY_EVIDENCE_CHANGED");
+    return JSON.parse(bytes.toString("utf8")) as T;
+  }
+  async function execute(input: { project: FormalCandidateProjectReceipt; preparation: AsyncCleanReplayPreparation }, control: { signal: AbortSignal; assertCurrent: () => void }): Promise<AsyncCleanReplayExecution> {
+    const { project, preparation } = input; control.assertCurrent();
+    if (preparation.campaign_id !== project.campaign_id || preparation.claim_id !== project.claim_id || preparation.candidate_id !== project.candidate_id || preparation.obligation_id !== project.obligation_id
+      || preparation.stage_attempt !== project.stage_attempt || preparation.scope_package_sha256 !== project.scope_package_sha256 || preparation.proof_authority !== "none") fail("ASYNC_CLEAN_REPLAY_BINDING_INVALID");
+    const preparationCommit = store.get("SELECT phase,plan_json FROM trust_commits WHERE operation_id=?", preparation.operation_id);
+    if (!preparationCommit || preparationCommit.phase !== "committed" || canonicalJson(JSON.parse(String(preparationCommit.plan_json)).response) !== canonicalJson(preparation)) fail("ASYNC_CLEAN_REPLAY_PREPARATION_CHANGED");
+    const identity = hash(canonicalJson({ project, preparation, config })), operation_id = `async-clean-replay:${identity}`, task_id = `RPTASK-${identity.slice(0, 40)}`;
+    const old = saved<AsyncCleanReplayExecution>(operation_id); if (old) return old;
+    const submissionRow = store.get("SELECT response_json FROM commands WHERE principal_id='service:formal-submission' AND json_extract(response_json,'$.operation_id')=?", project.source_operation_id);
+    if (!submissionRow) fail("ASYNC_CLEAN_REPLAY_SOURCE_RECEIPT_MISSING");
+    const submission = JSON.parse(String(submissionRow.response_json)), approved = requireApprovedFormalScope(runtime, project.campaign_id, submission.scope);
+    if (approved.obligation_binding.obligation_id !== project.obligation_id) fail("ASYNC_CLEAN_REPLAY_SCOPE_MISMATCH");
+    let task = store.getTask(task_id);
+    if (!task) {
+      const campaign = store.getCampaign(project.campaign_id)!;
+      app.applyPatch({ kind: "internal", id: "service:proof-workflow" }, { command_id: `${operation_id}:task`, campaign_id: project.campaign_id, base_revision: campaign.revision,
+        create_tasks: [{ task_id, kind: "proof_workflow", depends_on: [], scope: approved.scope, question: `Clean replay ${preparation.replay_id} for ${project.obligation_id}.`,
+          acceptance: ["Run service-owned async Lean commands on the immutable clean workspace. No promotion."], model_policy_id: config.candidate.model_policy_id,
+          tool_policy_id: config.candidate.tool_policy_id, role_template: config.candidate.role_template, pool: "formalization", priority: config.candidate.priority,
+          budget: config.tool_budget, method_family: "service_async_clean_replay", problem_slice: project.obligation_id, coupling_label: preparation.replay_id,
+          input_refs: [approved.formal_spec_ref, approved.ledger_ref, submission.result_ref], exclusions: ["Final authority remains with existing integrity and promotion gates."] }],
+        add_dependencies: [], replace_dependencies: [], reprioritize: [], cancel_tasks: [], move_pool: [], rationale: "Execute immutable clean replay through service-owned Lean permits." });
+      task = store.getTask(task_id)!;
+    }
+    if (task.kind !== "proof_workflow" || task.method_family !== "service_async_clean_replay" || task.coupling_label !== preparation.replay_id
+      || canonicalJson(task.scope) !== canonicalJson(approved.scope) || canonicalJson(task.budget) !== canonicalJson(config.tool_budget)) fail("ASYNC_CLEAN_REPLAY_TASK_CONFLICT");
+    const binding = tools.startAttempt({ command_id: `${operation_id}:start`, task_id, expected_generation: 0 });
+    const cwd = resolveProjectCommitPath(runtime.root, preparation.clean_workspace_path), allowed = (["lean", "lake"] as const).map(tool => {
+      const path = directElanTool(tool, config.lean_toolchain); return path !== tool && existsSync(path) ? path : undefined;
+    });
+    if (allowed.some(value => !value)) fail("LEAN_ASYNC_BINARY_UNAVAILABLE");
+    const result: AsyncCleanReplayExecution = { task_id, replay_id: preparation.replay_id, claim_id: project.claim_id, obligation_id: project.obligation_id, commands: {}, executed: false, proof_authority: "none" };
+    let complete = true;
+    async function command(name: string, runner: (execution: LeanHostAsyncCommandOptions) => Promise<ReplayCommand>) {
+      if (tools.readAttempt(binding.attempt_key)?.state === "settled") fail("ASYNC_CLEAN_REPLAY_ATTEMPT_SETTLED");
+      const key = `${operation_id}:${name}`, execution_id = `RPEX-${hash(key).slice(0, 40)}`;
+      let admission = tools.beginTool({ attempt_key: binding.attempt_key, execution_id, kind: "lean", command_ref: key });
+      while (!admission.granted) { if (admission.completed) fail("ASYNC_CLEAN_REPLAY_COMMAND_INCOMPLETE"); await delay(100, undefined, { signal: control.signal }); control.assertCurrent(); admission = tools.beginTool({ attempt_key: binding.attempt_key, execution_id, kind: "lean", command_ref: key }); }
+      const started = performance.now(); let completion: LeanHostAsyncCommandResult["completion"] | undefined;
+      try {
+        const value = await runner({ runtime, ownership: admission.ownership!, allowed_programs: allowed as string[], signal: control.signal,
+          timeout_ms: config.tool_timeout_ms, max_output_bytes: 2 * 1024 * 1024, onCompleted: value => { completion = value; } });
+        if (!completion) fail("ASYNC_CLEAN_REPLAY_COMPLETION_MISSING"); result.commands[name] = value; return value;
+      } finally {
+        if (completion) {
+          const released = tools.completeTool({ attempt_key: binding.attempt_key, execution_id, cumulative_wall_ms: Math.ceil(performance.now() - started), termination_confirmed: completion.termination_confirmed, handle: completion.handle });
+          if (!released.released) complete = false;
+        } else { complete = false; tools.recoverAttempt(binding.attempt_key); }
+      }
+    }
+    let failure: unknown;
+    try {
+      const versions: Record<string, string> = {};
+      for (const tool of ["lean", "lake"] as const) {
+        const value = await command(`${tool}-version`, async execution => {
+          const raw = await runLeanToolCommandAsync(tool, ["--version"], cwd, config.lean_toolchain, execution);
+          return { exit_code: raw.exit_code, stdout: raw.stdout, stderr: raw.stderr, proof_authority: "none" };
+        });
+        if (value.exit_code !== 0) break;
+        versions[tool] = `${value.stdout ?? ""}\n${value.stderr ?? ""}`;
+      }
+      if (versions.lean && versions.lake) for (const step of [
+        { name: "check", purpose: "check" as const, command: ["lake", "env", "lean", project.project.theorem_file_rel] as ["lake", ...string[]] },
+        { name: "build", purpose: "final_replay" as const, command: ["lake", "build", ...project.project.build_targets] as ["lake", ...string[]] },
+        { name: "audit", purpose: "audit" as const, command: ["lake", "env", "lean", project.project.audit_file_rel] as ["lake", ...string[]] }
+      ]) {
+        const value = await command(step.name, async execution => {
+          const files = preparation.copied_files.map(file => join(cwd, file.path)).filter(existsSync);
+          const receipt = await runServiceOwnedLeanCommandV3Async({ runtime, command_id: `${operation_id}:${step.name}:manifest`, claim_id: project.claim_id, campaign_id: project.campaign_id,
+            candidate_id: project.candidate_id, purpose: step.purpose, command: step.command, cwd, input_files: files, leanVersionOutput: versions.lean, lakeVersionOutput: versions.lake,
+            leanToolchain: config.lean_toolchain, network_policy: "disabled", proof_authority: "none", execution });
+          return { exit_code: receipt.manifest.exit_code, manifest: receipt, proof_authority: "none" };
+        });
+        if (value.exit_code !== 0) break;
+      }
+      result.executed = ["check", "build", "audit"].every(name => result.commands[name]?.exit_code === 0);
+      save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/async-execution.json`, project.campaign_id, result);
+      return result;
+    } catch (error) {
+      failure = error;
+      throw error;
+    } finally {
+      const settled = tools.finishAttempt({ attempt_key: binding.attempt_key, outcome: result.executed ? "succeeded" : "failed", usage_complete: complete });
+      if (!settled.released && !failure) fail("ASYNC_CLEAN_REPLAY_UNRECONCILED");
+    }
+  }
+  return { execute };
 }
