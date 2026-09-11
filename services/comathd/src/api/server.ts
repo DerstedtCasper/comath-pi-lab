@@ -5,7 +5,8 @@ import { realpathSync } from "node:fs";
 import { ComathError, toComathError } from "../errors.js";
 import { loadConfig, researchConfigSchema } from "../config/config.js";
 import { acquireResearchDaemon, type ResearchDaemonOptions, type ResearchDaemonReference } from "../research/daemon-runtime.js";
-import { authenticateOperator } from "../control/operator-auth.js";
+import { authenticateHost, authenticateOperator, authenticateResearchReader } from "../control/operator-auth.js";
+import { dispatchResearchRoute } from "../control/research-routes.js";
 import { getAcquiredProjectRuntime } from "../research/project-runtime.js";
 import { getProofWorkflowBridge } from "../research/proof-workflow-bridge.js";
 import { shutdownLegacyRuntime } from "../agents/runtime/legacy-runtime-facade.js";
@@ -2561,6 +2562,17 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
       server = createServer(async (req, res) => {
         try {
           const url = new URL(req.url ?? "/", "http://localhost");
+          const hostMutation = req.method === "POST" && /^\/host\/v1\/intakes\/[^/]+\/(tickets|approve)$/.test(url.pathname);
+          const operatorMutation = req.method === "POST" && (/^\/research\/v1\/campaigns\/[^/]+\/intakes$/.test(url.pathname)
+            || /^\/research\/v1\/intakes\/[^/]+\/approval-requests$/.test(url.pathname));
+          const intakeRead = req.method === "GET" && /^\/research\/v1\/intakes\/[^/]+$/.test(url.pathname);
+          if (reference && (hostMutation || operatorMutation || intakeRead)) {
+            const principal = hostMutation ? authenticateHost(req.headers, reference.daemon.config)
+              : intakeRead ? authenticateResearchReader(req.headers, reference.daemon.config) : authenticateOperator(req.headers, reference.daemon.config);
+            const response = await dispatchResearchRoute(reference.daemon, req.method ?? "GET", url.pathname,
+              req.method === "GET" ? undefined : await readJson(req), principal);
+            if (response) { writeJson(res, response); return; }
+          }
           if (req.method === "POST" && url.pathname === "/research/v1/campaigns" && reference) {
             const result = reference.daemon.startCampaign(authenticateOperator(req.headers, reference.daemon.config), await readJson(req));
             writeJson(res, { status: 202, body: { ok: true, data: result } });
