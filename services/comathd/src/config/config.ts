@@ -21,8 +21,8 @@ export const researchConfigSchema = z.strictObject({
     candidate: z.strictObject({ model_policy_id: z.string().min(1).max(160), tool_policy_id: z.string().min(1).max(160),
       role_template: z.string().min(1).max(160), budget: taskBudgetSchema.refine(value => value.token_enforcement !== "wall_only_legacy"),
       priority: z.union([z.literal(0),z.literal(1),z.literal(2),z.literal(3),z.literal(4)]).default(2) }),
-    tool_budget: taskBudgetSchema.refine(value => value.output_tokens === 0 && value.tool_calls >= 5 && value.token_enforcement !== "wall_only_legacy",
-      "Proof tools need zero LLM tokens and an explicit budget for version/check/build/audit calls"),
+    tool_budget: taskBudgetSchema.refine(value => value.output_tokens === 0 && value.tool_calls >= 6 && value.token_enforcement !== "wall_only_legacy",
+      "Proof tools need zero LLM tokens and an explicit budget for version/check/build/audit/lock-elaboration calls"),
     lean_toolchain: z.string().regex(/^leanprover\/lean4:v\d+\.\d+\.\d+$/),
     tool_timeout_ms: boundedMs.default(30000), advancement_lease_ms: boundedMs.default(120000)
   }).optional(),

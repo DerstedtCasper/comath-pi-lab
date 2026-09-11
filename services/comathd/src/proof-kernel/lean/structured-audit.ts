@@ -47,6 +47,29 @@ export type StructuredAuditStatementComparison = {
   hard_vetoes: string[];
 };
 
+/** Non-authoritative elaboration record for exact, already-approved lock bytes. */
+export type ApprovedLockElaboration = {
+  schema_version: "comath.approved_lock_elaboration.v1";
+  result: "pass" | "blocked";
+  proof_authority: "none";
+  claim_id: string;
+  campaign_id: string;
+  obligation_id: string;
+  approval_id: string;
+  scope_package_sha256: string;
+  statement_hash: string;
+  formal_spec_artifact: { artifact_id: string; sha256: string };
+  expected_target: string;
+  bridge_source_path: string;
+  bridge_source_sha256: string;
+  environment_fingerprint: string;
+  generated_by_run_id: string;
+  manifest_path: string;
+  theorem_type_canonical_version: "lean.expr.canonical.v1" | null;
+  theorem_type_elaborated_hash: string | null;
+  hard_vetoes: string[];
+};
+
 type AuditBinding = {
   expected_target: string;
   source_file: string;
@@ -103,16 +126,59 @@ export function parseStructuredLeanAuditOutput(input: AuditBinding & { stdout: s
   };
 }
 
+/** Maps a dedicated lock-only Lean elaboration into a non-authoritative comparator sidecar. */
+export function parseApprovedLockElaborationOutput(input: {
+  stdout: string;
+  claim_id: string;
+  campaign_id: string;
+  obligation_id: string;
+  approval_id: string;
+  scope_package_sha256: string;
+  statement_hash: string;
+  formal_spec_artifact: { artifact_id: string; sha256: string };
+  expected_target: string;
+  bridge_source_path: string;
+  bridge_source_sha256: string;
+  environment_fingerprint: string;
+  generated_by_run_id: string;
+  manifest_path: string;
+}): ApprovedLockElaboration {
+  const audit = parseStructuredLeanAuditOutput({
+    stdout: input.stdout, expected_target: input.expected_target, source_file: input.bridge_source_path,
+    source_file_sha256: input.bridge_source_sha256, audit_source_sha256: input.bridge_source_sha256,
+    environment_fingerprint: input.environment_fingerprint, generated_by_run_id: input.generated_by_run_id,
+    audit_manifest_path: input.manifest_path
+  });
+  const vetoes = audit.result === "pass" ? [] : audit.hard_vetoes;
+  return {
+    schema_version: "comath.approved_lock_elaboration.v1", result: vetoes.length ? "blocked" : "pass", proof_authority: "none",
+    claim_id: z.string().min(1).max(160).parse(input.claim_id), campaign_id: z.string().min(1).max(160).parse(input.campaign_id),
+    obligation_id: z.string().min(1).max(160).parse(input.obligation_id), approval_id: z.string().min(1).max(160).parse(input.approval_id),
+    scope_package_sha256: sha.parse(input.scope_package_sha256), statement_hash: sha.parse(input.statement_hash),
+    formal_spec_artifact: { artifact_id: z.string().min(1).max(160).parse(input.formal_spec_artifact.artifact_id), sha256: sha.parse(input.formal_spec_artifact.sha256) },
+    expected_target: qualifiedName.parse(input.expected_target), bridge_source_path: z.string().min(1).max(4096).parse(input.bridge_source_path),
+    bridge_source_sha256: sha.parse(input.bridge_source_sha256), environment_fingerprint: sha.parse(input.environment_fingerprint),
+    generated_by_run_id: z.string().min(1).max(160).parse(input.generated_by_run_id), manifest_path: z.string().min(1).max(4096).parse(input.manifest_path),
+    theorem_type_canonical_version: audit.result === "pass" ? audit.theorem_type_canonical_version : null,
+    theorem_type_elaborated_hash: audit.result === "pass" ? audit.theorem_type_elaborated_hash : null,
+    hard_vetoes: normalized(vetoes)
+  };
+}
+
 /** Compare only independently derived environment data with an approved-lock elaboration hash; absent hashes block. */
 export function compareStructuredLeanAuditToLock(input: {
   audit: StructuredLeanAudit;
   lock: { namespace: string; theorem_name: string; theorem_type_elaborated_hash?: string };
+  approved_lock_elaboration?: ApprovedLockElaboration;
 }): StructuredAuditStatementComparison {
   const expected = `${input.lock.namespace}.${input.lock.theorem_name}`;
   const vetoes: string[] = [];
   if (input.audit.result !== "pass") vetoes.push("structured_audit_failed");
   if (input.audit.fully_qualified_name !== expected) vetoes.push("locked_target_mismatch");
-  const locked = input.lock.theorem_type_elaborated_hash;
+  const elaboration = input.approved_lock_elaboration;
+  if (elaboration && elaboration.result !== "pass") vetoes.push("approved_lock_elaboration_failed");
+  if (elaboration && elaboration.expected_target !== expected) vetoes.push("approved_lock_elaboration_target_mismatch");
+  const locked = elaboration ? elaboration.theorem_type_elaborated_hash : input.lock.theorem_type_elaborated_hash;
   if (!locked) vetoes.push("locked_type_elaboration_missing");
   else if (!sha.safeParse(locked).success) vetoes.push("locked_type_elaboration_invalid");
   else if (locked !== input.audit.theorem_type_elaborated_hash) vetoes.push("locked_type_elaboration_mismatch");
@@ -124,12 +190,10 @@ export function compareStructuredLeanAuditToLock(input: {
   };
 }
 
-/** Source is intentionally limited to the declared target; lock/ledger JSON never enters the environment record. */
-export function buildStructuredLeanAuditSource(input: { target_module: string; target: string }): string {
-  const targetModule = leanQualifiedName.parse(input.target_module), target = leanQualifiedName.parse(input.target);
+function auditPreamble(imports: readonly string[]): string {
   return `import Lean
 import Lean.Util.CollectAxioms
-import ${targetModule}
+${imports.map(value => `import ${value}`).join("\n")}
 
 open Lean Elab Command
 
@@ -190,6 +254,48 @@ elab "#comath_structured_audit " target:ident : command => do
     ("axioms", toJson (axioms.map Name.toString)),
     ("audit_direct_imports", toJson (env.imports.map fun imported => imported.module.toString))]
   liftIO <| IO.println ("COMATH_STRUCTURED_AUDIT_JSON:" ++ report.compress)
+
+`;
+}
+
+/** Source is intentionally limited to the declared target; lock/ledger JSON never enters the environment record. */
+export function buildStructuredLeanAuditSource(input: { target_module: string; target: string }): string {
+  const targetModule = leanQualifiedName.parse(input.target_module), target = leanQualifiedName.parse(input.target);
+  return `${auditPreamble([targetModule])}
+#comath_structured_audit ${target}
+`;
+}
+
+function approvedLockDeclaration(input: { theorem_name: string; theorem_header: string }): { declaration: string; theorem_name: string } {
+  const theorem = z.string().regex(/^[A-Za-z_][A-Za-z0-9_']*$/).parse(input.theorem_name);
+  const header = z.string().min(1).max(16384).parse(input.theorem_header).trim();
+  const declaration = header.replace(/\s*:=\s*by\s*$/u, "").trim();
+  const match = /^(?:theorem|lemma)\s+([A-Za-z_][A-Za-z0-9_']*)\b/u.exec(declaration);
+  if (!match || match[1] !== theorem || !declaration.includes(":") || /[\r\n;`]|--|\/\*/u.test(declaration)
+    || /\b(?:sorry|admit|axiom|opaque|unsafe|run_tac|run_cmd|elab|macro|syntax|set_option|#eval|#check|#print|by)\b/u.test(declaration)
+    || declaration.includes(":=")) throw new Error("APPROVED_LOCK_ELABORATION_HEADER_INVALID");
+  return { declaration, theorem_name: theorem };
+}
+
+/** Builds a lock-only type-elaboration sidecar; its `sorry` declaration is never candidate or proof evidence. */
+export function buildApprovedLockElaborationSource(input: {
+  namespace: string;
+  theorem_name: string;
+  theorem_header: string;
+  imports: string[];
+}): string {
+  const namespace = qualifiedName.parse(input.namespace);
+  const declaration = approvedLockDeclaration(input);
+  const imports = normalized(input.imports.map(value => leanQualifiedName.parse(value)))
+    .filter(value => value !== "Lean" && value !== "Lean.Util.CollectAxioms");
+  const target = `${namespace}.${declaration.theorem_name}`;
+  return `${auditPreamble(imports)}
+namespace ${namespace}
+
+${declaration.declaration} := by
+  sorry
+
+end ${namespace}
 
 #comath_structured_audit ${target}
 `;

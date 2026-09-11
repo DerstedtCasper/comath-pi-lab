@@ -4,7 +4,7 @@ import { z } from "zod";
 import { ComathError } from "../errors.js";
 import { canonicalJson } from "../verification/runner-contracts.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
-import { buildStructuredLeanAuditSource } from "../proof-kernel/lean/structured-audit.js";
+import { buildApprovedLockElaborationSource, buildStructuredLeanAuditSource } from "../proof-kernel/lean/structured-audit.js";
 import type { GaAgentReplayProject } from "../proof-kernel/ensemble/ga-agent-stage-runner.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "./project-runtime.js";
 import { assertProjectReadable, existsCommittedFile, readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "./project-commit.js";
@@ -21,7 +21,7 @@ function leanName(parts: string[]): string {
 export type FormalCandidateProjectReceipt = { schema_version: "comath.formal_candidate_project.v1"; operation_id: string;
   candidate_id: string; obligation_id: string; claim_id: string; campaign_id: string; generation: number; stage_attempt: number;
   source_operation_id: string; source_files: { relative_path: string; sha256: string }[]; scope_package_sha256: string;
-  project: GaAgentReplayProject; input_files: string[]; descriptor_path: string; proof_authority: "none" };
+  project: GaAgentReplayProject; input_files: string[]; descriptor_path: string; approved_lock_elaboration_file: string; proof_authority: "none" };
 
 /** Materializes a clean source project from service-accepted bytes, never by reconstructing a proof or ledger. */
 export function createFormalCandidateProjectService(runtime: ProjectRuntime, options: {
@@ -47,7 +47,7 @@ export function createFormalCandidateProjectService(runtime: ProjectRuntime, opt
     // Local integrated dependencies need their own gate-verified producer; a worker reference is not that evidence.
     if (value.requested_dependencies.length) fail("FORMAL_INTEGRATED_MATERIAL_REQUIRED");
     const configuration = hash(canonicalJson({ source_operation_id: submission.operation_id, lean_toolchain: input.lean_toolchain,
-      scope_package_sha256: submission.scope_package_sha256 }));
+      scope_package_sha256: submission.scope_package_sha256, approved_lock_elaboration_version: 1 }));
     // Lake's native Windows trace/build paths can exceed MAX_PATH beneath the full canonical source hierarchy.
     // Keep original candidate sources there; this short derived workspace has a durable full-hash identity mapping.
     const projectId = store.transaction(() => {
@@ -81,11 +81,18 @@ export function createFormalCandidateProjectService(runtime: ProjectRuntime, opt
       build_targets: ["ComathCandidate"], replay_command: "lake build ComathCandidate", primary_dependency: "Lean4",
       formal_spec: { claim_id: submission.scope.claim_id, theorem_name: approved.lock.theorem_name, namespace: approved.lock.namespace,
         normalized_statement: approved.lock.normalized_nl_statement, locked_statement_hash: approved.lock.statement_hash } };
+    const approvedLockElaborationFile = "Audit/ApprovedLockElaboration.lean";
+    let approvedLockElaborationSource: string;
+    try {
+      approvedLockElaborationSource = buildApprovedLockElaborationSource({ namespace: approved.lock.namespace,
+        theorem_name: approved.lock.theorem_name, theorem_header: approved.lock.theorem_header, imports: approved.lock.imports_allowed });
+    } catch { fail("FORMAL_PROJECT_LOCK_ELABORATION_INVALID"); }
     const generated = [
       { path: project.formal_spec_file, bytes: lockBytes }, { path: project.assumption_ledger_file, bytes: ledgerBytes },
       { path: project.toolchain_file, bytes: input.lean_toolchain + "\n" },
       { path: project.lakefile, bytes: `import Lake\nopen Lake DSL\npackage ComathCandidate where\nlean_lib ComathCandidate where\n  srcDir := "source"\n  roots := #[${moduleNames.map(name => "`" + name).join(", ")}]\n` },
-      { path: project.audit_file_rel, bytes: buildStructuredLeanAuditSource({ target_module: targetModule, target: theorem }) }
+      { path: project.audit_file_rel, bytes: buildStructuredLeanAuditSource({ target_module: targetModule, target: theorem }) },
+      { path: approvedLockElaborationFile, bytes: approvedLockElaborationSource }
     ];
     const operationId = `formal-project:${configuration}`, descriptorPath = `${base}/candidate_replay_project_descriptor.json`;
     const receipt: FormalCandidateProjectReceipt = { schema_version: "comath.formal_candidate_project.v1", operation_id: operationId,
@@ -93,7 +100,8 @@ export function createFormalCandidateProjectService(runtime: ProjectRuntime, opt
       campaign_id: submission.campaign_id, generation: submission.generation, stage_attempt: submission.stage_attempt,
       source_operation_id: submission.operation_id, source_files: sourceFiles.map(({ relative_path, sha256 }) => ({ relative_path, sha256 })),
       scope_package_sha256: submission.scope_package_sha256, project, descriptor_path: descriptorPath,
-      input_files: [...sourceFiles.map(file => `${base}/${file.relative_path}`), ...generated.map(file => `${base}/${file.path}`)], proof_authority: "none" };
+      input_files: [...sourceFiles.map(file => `${base}/${file.relative_path}`), ...generated.map(file => `${base}/${file.path}`)],
+      approved_lock_elaboration_file: approvedLockElaborationFile, proof_authority: "none" };
     const existing = store.get("SELECT phase,plan_json FROM trust_commits WHERE operation_id=?", operationId);
     if (existing) {
       if (existing.phase !== "committed") fail("COMMIT_PENDING");
