@@ -371,6 +371,11 @@ export function appendFinalReplayRegistryEntryV3(
   return { registry_path, entry_sha256: entrySha256 };
 }
 
+/** The registry line hash is a provenance value; consumers must not substitute another JSON canonicalizer. */
+export function finalReplayRegistryEntrySha256V3(manifest: FinalReplayManifestV3): string {
+  return sha256Text(canonicalJson(manifest));
+}
+
 /** Stages one immutable registry entry and its audit event in the caller's project commit. */
 export function stageFinalReplayRegistryEntryV3(input: {
   projectRoot: string;
@@ -383,7 +388,7 @@ export function stageFinalReplayRegistryEntryV3(input: {
   const existing = existsCommittedFile(input.projectRoot, registry_path) ? readCommittedFile(input.projectRoot, registry_path) : "";
   const entries = existing.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line) as { replay_id?: unknown });
   if (entries.some(entry => entry.replay_id === input.manifest.replay_id)) throw new Error("final_replay_registry_append_only_violation");
-  const line = canonicalJson(input.manifest), entry_sha256 = sha256Text(line);
+  const line = canonicalJson(input.manifest), entry_sha256 = finalReplayRegistryEntrySha256V3(input.manifest);
   writeCommittedFile(input.projectRoot, registry_path, `${existing}${line}\n`);
   const id = allocateProjectId(input.projectRoot, "AUD", () => `AUD-${entry_sha256.slice(0, 40)}`);
   stageAuditEvent(input.projectRoot, { id, project_id: input.project_id, event_type: "lean.final_replay_registry_appended", actor: input.actor,

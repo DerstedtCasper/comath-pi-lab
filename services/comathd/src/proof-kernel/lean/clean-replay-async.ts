@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { ComathError } from "../../errors.js";
 import type { ResearchConfig } from "../../config/config.js";
+import type { FinalReplayManifestV3 } from "../../types/schemas.js";
 import { canonicalJson } from "../../verification/runner-contracts.js";
 import type { FormalCandidateProjectReceipt } from "../../research/formal-candidate-project.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "../../research/project-runtime.js";
@@ -16,8 +17,8 @@ import { checkAxiomProfileV2 } from "./axiom-profile.js";
 import { approvedLockDeclaration, compareStructuredLeanAuditToLock, parseApprovedLockElaborationOutput, parseStructuredLeanAuditOutput, type StructuredLeanAudit } from "./structured-audit.js";
 import { checkStatementEquivalence } from "./statement-equivalence.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
-import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
-import { createFinalReplayManifestV3, stageFinalReplayRegistryEntryV3, stageThirdPartyReplayPackV3 } from "./final-replay-manifest-v3.js";
+import { hasLeanRunManifestProvenanceIndexV1, runServiceOwnedLeanCommandV3Async, verifyLeanRunManifestV3Evidence, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
+import { createFinalReplayManifestV3, finalReplayRegistryEntrySha256V3, hasFinalReplayRegistryProvenanceV3, hasLeanLakeBinaryHashProvenanceV3, stageFinalReplayRegistryEntryV3, stageThirdPartyReplayPackV3, verifyFinalReplayManifestV3 } from "./final-replay-manifest-v3.js";
 import { readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "../../research/project-commit.js";
 
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
@@ -60,7 +61,173 @@ export type AsyncFinalAuthorityReplayExecution = { task_id: string; replay_id: s
   commands: Record<string, ReplayCommand>; result: "pass" | "blocked"; hard_vetoes: string[]; proof_authority: "none";
   can_promote_claim: false; promotion_requires_gate: true; final_replay_manifest_v3_path?: string;
   final_replay_registry?: { registry_path: string; entry_sha256: string; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true };
-  third_party_replay_pack?: { pack_path: string; expected_hashes_sha256: string; manifest_sha256: string; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true } };
+  third_party_replay_pack?: { pack_path: string; expected_hashes_sha256: string; manifest_sha256: string; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true };
+  final_authority_packaging?: { packaging_path: string; derived_bindings_path: string; result: "pass" | "blocked";
+    proof_authority: "none" | "lean_kernel_clean_replay"; can_promote_claim: false; promotion_requires_gate: true } };
+
+type ScopedEvidenceRef = { path: string; sha256: string };
+type ScopedFinalAuthorityScope = { campaign_id: string; claim_id: string; candidate_id: string; obligation_id: string;
+  stage_attempt: number; scope_package_sha256: string; replay_id: string };
+export type ScopedFinalAuthorityPackagingV1 = {
+  schema_version: "comath.scoped_final_authority_packaging.v1";
+  result: "pass" | "blocked";
+  hard_vetoes: string[];
+  scope: ScopedFinalAuthorityScope;
+  evidence: {
+    final_replay_manifest: ScopedEvidenceRef;
+    final_authority_lrun: ScopedEvidenceRef;
+    registry: { path: string; entry_sha256: string };
+    replay_pack: { pack_path: string; expected_hashes_sha256: string; manifest_sha256: string };
+    approved_scope: { formal_spec_sha256: string; ledger_sha256: string; clean_formal_spec: ScopedEvidenceRef; clean_ledger: ScopedEvidenceRef };
+    raw: { static_audit: ScopedEvidenceRef; dependency_closure: ScopedEvidenceRef; axiom_profile: ScopedEvidenceRef;
+      formal_header_comparison: ScopedEvidenceRef; clean_type_comparison: ScopedEvidenceRef };
+  };
+  derived_bindings_path: string;
+  proof_authority: "none" | "lean_kernel_clean_replay";
+  can_promote_claim: false;
+  promotion_requires_gate: true;
+};
+type ScopedFinalAuthorityDerivedBindingsV1 = {
+  schema_version: "comath.scoped_final_authority_derived_bindings.v1";
+  scope: ScopedFinalAuthorityScope;
+  packaging_path: string;
+  final_replay_manifest: ScopedEvidenceRef;
+  approved_scope: ScopedFinalAuthorityPackagingV1["evidence"]["approved_scope"];
+  raw: ScopedFinalAuthorityPackagingV1["evidence"]["raw"];
+  proof_authority: "none";
+  can_promote_claim: false;
+  promotion_requires_gate: true;
+};
+
+function committedRef(projectRoot: string, path: string): ScopedEvidenceRef {
+  return { path, sha256: hash(readCommittedFile(projectRoot, path)) };
+}
+function sameJson(left: unknown, right: unknown) { return canonicalJson(left) === canonicalJson(right); }
+function readJsonCommitted(projectRoot: string, path: string): unknown { return JSON.parse(readCommittedFile(projectRoot, path)); }
+function reportPasses(projectRoot: string, path: string): boolean {
+  try { const value = readJsonCommitted(projectRoot, path); return !!value && typeof value === "object" && (value as { result?: unknown }).result === "pass"; }
+  catch { return false; }
+}
+function replayPackMatches(projectRoot: string, manifest: FinalReplayManifestV3, pack: { pack_path: string; expected_hashes_sha256: string; manifest_sha256: string }): boolean {
+  try {
+    const manifestBytes = readCommittedFile(projectRoot, `${pack.pack_path}/FinalReplayManifest.json`);
+    const expectedBytes = readCommittedFile(projectRoot, `${pack.pack_path}/expected_hashes.json`);
+    const expected = { clean_workspace_sha256: manifest.clean_workspace_sha256, source_hashes_after: manifest.source_hashes_after,
+      artifact_hashes: manifest.artifact_hashes, report_paths: manifest.report_paths, dependency_lock: manifest.dependency_lock,
+      lean_run_manifest_paths: manifest.lean_run_manifest_paths, ...(manifest.replay_scope ? { replay_scope: manifest.replay_scope } : {}) };
+    if (hash(manifestBytes) !== pack.manifest_sha256 || hash(expectedBytes) !== pack.expected_hashes_sha256
+      || !sameJson(JSON.parse(manifestBytes), manifest) || !sameJson(JSON.parse(expectedBytes), expected)) return false;
+    return Object.entries(manifest.source_hashes_after).every(([relativePath, expectedHash]) =>
+      hash(readCommittedFile(projectRoot, `${pack.pack_path}/clean/${relativePath}`)) === expectedHash.sha256);
+  } catch { return false; }
+}
+
+/** Validates a PO-scoped packaging receipt without mutating claim state or invoking a promotion gate. */
+export function verifyScopedFinalAuthorityPackagingV1(projectRoot: string, candidate: unknown): { ok: boolean; vetoes: string[] } {
+  const value = candidate && typeof candidate === "object" ? candidate as Partial<ScopedFinalAuthorityPackagingV1> : {};
+  const vetoes: string[] = [];
+  if (value.schema_version !== "comath.scoped_final_authority_packaging.v1") vetoes.push("scoped_packaging_schema_invalid");
+  const scope = value.scope;
+  if (!scope || ![scope.campaign_id, scope.claim_id, scope.candidate_id, scope.obligation_id, scope.scope_package_sha256, scope.replay_id].every(item => typeof item === "string")
+    || !Number.isInteger(scope.stage_attempt) || scope.stage_attempt < 1) vetoes.push("scoped_packaging_scope_invalid");
+  const evidence = value.evidence;
+  const finalPath = evidence?.final_replay_manifest?.path;
+  let manifest: FinalReplayManifestV3 | undefined;
+  try { if (typeof finalPath !== "string" || !evidence?.final_replay_manifest || committedRef(projectRoot, finalPath).sha256 !== evidence.final_replay_manifest.sha256) throw new Error(); manifest = readJsonCommitted(projectRoot, finalPath) as FinalReplayManifestV3; }
+  catch { vetoes.push("scoped_packaging_final_manifest_changed"); }
+  if (!manifest || !verifyFinalReplayManifestV3(projectRoot, manifest).ok || !hasFinalReplayRegistryProvenanceV3(projectRoot, manifest) || !hasLeanLakeBinaryHashProvenanceV3(projectRoot, manifest)) vetoes.push("scoped_packaging_final_manifest_unverified");
+  if (manifest && (!scope || manifest.campaign_id !== scope.campaign_id || manifest.claim_id !== scope.claim_id || manifest.replay_id !== scope.replay_id
+    || !manifest.replay_scope || manifest.replay_scope.candidate_id !== scope.candidate_id || manifest.replay_scope.obligation_id !== scope.obligation_id
+    || manifest.replay_scope.stage_attempt !== scope.stage_attempt || manifest.replay_scope.scope_package_sha256 !== scope.scope_package_sha256)) vetoes.push("scoped_packaging_manifest_scope_mismatch");
+  const raw = evidence?.raw;
+  for (const [key, ref] of Object.entries(raw ?? {})) {
+    try { if (!ref || committedRef(projectRoot, ref.path).sha256 !== ref.sha256 || !reportPasses(projectRoot, ref.path)) vetoes.push(`scoped_packaging_${key}_invalid`); }
+    catch { vetoes.push(`scoped_packaging_${key}_invalid`); }
+  }
+  if (!raw || ![raw.static_audit, raw.dependency_closure, raw.axiom_profile, raw.formal_header_comparison, raw.clean_type_comparison].every(Boolean)) vetoes.push("scoped_packaging_raw_evidence_missing");
+  if (manifest && raw && (manifest.report_paths.static_audit !== raw.static_audit.path || manifest.report_paths.dependency_closure !== raw.dependency_closure.path
+    || manifest.report_paths.axiom_profile !== raw.axiom_profile.path || manifest.report_paths.statement_equivalence !== raw.formal_header_comparison.path)) vetoes.push("scoped_packaging_raw_manifest_mismatch");
+  const lrun = evidence?.final_authority_lrun;
+  try {
+    const receipt = lrun && readJsonCommitted(projectRoot, lrun.path);
+    if (!lrun || committedRef(projectRoot, lrun.path).sha256 !== lrun.sha256 || !verifyLeanRunManifestV3Evidence(projectRoot, receipt).ok
+      || !hasLeanRunManifestProvenanceIndexV1({ projectRoot, manifest: receipt, manifest_path: lrun.path }) || !manifest?.lean_run_manifest_paths.includes(lrun.path)
+      || !(receipt && typeof receipt === "object" && (receipt as Record<string, unknown>).purpose === "final_replay" && (receipt as Record<string, unknown>).proof_authority === "lean_kernel_check")) throw new Error();
+  } catch { vetoes.push("scoped_packaging_final_lrun_invalid"); }
+  const approved = evidence?.approved_scope;
+  try {
+    if (!approved || committedRef(projectRoot, approved.clean_formal_spec.path).sha256 !== approved.clean_formal_spec.sha256
+      || committedRef(projectRoot, approved.clean_ledger.path).sha256 !== approved.clean_ledger.sha256
+      || approved.clean_formal_spec.sha256 !== approved.formal_spec_sha256 || approved.clean_ledger.sha256 !== approved.ledger_sha256) throw new Error();
+  } catch { vetoes.push("scoped_packaging_approved_scope_invalid"); }
+  if (!evidence?.registry || !manifest || evidence.registry.entry_sha256 !== finalReplayRegistryEntrySha256V3(manifest)
+    || evidence.registry.path !== `.comath/evidence/${manifest.claim_id}/lean/final_replay_registry.jsonl`
+    || !evidence?.replay_pack || !manifest
+    || !replayPackMatches(projectRoot, manifest, evidence.replay_pack)) vetoes.push("scoped_packaging_replay_pack_invalid");
+  const derivedPath = value.derived_bindings_path;
+  try {
+    const derived = typeof derivedPath === "string" ? readJsonCommitted(projectRoot, derivedPath) as ScopedFinalAuthorityDerivedBindingsV1 : undefined;
+    if (!derived || derived.schema_version !== "comath.scoped_final_authority_derived_bindings.v1" || !sameJson(derived.scope, scope)
+      || derived.packaging_path === derivedPath || !sameJson(derived.final_replay_manifest, evidence?.final_replay_manifest)
+      || !sameJson(derived.approved_scope, approved) || !sameJson(derived.raw, raw) || derived.proof_authority !== "none"
+      || derived.can_promote_claim !== false || derived.promotion_requires_gate !== true) throw new Error();
+  } catch { vetoes.push("scoped_packaging_derived_bindings_invalid"); }
+  if (value.result !== "pass" || value.proof_authority !== "lean_kernel_clean_replay" || value.can_promote_claim !== false || value.promotion_requires_gate !== true || !Array.isArray(value.hard_vetoes) || value.hard_vetoes.length !== 0) vetoes.push("scoped_packaging_status_invalid");
+  return { ok: vetoes.length === 0, vetoes: Array.from(new Set(vetoes)) };
+}
+
+/** Stages the actual FRTASK consumer under the immutable RPLY scope. It deliberately stops before promotion. */
+function stageScopedFinalAuthorityPackagingV1(input: {
+  runtime: ProjectRuntime;
+  operation_id: string;
+  project: FormalCandidateProjectReceipt;
+  preparation: AsyncCleanReplayPreparation;
+  approved: ReturnType<typeof requireApprovedFormalScope>;
+  manifest_path: string;
+  manifest: FinalReplayManifestV3;
+  final_authority_lrun_path: string;
+  replay: AsyncCleanReplayExecution;
+  registry: { registry_path: string; entry_sha256: string };
+  pack: { pack_path: string; expected_hashes_sha256: string; manifest_sha256: string };
+}): NonNullable<AsyncFinalAuthorityReplayExecution["final_authority_packaging"]> {
+  const { runtime, project, preparation, approved, manifest, replay } = input;
+  if (!verifyFinalReplayManifestV3(runtime.root, manifest).ok || !hasFinalReplayRegistryProvenanceV3(runtime.root, manifest)
+    || !hasLeanLakeBinaryHashProvenanceV3(runtime.root, manifest) || !replayPackMatches(runtime.root, manifest, input.pack)) fail("ASYNC_FINAL_AUTHORITY_PACKAGING_INPUT_INVALID");
+  const scope: ScopedFinalAuthorityScope = { campaign_id: project.campaign_id, claim_id: project.claim_id, candidate_id: project.candidate_id,
+    obligation_id: project.obligation_id, stage_attempt: project.stage_attempt, scope_package_sha256: project.scope_package_sha256, replay_id: preparation.replay_id };
+  if (!manifest.replay_scope || manifest.replay_id !== scope.replay_id || manifest.campaign_id !== scope.campaign_id || manifest.claim_id !== scope.claim_id
+    || !sameJson(manifest.replay_scope, { candidate_id: scope.candidate_id, obligation_id: scope.obligation_id, stage_attempt: scope.stage_attempt, scope_package_sha256: scope.scope_package_sha256 })) fail("ASYNC_FINAL_AUTHORITY_PACKAGING_SCOPE_MISMATCH");
+  const rawPaths = { static_audit: replay.static_audit?.report_path, dependency_closure: replay.dependency_closure?.report_path,
+    axiom_profile: replay.axiom_profile?.report_path, formal_header_comparison: replay.formal_header_comparison?.report_path,
+    clean_type_comparison: replay.clean_type_comparison?.report_path };
+  if (Object.values(rawPaths).some(path => typeof path !== "string") || manifest.report_paths.static_audit !== rawPaths.static_audit
+    || manifest.report_paths.dependency_closure !== rawPaths.dependency_closure || manifest.report_paths.axiom_profile !== rawPaths.axiom_profile
+    || manifest.report_paths.statement_equivalence !== rawPaths.formal_header_comparison) fail("ASYNC_FINAL_AUTHORITY_PACKAGING_RAW_MISMATCH");
+  const raw = Object.fromEntries(Object.entries(rawPaths).map(([key, path]) => [key, committedRef(runtime.root, path!)])) as ScopedFinalAuthorityPackagingV1["evidence"]["raw"];
+  if (!Object.values(raw).every(ref => reportPasses(runtime.root, ref.path))) fail("ASYNC_FINAL_AUTHORITY_PACKAGING_RAW_INVALID");
+  const cleanFormalSpec = committedRef(runtime.root, `${preparation.clean_workspace_path}/FormalSpec/formal_spec_lock.json`);
+  const cleanLedger = committedRef(runtime.root, `${preparation.clean_workspace_path}/FormalSpec/assumption_ledger.json`);
+  if (cleanFormalSpec.sha256 !== approved.formal_spec_ref.sha256 || cleanLedger.sha256 !== approved.ledger_ref.sha256) fail("ASYNC_FINAL_AUTHORITY_PACKAGING_APPROVED_SCOPE_CHANGED");
+  const packaging_path = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/final-authority-packaging.json`;
+  const derived_bindings_path = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/final-authority-derived-bindings.json`;
+  const evidence: ScopedFinalAuthorityPackagingV1["evidence"] = { final_replay_manifest: committedRef(runtime.root, input.manifest_path),
+    final_authority_lrun: committedRef(runtime.root, input.final_authority_lrun_path), registry: { path: input.registry.registry_path, entry_sha256: input.registry.entry_sha256 },
+    replay_pack: input.pack, approved_scope: { formal_spec_sha256: approved.formal_spec_ref.sha256, ledger_sha256: approved.ledger_ref.sha256,
+      clean_formal_spec: cleanFormalSpec, clean_ledger: cleanLedger }, raw };
+  const packaging: ScopedFinalAuthorityPackagingV1 = { schema_version: "comath.scoped_final_authority_packaging.v1", result: "pass", hard_vetoes: [], scope, evidence,
+    derived_bindings_path, proof_authority: "lean_kernel_clean_replay", can_promote_claim: false, promotion_requires_gate: true };
+  const derived: ScopedFinalAuthorityDerivedBindingsV1 = { schema_version: "comath.scoped_final_authority_derived_bindings.v1", scope, packaging_path,
+    final_replay_manifest: evidence.final_replay_manifest, approved_scope: evidence.approved_scope, raw: evidence.raw,
+    proof_authority: "none", can_promote_claim: false, promotion_requires_gate: true };
+  withProjectCommit(runtime.root, { operation_id: `${input.operation_id}:scoped-packaging`, campaign_id: project.campaign_id,
+    request: { scope, manifest_path: input.manifest_path, final_authority_lrun_path: input.final_authority_lrun_path,
+      registry: input.registry, pack: input.pack } }, () => {
+    writeCommittedFile(runtime.root, derived_bindings_path, canonicalJson(derived));
+    writeCommittedFile(runtime.root, packaging_path, canonicalJson(packaging));
+    return { packaging_path, derived_bindings_path };
+  });
+  return { packaging_path, derived_bindings_path, result: "pass", proof_authority: "lean_kernel_clean_replay", can_promote_claim: false, promotion_requires_gate: true };
+}
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -493,6 +660,9 @@ export function createAsyncFinalAuthorityReplayExecutor(app: ResearchOrchestrato
             request: { final_replay_manifest_v3_path, replay_id: preparation.replay_id, clean_workspace_sha256: manifest.clean_workspace_sha256 } }, () =>
             stageThirdPartyReplayPackV3({ projectRoot: runtime.root, manifest }));
           result.third_party_replay_pack = { ...pack, proof_authority: "none", can_promote_claim: false, promotion_requires_gate: true };
+          result.final_authority_packaging = stageScopedFinalAuthorityPackagingV1({ runtime, operation_id, project, preparation, approved,
+            manifest_path: final_replay_manifest_v3_path, manifest, final_authority_lrun_path: value.manifest.manifest_path,
+            replay, registry, pack });
         }
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/final-authority-execution.json`, project.campaign_id, result);
