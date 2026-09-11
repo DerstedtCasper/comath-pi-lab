@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ComathError } from "../errors.js";
 import { canonicalJson } from "../verification/runner-contracts.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
+import { collectIntegratedLemmaMaterialFromRuntime } from "../proof-kernel/campaign/integrated-lemma-material.js";
 import { buildApprovedLockElaborationSource, buildStructuredLeanAuditSource } from "../proof-kernel/lean/structured-audit.js";
 import type { GaAgentReplayProject } from "../proof-kernel/ensemble/ga-agent-stage-runner.js";
 import { getAcquiredProjectRuntime, type ProjectRuntime } from "./project-runtime.js";
@@ -44,8 +45,8 @@ export function createFormalCandidateProjectService(runtime: ProjectRuntime, opt
     const packageEntry = approved.receipt.packages.find(value => value.obligation_id === submission.obligation_id);
     if (!packageEntry || packageEntry.scope_package_sha256 !== submission.scope_package_sha256) fail("FORMAL_PROJECT_SCOPE_MISMATCH");
     const value = formalCandidateSubmissionSchema.parse(JSON.parse(readCommittedFile(runtime.root, submission.submission_path)));
-    // Local integrated dependencies need their own gate-verified producer; a worker reference is not that evidence.
-    if (value.requested_dependencies.length) fail("FORMAL_INTEGRATED_MATERIAL_REQUIRED");
+    const integratedMaterial = collectIntegratedLemmaMaterialFromRuntime({ runtime, campaign_id: submission.campaign_id,
+      requested_dependencies: value.requested_dependencies, readSubmissionReceipt: options.readSubmissionReceipt });
     const configuration = hash(canonicalJson({ source_operation_id: submission.operation_id, lean_toolchain: input.lean_toolchain,
       scope_package_sha256: submission.scope_package_sha256, approved_lock_elaboration_version: 1 }));
     // Lake's native Windows trace/build paths can exceed MAX_PATH beneath the full canonical source hierarchy.
@@ -64,7 +65,9 @@ export function createFormalCandidateProjectService(runtime: ProjectRuntime, opt
       return value.project_id;
     });
     const base = `.comath/lean/projects/${projectId}`;
-    const moduleNames = value.files.map(file => leanName(file.relative_path.slice(0, -5).split("/")));
+    const allFiles = [...value.files, ...integratedMaterial.map(file => ({ relative_path: file.relative_path, artifact: { sha256: file.sha256 } }))];
+    if (new Set(allFiles.map(file => file.relative_path.toLowerCase())).size !== allFiles.length) fail("FORMAL_INTEGRATED_MATERIAL_COLLISION");
+    const moduleNames = allFiles.map(file => leanName(file.relative_path.slice(0, -5).split("/")));
     const targetModule = leanName(value.theorem_file.slice(0, -5).split("/"));
     const theorem = leanName(value.theorem_name.split("."));
     const sourceFiles = value.files.map(file => {
@@ -72,6 +75,7 @@ export function createFormalCandidateProjectService(runtime: ProjectRuntime, opt
       if (hash(bytes) !== file.artifact.sha256) fail("FORMAL_PROJECT_SOURCE_CHANGED");
       return { relative_path: `source/${file.relative_path}`, sha256: file.artifact.sha256, bytes };
     });
+    sourceFiles.push(...integratedMaterial.map(file => ({ relative_path: `source/${file.relative_path}`, sha256: file.sha256, bytes: Buffer.from(file.bytes) })));
     const lockBytes = readCommittedFile(runtime.root, packageEntry.formal_spec_path), ledgerBytes = readCommittedFile(runtime.root, packageEntry.ledger_path);
     if (hash(lockBytes) !== submission.scope.formal_spec_sha256 || hash(ledgerBytes) !== submission.scope.ledger_sha256) fail("FORMAL_PROJECT_SCOPE_CHANGED");
     const project: GaAgentReplayProject = { lean_root: base, theorem_file_rel: `source/${value.theorem_file}`,
