@@ -18,6 +18,7 @@ import { sha256Buffer, sha256FileSync } from "./lean-project.js";
 import { appendAuditEvent, readAuditEvents } from "../../audit/jsonl-writer.js";
 import { hasLeanRunManifestProvenanceIndexV1, verifyLeanRunManifestV3Evidence } from "./lean-run-manifest-v3.js";
 import { dependencyClosureV2PackagesToExternalRevisions } from "./dependency-closure.js";
+import { allocateProjectId, existsCommittedFile, projectCommitTime, readCommittedFile, stageAuditEvent, writeCommittedFile } from "../../research/project-commit.js";
 
 type HashRef = { sha256: string; size_bytes: number };
 
@@ -368,6 +369,29 @@ export function appendFinalReplayRegistryEntryV3(
     });
   }
   return { registry_path, entry_sha256: entrySha256 };
+}
+
+/** Stages one immutable registry entry and its audit event in the caller's project commit. */
+export function stageFinalReplayRegistryEntryV3(input: {
+  projectRoot: string;
+  manifest: FinalReplayManifestV3;
+  project_id: string;
+  actor: string;
+  source?: string;
+}): { registry_path: string; entry_sha256: string } {
+  const registry_path = join(".comath", "evidence", input.manifest.claim_id, "lean", "final_replay_registry.jsonl").replace(/\\/g, "/");
+  const existing = existsCommittedFile(input.projectRoot, registry_path) ? readCommittedFile(input.projectRoot, registry_path) : "";
+  const entries = existing.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line) as { replay_id?: unknown });
+  if (entries.some(entry => entry.replay_id === input.manifest.replay_id)) throw new Error("final_replay_registry_append_only_violation");
+  const line = canonicalJson(input.manifest), entry_sha256 = sha256Text(line);
+  writeCommittedFile(input.projectRoot, registry_path, `${existing}${line}\n`);
+  const id = allocateProjectId(input.projectRoot, "AUD", () => `AUD-${entry_sha256.slice(0, 40)}`);
+  stageAuditEvent(input.projectRoot, { id, project_id: input.project_id, event_type: "lean.final_replay_registry_appended", actor: input.actor,
+    target_id: input.manifest.claim_id, payload: { claim_id: input.manifest.claim_id, replay_id: input.manifest.replay_id, registry_path, entry_sha256,
+      manifest_sha256: entry_sha256, runner: input.manifest.runner, proof_authority: input.manifest.proof_authority,
+      source: input.source ?? "comathd.LeanAuthority", service_owned_clean_replay_provenance: true, replay_scope: input.manifest.replay_scope ?? null },
+    created_at: projectCommitTime(input.projectRoot) });
+  return { registry_path, entry_sha256 };
 }
 
 export function hasFinalReplayRegistryProvenanceV3(projectRoot: string, candidate: unknown): boolean {

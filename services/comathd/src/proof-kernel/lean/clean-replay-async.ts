@@ -17,7 +17,7 @@ import { approvedLockDeclaration, compareStructuredLeanAuditToLock, parseApprove
 import { checkStatementEquivalence } from "./statement-equivalence.js";
 import { directElanTool, runLeanToolCommandAsync, type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { runServiceOwnedLeanCommandV3Async, type AsyncLeanCommandReceipt } from "./lean-run-manifest-v3.js";
-import { createFinalReplayManifestV3 } from "./final-replay-manifest-v3.js";
+import { createFinalReplayManifestV3, stageFinalReplayRegistryEntryV3 } from "./final-replay-manifest-v3.js";
 import { readCommittedFile, resolveProjectCommitPath, withProjectCommit, writeCommittedFile } from "../../research/project-commit.js";
 
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
@@ -58,7 +58,8 @@ export type AsyncCleanReplayExecution = { task_id: string; replay_id: string; cl
 };
 export type AsyncFinalAuthorityReplayExecution = { task_id: string; replay_id: string; claim_id: string; obligation_id: string;
   commands: Record<string, ReplayCommand>; result: "pass" | "blocked"; hard_vetoes: string[]; proof_authority: "none";
-  can_promote_claim: false; promotion_requires_gate: true; final_replay_manifest_v3_path?: string };
+  can_promote_claim: false; promotion_requires_gate: true; final_replay_manifest_v3_path?: string;
+  final_replay_registry?: { registry_path: string; entry_sha256: string; proof_authority: "none"; can_promote_claim: false; promotion_requires_gate: true } };
 
 /**
  * Copies an already committed candidate project into an append-only clean replay workspace.
@@ -480,6 +481,13 @@ export function createAsyncFinalAuthorityReplayExecutor(app: ResearchOrchestrato
               max_stdout_bytes: 2 * 1024 * 1024, max_stderr_bytes: 2 * 1024 * 1024 }, binary_hashes: { lean: leanHash, lake: lakeHash } });
           save(`${operation_id}:final-replay-manifest-v3`, final_replay_manifest_v3_path, project.campaign_id, manifest);
           result.final_replay_manifest_v3_path = final_replay_manifest_v3_path;
+          const controlCampaign = store.getCampaign(project.campaign_id);
+          if (!controlCampaign?.project_id) fail("ASYNC_FINAL_AUTHORITY_PROJECT_MISSING");
+          const registry = withProjectCommit(runtime.root, { operation_id: `${operation_id}:registry`, campaign_id: project.campaign_id,
+            request: { final_replay_manifest_v3_path, replay_id: preparation.replay_id, scope_package_sha256: project.scope_package_sha256 } }, () =>
+            stageFinalReplayRegistryEntryV3({ projectRoot: runtime.root, manifest, project_id: controlCampaign.project_id,
+              actor: "service:proof-workflow", source: "async_final_authority_replay" }));
+          result.final_replay_registry = { ...registry, proof_authority: "none", can_promote_claim: false, promotion_requires_gate: true };
         }
       }
       save(operation_id, `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/final-authority-execution.json`, project.campaign_id, result);
