@@ -7,6 +7,7 @@ import {
 } from "./research-loop.js";
 import { createDefaultResearchOperatorClient, type ResearchOperatorClient } from "./research-client.js";
 import { dispatchResearchOperatorRequest } from "./research-tools.js";
+import { renderDurableResearchDashboard } from "./renderers.js";
 
 export * from "./subagents.js";
 export * from "./widgets.js";
@@ -72,6 +73,7 @@ type PiRuntimeContext = {
   ui?: {
     confirm?(title: string, body?: string): Promise<boolean> | boolean;
     notify?(message: string, level?: "info" | "warning" | "error"): Promise<void> | void;
+    setWidget?(key: string, lines: string[] | undefined): Promise<void> | void;
   };
 };
 
@@ -6508,7 +6510,7 @@ export async function readDurableResearchDashboard(researchClient: ResearchOpera
     dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-frontier-${stamp}`, tool: "research_frontier_get", input: { campaign_id: campaignId } }),
     dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-budget-${stamp}`, tool: "research_budget_get", input: { campaign_id: campaignId } })
   ]);
-  return { campaign, frontier, budget, proof_authority: "none" };
+  return { campaign, frontier, budget, proof_authority: "none" as const };
 }
 
 function optionValue(args: string[], name: string): string | undefined {
@@ -7134,7 +7136,10 @@ async function handleDashboardCommand(options: RegisterComathPiRuntimeOptions, a
   const parsed = parseComathCommand(`/cm:dashboard ${args}`.trim());
   if (!parsed || parsed.action !== "dashboard") throw new Error("dashboard command is required");
   const campaignId = optionValue(parsed.args, "--campaign-id") ?? firstPositional(parsed.args);
-  await notifyRuntimeResult(ctx, await readDurableResearchDashboard(options.researchClient ?? createDefaultResearchOperatorClient(), requiredOption(campaignId, "campaign_id")));
+  const snapshot = await readDurableResearchDashboard(options.researchClient ?? createDefaultResearchOperatorClient(), requiredOption(campaignId, "campaign_id"));
+  const model = renderDurableResearchDashboard(snapshot);
+  await runtimeCtx(ctx).ui?.setWidget?.("comath-research", model.sections.flatMap(section => [section.title, ...section.rows]));
+  await notifyRuntimeResult(ctx, snapshot);
 }
 
 async function handleAgentCommand(
