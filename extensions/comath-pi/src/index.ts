@@ -223,6 +223,7 @@ const COMATH_EXTENSION_COMMANDS = [
 
 const PI_RUNTIME_COMMANDS = [
   "/cm:research",
+  "/cm:dashboard",
   "/cm:campaign",
   "/cm:agent",
   "/cm:audit",
@@ -6459,6 +6460,57 @@ export async function runComathResearchCommand(
   );
 }
 
+const durableResearchTools: Record<string, string> = {
+  capabilities: "research_capabilities_get", status: "research_campaign_get", frontier: "research_frontier_get", budget: "research_budget_get", events: "research_events_read",
+  start: "research_campaign_start", patch: "research_dag_patch", synthesize: "research_dag_patch", "budget-update": "research_budget_update",
+  pause: "research_campaign_pause", resume: "research_campaign_resume", cancel: "research_campaign_cancel", finish: "research_campaign_finish",
+  task: "research_task_get", "task-cancel": "research_task_cancel", retry: "research_task_retry", checkpoint: "research_checkpoint_get", operation: "research_operation_get",
+  "prepare-lock": "research_intake_prepare", "request-approval": "research_intake_request_approval"
+};
+
+function durableJsonInput(args: string[]): Record<string, unknown> | undefined {
+  const value = optionValue(args, "--input");
+  if (value === undefined) return undefined;
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { throw new Error("--input must be a JSON object"); }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("--input must be a JSON object");
+  return parsed as Record<string, unknown>;
+}
+
+function durableReadInput(subcommand: string, args: string[]): Record<string, unknown> {
+  const campaignId = optionValue(args, "--campaign-id"), taskId = optionValue(args, "--task-id"), operationId = optionValue(args, "--operation-id");
+  if (subcommand === "capabilities") return {};
+  if (subcommand === "status" || subcommand === "budget") return { campaign_id: requiredOption(campaignId, "campaign_id") };
+  if (subcommand === "frontier") return { campaign_id: requiredOption(campaignId, "campaign_id"), ...(optionValue(args, "--after-task-id") ? { after_task_id: optionValue(args, "--after-task-id") } : {}), ...(numberOptionValue(args, "--limit") !== undefined ? { limit: numberOptionValue(args, "--limit") } : {}) };
+  if (subcommand === "events") return { campaign_id: requiredOption(campaignId, "campaign_id"), after_seq: numberOptionValue(args, "--after-seq") ?? 0, limit: numberOptionValue(args, "--limit") ?? 100 };
+  if (subcommand === "task" || subcommand === "checkpoint") return { task_id: requiredOption(taskId, "task_id") };
+  if (subcommand === "operation") return { operation_id: requiredOption(operationId, "operation_id") };
+  throw new Error(`durable ${subcommand} requires --input with the documented service request body`);
+}
+
+/** The durable command family never falls through to the legacy goal-mode loop. */
+export async function runDurableResearchCommand(researchClient: ResearchOperatorClient, command: string) {
+  const parsed = parseComathCommand(command);
+  if (!parsed || parsed.action !== "research" || parsed.subcommand !== "durable") throw new Error("durable research command is required");
+  const [subcommand, ...args] = parsed.args;
+  const tool = subcommand ? durableResearchTools[subcommand] : undefined;
+  if (!tool) throw new Error(`unsupported durable research command: ${subcommand ?? ""}`);
+  const input = durableJsonInput(args) ?? durableReadInput(subcommand!, args);
+  const requestId = optionValue(args, "--request-id") ?? `pi-durable-${subcommand}-${Date.now().toString(36)}`;
+  return dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: requestId, tool, input });
+}
+
+/** Read-only dashboard facts; like all operator output, this has no proof authority. */
+export async function readDurableResearchDashboard(researchClient: ResearchOperatorClient, campaignId: string) {
+  const stamp = Date.now().toString(36);
+  const [campaign, frontier, budget] = await Promise.all([
+    dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-campaign-${stamp}`, tool: "research_campaign_get", input: { campaign_id: campaignId } }),
+    dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-frontier-${stamp}`, tool: "research_frontier_get", input: { campaign_id: campaignId } }),
+    dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-budget-${stamp}`, tool: "research_budget_get", input: { campaign_id: campaignId } })
+  ]);
+  return { campaign, frontier, budget, proof_authority: "none" };
+}
+
 function optionValue(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   if (index === -1) {
@@ -7054,6 +7106,10 @@ async function handleResearchCommand(
   if (!parsed || parsed.action !== "research") {
     throw new Error("research command is required");
   }
+  if (parsed.subcommand === "durable") {
+    await notifyRuntimeResult(ctx, await runDurableResearchCommand(options.researchClient ?? createDefaultResearchOperatorClient(), `/cm:research ${args}`.trim()));
+    return;
+  }
   const projectRoot = projectRootFrom(options, parsed.args);
   const actor = actorFrom(options, parsed.args);
   const confirmationId = await requirePiHostConfirmation(ctx, "/cm:research", {
@@ -7072,6 +7128,13 @@ async function handleResearchCommand(
       max_ticks: numberOptionValue(parsed.args, "--max-ticks") ?? options.max_ticks
     })
   );
+}
+
+async function handleDashboardCommand(options: RegisterComathPiRuntimeOptions, args: string, ctx: unknown): Promise<void> {
+  const parsed = parseComathCommand(`/cm:dashboard ${args}`.trim());
+  if (!parsed || parsed.action !== "dashboard") throw new Error("dashboard command is required");
+  const campaignId = optionValue(parsed.args, "--campaign-id") ?? firstPositional(parsed.args);
+  await notifyRuntimeResult(ctx, await readDurableResearchDashboard(options.researchClient ?? createDefaultResearchOperatorClient(), requiredOption(campaignId, "campaign_id")));
 }
 
 async function handleAgentCommand(
@@ -9118,9 +9181,16 @@ export function registerComathPiRuntime(pi: PiExtensionApi, options: RegisterCom
   }
 
   pi.registerCommand("cm:research", {
-    description: "Start or continue a goal-mode CoMath ResearchCampaign through comathd.",
+    description: "Run a legacy goal-mode campaign or an explicit durable research operator command through comathd.",
     handler: async (args, ctx) => {
       await handleResearchCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.registerCommand("cm:dashboard", {
+    description: "Read durable campaign, frontier, and budget facts without asserting proof authority.",
+    handler: async (args, ctx) => {
+      await handleDashboardCommand(options, args, ctx);
     }
   });
 
