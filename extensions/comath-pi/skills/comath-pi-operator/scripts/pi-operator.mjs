@@ -74,14 +74,39 @@ async function withHandoffLock(path, work) {
   catch (error) { if (error?.code === 'EEXIST') throw Error('PI_OPERATOR_HANDOFF_BUSY'); throw error; }
   try { return await work(); } finally { await unlink(lock).catch(error => { if (error?.code !== 'ENOENT') throw error; }); }
 }
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  return JSON.stringify(value);
+}
+function samePendingRequest(pending, request) {
+  return pending && pending.tool === request.tool && canonicalJson(pending.input) === canonicalJson(request.input);
+}
+function startCommandId(request) {
+  const value = request?.tool === 'research_campaign_start' && request.input && typeof request.input === 'object' ? request.input.command_id : undefined;
+  return typeof value === 'string' && value ? value : undefined;
+}
+async function recoverPendingStart(prior, request, options) {
+  const commandId = startCommandId(request), pendingCommandId = startCommandId(prior.pending_mutation);
+  if (!commandId || commandId !== pendingCommandId) return undefined;
+  const lookup = await runOperatorRequest({ version: 1, request_id: `${request.request_id}-recover`, tool: 'research_campaign_list', input: { command_id: commandId, limit: 2 } }, options).catch(() => undefined);
+  const campaigns = lookup?.result?.ok && lookup.result.data && typeof lookup.result.data === 'object' && Array.isArray(lookup.result.data.campaigns) ? lookup.result.data.campaigns : [];
+  if (campaigns.length !== 1 || !campaigns[0] || typeof campaigns[0].campaign_id !== 'string') return undefined;
+  return { version: 1, request_id: request.request_id, tool: request.tool, result: { ok: true, data: campaigns[0] } };
+}
 /** Persist a non-authoritative recovery hint around exactly one operator request. */
 export async function runWithHandoff(raw, options) {
   const request = requireRequest(raw), handoff = safeHandoffPath(options?.handoffFile, options?.project);
   return withHandoffLock(handoff, async () => {
     const prior = await readHandoff(handoff), pending = { tool: request.tool, input: request.input, request_id: request.request_id };
-    await writeHandoff(handoff, { version: 1, project_root: resolve(options.project), project_id: prior.project_id ?? null, campaign_id: prior.campaign_id ?? null,
-      start_command_id: prior.start_command_id ?? null, last_event_seq: prior.last_event_seq ?? 0, last_request_id: prior.last_request_id ?? null, pending_mutation: pending });
-    const result = await runOperatorRequest(request, options), data = result.result.ok && result.result.data && typeof result.result.data === 'object' ? result.result.data : {};
+    if (prior.pending_mutation && !samePendingRequest(prior.pending_mutation, request)) throw Error('PI_OPERATOR_PENDING_MUTATION');
+    const recovered = prior.pending_mutation ? await recoverPendingStart(prior, request, options) : undefined;
+    const result = recovered ?? await (async () => {
+      await writeHandoff(handoff, { version: 1, project_root: resolve(options.project), project_id: prior.project_id ?? null, campaign_id: prior.campaign_id ?? null,
+        start_command_id: prior.start_command_id ?? null, last_event_seq: prior.last_event_seq ?? 0, last_request_id: prior.last_request_id ?? null, pending_mutation: pending });
+      return runOperatorRequest(request, options);
+    })();
+    const data = result.result.ok && result.result.data && typeof result.result.data === 'object' ? result.result.data : {};
     await writeHandoff(handoff, { version: 1, project_root: resolve(options.project), project_id: data.project_id ?? prior.project_id ?? null,
       campaign_id: data.campaign_id ?? prior.campaign_id ?? null, start_command_id: request.tool === 'research_campaign_start' ? request.input?.command_id ?? null : prior.start_command_id ?? null,
       last_event_seq: Number.isSafeInteger(data.snapshot_seq) ? data.snapshot_seq : prior.last_event_seq ?? 0, last_request_id: request.request_id, pending_mutation: null });
