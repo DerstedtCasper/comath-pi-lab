@@ -12,6 +12,7 @@ const route = (tool: string, input: unknown): { method: "GET" | "POST"; path: st
     case "research_campaign_get": return campaign ? { method: "GET", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}` } : undefined;
     case "research_frontier_get": return campaign ? { method: "GET", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}/frontier` } : undefined;
     case "research_budget_get": return campaign ? { method: "GET", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}/budget` } : undefined;
+    case "research_dashboard_get": return campaign ? { method: "GET", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}/dashboard` } : undefined;
     case "research_events_read": return campaign ? { method: "GET", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}/events?after_seq=${Number.isSafeInteger(value.after_seq) ? value.after_seq : 0}&limit=${Number.isSafeInteger(value.limit) ? value.limit : 100}` } : undefined;
     case "research_dag_patch": return campaign ? { method: "POST", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}/patches`, body: input } : undefined;
     case "research_budget_update": return campaign ? { method: "POST", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}/budget`, body: input } : undefined;

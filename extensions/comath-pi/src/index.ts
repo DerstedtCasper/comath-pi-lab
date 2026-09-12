@@ -6504,13 +6504,8 @@ export async function runDurableResearchCommand(researchClient: ResearchOperator
 
 /** Read-only dashboard facts; like all operator output, this has no proof authority. */
 export async function readDurableResearchDashboard(researchClient: ResearchOperatorClient, campaignId: string) {
-  const stamp = Date.now().toString(36);
-  const [campaign, frontier, budget] = await Promise.all([
-    dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-campaign-${stamp}`, tool: "research_campaign_get", input: { campaign_id: campaignId } }),
-    dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-frontier-${stamp}`, tool: "research_frontier_get", input: { campaign_id: campaignId } }),
-    dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-budget-${stamp}`, tool: "research_budget_get", input: { campaign_id: campaignId } })
-  ]);
-  return { campaign, frontier, budget, proof_authority: "none" as const };
+  const dashboard = await dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-${Date.now().toString(36)}`, tool: "research_dashboard_get", input: { campaign_id: campaignId } });
+  return { campaign: dashboard, frontier: dashboard, budget: dashboard, proof_authority: "none" as const };
 }
 
 function optionValue(args: string[], name: string): string | undefined {

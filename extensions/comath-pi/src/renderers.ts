@@ -330,11 +330,13 @@ function durableData(value: unknown): Record<string, any> {
 export function renderDurableResearchDashboard(snapshot: DurableResearchDashboardSnapshot): TuiDashboardModel {
   const campaign = durableData(snapshot.campaign), frontier = durableData(snapshot.frontier), budget = durableData(snapshot.budget);
   const control = campaign.campaign && typeof campaign.campaign === "object" ? campaign.campaign : campaign;
-  const tasks = Array.isArray(frontier.tasks) ? frontier.tasks : [];
-  const charged = budget.charged && typeof budget.charged === "object" ? budget.charged : {};
-  const reserved = budget.reserved && typeof budget.reserved === "object" ? budget.reserved : {};
-  const unknown = Array.isArray(budget.unknown_dimensions) ? budget.unknown_dimensions.filter((value: unknown) => typeof value === "string") : [];
-  const overrun = budget.overrun && typeof budget.overrun === "object" ? budget.overrun : {};
+  const frontierPage = frontier.frontier && typeof frontier.frontier === "object" ? frontier.frontier : frontier;
+  const budgetView = budget.budget && typeof budget.budget === "object" ? budget.budget : budget;
+  const tasks = Array.isArray(frontierPage.tasks) ? frontierPage.tasks : Array.isArray(frontierPage.items) ? frontierPage.items : [];
+  const charged = budgetView.charged && typeof budgetView.charged === "object" ? budgetView.charged : {};
+  const reserved = budgetView.reserved && typeof budgetView.reserved === "object" ? budgetView.reserved : {};
+  const unknown = Array.isArray(budgetView.unknown_dimensions) ? budgetView.unknown_dimensions.filter((value: unknown) => typeof value === "string") : budgetView.unknown === true ? ["usage"] : [];
+  const overrun = budgetView.overrun && typeof budgetView.overrun === "object" ? budgetView.overrun : {};
   return {
     kind: "dashboard",
     generated_at: new Date().toISOString(),
