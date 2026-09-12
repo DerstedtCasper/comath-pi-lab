@@ -6,8 +6,10 @@ import { canonicalJson } from "../verification/runner-contracts.js";
 import { getCampaign, writeCampaign } from "../proof-kernel/campaign/research-campaign.js";
 import { advanceApprovedProofPlanning, inspectApprovedProofStage, type CampaignTickInput, type CampaignTickResult } from "../proof-kernel/campaign/campaign-tick.js";
 import { advanceObligationStage, obligationStagePath } from "../proof-kernel/campaign/obligation-stage.js";
-import { replaceObligationById } from "../proof-kernel/campaign/active-obligation.js";
+import { replaceObligationById, selectReadyObligation } from "../proof-kernel/campaign/active-obligation.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
+import { applyGatePromotedClaim, getClaim } from "../claim/claim-store.js";
+import { promoteClaim } from "../verification/gate.js";
 import type { ResearchCampaign } from "../types/schemas.js";
 import { createResearchEventStore, notifyResearchEventsCommitted } from "./event-store.js";
 import { getAcquiredProjectRuntime } from "./project-runtime.js";
@@ -20,7 +22,7 @@ import type { createFormalCandidateProjectService, FormalCandidateProjectReceipt
 import type { createProofToolAttemptService } from "./proof-tool-attempt.js";
 import { registerProofWorkflowBridge } from "./proof-workflow-bridge.js";
 import { createProofNativeVerification, type ProofNativeVerificationResult } from "./proof-native-verification.js";
-import { createAsyncCleanReplayExecutor, createAsyncFinalAuthorityReplayExecutor, prepareAsyncCleanReplayWorkspace } from "../proof-kernel/lean/clean-replay-async.js";
+import { createAsyncCleanReplayExecutor, createAsyncFinalAuthorityReplayExecutor, prepareAsyncCleanReplayWorkspace, verifyScopedFinalAuthorityPackagingV1, type AsyncFinalAuthorityReplayExecution } from "../proof-kernel/lean/clean-replay-async.js";
 
 type Configuration = NonNullable<ResearchConfig["proof_workflow"]>;
 type Lease = { incarnation: string; nonce: string; epoch: number; expires_at: string; state: "active" | "idle" | "blocked";
@@ -209,6 +211,52 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     }
     return sources;
   }
+  function integrateVerifiedLeaf(snapshot: Snapshot, executions: AsyncFinalAuthorityReplayExecution[]): boolean {
+    const final = executions.find(value => value.result === "pass" && value.claim_id === snapshot.campaign.open_obligations.find(item => item.obligation_id === snapshot.obligation_id)?.claim_id
+      && value.obligation_id === snapshot.obligation_id);
+    const finalPackaging = final?.final_authority_packaging;
+    if (!final || !finalPackaging?.evidence_id || finalPackaging.artifact_ids?.length !== 3 || !final.final_replay_manifest_v3_path) return false;
+    const artifactIds = finalPackaging.artifact_ids, finalManifestPath = final.final_replay_manifest_v3_path;
+    const packaging = JSON.parse(readCommittedFile(runtime.root, finalPackaging.packaging_path));
+    if (!verifyScopedFinalAuthorityPackagingV1(runtime.root, packaging).ok) fail("PROOF_FINAL_AUTHORITY_PACKAGING_INVALID");
+    const current = prepareStageWork(snapshot.campaign.campaign_id);
+    if (!current || current.binding_hash !== snapshot.binding_hash) fail("PROOF_STAGE_BINDING_CHANGED");
+    const obligation = current.campaign.open_obligations.find(item => item.obligation_id === current.obligation_id);
+    if (!obligation || final.claim_id !== obligation.claim_id || final.obligation_id !== obligation.obligation_id) fail("PROOF_FINAL_AUTHORITY_SCOPE_MISMATCH");
+    // Root completion requires its own final campaign evidence binding. A successful leaf is never root authority.
+    if (obligation.claim_id === current.campaign.root_claim_id) return false;
+    const control = store.getCampaign(current.campaign.campaign_id);
+    if (!control) fail("RESEARCH_CAMPAIGN_NOT_FOUND");
+    const claim = getClaim(runtime.root, control.project_id, obligation.claim_id);
+    if (!claim) fail("CLAIM_NOT_FOUND");
+    applyGatePromotedClaim(runtime.root, { ...claim, formalization_status: "kernel_checked", dependency_closure_status: "all_dependencies_present", audit_state: "audit_passed", updated_at: new Date(runtime.clock.now()).toISOString() });
+    const promotion = promoteClaim(runtime.root, { project_id: control.project_id, claim_id: obligation.claim_id, target_status: "formally_checked",
+      evidence_ids: [finalPackaging.evidence_id], artifact_ids: artifactIds, actor: "service:proof-workflow" });
+    if (!promotion.gate.ok) fail("PROOF_FINAL_AUTHORITY_GATE_REJECTED");
+    withProjectCommit(runtime.root, { operation_id: `${operation(current, "leaf-integrated")}:${final.replay_id}`, campaign_id: current.campaign.campaign_id,
+      expected_revision: current.revision, request: { obligation_id: obligation.obligation_id, claim_id: obligation.claim_id, gate_result_id: promotion.gate.id,
+        replay_id: final.replay_id, artifact_ids: artifactIds } }, () => {
+      const latest = getCampaign(runtime.root, current.campaign.campaign_id), latestControl = store.getCampaign(current.campaign.campaign_id)!;
+      if (!latest || hash(latest) !== hash(current.campaign) || latestControl.revision !== current.revision) fail("PROOF_STAGE_REVISION_CONFLICT");
+      const obligations = replaceObligationById(latest.open_obligations, { ...obligation, status: "integrated" });
+      const completed = advanceObligationStage({ ...latest, open_obligations: obligations,
+        stage_runs: [...latest.stage_runs, { id: store.allocateId("SRUN"), stage: latest.current_stage, status: "completed", artifact_paths: [
+          finalPackaging.packaging_path, finalManifestPath, finalPackaging.derived_bindings_path],
+          obligation_id: obligation.obligation_id, stage_attempt: current.stage_attempt, scope_package_sha256: current.scope_package_sha256,
+          created_at: new Date(runtime.clock.now()).toISOString() }] }, "completed_formal_proof", { obligation_id: obligation.obligation_id });
+      const next = selectReadyObligation(obligations);
+      if (!next) fail("PROOF_NEXT_OBLIGATION_UNAVAILABLE");
+      const advanced = advanceObligationStage({ ...completed, status: "running" }, "planning", { obligation_id: next.obligation_id });
+      writeCampaign(runtime.root, advanced, "service:proof-workflow");
+      const payload = { obligation_id: obligation.obligation_id, claim_id: obligation.claim_id, gate_result_id: promotion.gate.id, replay_id: final.replay_id, proof_authority: "none" };
+      stageResearchMutation(runtime.root, "INSERT INTO events(campaign_id,type,actor,payload_json,payload_sha256,created_at) VALUES (?,?,?, ?,?,?)",
+        [current.campaign.campaign_id, "ProofObligationIntegrated", "service:proof-workflow", canonicalJson(payload), hash(payload), new Date(runtime.clock.now()).toISOString()]);
+      stageResearchMutation(runtime.root, "UPDATE campaigns SET revision=?,control_json=json_set(control_json,'$.revision',?,'$.snapshot_seq',(SELECT MAX(seq) FROM events WHERE campaign_id=?)) WHERE campaign_id=? AND revision=?",
+        [current.revision + 1, current.revision + 1, current.campaign.campaign_id, current.campaign.campaign_id, current.revision]);
+      return { proof_authority: "none", next_obligation_id: next.obligation_id };
+    });
+    notifyResearchEventsCommitted(runtime); return true;
+  }
   async function executeStageWork(lease: Lease, snapshot: Snapshot): Promise<boolean> {
     assertLease(lease);
     const campaign = snapshot.campaign;
@@ -226,7 +274,11 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
       return true;
     }
     if (campaign.current_stage === "candidate_verification") {
-      if (savedResult(operation(snapshot, "native"))) fail("PROOF_VERIFICATION_INTEGRITY_GATES_REQUIRED");
+      const previous = savedResult(operation(snapshot, "native"));
+      if (previous) {
+        if (Array.isArray(previous.final_authority_executions) && integrateVerifiedLeaf(snapshot, previous.final_authority_executions as AsyncFinalAuthorityReplayExecution[])) return true;
+        fail("PROOF_VERIFICATION_INTEGRITY_GATES_REQUIRED");
+      }
       const run = [...campaign.stage_runs].reverse().find(value => value.stage === "candidate_generation" && value.obligation_id === snapshot.obligation_id);
       if (!run || !run.artifact_paths[0]) fail("PROOF_GENERATION_RESULT_MISSING");
       const generationSnapshot = { ...snapshot, campaign: { ...campaign, current_stage: "candidate_generation" as const }, stage_attempt: run.stage_attempt ?? 1 };
@@ -268,6 +320,7 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
         if (replay.legacy_final_input?.result === "ready") final_authority_executions.push(await executeFinalAuthorityReplay!.execute({ project, preparation }, { signal: controller.signal, assertCurrent }));
       }
       commitStageResult(lease, snapshot, { schema_version: "comath.proof_native_results.v1", results, replay_preparations, replay_executions, final_authority_executions, proof_authority: "none" }, undefined, true);
+      if (integrateVerifiedLeaf(snapshot, final_authority_executions)) return true;
       recordBlock(campaign.campaign_id, "PROOF_VERIFICATION_INTEGRITY_GATES_REQUIRED", snapshot);
       return false;
     }

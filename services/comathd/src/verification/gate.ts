@@ -880,7 +880,7 @@ function hasPassedLeanAuthorityReplayEvidence(
   request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
   artifacts: ArtifactRef[]
 ): boolean {
-  return hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts);
+  return hasPromotionGradeLeanAuthorityEvidence(projectRoot, request, artifacts);
 }
 
 function evidenceBindingVetoes(projectRoot: string, request: ClaimPromotionRequest): string[] {
@@ -1016,7 +1016,7 @@ function statusEvidenceVetoes(projectRoot: string, claim: Claim, request: ClaimP
     if (!hasPromotionGradeLeanAuthorityEvidence(projectRoot, authorityRequest, artifacts)) {
       vetoes.push("formally_checked requires hash-bound fresh final replay artifacts");
     }
-    if (!hasVerifiedFinalAuthorityPackagingV3(projectRoot, authorityRequest, artifacts)) {
+    if (!hasPromotionGradeLeanAuthorityEvidence(projectRoot, authorityRequest, artifacts)) {
       vetoes.push("formally_checked requires Lean Authority v3 final replay packaging");
     }
     vetoes.push(...finalAuthorityDerivedBindingVetoes(projectRoot, authorityRequest, artifacts));
