@@ -6,6 +6,7 @@ import type {
   GateBoardItem,
   PaperDashboardState,
   TuiDashboardModel,
+  DurableResearchDashboardSnapshot,
   WorkstreamBoardItem
 } from "./widgets.js";
 
@@ -316,6 +317,32 @@ export function renderTuiDashboard(snapshot: DashboardSnapshot): TuiDashboardMod
         title: "Blockers",
         rows: snapshot.blockers.length ? snapshot.blockers.map((item) => `${item.source} ${publicDashboardText(item.reason)}`) : ["none"]
       }
+    ]
+  };
+}
+
+function durableData(value: unknown): Record<string, any> {
+  const result = value && typeof value === "object" ? (value as any).result : undefined;
+  return result?.ok === true && result.data && typeof result.data === "object" ? result.data : {};
+}
+
+/** Render only service-reported durable facts; it never infers proof success. */
+export function renderDurableResearchDashboard(snapshot: DurableResearchDashboardSnapshot): TuiDashboardModel {
+  const campaign = durableData(snapshot.campaign), frontier = durableData(snapshot.frontier), budget = durableData(snapshot.budget);
+  const control = campaign.campaign && typeof campaign.campaign === "object" ? campaign.campaign : campaign;
+  const tasks = Array.isArray(frontier.tasks) ? frontier.tasks : [];
+  const charged = budget.charged && typeof budget.charged === "object" ? budget.charged : {};
+  const reserved = budget.reserved && typeof budget.reserved === "object" ? budget.reserved : {};
+  const unknown = Array.isArray(budget.unknown_dimensions) ? budget.unknown_dimensions.filter((value: unknown) => typeof value === "string") : [];
+  const overrun = budget.overrun && typeof budget.overrun === "object" ? budget.overrun : {};
+  return {
+    kind: "dashboard",
+    generated_at: new Date().toISOString(),
+    sections: [
+      { id: "research-campaign", title: "Research Campaign", rows: [`${typeof control.campaign_id === "string" ? control.campaign_id : "unknown"} ${typeof control.state === "string" ? control.state : "unknown"} revision:${Number.isSafeInteger(control.revision) ? control.revision : "unknown"}`, "proof_authority:none"] },
+      { id: "research-frontier", title: "Research Frontier", rows: tasks.length ? tasks.map((task: any) => `${typeof task.task_id === "string" ? task.task_id : "unknown"} ${typeof task.status === "string" ? task.status : "unknown"} generation:${Number.isSafeInteger(task.generation) ? task.generation : "unknown"}${typeof task.blocked_reason === "string" ? ` blocker:${task.blocked_reason}` : ""}`) : ["none"] },
+      { id: "research-budget", title: "Research Budget", rows: [`charged_output:${Number.isSafeInteger(charged.output_tokens) ? charged.output_tokens : "unknown"}`, `reserved_output:${Number.isSafeInteger(reserved.output_tokens) ? reserved.output_tokens : "unknown"}`, `unknown:${unknown.length ? unknown.join(",") : "none"}`, `overrun_output:${Number.isSafeInteger(overrun.output_tokens) ? overrun.output_tokens : "unknown"}`] },
+      { id: "research-snapshot", title: "Research Snapshot", rows: [`snapshot_seq:${Number.isSafeInteger(frontier.snapshot_seq) ? frontier.snapshot_seq : "unknown"}`] }
     ]
   };
 }
