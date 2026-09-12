@@ -2609,7 +2609,7 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
             || /^\/research\/v1\/campaigns\/[^/]+\/(pause|resume|cancel|finish)$/.test(url.pathname)
             || /^\/research\/v1\/tasks\/[^/]+\/(retry|cancel)$/.test(url.pathname));
           const intakeRead = req.method === "GET" && /^\/research\/v1\/intakes\/[^/]+$/.test(url.pathname);
-          const operatorRead = req.method === "GET" && /^\/research\/v1\/campaigns\/[^/]+(?:\/(frontier|budget|events))?$/.test(url.pathname);
+          const operatorRead = req.method === "GET" && /^\/research\/v1\/campaigns\/[^/]+(?:\/(frontier|budget|events|dashboard))?$/.test(url.pathname);
           const taskRead = req.method === "GET" && /^\/research\/v1\/tasks\/[^/]+(?:\/checkpoint)?$/.test(url.pathname);
           const operationRead = req.method === "GET" && /^\/research\/v1\/operations\/[^/]+$/.test(url.pathname);
           if (reference && (hostMutation || operatorMutation || intakeRead || operatorRead || taskRead || operationRead)) {
