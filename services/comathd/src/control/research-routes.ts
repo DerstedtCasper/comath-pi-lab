@@ -2,6 +2,8 @@ import { ComathError } from "../errors.js";
 import type { ResearchDaemon } from "../research/daemon-runtime.js";
 import type { IntakePrincipal } from "../research/formalization-intake.js";
 import { createCheckpointStore } from "../research/checkpoint-store.js";
+import { createResearchReadModel } from "../research/research-read-model.js";
+import { createResearchMetrics } from "../research/research-metrics.js";
 
 export type ResearchRouteResponse = { status: number; body: { ok: true; data: unknown } };
 const noRoute = () => undefined;
@@ -111,6 +113,14 @@ export async function dispatchResearchRoute(daemon: ResearchDaemon, method: stri
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may change a campaign budget", 403);
     requireBodyId(body, "campaign_id", budgetMutationId);
     return { status: 200, body: { ok: true, data: daemon.app.updateBudget({ kind: "operator", id: principal.id }, body as never) } };
+  }
+  const dashboardCampaignId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/dashboard$/.exec(pathname));
+  if (method === "GET" && dashboardCampaignId) {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may read a research dashboard", 403);
+    const rawLimit = url.searchParams.get("limit"), after = url.searchParams.get("after_task_id");
+    const readModel = createResearchReadModel(daemon.runtime).readCampaign(dashboardCampaignId, {
+      ...(rawLimit === null ? {} : { limit: Number(rawLimit) }), ...(after === null ? {} : { after_task_id: after }) });
+    return { status: 200, body: { ok: true, data: { ...readModel, metrics: createResearchMetrics(daemon.runtime).readCampaign(dashboardCampaignId) } } };
   }
   const campaignDetailId = pathId(/^\/research\/v1\/campaigns\/([^/]+)$/.exec(pathname));
   if (method === "GET" && campaignDetailId) {
