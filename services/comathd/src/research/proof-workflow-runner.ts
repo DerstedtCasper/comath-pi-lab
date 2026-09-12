@@ -223,8 +223,7 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     if (!current || current.binding_hash !== snapshot.binding_hash) fail("PROOF_STAGE_BINDING_CHANGED");
     const obligation = current.campaign.open_obligations.find(item => item.obligation_id === current.obligation_id);
     if (!obligation || final.claim_id !== obligation.claim_id || final.obligation_id !== obligation.obligation_id) fail("PROOF_FINAL_AUTHORITY_SCOPE_MISMATCH");
-    // Root completion requires its own final campaign evidence binding. A successful leaf is never root authority.
-    if (obligation.claim_id === current.campaign.root_claim_id) return false;
+    const rootCompletion = obligation.claim_id === current.campaign.root_claim_id;
     const control = store.getCampaign(current.campaign.campaign_id);
     if (!control) fail("RESEARCH_CAMPAIGN_NOT_FOUND");
     const claim = getClaim(runtime.root, control.project_id, obligation.claim_id);
@@ -233,17 +232,41 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     const promotion = promoteClaim(runtime.root, { project_id: control.project_id, claim_id: obligation.claim_id, target_status: "formally_checked",
       evidence_ids: [finalPackaging.evidence_id], artifact_ids: artifactIds, actor: "service:proof-workflow" });
     if (!promotion.gate.ok) fail("PROOF_FINAL_AUTHORITY_GATE_REJECTED");
+    const authorityEvidence = rootCompletion ? {
+      schema_version: "comath.formal_replay_authority_evidence.v1" as const,
+      proof_authority: "lean_kernel_clean_replay" as const,
+      final_evidence_status: "verified_final_authority_evidence" as const,
+      final_replay_manifest_v3_path: finalManifestPath,
+      final_authority_packaging_path: finalPackaging.packaging_path,
+      replay_id: final.replay_id,
+      gate_result_id: promotion.gate.id,
+      artifact_hash: createHash("sha256").update(readCommittedFile(runtime.root, finalPackaging.packaging_path)).digest("hex"),
+      recorded_at: new Date(runtime.clock.now()).toISOString()
+    } : undefined;
     withProjectCommit(runtime.root, { operation_id: `${operation(current, "leaf-integrated")}:${final.replay_id}`, campaign_id: current.campaign.campaign_id,
       expected_revision: current.revision, request: { obligation_id: obligation.obligation_id, claim_id: obligation.claim_id, gate_result_id: promotion.gate.id,
         replay_id: final.replay_id, artifact_ids: artifactIds } }, () => {
       const latest = getCampaign(runtime.root, current.campaign.campaign_id), latestControl = store.getCampaign(current.campaign.campaign_id)!;
       if (!latest || hash(latest) !== hash(current.campaign) || latestControl.revision !== current.revision) fail("PROOF_STAGE_REVISION_CONFLICT");
       const obligations = replaceObligationById(latest.open_obligations, { ...obligation, status: "integrated" });
+      const stageRun = { id: store.allocateId("SRUN"), stage: latest.current_stage, status: "completed" as const, artifact_paths: [
+        finalPackaging.packaging_path, finalManifestPath, finalPackaging.derived_bindings_path],
+        obligation_id: obligation.obligation_id, stage_attempt: current.stage_attempt, scope_package_sha256: current.scope_package_sha256,
+        created_at: new Date(runtime.clock.now()).toISOString() };
+      if (rootCompletion) {
+        if (!authorityEvidence) fail("PROOF_ROOT_AUTHORITY_EVIDENCE_MISSING");
+        writeCampaign(runtime.root, { ...latest, current_stage: "completed_formal_proof", status: "terminal", terminal_state: "completed_formal_proof",
+          open_obligations: obligations, formal_replay_authority_passed: true, formal_replay_authority_evidence: authorityEvidence,
+          stage_runs: [...latest.stage_runs, stageRun], next_actions: [] }, "service:proof-workflow");
+        const payload = { obligation_id: obligation.obligation_id, claim_id: obligation.claim_id, gate_result_id: promotion.gate.id, replay_id: final.replay_id, proof_authority: "lean_kernel_clean_replay" };
+        stageResearchMutation(runtime.root, "INSERT INTO events(campaign_id,type,actor,payload_json,payload_sha256,created_at) VALUES (?,?,?, ?,?,?)",
+          [current.campaign.campaign_id, "ProofCampaignFormallyCompleted", "service:proof-workflow", canonicalJson(payload), hash(payload), new Date(runtime.clock.now()).toISOString()]);
+        stageResearchMutation(runtime.root, "UPDATE campaigns SET revision=?,control_json=json_set(control_json,'$.revision',?,'$.snapshot_seq',(SELECT MAX(seq) FROM events WHERE campaign_id=?)) WHERE campaign_id=? AND revision=?",
+          [current.revision + 1, current.revision + 1, current.campaign.campaign_id, current.campaign.campaign_id, current.revision]);
+        return { proof_authority: "lean_kernel_clean_replay", terminal: true };
+      }
       const completed = advanceObligationStage({ ...latest, open_obligations: obligations,
-        stage_runs: [...latest.stage_runs, { id: store.allocateId("SRUN"), stage: latest.current_stage, status: "completed", artifact_paths: [
-          finalPackaging.packaging_path, finalManifestPath, finalPackaging.derived_bindings_path],
-          obligation_id: obligation.obligation_id, stage_attempt: current.stage_attempt, scope_package_sha256: current.scope_package_sha256,
-          created_at: new Date(runtime.clock.now()).toISOString() }] }, "completed_formal_proof", { obligation_id: obligation.obligation_id });
+        stage_runs: [...latest.stage_runs, stageRun] }, "completed_formal_proof", { obligation_id: obligation.obligation_id });
       const next = selectReadyObligation(obligations);
       if (!next) fail("PROOF_NEXT_OBLIGATION_UNAVAILABLE");
       const advanced = advanceObligationStage({ ...completed, status: "running" }, "planning", { obligation_id: next.obligation_id });

@@ -226,7 +226,7 @@ function stageScopedFinalAuthorityPackagingV1(input: {
       registry: input.registry, pack: input.pack } }, () => {
     writeCommittedFile(runtime.root, derived_bindings_path, canonicalJson(derived));
     writeCommittedFile(runtime.root, packaging_path, canonicalJson(packaging));
-    return { packaging_path, derived_bindings_path };
+    return { final_authority_packaging: { packaging_path, derived_bindings_path } };
   });
   return { packaging_path, derived_bindings_path, result: "pass", proof_authority: "lean_kernel_clean_replay", can_promote_claim: false, promotion_requires_gate: true };
 }
@@ -381,8 +381,9 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         versions[tool] = `${value.stdout ?? ""}\n${value.stderr ?? ""}`;
       }
       if (versions.lean && versions.lake) for (const step of [
-        { name: "check", purpose: "check" as const, command: ["lake", "env", "lean", project.project.theorem_file_rel] as ["lake", ...string[]] },
         { name: "build", purpose: "final_replay" as const, command: ["lake", "build", ...project.project.build_targets] as ["lake", ...string[]] },
+        // Build every declared project root first: a root theorem may import already-verified local lemmas.
+        { name: "check", purpose: "check" as const, command: ["lake", "env", "lean", project.project.theorem_file_rel] as ["lake", ...string[]] },
         { name: "audit", purpose: "audit" as const, command: ["lake", "env", "lean", project.project.audit_file_rel] as ["lake", ...string[]] },
         { name: "lock-elaboration", purpose: "audit" as const, command: ["lake", "env", "lean", project.approved_lock_elaboration_file] as ["lake", ...string[]] }
       ]) {
