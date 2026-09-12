@@ -9,7 +9,7 @@ const budgetDimensions = ["output_tokens", "tool_calls", "wall_ms", "cost_microu
 export type ResearchReadPage = { limit?: number; after_task_id?: string };
 export type ResearchReadModel = { readCampaign(campaignId: string, page?: ResearchReadPage): ResearchDashboardReadModel };
 export type ResearchDashboardReadModel = {
-  campaign_id: string; snapshot_seq: number; proof_authority: "none";
+  campaign_id: string; campaign: { campaign_id: string; state: string; revision: number }; snapshot_seq: number; proof_authority: "none";
   frontier: { items: ResearchTaskReadModel[]; next_cursor: string | null };
   budget: { charged: BudgetAmounts; reserved: BudgetAmounts; unknown: boolean; unknown_attempt_count: number; overrun: BudgetAmounts };
   validation: { current: ValidationSlotReadModel[]; history: ValidationSlotReadModel[]; open_issue_count: number };
@@ -84,7 +84,7 @@ export function createResearchReadModel(runtime: ProjectRuntime): ResearchReadMo
       active_obligation: active ? { obligation_id: active.obligation_id, claim_id: active.claim_id, status: active.status } : null };
   }
   function readCampaign(campaignId: string, input?: ResearchReadPage): ResearchDashboardReadModel {
-    if (!store.getCampaign(campaignId)) throw new Error("Research campaign does not exist");
+    const control = store.getCampaign(campaignId); if (!control) throw new Error("Research campaign does not exist");
     const page = boundedPage(input), rows = store.all("SELECT t.task_id,t.status,t.generation,t.pool,t.priority,a.attempt_key,a.state AS attempt_state,a.expires_at,a.stop_requested_at,a.termination_confirmed,c.checkpoint_id,c.seq,c.created_at,c.artifact_ref FROM tasks t LEFT JOIN attempts a ON a.task_id=t.task_id AND a.generation=t.generation LEFT JOIN checkpoints c ON c.checkpoint_id=json_extract(t.task_json,'$.checkpoint_head') WHERE t.campaign_id=? AND t.task_id>? ORDER BY t.task_id LIMIT ?", campaignId, page.after_task_id, page.limit + 1);
     const hasMore = rows.length > page.limit, selected = rows.slice(0, page.limit), now = runtime.clock.now();
     const items = selected.map(row => {
@@ -92,7 +92,7 @@ export function createResearchReadModel(runtime: ProjectRuntime): ResearchReadMo
       const attempt: JsonRecord = { attempt_key: row.attempt_key, state: row.attempt_state, expires_at: row.expires_at, stop_requested_at: row.stop_requested_at, termination_confirmed: row.termination_confirmed };
       return { task_id: String(row.task_id), status: String(row.status), generation: Number(row.generation), pool: String(row.pool), priority: Number(row.priority), runtime: { attempt_key: row.attempt_key === null || row.attempt_key === undefined ? null : String(row.attempt_key), state: row.attempt_state === null || row.attempt_state === undefined ? null : String(row.attempt_state), health: health(attempt, now) }, checkpoint };
     });
-    return { campaign_id: campaignId, snapshot_seq: Number(store.get("SELECT COALESCE(MAX(seq),0) AS seq FROM events WHERE campaign_id=?", campaignId)?.seq ?? 0), proof_authority: "none",
+    return { campaign_id: campaignId, campaign: { campaign_id: control.campaign_id, state: control.state, revision: control.revision }, snapshot_seq: Number(store.get("SELECT COALESCE(MAX(seq),0) AS seq FROM events WHERE campaign_id=?", campaignId)?.seq ?? 0), proof_authority: "none",
       frontier: { items, next_cursor: hasMore && items.length ? items.at(-1)!.task_id : null }, budget: budget(campaignId), validation: validation(campaignId), formalization: formalization(campaignId) };
   }
   return { readCampaign };
