@@ -35,6 +35,9 @@ export function createResearchOperatorMcp(config: OperatorMcpConfig): McpServer 
   const charter = z.object({ goal: text, approach_hints: z.array(text).max(100).default([]), constraints: z.array(text).max(100), success_criteria: z.array(text).min(1).max(100) }).strict();
   const budget = z.object({ output_tokens: z.number().int().nonnegative(), tool_calls: z.number().int().nonnegative(), wall_ms: z.number().int().positive(),
     cost_microusd: z.number().int().nonnegative().optional(), token_enforcement: z.enum(["observed_stop", "exact_output_cap"]) }).strict();
+  const budgetLimits = z.object({ output_tokens: z.number().int().nonnegative(), tool_calls: z.number().int().nonnegative(), wall_ms: z.number().int().nonnegative(),
+    cost_microusd: z.number().int().nonnegative().optional(), enforcement: z.literal("legacy_wall_only").optional() }).strict();
+  const artifact = z.object({ artifact_id: id, sha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
   server.registerTool("research_capabilities_get", { description: "Read actual CoMath durable-research operator capabilities. This never starts work.", inputSchema: {}, annotations: { readOnlyHint: true } }, () => call("/research/v1/capabilities"));
   server.registerTool("research_campaign_get", { description: "Read a durable research campaign and its non-authoritative proof status.", inputSchema: { campaign_id: id }, annotations: { readOnlyHint: true } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}`));
   server.registerTool("research_campaign_list", { description: "List durable campaigns or recover one by its operator start command ID.", inputSchema: { offset: z.number().int().nonnegative().optional(), limit: z.number().int().min(1).max(200).optional(), command_id: id.optional() }, annotations: { readOnlyHint: true } }, args => {
@@ -50,6 +53,15 @@ export function createResearchOperatorMcp(config: OperatorMcpConfig): McpServer 
   server.registerTool("research_operation_get", { description: "Read a sanitized durable operation state without its internal trust-commit plan.", inputSchema: { operation_id: id }, annotations: { readOnlyHint: true } }, args => call(`/research/v1/operations/${encodeURIComponent(args.operation_id)}`));
   server.registerTool("research_campaign_start", { description: "Start a bounded charter-scoped research campaign. This does not grant formal proof authority.",
     inputSchema: { command_id: id, charter, budget, max_active_workers: z.number().int().min(1).max(64), model_policy_id: id, tool_policy_id: id, role_template: id } }, args => call("/research/v1/campaigns", args));
+  server.registerTool("research_dag_patch", { description: "Apply one revision-checked, bounded ResearchDAG patch. The service validates every task and dependency; this does not grant proof authority.",
+    inputSchema: { command_id: id, campaign_id: id, base_revision: z.number().int().nonnegative(), create_tasks: z.array(z.unknown()).max(100),
+      add_dependencies: z.array(z.unknown()).max(100), replace_dependencies: z.array(z.unknown()).max(100), reprioritize: z.array(z.unknown()).max(100),
+      cancel_tasks: z.array(z.unknown()).max(100), move_pool: z.array(z.unknown()).max(100), rationale: text } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/patches`, args));
+  server.registerTool("research_budget_update", { description: "Update a campaign budget at an explicit revision. The service keeps reservations, charges, unknown usage, and overruns authoritative.",
+    inputSchema: { ...campaignMutation, new_limits: budgetLimits, pools: z.object({ exploration: budgetLimits, deepening: budgetLimits, validation: budgetLimits, formalization: budgetLimits }).strict().optional(),
+      pool_transfers: z.array(z.object({ from: z.enum(["exploration", "deepening", "validation", "formalization"]), to: z.enum(["exploration", "deepening", "validation", "formalization"]),
+        amounts: z.object({ output_tokens: z.number().int().nonnegative().optional(), tool_calls: z.number().int().nonnegative().optional(), wall_ms: z.number().int().nonnegative().optional(), cost_microusd: z.number().int().nonnegative().optional() }).strict() }).strict()).max(100).optional(), rationale: text } },
+    args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/budget`, args));
   server.registerTool("research_campaign_pause", { description: "Checkpoint and stop active work, then pause the campaign after owned attempts terminate.",
     inputSchema: { ...campaignMutation, reason: text } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/pause`, args));
   server.registerTool("research_campaign_resume", { description: "Resume a fully paused research campaign without changing its charter or formal scope.",
@@ -58,6 +70,15 @@ export function createResearchOperatorMcp(config: OperatorMcpConfig): McpServer 
     inputSchema: { ...campaignMutation, reason: text } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/cancel`, args));
   server.registerTool("research_campaign_finish", { description: "Checkpoint and stop remaining research work, then complete the research campaign without claiming a formal proof.",
     inputSchema: { ...campaignMutation, reason: text } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/finish`, args));
+  server.registerTool("research_task_cancel", { description: "Request a service-owned stop for one research task. It cannot promote claims or bypass owned attempt termination.",
+    inputSchema: { command_id: id, task_id: id, reason: text } }, args => call(`/research/v1/tasks/${encodeURIComponent(args.task_id)}/cancel`, args));
+  server.registerTool("research_task_retry", { description: "Retry an eligible task through the durable graph with explicit evidence and dependent rebinding. The previous task remains historical evidence.",
+    inputSchema: { ...campaignMutation, task_id: id, new_evidence_refs: z.array(artifact).max(100), rebind_dependents: z.array(id).max(100), rationale: text } }, args => call(`/research/v1/tasks/${encodeURIComponent(args.task_id)}/retry`, args));
+  server.registerTool("research_intake_prepare", { description: "Prepare a formalization package for host review. Preparation is non-authoritative and cannot approve or promote a proof.",
+    inputSchema: { command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(), root_local_id: id, result_refs: z.array(artifact).min(1).max(100), root_and_lemma_drafts: z.array(z.unknown()).min(1).max(100) } },
+    args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/intakes`, args));
+  server.registerTool("research_intake_request_approval", { description: "Ask the host confirmation channel to review one prepared formalization package. This tool cannot issue tickets or approve it.",
+    inputSchema: { command_id: id, intake_id: id, expected_revision: z.number().int().nonnegative(), prepared_sha256: z.string().regex(/^[a-f0-9]{64}$/) } }, args => call(`/research/v1/intakes/${encodeURIComponent(args.intake_id)}/approval-requests`, args));
   return server;
 }
 
