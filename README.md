@@ -62,7 +62,7 @@ Key directories:
 - `services/comathd/src/adapters/`: external wheel registry contracts.
 - `services/comathd/src/release/`: release, audit, certificate, proof-breadth, and source-review gates.
 - `config/`: non-secret sample configuration.
-- `docs/architecture/`: GA release criteria, threat model, adapter contracts, evidence-pack policy, and module boundaries.
+- `docs/architecture/`: durable research orchestration, GA release criteria, threat model, adapter contracts, evidence-pack policy, and module boundaries.
 - `.comath/`: runtime state written by `comathd`; ignored by Git and never committed.
 
 中文目录说明：
@@ -73,7 +73,7 @@ Key directories:
 - `services/comathd/src/adapters/`：external wheel registry 合约。
 - `services/comathd/src/release/`：发布、审计、证书、proof-breadth 与 source-review 门控。
 - `config/`：非密钥配置样例。
-- `docs/architecture/`：GA release criteria、threat model、adapter contracts、evidence-pack policy 和 module boundaries。
+- `docs/architecture/`：durable research orchestration、GA release criteria、threat model、adapter contracts、evidence-pack policy 和 module boundaries。
 - `.comath/`：由 `comathd` 写入的运行时状态，已被 Git 忽略，禁止提交。
 
 ## Deployment
@@ -319,6 +319,7 @@ git ls-files | rg "(^tests/|/tests/|\\.test\\.|phase0-smoke|docs/progress|docs/s
 - [External Lean Supply Chain](docs/architecture/external-lean-supply-chain.md)
 - [Evidence Pack Policy](docs/architecture/evidence-pack-policy.md)
 - [Module Boundaries](docs/architecture/module-boundaries.md)
+- [Durable Research Orchestration](docs/architecture/durable-research-orchestration.md)
 - [Config Samples](config/README.md)
 - [Contributing](CONTRIBUTING.md)
 
