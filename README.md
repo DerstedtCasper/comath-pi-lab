@@ -122,38 +122,25 @@ The public product snapshot intentionally does not ship the maintainers' interna
 
 ### Local HTTP Service
 
-`comathd` is currently exposed as an embeddable service factory rather than a packaged daemon binary. After building, start a local HTTP server by embedding `createComathServer()`:
+After building, use the service CLI with explicit absolute project and host-config paths. `doctor` opens no listener; `serve` is restricted to a loopback operator listener.
 
 PowerShell:
 
 ```powershell
-$env:COMATHD_PORT = "8787"
-@'
-import { createComathServer } from "./services/comathd/dist/index.js";
-
-const server = createComathServer();
-const http = await server.listen(Number(process.env.COMATHD_PORT ?? 8787), "127.0.0.1");
-const address = http.address();
-const port = typeof address === "object" && address ? address.port : process.env.COMATHD_PORT;
-console.log(`comathd listening on http://127.0.0.1:${port}`);
-'@ | node --input-type=module
+node .\services\comathd\dist\cli.js doctor --project-root D:\work\example --config D:\work\example\comath.json
+node .\services\comathd\dist\cli.js serve --project-root D:\work\example --config D:\work\example\comath.json --host 127.0.0.1 --port 8787
 ```
 
 POSIX shell:
 
 ```sh
-COMATHD_PORT=8787 node --input-type=module <<'EOF'
-import { createComathServer } from "./services/comathd/dist/index.js";
-
-const server = createComathServer();
-const http = await server.listen(Number(process.env.COMATHD_PORT ?? 8787), "127.0.0.1");
-const address = http.address();
-const port = typeof address === "object" && address ? address.port : process.env.COMATHD_PORT;
-console.log(`comathd listening on http://127.0.0.1:${port}`);
-EOF
+node services/comathd/dist/cli.js doctor --project-root /srv/comath/example --config /srv/comath/example/comath.json
+node services/comathd/dist/cli.js serve --project-root /srv/comath/example --config /srv/comath/example/comath.json --host 127.0.0.1 --port 8787
 ```
 
-中文：当前 `comathd` 以 embeddable service factory 形式暴露，而不是独立 daemon binary。构建后通过 `createComathServer().listen()` 在本机启动 HTTP 服务；生产化部署应由宿主进程管理生命周期、日志、端口和权限。
+The embeddable `createComathServer()` factory remains available for an in-process host. Host deployment owns lifecycle, logs, ports, and configuration secrets.
+
+中文：构建后通过 CLI 的 `doctor` 和 `serve` 启动本机服务，必须给出绝对 project/config 路径；`serve` 只接受 loopback operator listener。`createComathServer()` 仍可供嵌入式宿主使用；生产部署由宿主管理生命周期、日志、端口和配置密钥。
 
 ## Configuration
 
