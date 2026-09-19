@@ -177,7 +177,13 @@ export class ResearchDaemon {
         this.validationFanout.recordReplacementContext(previous, next, refs);
       } : policies.recordValidationRetry,
       validateRoute: (draft, campaign) => {
-      policies.validateRoute?.(draft, campaign); this.failureService?.validateRoute(draft, campaign);
+      policies.validateRoute?.(draft, campaign);
+      // Validation fanout constructs its context and slot binding in the same
+      // transaction as the DAG patch. Asking the generic failure route to
+      // materialize that context while the draft is still being admitted is a
+      // circular read; the fanout verifies its own policy-bound context before
+      // the task can run.
+      if (!options.validation || !draft.specialization?.startsWith("validation:")) this.failureService?.validateRoute(draft, campaign);
     } });
     if (options.formalCandidateProfile && config.proof_workflow && canonicalJson(options.formalCandidateProfile) !== canonicalJson(config.proof_workflow.candidate)) fail("PROOF_PROFILE_CONFLICT", "Host proof workflow and candidate profiles disagree");
     this.formalCandidates = createFormalCandidateDispatch(this.app, { profile: options.formalCandidateProfile ?? config.proof_workflow?.candidate });
