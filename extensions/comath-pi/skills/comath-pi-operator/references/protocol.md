@@ -26,3 +26,9 @@ command ID and payload.
 The operator credential permits research control only. It never permits ticket
 issuance or formal approval. `ctx.hasUI`, a model tool call, or an external
 harness message is not proof of human confirmation.
+
+`research_validation_issue_resolve` is a fixed operator tool, not a free-form
+resolution assertion. Its input names a candidate, the existing issue, a
+separately accepted `dispute` or `referee` task, and newly cited artifact
+references. The service rejects non-independent tasks, old evidence, missing
+authorization policy, or any attempt to promote a proof.

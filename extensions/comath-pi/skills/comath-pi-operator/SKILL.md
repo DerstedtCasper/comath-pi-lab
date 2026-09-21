@@ -25,7 +25,11 @@ skill or the harness, schedules work and owns all durable state.
 5. To prepare a formal lock, request preparation and approval only. The operator
    path cannot issue tickets or approve; a human host must inspect and approve
    through the separate host route.
-6. Preserve the last observed event sequence and any pending mutation outside
+6. Resolve a validation issue only after an independently accepted `dispute` or
+   `referee` task cites the original issue and new artifact evidence. Send
+   `research_validation_issue_resolve`; it rechecks those bindings and cannot
+   approve a formal lock or promote a proof.
+7. Preserve the last observed event sequence and any pending mutation outside
    `.comath/`. Retry a lost start response with the same command ID and payload;
    never generate a replacement campaign merely because a response was lost.
 

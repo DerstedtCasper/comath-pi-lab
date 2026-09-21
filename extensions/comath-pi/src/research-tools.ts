@@ -2,7 +2,7 @@ import type { ResearchOperatorClient } from "./research-client.js";
 
 export type PiOperatorRequest = { version: 1; request_id: string; tool: string; input: unknown };
 export type PiOperatorResult = { version: 1; request_id: string; tool: string; result: { ok: true; data: unknown } | { ok: false; code: string; error: string } };
-const allowed = new Set(["research_capabilities_get", "research_campaign_list", "research_campaign_start", "research_campaign_get", "research_frontier_get", "research_budget_get", "research_dashboard_get", "research_events_read", "research_dag_patch", "research_budget_update", "research_campaign_pause", "research_campaign_resume", "research_campaign_cancel", "research_campaign_finish", "research_task_get", "research_task_cancel", "research_task_retry", "research_checkpoint_get", "research_operation_get", "research_intake_prepare", "research_intake_request_approval"]);
+const allowed = new Set(["research_capabilities_get", "research_campaign_list", "research_campaign_start", "research_campaign_get", "research_frontier_get", "research_budget_get", "research_dashboard_get", "research_events_read", "research_dag_patch", "research_budget_update", "research_campaign_pause", "research_campaign_resume", "research_campaign_cancel", "research_campaign_finish", "research_task_get", "research_task_cancel", "research_task_retry", "research_validation_issue_resolve", "research_checkpoint_get", "research_operation_get", "research_intake_prepare", "research_intake_request_approval"]);
 
 export async function dispatchResearchOperatorRequest(client: ResearchOperatorClient, raw: unknown): Promise<PiOperatorResult> {
   const value = raw && typeof raw === "object" ? raw as Partial<PiOperatorRequest> : {};
