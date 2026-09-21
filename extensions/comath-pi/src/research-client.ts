@@ -24,6 +24,7 @@ const route = (tool: string, input: unknown): { method: "GET" | "POST"; path: st
     case "research_task_cancel": return task ? { method: "POST", path: `/research/v1/tasks/${encodeURIComponent(task)}/cancel`, body: input } : undefined;
     case "research_task_retry": return task ? { method: "POST", path: `/research/v1/tasks/${encodeURIComponent(task)}/retry`, body: input } : undefined;
     case "research_validation_issue_resolve": return { method: "POST", path: "/research/v1/validation/issues/resolve", body: input };
+    case "research_validation_intake_preparations_list": { const page = new URLSearchParams(); if (campaign) page.set("campaign_id", campaign); return { method: "GET", path: `/research/v1/validation/intake-preparations${page.size ? `?${page}` : ""}` }; }
     case "research_checkpoint_get": return task ? { method: "GET", path: `/research/v1/tasks/${encodeURIComponent(task)}/checkpoint` } : undefined;
     case "research_operation_get": return operation ? { method: "GET", path: `/research/v1/operations/${encodeURIComponent(operation)}` } : undefined;
     case "research_intake_prepare": return campaign ? { method: "POST", path: `/research/v1/campaigns/${encodeURIComponent(campaign)}/intakes`, body: input } : undefined;

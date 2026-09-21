@@ -22,9 +22,12 @@ skill or the harness, schedules work and owns all durable state.
    approach hint, a model response, or a Pi receipt is never Lean proof. Report
    formal proof only when the service's existing final replay/gate evidence says
    so.
-5. To prepare a formal lock, request preparation and approval only. The operator
-   path cannot issue tickets or approve; a human host must inspect and approve
-   through the separate host route.
+5. For a validated research candidate, first read
+   `research_validation_intake_preparations_list`. Its candidate reference can
+   be supplied to the existing preparation request, but it does not create a
+   draft, lock, ticket, approval, or proof. The operator path cannot issue
+   tickets or approve; a human host must inspect and approve through the
+   separate host route.
 6. Resolve a validation issue only after an independently accepted `dispute` or
    `referee` task cites the original issue and new artifact evidence. Send
    `research_validation_issue_resolve`; it rechecks those bindings and cannot

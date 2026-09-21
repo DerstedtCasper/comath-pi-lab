@@ -6466,7 +6466,7 @@ const durableResearchTools: Record<string, string> = {
   capabilities: "research_capabilities_get", status: "research_campaign_get", frontier: "research_frontier_get", budget: "research_budget_get", events: "research_events_read",
   start: "research_campaign_start", patch: "research_dag_patch", synthesize: "research_dag_patch", "budget-update": "research_budget_update",
   pause: "research_campaign_pause", resume: "research_campaign_resume", cancel: "research_campaign_cancel", finish: "research_campaign_finish",
-  task: "research_task_get", "task-cancel": "research_task_cancel", retry: "research_task_retry", "resolve-issue": "research_validation_issue_resolve", checkpoint: "research_checkpoint_get", operation: "research_operation_get",
+  task: "research_task_get", "task-cancel": "research_task_cancel", retry: "research_task_retry", "resolve-issue": "research_validation_issue_resolve", preparations: "research_validation_intake_preparations_list", checkpoint: "research_checkpoint_get", operation: "research_operation_get",
   "prepare-lock": "research_intake_prepare", "request-approval": "research_intake_request_approval"
 };
 
@@ -6482,6 +6482,7 @@ function durableJsonInput(args: string[]): Record<string, unknown> | undefined {
 function durableReadInput(subcommand: string, args: string[]): Record<string, unknown> {
   const campaignId = optionValue(args, "--campaign-id"), taskId = optionValue(args, "--task-id"), operationId = optionValue(args, "--operation-id");
   if (subcommand === "capabilities") return {};
+  if (subcommand === "preparations") return campaignId ? { campaign_id: campaignId } : {};
   if (subcommand === "status" || subcommand === "budget") return { campaign_id: requiredOption(campaignId, "campaign_id") };
   if (subcommand === "frontier") return { campaign_id: requiredOption(campaignId, "campaign_id"), ...(optionValue(args, "--after-task-id") ? { after_task_id: optionValue(args, "--after-task-id") } : {}), ...(numberOptionValue(args, "--limit") !== undefined ? { limit: numberOptionValue(args, "--limit") } : {}) };
   if (subcommand === "events") return { campaign_id: requiredOption(campaignId, "campaign_id"), after_seq: numberOptionValue(args, "--after-seq") ?? 0, limit: numberOptionValue(args, "--limit") ?? 100 };
