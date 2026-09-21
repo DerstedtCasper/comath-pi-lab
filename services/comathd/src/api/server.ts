@@ -2607,7 +2607,8 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
             || /^\/research\/v1\/intakes\/[^/]+\/approval-requests$/.test(url.pathname)
             || /^\/research\/v1\/campaigns\/[^/]+\/(patches|budget)$/.test(url.pathname)
             || /^\/research\/v1\/campaigns\/[^/]+\/(pause|resume|cancel|finish)$/.test(url.pathname)
-            || /^\/research\/v1\/tasks\/[^/]+\/(retry|cancel)$/.test(url.pathname));
+            || /^\/research\/v1\/tasks\/[^/]+\/(retry|cancel)$/.test(url.pathname)
+            || url.pathname === "/research/v1/validation/issues/resolve");
           const intakeRead = req.method === "GET" && /^\/research\/v1\/intakes\/[^/]+$/.test(url.pathname);
           const operatorRead = req.method === "GET" && /^\/research\/v1\/campaigns\/[^/]+(?:\/(frontier|budget|events|dashboard))?$/.test(url.pathname);
           const taskRead = req.method === "GET" && /^\/research\/v1\/tasks\/[^/]+(?:\/checkpoint)?$/.test(url.pathname);
@@ -2634,7 +2635,7 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
               missing_configuration: reference.daemon.config.enabled ? [] : ["research.enabled"], operator_tools: [
                 "research_capabilities_get", "research_campaign_list", "research_campaign_start", "research_campaign_get", "research_frontier_get",
                 "research_budget_get", "research_budget_update", "research_dag_patch", "research_campaign_pause", "research_campaign_resume",
-                "research_campaign_cancel", "research_campaign_finish", "research_task_get", "research_task_cancel", "research_task_retry",
+                "research_campaign_cancel", "research_campaign_finish", "research_task_get", "research_task_cancel", "research_task_retry", "research_validation_issue_resolve",
                 "research_checkpoint_get", "research_artifact_read", "research_events_read", "research_intake_prepare", "research_intake_request_approval",
                 "research_operation_get"
               ] } } });

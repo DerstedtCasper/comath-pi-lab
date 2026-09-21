@@ -102,6 +102,14 @@ export async function dispatchResearchRoute(daemon: ResearchDaemon, method: stri
     requireBodyId(body, "task_id", retryTaskId);
     return { status: 200, body: { ok: true, data: daemon.app.retryTask({ kind: "operator", id: principal.id }, body as never) } };
   }
+  if (method === "POST" && pathname === "/research/v1/validation/issues/resolve") {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may request validation issue resolution", 403);
+    const input = record(body);
+    return { status: 200, body: { ok: true, data: daemon.resolveValidationIssue({
+      candidate_id: typeof input.candidate_id === "string" ? input.candidate_id : "", issue_id: typeof input.issue_id === "string" ? input.issue_id : "",
+      task_id: typeof input.task_id === "string" ? input.task_id : "", evidence_refs: Array.isArray(input.evidence_refs) ? input.evidence_refs as { artifact_id: string; sha256: string }[] : []
+    }) } };
+  }
   const patchId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/patches$/.exec(pathname));
   if (method === "POST" && patchId) {
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may patch a campaign", 403);

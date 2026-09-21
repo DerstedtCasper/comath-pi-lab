@@ -74,6 +74,8 @@ export function createResearchOperatorMcp(config: OperatorMcpConfig): McpServer 
     inputSchema: { command_id: id, task_id: id, reason: text } }, args => call(`/research/v1/tasks/${encodeURIComponent(args.task_id)}/cancel`, args));
   server.registerTool("research_task_retry", { description: "Retry an eligible task through the durable graph with explicit evidence and dependent rebinding. The previous task remains historical evidence.",
     inputSchema: { ...campaignMutation, task_id: id, new_evidence_refs: z.array(artifact).max(100), rebind_dependents: z.array(id).max(100), rationale: text } }, args => call(`/research/v1/tasks/${encodeURIComponent(args.task_id)}/retry`, args));
+  server.registerTool("research_validation_issue_resolve", { description: "Request resolution of one durable validation issue using a separately accepted dispute/referee task and new evidence. The service rechecks independence and cannot promote proof authority.",
+    inputSchema: { candidate_id: id, issue_id: id, task_id: id, evidence_refs: z.array(artifact).min(1).max(100) } }, args => call("/research/v1/validation/issues/resolve", args));
   server.registerTool("research_intake_prepare", { description: "Prepare a formalization package for host review. Preparation is non-authoritative and cannot approve or promote a proof.",
     inputSchema: { command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(), root_local_id: id, result_refs: z.array(artifact).min(1).max(100), root_and_lemma_drafts: z.array(z.unknown()).min(1).max(100) } },
     args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/intakes`, args));

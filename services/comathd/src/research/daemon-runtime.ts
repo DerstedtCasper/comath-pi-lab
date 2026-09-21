@@ -362,6 +362,11 @@ export class ResearchDaemon {
   resumeCampaign(principal: ResearchPrincipal, campaignId: string, input: { command_id: string; expected_revision: number }) {
     return this.app.resumeCampaign(principal, { ...input, campaign_id: campaignId });
   }
+  /** The aggregation validates independent dispute evidence; this transport hook never resolves issues itself. */
+  resolveValidationIssue(input: { candidate_id: string; issue_id: string; task_id: string; evidence_refs: { artifact_id: string; sha256: string }[] }) {
+    if (!this.validationAggregation) fail("VALIDATION_RESOLUTION_UNAVAILABLE", "Validation resolution is not configured for this daemon");
+    return this.validationAggregation.resolveValidationIssue(input);
+  }
   async cancelCampaign(principal: ResearchPrincipal, campaignId: string, input: { command_id: string; expected_revision: number; reason: string }) {
     const pending = this.app.beginCancelCampaign(principal, { ...input, campaign_id: campaignId });
     await Promise.all(pending.attempt_keys.map(attemptKey => this.reconciler.requestStop(attemptKey, "user_cancel")));
