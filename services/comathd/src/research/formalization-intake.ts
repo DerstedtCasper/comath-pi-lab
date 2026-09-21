@@ -286,7 +286,7 @@ export function createFormalizationIntake(runtime: ProjectRuntime, options: Form
       stageResearchMutation(runtime.root, "UPDATE approval_requests SET state='approved',host_decision_ref=? WHERE request_id=?", [operationId, String(ticket.request_id)]);
       const control = store.getCampaign(prepared.campaign_id)!;
       stageResearchMutation(runtime.root, "UPDATE campaigns SET revision=?,control_json=? WHERE campaign_id=? AND revision=?", [control.revision + 1,
-        canonicalJson({ ...control, revision: control.revision + 1, supervisor: { ...control.supervisor, dirty: true } }), control.campaign_id, control.revision]);
+        canonicalJson({ ...control, revision: control.revision + 1, supervisor: { ...control.supervisor, awaiting_formal_scope: false, dirty: true } }), control.campaign_id, control.revision]);
       stageResearchMutation(runtime.root, "INSERT INTO events(campaign_id,type,actor,payload_json,payload_sha256,created_at) VALUES (?,'FormalScopeApproved','service:formal-intake',?,?,?)",
         [control.campaign_id, canonicalJson(receipt), hash(receipt), stamp]);
       return receipt;

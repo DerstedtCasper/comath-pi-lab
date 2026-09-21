@@ -171,8 +171,8 @@ export class ResearchOrchestrator {
       const taskId = allocateUnused("TASK", value => !!this.runtime.store.getTask(value));
       const projectId = bootstrap.project_id ? id.parse(bootstrap.project_id) : this.runtime.store.listCampaigns().at(0)?.project_id ?? this.runtime.store.allocateId("P");
       const campaign: ResearchControlCampaign = { campaign_id: campaignId, project_id: projectId, revision: 0, state: "running", charter,
-        max_active_workers: input.max_active_workers, budget_policy_id: "operator_explicit", supervisor: { dirty: true, last_event_seq: 0,
-          ordinary_completed_since_trigger: 0, next_trigger_at: stamp }, snapshot_seq: 0 };
+        max_active_workers: input.max_active_workers, budget_policy_id: "operator_explicit", supervisor: { dirty: false, awaiting_formal_scope: true, last_event_seq: 0,
+          ordinary_completed_since_trigger: 0, next_trigger_at: new Date(this.runtime.clock.now() + 15 * 60_000).toISOString() }, snapshot_seq: 0 };
       const task = researchTaskSchema.parse({ task_id: taskId, campaign_id: campaignId, depends_on: [], kind: "intake", question: charter.goal,
         acceptance: charter.success_criteria, role_template: input.role_template, model_policy_id: input.model_policy_id, tool_policy_id: input.tool_policy_id,
         scope: { kind: "charter", charter_sha256: charter.sha256 }, pool: "exploration", priority: 2, budget: input.budget,

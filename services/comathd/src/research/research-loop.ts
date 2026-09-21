@@ -91,6 +91,10 @@ export class ResearchLoop {
       const campaign = this.campaign(campaignId), supervisor = { ...campaign.supervisor };
       const page = this.app.events.readEventsAfter({ campaign_id: campaignId, after_seq: supervisor.last_event_seq, limit: 200 });
       let snapshotSeq = campaign.snapshot_seq;
+      if (supervisor.awaiting_formal_scope === true) {
+        store.putCampaign({ ...campaign, snapshot_seq: snapshotSeq, supervisor });
+        return { last_event_seq: supervisor.last_event_seq, dirty: supervisor.dirty, has_more: false };
+      }
       for (const event of page) {
         if (event.payload_sha256 !== hash(event.payload)) fail("SUPERVISOR_SOURCE_EVENT_INVALID");
         supervisor.last_event_seq = event.seq;
@@ -145,6 +149,7 @@ export class ResearchLoop {
       const { store, clock } = this.app.runtime;
       const campaign = this.campaign(input.campaign_id);
       if (campaign.state !== "running") return { status: "inactive" };
+      if (campaign.supervisor.awaiting_formal_scope === true) return { status: "idle" };
       if (campaign.supervisor.inflight_task_id) return { status: "inflight", task_id: campaign.supervisor.inflight_task_id };
       if (!campaign.supervisor.dirty) return { status: "idle" };
       if (input.task.kind !== "synthesize") fail("SUPERVISOR_TASK_KIND_INVALID");
