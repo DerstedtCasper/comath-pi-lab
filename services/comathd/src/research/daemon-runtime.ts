@@ -1,4 +1,7 @@
+import { createHash, randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { canonicalJson } from "../verification/runner-contracts.js";
 import { ComathError } from "../errors.js";
 import { researchConfigSchema, type ResearchConfig } from "../config/config.js";
@@ -12,7 +15,7 @@ import { createPortfolioScheduler, type PortfolioScheduler, type ResearchGrant }
 import { createResearchOrchestrator, type ResearchOrchestrator, type ResearchPrincipal, type ResearchTaskPolicies } from "./research-orchestrator.js";
 import type { PoolBudgetLimits } from "./budget-ledger.js";
 import { createAttemptReconciler, type AttemptReconciler, type AttemptLifecycleHooks } from "./reconciliation.js";
-import { drainResearchAuditOutbox } from "./project-commit.js";
+import { drainResearchAuditOutbox, resolveProjectCommitPath } from "./project-commit.js";
 import type { ResearchTask } from "./research-schemas.js";
 import type { ResearchResourceConfig } from "./resource-admission.js";
 import { createWorkerGateway, type WorkerGatewayOptions } from "../control/worker-routes.js";
@@ -24,7 +27,7 @@ import { createResearchToolExecutor } from "./research-tool-executor.js";
 import { createConfiguredCodexAdapter } from "../agents/runtime/codex-owned-launcher.js";
 import { createResearchResultService } from "./research-result-service.js";
 import { createSupervisorDriver, defaultResearchContextPolicy } from "./supervisor-driver.js";
-import { createValidationFanout, type ValidationFanoutOptions } from "./validation-fanout.js";
+import { createValidationFanout, validationStatementBriefSchema, type ValidationFanoutOptions } from "./validation-fanout.js";
 import { createValidationAggregation, type ValidationAggregationOptions } from "./validation-aggregation.js";
 import { createValidationDriver } from "./validation-driver.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
@@ -35,7 +38,7 @@ import { createFormalSubmissionLifecycle } from "./formal-submission-lifecycle.j
 import { createFormalCandidateProjectService } from "./formal-candidate-project.js";
 import { createProofToolAttemptService } from "./proof-tool-attempt.js";
 import { createProofWorkflowRunner } from "./proof-workflow-runner.js";
-import { listArtifactRefs } from "../artifacts/store.js";
+import { importArtifact, listArtifactRefs } from "../artifacts/store.js";
 import { initProject } from "../project/project-store.js";
 import { startCampaign as startFormalCampaign } from "../proof-kernel/campaign/campaign-tick.js";
 import { getCampaign as getFormalCampaign } from "../proof-kernel/campaign/research-campaign.js";
@@ -79,6 +82,40 @@ function resourcesWithLegacy(config: ResearchConfig): ResearchResourceConfig {
     } };
 }
 function canonical(root: string): string { const path = realpathSync(root); return process.platform === "win32" ? path.toLowerCase() : path; }
+function configuredValidationOptions(runtime: ProjectRuntime, config: ResearchConfig): Omit<ValidationFanoutOptions, "verifyPublishedCandidate"> | undefined {
+  if (!config.validation) return undefined;
+  return {
+    policy_version: config.validation.policy_version,
+    profiles: config.validation.profiles,
+    resolveToolPolicy: toolPolicyId => {
+      const policy = config.tool_policies[toolPolicyId];
+      return policy ? { visibility: policy.visibility, allowed_tools: policy.allowed_tools, new_thread: policy.new_thread } : undefined;
+    },
+    authorizeArtifact: (task, ref) => {
+      const campaign = runtime.store.getCampaign(task.campaign_id);
+      const artifact = campaign && listArtifactRefs(runtime.root).find(value => value.id === ref.artifact_id && value.sha256 === ref.sha256);
+      return task.scope.kind === "formal" && artifact?.project_id === campaign?.project_id;
+    },
+    prepareContext: async ({ candidate_id, candidate, root }) => {
+      const brief = validationStatementBriefSchema.parse({ schema_version: "comath.validation_statement_brief.v1", candidate_id,
+        root_scope_sha256: createHash("sha256").update(canonicalJson(root.scope)).digest("hex"),
+        claims: candidate.claims.map(claim => ({ statement: claim.statement, assumptions: claim.assumptions })),
+        approved_assumptions: root.assumptions, proof_authority: "none" });
+      const temporary = resolveProjectCommitPath(runtime.root, `.tmp/comath/validation-briefs/${randomUUID()}.json`);
+      await mkdir(dirname(temporary), { recursive: true });
+      await writeFile(temporary, canonicalJson(brief), { flag: "wx", flush: true });
+      try {
+        const source = runtime.store.get("SELECT source_task_id FROM candidates WHERE candidate_id=?", candidate_id);
+        const sourceTask = source && runtime.store.getTask(String(source.source_task_id));
+        const campaign = sourceTask && runtime.store.getCampaign(sourceTask.campaign_id);
+        if (!campaign) fail("VALIDATION_CANDIDATE_NOT_FOUND", "Validation candidate has no current campaign");
+        const artifact = await importArtifact({ projectRoot: runtime.root, project_id: campaign.project_id,
+          source_path: temporary, kind: "other", actor: "service:validation-context" });
+        return { statement_brief: { ref: { artifact_id: artifact.id, sha256: artifact.sha256 }, kind: "statement" as const, source: "service:validation-statement-brief" }, public_sources: [] };
+      } finally { await unlink(temporary).catch(error => { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }); }
+    }
+  };
+}
 function fail(code: string, message: string): never { throw new ComathError(message, { code, statusCode: 409 }); }
 async function withinShutdownGrace<T>(work: Promise<T>, milliseconds: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -167,15 +204,16 @@ export class ResearchDaemon {
       role_template_ids: listRoleTemplates().map(role => role.id), validateFormalScope: (scope, campaign) => {
         try { requireApprovedFormalScope(runtime, campaign.campaign_id, scope); return true; } catch { return false; }
       } };
+    const validation = options.validation ?? configuredValidationOptions(runtime, config);
     if (config.supervisor && !policies.role_template_ids.includes(config.supervisor.role_template)) fail("SUPERVISOR_ROLE_UNKNOWN", "Supervisor role must be selected from the configured host role templates");
     if (this.contextService) this.failureService = createResearchFailureService(runtime, { policyForTask: this.contextService.routePolicyForTask,
       verifyRetryCondition: options.verifyRetryCondition, classifyHardBlocker: options.classifyHardBlocker });
     this.app = createResearchOrchestrator(runtime, { ...policies,
-      validateValidationRetry: options.validation ? (previous, refs) => {
+      validateValidationRetry: validation ? (previous, refs) => {
         if (!this.resultService) fail("VALIDATION_RETRY_CONSUMER_UNAVAILABLE", "Validation result consumer is not ready");
-        this.resultService.validateValidationRetry(previous, refs, options.validation!.authorizeArtifact);
+        this.resultService.validateValidationRetry(previous, refs, validation.authorizeArtifact);
       } : policies.validateValidationRetry,
-      recordValidationRetry: options.validation ? (previous, next, refs) => {
+      recordValidationRetry: validation ? (previous, next, refs) => {
         if (!this.validationFanout) fail("VALIDATION_REPLACEMENT_CONTEXT_UNAVAILABLE", "Validation context consumer is not ready");
         this.validationFanout.recordReplacementContext(previous, next, refs);
       } : policies.recordValidationRetry,
@@ -186,7 +224,7 @@ export class ResearchDaemon {
       // materialize that context while the draft is still being admitted is a
       // circular read; the fanout verifies its own policy-bound context before
       // the task can run.
-      if (!options.validation || !draft.specialization?.startsWith("validation:")) this.failureService?.validateRoute(draft, campaign);
+      if (!validation || !draft.specialization?.startsWith("validation:")) this.failureService?.validateRoute(draft, campaign);
     } });
     if (options.formalCandidateProfile && config.proof_workflow && canonicalJson(options.formalCandidateProfile) !== canonicalJson(config.proof_workflow.candidate)) fail("PROOF_PROFILE_CONFLICT", "Host proof workflow and candidate profiles disagree");
     this.formalCandidates = createFormalCandidateDispatch(this.app, { profile: options.formalCandidateProfile ?? config.proof_workflow?.candidate });
@@ -248,8 +286,8 @@ export class ResearchDaemon {
       authorizeArtifact: options.workerGateway?.authorizeArtifact ?? this.contextService.gatewayOptions.authorizeArtifact,
       onArtifactCommitted: options.workerGateway?.onArtifactCommitted ?? this.contextService.gatewayOptions.onArtifactCommitted
     });
-    if (options.validation) {
-      const host = options.validation;
+    if (validation) {
+      const host = validation;
       this.validationFanout = createValidationFanout(this.app, { ...host, verifyPublishedCandidate: this.resultService.verifyPublishedCandidate,
         resolveApprovedRoot: host.resolveApprovedRoot ?? ((source) => {
           const approved = requireApprovedFormalScope(runtime, source.campaign_id, source.scope);
@@ -273,8 +311,8 @@ export class ResearchDaemon {
     this.intake = createFormalizationIntake(runtime, { results: this.resultService,
       authorizeArtifact: (_principal, ref, campaignId) => listArtifactRefs(runtime.root).some(record => record.id === ref.artifact_id && record.sha256 === ref.sha256
         && record.project_id === runtime.store.getCampaign(campaignId)?.project_id),
-      verifyValidatedCandidate: candidateId => !!options.validation && this.validationAggregation?.aggregateValidation({ candidate_id: candidateId,
-        policy_version: options.validation.policy_version }).state === "research_validated" });
+      verifyValidatedCandidate: candidateId => !!validation && this.validationAggregation?.aggregateValidation({ candidate_id: candidateId,
+        policy_version: validation.policy_version }).state === "research_validated" });
     if (config.proof_workflow && !policies.role_template_ids.includes(config.proof_workflow.candidate.role_template)) fail("PROOF_ROLE_UNKNOWN", "Proof candidate role must be a configured host role");
     this.proofWorkflow = createProofWorkflowRunner(this.app, { config: config.proof_workflow, candidates: this.formalCandidates,
       intake: this.formalCandidateIntake, projects: this.formalCandidateProjects, tools: this.proofTools,

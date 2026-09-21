@@ -3,7 +3,7 @@ import { isAbsolute, join } from "node:path";
 import { z } from "zod";
 import { assertPathAllowed } from "../security/path-policy.js";
 import { runtimeLayout } from "../project/runtime-layout.js";
-import { taskBudgetSchema } from "../research/research-schemas.js";
+import { researchPoolSchema, taskBudgetSchema } from "../research/research-schemas.js";
 
 export type ComathConfig = {
   version: number;
@@ -15,6 +15,11 @@ const boundedMs = z.number().int().min(1).max(86400000);
 const wheelTerms = z.strictObject({ license_note: z.string().min(1), terms_url: z.url().optional(), redistribution_policy: z.string().min(1) });
 const wheelHttp = z.strictObject({ endpoint: z.url(), wire_format: z.enum(["query_json", "query_text"]), credential_env: envName.optional(),
   timeout_ms: z.number().int().min(1).max(120000).optional(), max_response_bytes: z.number().int().min(1).max(2 * 1024 * 1024).optional(), terms: wheelTerms });
+const validationProfileSchema = z.strictObject({ model_policy_id: z.string().min(1).max(160), tool_policy_id: z.string().min(1).max(160),
+  role_template: z.string().min(1).max(160), budget: taskBudgetSchema.refine(value => value.token_enforcement !== "wall_only_legacy"),
+  pool: researchPoolSchema, priority: z.number().int().min(0).max(4), context_byte_cap: z.number().int().min(1024).max(16 * 1024 * 1024) });
+const validationProfilesSchema = z.strictObject({ referee: validationProfileSchema, counterexample: validationProfileSchema,
+  reproduce_a: validationProfileSchema, reproduce_b: validationProfileSchema, novelty: validationProfileSchema, formalization_probe: validationProfileSchema });
 export const researchConfigSchema = z.strictObject({
   enabled: z.boolean().default(false), max_active_workers: z.number().int().min(1).max(64).default(4),
   proof_workflow: z.strictObject({
@@ -28,9 +33,10 @@ export const researchConfigSchema = z.strictObject({
   }).optional(),
   supervisor: z.strictObject({ model_policy_id: z.string().min(1).max(160), tool_policy_id: z.string().min(1).max(160),
     role_template: z.string().min(1).max(160), budget: taskBudgetSchema.refine(value => value.token_enforcement !== "wall_only_legacy", "Supervisor requires an explicit research budget") }).optional(),
+  validation: z.strictObject({ policy_version: z.string().min(1).max(160), profiles: validationProfilesSchema }).optional(),
   provider_policies: z.record(z.string(), z.strictObject({ launch_rpm: z.number().int().min(1).max(4).default(4), max_sessions: z.number().int().min(1).max(64).default(4) })).default({}),
   model_policies: z.record(z.string(), z.strictObject({ provider_id: z.string().min(1), runtime_id: z.string().min(1), model: z.string().min(1), initial_context_bytes: z.number().int().min(1024).max(16 * 1024 * 1024), max_sessions: z.number().int().min(1).max(64).optional() })).default({}),
-  tool_policies: z.record(z.string(), z.strictObject({ allowed_tools: z.array(z.string().min(1)).max(100), visibility: z.enum(["task", "blind"]).default("task") })).default({}),
+  tool_policies: z.record(z.string(), z.strictObject({ allowed_tools: z.array(z.string().min(1)).max(100), visibility: z.enum(["task", "blind"]).default("task"), new_thread: z.boolean().default(false) })).default({}),
   runtimes: z.record(z.string(), z.strictObject({ kind: z.string().regex(/^[a-z][a-z0-9._-]{0,63}$/), binary: z.string().refine(isAbsolute).optional(),
     model_provider: z.string().default("comath"), provider_endpoint: z.url().optional(), provider_secret_env: envName.optional(),
     sandbox_mode: z.enum(["deferred", "native"]).default("deferred") })).default({}),
@@ -57,6 +63,18 @@ export const researchConfigSchema = z.strictObject({
     ctx.addIssue({ code: "custom", message: "Supervisor requires research.enabled and existing host model/tool policies" });
   }
   if (config.supervisor && config.tool_policies[config.supervisor.tool_policy_id]?.visibility === "blind") ctx.addIssue({ code: "custom", message: "Supervisor needs the complete frontier and cannot use a blind tool policy" });
+  if (config.validation) for (const [slot, profile] of Object.entries(config.validation.profiles)) {
+    const tool = config.tool_policies[profile.tool_policy_id];
+    if (!config.enabled || !config.model_policies[profile.model_policy_id] || !tool) {
+      ctx.addIssue({ code: "custom", message: `Validation profile ${slot} requires enabled research and existing model/tool policies` }); continue;
+    }
+    const blind = slot === "reproduce_a" || slot === "reproduce_b";
+    if (blind && (tool.visibility !== "blind" || !tool.new_thread)) ctx.addIssue({ code: "custom", message: `Validation profile ${slot} requires a blind new-thread tool policy` });
+    if (!blind && tool.visibility !== "task") ctx.addIssue({ code: "custom", message: `Validation profile ${slot} requires a task-visible tool policy` });
+    if (slot === "formalization_probe" && tool.allowed_tools.some(name => !["retrieval.search", "retrieval.read", "theorem_search.query"].includes(name))) {
+      ctx.addIssue({ code: "custom", message: "Formalization probe permits only retrieval or theorem-search tools" });
+    }
+  }
   if (config.lease_ttl_ms < 3 * config.heartbeat_ms) ctx.addIssue({ code: "custom", message: "Lease TTL must be at least three heartbeats" });
   for (const [id, policy] of Object.entries(config.model_policies)) if (!config.provider_policies[policy.provider_id] || !config.runtimes[policy.runtime_id]) ctx.addIssue({ code: "custom", message: `Model policy ${id} has an unknown provider/runtime` });
   for (const policy of Object.values(config.provider_policies)) if (policy.max_sessions > config.max_active_workers) ctx.addIssue({ code: "custom", message: "Provider session cap exceeds deployment cap" });
