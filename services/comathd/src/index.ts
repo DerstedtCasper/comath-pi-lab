@@ -42,8 +42,8 @@ export { acquireDaemonOwner } from "./research/daemon-owner.js";
 export type { DaemonOwner } from "./research/daemon-owner.js";
 export { ResearchStore, openResearchStore, researchDatabasePath, RESEARCH_SCHEMA_VERSION } from "./research/research-store.js";
 export type { ResearchClock, ResearchStoreOptions, ResearchEvent } from "./research/research-store.js";
-export { probeResearchLayout, ensureResearchControlReady } from "./research/research-migration.js";
-export type { ResearchLayout, ResearchMigrationOptions, ResearchMigrationReceipt, MigrationQuiescence } from "./research/research-migration.js";
+export { probeResearchLayout, ensureResearchControlReady, rollbackResearchControlSnapshot } from "./research/research-migration.js";
+export type { ResearchLayout, ResearchMigrationOptions, ResearchMigrationReceipt, MigrationQuiescence, ResearchRollbackResult } from "./research/research-migration.js";
 export { sha256Schema, artifactPointerSchema, scopeBindingSchema, taskKindSchema, taskStatusSchema,
   researchPoolSchema, usageSchema, taskBudgetSchema, researchTaskDraftSchema, researchTaskSchema,
   researchControlCampaignSchema, researchDagPatchSchema, researchEventInputSchema,

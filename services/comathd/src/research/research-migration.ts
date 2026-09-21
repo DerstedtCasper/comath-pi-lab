@@ -28,6 +28,7 @@ export type ResearchMigrationOptions = {
   /** Service lifecycle hook, also permits deterministic crash injection before schema creation. */
   afterRestoreVerified?: (receipt: ResearchMigrationReceipt) => void | Promise<void>;
 };
+export type ResearchRollbackResult = { restored_entries: number; target_root: string; project_id: string; database_schema_version: number };
 function migrationFile(root: string, name: "journal" | "receipt"): string {
   return resolveResearchControlPath(root, `migration-${name}.json`);
 }
@@ -174,4 +175,39 @@ export async function ensureResearchControlReady(layout: ResearchLayout, owner: 
 export function finalizeResearchMigration(root: string, receipt: ResearchMigrationReceipt): void {
   if (receipt.root !== root || readVersion(root) !== RESEARCH_SCHEMA_VERSION) throw blocked("Schema is not ready for migration receipt");
   writeAtomic(migrationFile(root, "receipt"), receiptSchema.parse(receipt));
+}
+
+/**
+ * Restore a verified internal snapshot only while the caller holds the project
+ * owner. Callers must stop the new daemon before acquiring that owner; this is
+ * deliberately not a binary-replacement shortcut or a public download import.
+ */
+export async function rollbackResearchControlSnapshot(projectRoot: string, manifestPath: string, owner: DaemonOwner): Promise<ResearchRollbackResult> {
+  const root = realpathSync(projectRoot);
+  if (owner.root !== root) throw blocked("Rollback owner belongs to another root");
+  const snapshot = checkedSnapshotPath(root, manifestPath);
+  const verification = await verifySnapshot(snapshot);
+  if (!verification.ok || !verification.manifest) throw new ComathError("Rollback snapshot verification failed", { code: "SNAPSHOT_VERIFICATION_FAILED", statusCode: 409 });
+  if (!verification.manifest.can_restore || verification.manifest.snapshot_kind !== "internal_restore") {
+    throw new ComathError("Public snapshot downloads cannot be used for rollback", { code: "SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE", statusCode: 409 });
+  }
+  if (!verification.manifest.entries.some(entry => entry.relative_path === ".comath/control/research.sqlite")) {
+    throw blocked("Rollback snapshot has no research control database");
+  }
+  let staging: string | undefined;
+  try {
+    staging = mkdtempSync(join(tmpdir(), "comath-rollback-verify-"));
+    await restoreSnapshot(snapshot, staging, { actor: "research-rollback-verify" });
+    if (!existsSync(researchDatabasePath(staging))) throw blocked("Rollback staging restore has no research control database");
+    return await withDaemonOwnerMaintenance(owner, async () => {
+      // SQLite sidecars from the newer daemon must never accompany old bytes.
+      for (const path of [researchDatabasePath(root), resolveResearchControlPath(root, "research.sqlite-wal"), resolveResearchControlPath(root, "research.sqlite-shm"),
+        migrationFile(root, "receipt"), migrationFile(root, "journal")]) rmSync(path, { force: true });
+      const restored = await restoreSnapshot(snapshot, root, { actor: "research-rollback" });
+      if (!existsSync(researchDatabasePath(root))) throw blocked("Rollback restore did not install research control database");
+      return { ...restored, database_schema_version: readVersion(root, true) };
+    });
+  } finally {
+    if (staging && resolve(staging).startsWith(resolve(tmpdir()) + sep)) rmSync(staging, { recursive: true, force: true });
+  }
 }
