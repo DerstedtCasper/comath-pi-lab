@@ -6,7 +6,7 @@ Runtime configuration is owned by `comathd`; Pi may select declared options but 
 
 ## Durable research service
 
-Use absolute project/config paths with `comathd doctor --project-root <path> --config <path>` or `comathd serve --project-root <path> --config <path>`. The sample keeps research execution disabled, declares no paid provider or campaign budget, and uses separate loopback operator and worker listeners. `--host` and `--port` override the operator listener only.
+Use absolute project/config paths with `comathd doctor --project-root <path> --config <path>` or `comathd serve --project-root <path> --config <path>`. The sample keeps research execution disabled, declares no paid provider or campaign budget, and uses separate loopback operator and worker listeners. `--host` and `--port` override the operator listener only. A stopped daemon can be rolled back with `comathd rollback --project-root <path> --config <path> --snapshot <absolute-internal-manifest>`; it rejects public-download snapshots and never opens a listener.
 
 The doctor inspects configuration, runtime binary hashes, SQLite availability and explicitly configured credential environment-variable presence. It does not execute a runtime, start a model turn, provision a sandbox or modify Codex configuration. Active WAL data may require a consistent snapshot; that diagnostic is not a failed migration and must not be relabeled verified.
 

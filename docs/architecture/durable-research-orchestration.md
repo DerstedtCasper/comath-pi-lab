@@ -35,6 +35,6 @@ Direct service use remains supported for hosts that do not use Pi. A transport a
 
 The runtime records unavailable adapters, missing execution owners, failed replay checks, and incomplete shutdowns as explicit blockers. Provider calls and operating-system isolation are separately configured and tested capabilities. Their availability is not implied by this architecture document.
 
-Snapshots intended for rollback use the internal-restore audience and require verification before restore. Public-download snapshots are not restore inputs. A migration drains admissions and confirms ownership before snapshot and restore verification; replacing a binary alone is not a rollback procedure.
+Snapshots intended for rollback use the internal-restore audience and require verification before restore. Public-download snapshots are not restore inputs. A migration drains admissions and confirms ownership before snapshot and restore verification; replacing a binary alone is not a rollback procedure. The explicit `comathd rollback` command requires an absolute internal snapshot manifest and a stopped daemon so it can acquire the sole project owner, verify a staging restore, remove newer SQLite sidecars, and restore the selected snapshot without opening a listener.
 
 See [module boundaries](module-boundaries.md), [runtime layout](runtime-layout.md), [adapter contracts](adapter-contracts.md), and [Pi runtime assumptions](../integrations/pi-runtime-assumptions.md) for adjacent boundaries.

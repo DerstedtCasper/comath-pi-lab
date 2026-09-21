@@ -129,6 +129,7 @@ PowerShell:
 ```powershell
 node .\services\comathd\dist\cli.js doctor --project-root D:\work\example --config D:\work\example\comath.json
 node .\services\comathd\dist\cli.js serve --project-root D:\work\example --config D:\work\example\comath.json --host 127.0.0.1 --port 8787
+node .\services\comathd\dist\cli.js rollback --project-root D:\work\example --config D:\work\example\comath.json --snapshot D:\work\example\.comath\snapshots\SNAPSHOT\manifest.json
 ```
 
 POSIX shell:
@@ -136,11 +137,12 @@ POSIX shell:
 ```sh
 node services/comathd/dist/cli.js doctor --project-root /srv/comath/example --config /srv/comath/example/comath.json
 node services/comathd/dist/cli.js serve --project-root /srv/comath/example --config /srv/comath/example/comath.json --host 127.0.0.1 --port 8787
+node services/comathd/dist/cli.js rollback --project-root /srv/comath/example --config /srv/comath/example/comath.json --snapshot /srv/comath/example/.comath/snapshots/SNAPSHOT/manifest.json
 ```
 
-The embeddable `createComathServer()` factory remains available for an in-process host. Host deployment owns lifecycle, logs, ports, and configuration secrets.
+The embeddable `createComathServer()` factory remains available for an in-process host. Host deployment owns lifecycle, logs, ports, and configuration secrets. `rollback` opens no listener and only accepts a verified `internal_restore` snapshot after the new daemon has stopped; public-download snapshots cannot be restored.
 
-中文：构建后通过 CLI 的 `doctor` 和 `serve` 启动本机服务，必须给出绝对 project/config 路径；`serve` 只接受 loopback operator listener。`createComathServer()` 仍可供嵌入式宿主使用；生产部署由宿主管理生命周期、日志、端口和配置密钥。
+中文：构建后通过 CLI 的 `doctor`、`serve` 与 `rollback` 操作服务，必须给出绝对 project/config 路径；`serve` 只接受 loopback operator listener。`rollback` 不开 listener，必须先停止新 daemon，并且只接受已验证的 `internal_restore` 快照；public-download 快照不能恢复。`createComathServer()` 仍可供嵌入式宿主使用；生产部署由宿主管理生命周期、日志、端口和配置密钥。
 
 ## Configuration
 
