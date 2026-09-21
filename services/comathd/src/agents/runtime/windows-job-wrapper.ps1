@@ -4,6 +4,10 @@ $ProgressPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 # Fixed, service-owned process-tree supervisor. This does not provide filesystem/network isolation.
 $request = [Console]::ReadLine() | ConvertFrom-Json
+$compilerTemp = Join-Path $env:LOCALAPPDATA 'Temp'
+if (-not (Test-Path -LiteralPath $compilerTemp -PathType Container)) { throw 'AGENT_PROCESS_HOST_UNAVAILABLE' }
+$env:TEMP = $compilerTemp
+$env:TMP = $compilerTemp
 Add-Type -TypeDefinition @'
 using System;
 using System.IO;

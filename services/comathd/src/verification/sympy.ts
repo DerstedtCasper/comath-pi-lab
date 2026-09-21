@@ -2,7 +2,7 @@ import { type ComputeRunnerRequest, runPythonRunner } from "./runner-contracts.j
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import type { Readable } from "node:stream";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join, toNamespacedPath } from "node:path";
 import { z } from "zod";
 import { ComathError } from "../errors.js";
@@ -14,7 +14,7 @@ export type ResearchSympyInput = z.infer<typeof researchSympyInputSchema>;
 export type ResearchSympyConfig = { python: string; python_sha256: string; script: string; script_sha256: string };
 export type ResearchSympyHandle = { runtime_kind: "fixed_python"; pid: number; nonce: string; script_sha256: string; started_at: string };
 export class ResearchSympyExecutionError extends ComathError {
-  constructor(code: string, readonly termination_confirmed: boolean) { super("Fixed Python research tool did not complete", { code, statusCode: 409 }); }
+  constructor(code: string, readonly termination_confirmed: boolean, readonly cause_code?: string) { super("Fixed Python research tool did not complete", { code, statusCode: 409 }); }
 }
 const digest = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
 
@@ -38,13 +38,16 @@ export async function runResearchSympyDifference(raw: unknown, config: ResearchS
   await writeFile(scriptCopy, scriptBytes, { flag: "wx", flush: true });
   await writeFile(inputPath, envelope, { flag: "wx", flush: true });
   execution.signal.throwIfAborted();
-  const env: Record<string, string> = { TEMP: execution.workspace, TMP: execution.workspace };
+  const shortWindowsCwd = process.platform === "win32" && process.env.TEMP && isAbsolute(process.env.TEMP)
+    ? await mkdtemp(join(process.env.TEMP, "comath-sympy-")) : execution.workspace;
+  const env: Record<string, string> = { TEMP: shortWindowsCwd, TMP: shortWindowsCwd };
   if (process.platform === "win32" && process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
-  return await new Promise<{ kind: "sympy_difference"; result: unknown; metadata: { execution_mode: "local_process"; python_sha256: string; script_sha256: string;
+  try { return await new Promise<{ kind: "sympy_difference"; result: unknown; metadata: { execution_mode: "local_process"; python_sha256: string; script_sha256: string;
     input_sha256: string; stdout_sha256: string; stderr_sha256: string; isolation_verified: false; proof_authority: "none" }; termination_confirmed: true }>((resolve, reject) => {
     let child: ChildProcessByStdio<null, Readable, Readable>;
     try {
-      child = spawn(python, ["-I", "-B", "-X", "utf8", toNamespacedPath(scriptCopy), "--input-file", toNamespacedPath(inputPath)], { cwd: toNamespacedPath(execution.workspace), env, shell: false, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      child = spawn(python, ["-I", "-B", "-X", "utf8", toNamespacedPath(scriptCopy), "--input-file", toNamespacedPath(inputPath)], {
+        cwd: process.platform === "win32" ? shortWindowsCwd : toNamespacedPath(shortWindowsCwd), env, shell: false, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     } catch { reject(new ResearchSympyExecutionError("SYMPY_PROCESS_ERROR", true)); return; }
     let stdout = Buffer.alloc(0), stderr = Buffer.alloc(0), stopping: string | undefined, spawned = false;
     const stop = (code: string) => { stopping ??= code; if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); };
@@ -61,7 +64,8 @@ export async function runResearchSympyDifference(raw: unknown, config: ResearchS
     child.stderr.on("data", bytes => { if (stderr.length + bytes.length > 64 * 1024) stop("SYMPY_OUTPUT_LIMIT"); else stderr = Buffer.concat([stderr, bytes]); });
     child.stdout.on("error", () => stop("SYMPY_PIPE_ERROR"));
     child.stderr.on("error", () => stop("SYMPY_PIPE_ERROR"));
-    child.once("error", () => { clearTimeout(timer); execution.signal.removeEventListener("abort", abort); reject(new ResearchSympyExecutionError("SYMPY_PROCESS_ERROR", !spawned)); });
+    child.once("error", error => { clearTimeout(timer); execution.signal.removeEventListener("abort", abort);
+      reject(new ResearchSympyExecutionError("SYMPY_PROCESS_ERROR", !spawned, (error as NodeJS.ErrnoException).code)); });
     child.once("close", code => {
       clearTimeout(timer); execution.signal.removeEventListener("abort", abort);
       if (stopping || code !== 0) { reject(new ResearchSympyExecutionError(stopping ?? "SYMPY_PROCESS_FAILED", true)); return; }
@@ -73,7 +77,7 @@ export async function runResearchSympyDifference(raw: unknown, config: ResearchS
       resolve({ kind: "sympy_difference", result, metadata: { execution_mode: "local_process", python_sha256: config.python_sha256, script_sha256: config.script_sha256,
         input_sha256: digest(envelope), stdout_sha256: digest(stdout), stderr_sha256: digest(stderr), isolation_verified: false, proof_authority: "none" }, termination_confirmed: true });
     });
-  });
+  }); } finally { if (shortWindowsCwd !== execution.workspace) await rm(shortWindowsCwd, { recursive: true, force: true }); }
 }
 
 export function runSympyExact(projectRoot: string, request: ComputeRunnerRequest) {

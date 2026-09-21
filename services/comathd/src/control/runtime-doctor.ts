@@ -1,4 +1,5 @@
 import { realpath, stat } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { z } from "zod";
 import { sha256File } from "../artifacts/hash.js";
 import { researchConfigSchema, type ComathConfig } from "../config/config.js";
@@ -66,7 +67,7 @@ export async function inspectRuntimeDoctor(projectRoot: string, input: ComathCon
   if (!parsed.success) throw new ComathError("Runtime doctor received invalid configuration or unresolved model/provider/runtime references", { code: "RUNTIME_DOCTOR_CONFIG_INVALID", statusCode: 400 });
   let root: string;
   try {
-    root = await realpath(projectRoot);
+    root = realpathSync(projectRoot);
     if (!(await stat(root)).isDirectory()) throw new Error("not a directory");
   } catch {
     throw new ComathError("Runtime doctor project root is missing, unreadable or not a directory", { code: "RUNTIME_DOCTOR_ROOT_INVALID", statusCode: 400 });

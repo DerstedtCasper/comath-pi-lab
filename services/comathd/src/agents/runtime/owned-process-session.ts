@@ -183,8 +183,11 @@ async function startSession(input: Omit<StartOwnedProcessSessionInput, "grant">,
       if (!systemRoot) fail("AGENT_PROCESS_HOST_UNAVAILABLE");
       const wrapper = fileURLToPath(new URL("windows-job-wrapper.ps1", import.meta.url));
       if (!existsSync(wrapper)) fail("AGENT_PROCESS_HOST_UNAVAILABLE");
+      const localAppData = process.env.LOCALAPPDATA;
+      if (!localAppData) fail("AGENT_PROCESS_HOST_UNAVAILABLE");
+      const wrapperEnvironment = { ...environment(), LOCALAPPDATA: localAppData };
       const child = spawn(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
-        ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", wrapper], { windowsHide: true, env: environment(), stdio: ["pipe", "pipe", "pipe"] });
+        ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", wrapper], { windowsHide: true, env: wrapperEnvironment, stdio: ["pipe", "pipe", "pipe"] });
       handle.wrapper_pid = child.pid ?? 0;
       const frame = (type: string, data?: string) => JSON.stringify({ type, nonce, ...(data !== undefined ? { data } : {}) }) + "\n";
       sendCancel = () => { if (!child.stdin.destroyed) child.stdin.write(frame("cancel")); };
