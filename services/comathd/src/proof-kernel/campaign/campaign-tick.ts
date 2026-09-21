@@ -86,6 +86,8 @@ import {
 
 export type StartCampaignInput = {
   project_root: string;
+  /** The durable control plane reserves this before writing its matching formal campaign. */
+  campaign_id?: string;
   project_name?: string;
   user_goal: string;
   domain?: string;
@@ -2455,7 +2457,7 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
   });
   createProblemLock(input.project_root, { claim_id: claim.id, goal: input.user_goal, domain: input.domain ?? "elementary" });
   const timestamp = now();
-  const campaignId = nextCampaignId(input.project_root);
+  const campaignId = input.campaign_id ?? nextCampaignId(input.project_root);
   if (requiresFormalSpecLock) {
     const blockerRel = join(".comath", "campaign", campaignId, "formal_spec_lock_blocker.json").replace(/\\/g, "/");
     writeRuntimeFile(

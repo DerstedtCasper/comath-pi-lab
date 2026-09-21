@@ -36,6 +36,9 @@ import { createFormalCandidateProjectService } from "./formal-candidate-project.
 import { createProofToolAttemptService } from "./proof-tool-attempt.js";
 import { createProofWorkflowRunner } from "./proof-workflow-runner.js";
 import { listArtifactRefs } from "../artifacts/store.js";
+import { initProject } from "../project/project-store.js";
+import { startCampaign as startFormalCampaign } from "../proof-kernel/campaign/campaign-tick.js";
+import { getCampaign as getFormalCampaign } from "../proof-kernel/campaign/research-campaign.js";
 
 export type ResearchExecutionConsumer = {
   validate(task: ResearchTask): void;
@@ -333,10 +336,26 @@ export class ResearchDaemon {
     if (typeof requestedWorkers === "number" && Number.isInteger(requestedWorkers) && requestedWorkers > this.config.max_active_workers) {
       throw new ComathError("Campaign worker limit exceeds the configured deployment capacity", { code: "CAMPAIGN_WORKER_CAPABILITY", statusCode: 422 });
     }
-    return this.app.startCampaign(principal, request, (campaignId, limits) => {
+    const project = initProject({ root_path: this.runtime.root });
+    return this.app.startCampaign(principal, request, (configuredCampaignId, limits) => {
       const pools = Object.fromEntries(["exploration", "deepening", "validation", "formalization"].map(pool => [pool, { ...limits }])) as PoolBudgetLimits;
-      this.scheduler.budget.configure(campaignId, limits, pools);
-    });
+      this.scheduler.budget.configure(configuredCampaignId, limits, pools);
+    }, { project_id: project.project.project_id, createFormalCampaign: bootstrap => {
+      const existing = getFormalCampaign(this.runtime.root, bootstrap.campaign_id);
+      if (existing) {
+        if (existing.project_id !== bootstrap.project_id || existing.user_goal !== bootstrap.charter.goal) fail("FORMAL_BOOTSTRAP_CONFLICT", "Existing formal campaign does not match durable bootstrap");
+        return;
+      }
+      let formal;
+      try {
+        formal = startFormalCampaign({ project_root: this.runtime.root, project_name: project.project.name, user_goal: bootstrap.charter.goal,
+          strict_mode: true, actor: `operator:${bootstrap.actor}`, campaign_id: bootstrap.campaign_id }).campaign;
+      } catch (error) {
+        if (error instanceof ComathError) throw error;
+        throw new ComathError(`Formal bootstrap failed: ${String(error)}`, { code: "FORMAL_BOOTSTRAP_FAILED", statusCode: 409 });
+      }
+      if (formal.project_id !== bootstrap.project_id || formal.campaign_id !== bootstrap.campaign_id) fail("FORMAL_BOOTSTRAP_CONFLICT", "Formal bootstrap did not preserve durable identities");
+    } });
   }
   /** Route a cancellation through the graph command, then the reconciler that owns every runtime/tool stop. */
   async cancelTask(principal: ResearchPrincipal, taskId: string, input: { command_id: string; reason: string }) {

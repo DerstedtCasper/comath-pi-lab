@@ -29,6 +29,10 @@ const retrySchema = z.strictObject({ command_id: id, campaign_id: id, expected_r
   task_id: id, new_evidence_refs: z.array(artifactPointerSchema).max(100), rebind_dependents: z.array(id).max(100),
   rationale: z.string().trim().min(1).max(8192) });
 type RetryRequest = z.infer<typeof retrySchema>;
+type CampaignBootstrap = {
+  project_id?: string;
+  createFormalCampaign?: (input: { campaign_id: string; project_id: string; charter: ResearchControlCampaign["charter"]; actor: string }) => void;
+};
 const registrationSchema = z.strictObject({ command_id: id, campaign: researchControlCampaignSchema, tasks: z.array(researchTaskSchema).max(10000) });
 type RegistrationRequest = z.infer<typeof registrationSchema>;
 const startCampaignSchema = z.strictObject({ command_id: id, charter: researchCharterSchema,
@@ -151,7 +155,7 @@ export class ResearchOrchestrator {
    * allocates every control/task identifier and creates only charter-scoped
    * intake work. Formal scopes and proof authority cannot cross this boundary.
    */
-  startCampaign(principal: ResearchPrincipal, request: unknown, configureBudget: CampaignBudgetConfigurer): {
+  startCampaign(principal: ResearchPrincipal, request: unknown, configureBudget: CampaignBudgetConfigurer, bootstrap: CampaignBootstrap = {}): {
     campaign_id: string; revision: number; state: "running"; initial_task_id: string; snapshot_seq: number;
   } {
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator can start a research campaign", 403);
@@ -165,7 +169,7 @@ export class ResearchOrchestrator {
       };
       const campaignId = allocateUnused("CAM", value => !!this.runtime.store.getCampaign(value));
       const taskId = allocateUnused("TASK", value => !!this.runtime.store.getTask(value));
-      const projectId = this.runtime.store.listCampaigns().at(0)?.project_id ?? this.runtime.store.allocateId("P");
+      const projectId = bootstrap.project_id ? id.parse(bootstrap.project_id) : this.runtime.store.listCampaigns().at(0)?.project_id ?? this.runtime.store.allocateId("P");
       const campaign: ResearchControlCampaign = { campaign_id: campaignId, project_id: projectId, revision: 0, state: "running", charter,
         max_active_workers: input.max_active_workers, budget_policy_id: "operator_explicit", supervisor: { dirty: true, last_event_seq: 0,
           ordinary_completed_since_trigger: 0, next_trigger_at: stamp }, snapshot_seq: 0 };
@@ -174,9 +178,12 @@ export class ResearchOrchestrator {
         scope: { kind: "charter", charter_sha256: charter.sha256 }, pool: "exploration", priority: 2, budget: input.budget,
         method_family: "intake", problem_slice: "campaign_bootstrap", coupling_label: "campaign_bootstrap", input_refs: [], exclusions: [],
         status: "queued", generation: 0, fault_retry_count: 0, created_at: stamp, updated_at: stamp });
-      // Route validators may inspect the canonical campaign, but this entire
-      // bootstrap remains one command transaction and rolls back on rejection.
-      this.runtime.store.putCampaign(campaign); this.validateDraft(task, campaign); this.persistGraph([task]);
+      // Route validation needs the current campaign, and the formal bootstrap
+      // is constrained to this same campaign/project pair. It creates no
+      // formal scope or proof authority.
+      this.runtime.store.putCampaign(campaign); this.validateDraft(task, campaign);
+      bootstrap.createFormalCampaign?.({ campaign_id: campaignId, project_id: projectId, charter, actor: principal.id });
+      this.persistGraph([task]);
       const { token_enforcement: _mode, ...limits } = input.budget;
       configureBudget(campaignId, limits);
       const event = this.events.appendEvent({ campaign_id: campaignId, task_id: taskId, type: "CampaignStarted", actor: principal.id,
