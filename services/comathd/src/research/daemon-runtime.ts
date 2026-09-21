@@ -28,7 +28,7 @@ import { createConfiguredCodexAdapter } from "../agents/runtime/codex-owned-laun
 import { createResearchResultService } from "./research-result-service.js";
 import { createSupervisorDriver, defaultResearchContextPolicy } from "./supervisor-driver.js";
 import { createValidationFanout, validationStatementBriefSchema, type ValidationFanoutOptions } from "./validation-fanout.js";
-import { createValidationAggregation, type ValidationAggregationOptions } from "./validation-aggregation.js";
+import { createValidationAggregation, type HostBlindComparisonInput, type ValidationAggregationOptions } from "./validation-aggregation.js";
 import { createValidationDriver } from "./validation-driver.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
 import { createFormalizationIntake } from "./formalization-intake.js";
@@ -68,7 +68,7 @@ export type ResearchDaemonOptions = {
   classifyHardBlocker?: ResearchFailureOptions["classifyHardBlocker"];
   authorizeReaderUrl?: (task: ResearchTask, url: string) => boolean;
   validation?: Omit<ValidationFanoutOptions, "verifyPublishedCandidate">;
-  validationAggregation?: Pick<ValidationAggregationOptions, "blindComparison" | "authorizeResolution">;
+  validationAggregation?: Pick<ValidationAggregationOptions, "authorizeResolution">;
   formalCandidateProfile?: FormalCandidateDispatchProfile;
 };
 const defaultDependencies: ProjectRuntimeDependencies = { clock: { now: () => Date.now() }, executor: {},
@@ -424,6 +424,11 @@ export class ResearchDaemon {
   resolveValidationIssue(input: { candidate_id: string; issue_id: string; task_id: string; evidence_refs: { artifact_id: string; sha256: string }[] }) {
     if (!this.validationAggregation) fail("VALIDATION_RESOLUTION_UNAVAILABLE", "Validation resolution is not configured for this daemon");
     return this.validationAggregation.resolveValidationIssue(input);
+  }
+  /** A host credential may interpret accepted blind evidence, but cannot confer Lean authority. */
+  recordBlindComparison(host: { kind: "host"; id: string }, input: HostBlindComparisonInput) {
+    if (!this.validationAggregation) fail("VALIDATION_BLIND_COMPARISON_UNAVAILABLE", "Blind-comparison aggregation is not configured for this daemon");
+    return this.validationAggregation.recordBlindComparison(host, input);
   }
   async cancelCampaign(principal: ResearchPrincipal, campaignId: string, input: { command_id: string; expected_revision: number; reason: string }) {
     const pending = this.app.beginCancelCampaign(principal, { ...input, campaign_id: campaignId });

@@ -2602,7 +2602,8 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
               etag: `\"sha256-${artifact.sha256}\"`, ...(range.partial ? { "content-range": `bytes ${range.start}-${range.end}/${artifact.bytes.length}` } : {}) });
             res.end(body); return;
           }
-          const hostMutation = req.method === "POST" && /^\/host\/v1\/intakes\/[^/]+\/(tickets|approve)$/.test(url.pathname);
+          const hostMutation = req.method === "POST" && (/^\/host\/v1\/intakes\/[^/]+\/(tickets|approve)$/.test(url.pathname)
+            || url.pathname === "/host/v1/validation/blind-comparisons");
           const operatorMutation = req.method === "POST" && (/^\/research\/v1\/campaigns\/[^/]+\/intakes$/.test(url.pathname)
             || /^\/research\/v1\/intakes\/[^/]+\/approval-requests$/.test(url.pathname)
             || /^\/research\/v1\/campaigns\/[^/]+\/(patches|budget)$/.test(url.pathname)

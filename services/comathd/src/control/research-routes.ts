@@ -110,6 +110,10 @@ export async function dispatchResearchRoute(daemon: ResearchDaemon, method: stri
       task_id: typeof input.task_id === "string" ? input.task_id : "", evidence_refs: Array.isArray(input.evidence_refs) ? input.evidence_refs as { artifact_id: string; sha256: string }[] : []
     }) } };
   }
+  if (method === "POST" && pathname === "/host/v1/validation/blind-comparisons") {
+    if (principal.kind !== "host") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only a host may interpret blind comparison evidence", 403);
+    return { status: 200, body: { ok: true, data: daemon.recordBlindComparison({ kind: "host", id: principal.id }, record(body) as never) } };
+  }
   const patchId = pathId(/^\/research\/v1\/campaigns\/([^/]+)\/patches$/.exec(pathname));
   if (method === "POST" && patchId) {
     if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may patch a campaign", 403);

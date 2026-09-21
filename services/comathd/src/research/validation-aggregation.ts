@@ -8,7 +8,7 @@ import { createResearchEventStore } from "./event-store.js";
 import { assertProjectReadable, resolveProjectCommitPath } from "./project-commit.js";
 import type { ProjectRuntime } from "./project-runtime.js";
 import type { ResearchEvent } from "./research-store.js";
-import { artifactPointerSchema, type ArtifactPointer, type ResearchTask } from "./research-schemas.js";
+import { artifactPointerSchema, scopeBindingSchema, sha256Schema, type ArtifactPointer, type ResearchTask } from "./research-schemas.js";
 import { researchResultSchema, validationResultSchema, type ResearchResultService, type ResearchCandidatePublication,
   type ResearchResult, type ValidationResult } from "./research-result-service.js";
 import { VALIDATION_SLOTS, type ValidationRoleSlot } from "./validation-contracts.js";
@@ -20,8 +20,6 @@ export type ValidationAggregationOptions = {
   results: ResearchResultService;
   /** Trusted host selection, re-read inside the commit transaction; never a worker-supplied policy. */
   approvedPolicy: (candidateId: string) => { policy_version: string; approved_assumptions: readonly string[] } | undefined;
-  /** Host interpreter of an accepted independent comparison, only invoked after both blind slots finish. */
-  blindComparison?: (a: Readonly<Accepted>, b: Readonly<Accepted>) => { task_id: string; outcome: "consistent" | "disagreement" } | undefined;
   /** Independent accepted dispute/referee evidence must be interpreted by a trusted consumer. */
   authorizeResolution?: (issue: Readonly<ValidationIssue>, resolution: Readonly<Accepted>, evidence: readonly ArtifactPointer[]) => boolean;
 };
@@ -30,6 +28,15 @@ const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
 const id = z.string().min(1).max(160);
 const aggregationInputSchema = z.strictObject({ candidate_id: id, policy_version: id });
 const resolutionInputSchema = z.strictObject({ candidate_id: id, issue_id: id, task_id: id, evidence_refs: z.array(artifactPointerSchema).min(1).max(100) });
+const hostBlindComparisonInputSchema = z.strictObject({ candidate_id: id, policy_version: id, task_id: id,
+  reproduce_a_ref: artifactPointerSchema, reproduce_b_ref: artifactPointerSchema, outcome: z.enum(["consistent", "disagreement"]) });
+const hostBlindComparisonEvidenceSchema = z.strictObject({ task_id: id, result_ref: artifactPointerSchema, accepted_event_seq: z.number().int().positive() });
+const hostBlindComparisonSchema = z.strictObject({ schema_version: z.literal("comath.host_blind_comparison.v1"), candidate_id: id,
+  policy_version: id, policy_sha256: sha256Schema, candidate_ref: artifactPointerSchema, campaign_id: id, scope: scopeBindingSchema,
+  reproduce_a: hostBlindComparisonEvidenceSchema, reproduce_b: hostBlindComparisonEvidenceSchema, comparison: hostBlindComparisonEvidenceSchema,
+  outcome: z.enum(["consistent", "disagreement"]), host_id: id, proof_authority: z.literal("none") });
+export type HostBlindComparisonInput = z.infer<typeof hostBlindComparisonInputSchema>;
+type HostBlindComparison = z.infer<typeof hostBlindComparisonSchema>;
 const field = (event: ResearchEvent, name: string): unknown => (event.payload as Record<string, unknown>)[name];
 function fail(code: string): never { throw new ComathError(code, { code, statusCode: 409 }); }
 function eventFromRow(row: Record<string, unknown>): ResearchEvent {
@@ -64,9 +71,19 @@ export function createValidationAggregation(runtime: ProjectRuntime, options: Va
     return store.all("SELECT * FROM events WHERE type=? AND actor='service:validation-aggregation' AND json_extract(payload_json,'$.candidate_id')=? ORDER BY seq", type, candidateId)
       .map(row => { const event = eventFromRow(row); if (hash(event.payload) !== event.payload_sha256) fail("VALIDATION_EVENT_CORRUPT"); return event; });
   }
-  function emit(type: string, campaignId: string, sourceTaskId: string, payload: Record<string, unknown>): ResearchEvent {
+  function hostBlindComparisons(candidateId: string): { event: ResearchEvent; value: HostBlindComparison }[] {
+    return store.all("SELECT * FROM events WHERE type='HostBlindComparisonRecorded' AND json_extract(payload_json,'$.candidate_id')=? ORDER BY seq", candidateId)
+      .map(row => {
+        const event = eventFromRow(row);
+        if (hash(event.payload) !== event.payload_sha256) fail("VALIDATION_EVENT_CORRUPT");
+        const value = hostBlindComparisonSchema.parse(event.payload);
+        if (event.actor !== `host:${value.host_id}`) fail("VALIDATION_HOST_INTERPRETATION_CORRUPT");
+        return { event, value };
+      });
+  }
+  function emit(type: string, campaignId: string, sourceTaskId: string, payload: Record<string, unknown>, actor = "service:validation-aggregation"): ResearchEvent {
     const events = createResearchEventStore(runtime);
-    try { return events.appendEvent({ campaign_id: campaignId, task_id: sourceTaskId, type, actor: "service:validation-aggregation", payload: JSON.parse(canonicalJson(payload)) }); }
+    try { return events.appendEvent({ campaign_id: campaignId, task_id: sourceTaskId, type, actor, payload: JSON.parse(canonicalJson(payload)) }); }
     finally { events.close(); }
   }
   function publication(candidateId: string) {
@@ -81,6 +98,54 @@ export function createValidationAggregation(runtime: ProjectRuntime, options: Va
   function openIssues(candidateId: string): ValidationIssue[] {
     const resolved = new Set(history("ValidationIssueResolved", candidateId).map(event => String(field(event, "issue_id"))));
     return history("ValidationIssueOpened", candidateId).map(event => event.payload as ValidationIssue).filter(issue => !resolved.has(issue.issue_id));
+  }
+  function comparisonBinding(candidateId: string, policyVersion: string, policy: { policy_version: string; approved_assumptions: readonly string[] },
+    metadata: ResearchCandidatePublication, source: ResearchTask, reproduceA: Accepted, reproduceB: Accepted, comparison: Accepted) {
+    return { schema_version: "comath.host_blind_comparison.v1" as const, candidate_id: candidateId, policy_version: policyVersion, policy_sha256: hash(policy),
+      candidate_ref: metadata.result_ref, campaign_id: source.campaign_id, scope: source.scope,
+      reproduce_a: { task_id: reproduceA.task.task_id, result_ref: reproduceA.ref, accepted_event_seq: reproduceA.event.seq },
+      reproduce_b: { task_id: reproduceB.task.task_id, result_ref: reproduceB.ref, accepted_event_seq: reproduceB.event.seq },
+      comparison: { task_id: comparison.task.task_id, result_ref: comparison.ref, accepted_event_seq: comparison.event.seq }, proof_authority: "none" as const };
+  }
+  function sameComparisonBinding(value: HostBlindComparison, expected: ReturnType<typeof comparisonBinding>): boolean {
+    const { outcome: _outcome, host_id: _hostId, ...binding } = value;
+    return same(binding, expected);
+  }
+  function currentBlind(candidateId: string, slots: Record<string, unknown>[], role: "reproduce_a" | "reproduce_b"): Accepted | undefined {
+    const slot = slots.find(value => value.role_slot === role), value = slot ? accepted(String(slot.current_task_id)) : undefined;
+    if (!value || value.result.kind !== "validation") return undefined;
+    const result = validationResultSchema.parse(value.result);
+    return result.candidate_id === candidateId && result.role_slot === role ? value : undefined;
+  }
+  function recordBlindComparison(host: { kind: "host"; id: string }, raw: HostBlindComparisonInput) {
+    if (host.kind !== "host" || !host.id) fail("VALIDATION_HOST_PRINCIPAL_REQUIRED");
+    const input = hostBlindComparisonInputSchema.parse(raw);
+    const recorded = store.transaction(() => {
+      const { metadata, source } = publication(input.candidate_id);
+      const policy = options.approvedPolicy(input.candidate_id);
+      if (!policy || policy.policy_version !== input.policy_version) fail("VALIDATION_POLICY_NOT_OPERATIVE");
+      const slots = store.all("SELECT * FROM validation_tasks WHERE candidate_id=? AND policy_version=? ORDER BY role_slot", input.candidate_id, input.policy_version);
+      const reproduceA = currentBlind(input.candidate_id, slots, "reproduce_a"), reproduceB = currentBlind(input.candidate_id, slots, "reproduce_b");
+      if (!reproduceA || !reproduceB || !same(reproduceA.ref, input.reproduce_a_ref) || !same(reproduceB.ref, input.reproduce_b_ref)) fail("VALIDATION_BLIND_COMPARISON_BINDING_INVALID");
+      const comparison = accepted(input.task_id);
+      if (!comparison || comparison.task.kind !== "synthesize" || comparison.task.specialization !== "blind_comparison"
+        || comparison.task.campaign_id !== source.campaign_id || !same(comparison.task.scope, source.scope)
+        || comparison.event.seq <= Math.max(reproduceA.event.seq, reproduceB.event.seq)
+        || ![reproduceA.ref, reproduceB.ref].every(ref => comparison.task.input_refs.some(value => same(value, ref))
+          && comparison.result.claims.some(claim => claim.artifact_refs.some(value => same(value, ref))))) fail("VALIDATION_BLIND_COMPARISON_REQUIRED");
+      const value: HostBlindComparison = { ...comparisonBinding(input.candidate_id, input.policy_version, policy, metadata, source, reproduceA, reproduceB, comparison),
+        outcome: input.outcome, host_id: host.id };
+      const previous = hostBlindComparisons(input.candidate_id);
+      if (previous.length) {
+        const matching = previous.find(event => same(event.value, value));
+        if (!matching || previous.length !== 1) fail("VALIDATION_BLIND_COMPARISON_CONFLICT");
+        return matching.value;
+      }
+      emit("HostBlindComparisonRecorded", source.campaign_id, source.task_id, value, `host:${host.id}`);
+      return value;
+    });
+    const report = aggregateValidation({ candidate_id: input.candidate_id, policy_version: input.policy_version });
+    return { ...recorded, validation_state: report.state };
   }
   function aggregateValidation(input: { candidate_id: string; policy_version: string }) {
     input = aggregationInputSchema.parse(input);
@@ -122,13 +187,16 @@ export function createValidationAggregation(runtime: ProjectRuntime, options: Va
       const blindA = current.find(value => (value.result as ValidationResult).role_slot === "reproduce_a"), blindB = current.find(value => (value.result as ValidationResult).role_slot === "reproduce_b");
       let comparisonRef: ArtifactPointer | null = null;
       if (blindA && blindB) {
-        const comparison = options.blindComparison?.(blindA, blindB), value = comparison ? accepted(comparison.task_id) : undefined;
-        if (!value || !comparison || value.task.kind !== "synthesize" || value.task.specialization !== "blind_comparison"
+        const interpretations = hostBlindComparisons(input.candidate_id);
+        const interpretation = policy && interpretations.length === 1 ? interpretations[0] : undefined;
+        const value = interpretation ? accepted(interpretation.value.comparison.task_id) : undefined;
+        if (!value || !interpretation || !policy || value.task.kind !== "synthesize" || value.task.specialization !== "blind_comparison"
           || value.task.campaign_id !== source.campaign_id || !same(value.task.scope, source.scope)
           || value.event.seq <= Math.max(blindA.event.seq, blindB.event.seq)
+          || !sameComparisonBinding(interpretation.value, comparisonBinding(input.candidate_id, input.policy_version, policy, metadata, source, blindA, blindB, value))
           || ![blindA.ref, blindB.ref].every(ref => value.task.input_refs.some(input => same(input, ref))
             && value.result.claims.some(claim => claim.artifact_refs.some(cited => same(cited, ref))))) blockers.push({ code: "VALIDATION_BLIND_COMPARISON_REQUIRED" });
-        else { comparisonRef = value.ref; if (comparison.outcome === "disagreement") { issue(value, "blind_disagreement", [value.result.summary], [blindA.ref, blindB.ref]); blockers.push({ code: "VALIDATION_BLIND_DISAGREEMENT" }); } }
+        else { comparisonRef = value.ref; if (interpretation.value.outcome === "disagreement") { issue(value, "blind_disagreement", [value.result.summary], [blindA.ref, blindB.ref]); blockers.push({ code: "VALIDATION_BLIND_DISAGREEMENT" }); } }
       }
       const issues = openIssues(input.candidate_id);
       if (issues.length) blockers.push({ code: "VALIDATION_OPEN_ADVERSE_ISSUES" });
@@ -184,5 +252,5 @@ export function createValidationAggregation(runtime: ProjectRuntime, options: Va
         original_issue_sha256: opened.payload_sha256, proof_authority: "none" });
     });
   }
-  return { aggregateValidation, resolveValidationIssue, openIssues };
+  return { aggregateValidation, recordBlindComparison, resolveValidationIssue, openIssues };
 }
