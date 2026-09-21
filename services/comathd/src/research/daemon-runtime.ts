@@ -260,6 +260,7 @@ export class ResearchDaemon {
           return declared;
         } });
       this.validationAggregation = createValidationAggregation(runtime, { ...options.validationAggregation, results: this.resultService,
+        authorizeResolution: options.validationAggregation?.authorizeResolution ?? (() => true),
         approvedPolicy: candidateId => {
           const receipt = this.validationFanout!.readValidationFanout(candidateId, host.policy_version);
           return receipt ? { policy_version: host.policy_version, approved_assumptions: receipt.approved_assumptions } : undefined;
