@@ -168,7 +168,10 @@ export function createFailureIndex(runtime: ProjectRuntime, options: FailureInde
     if (!row) return base;
     const { failure } = readRecord(row);
     const known = new Set([...failure.artifact_refs, ...failure.counterexample_refs].map(ref => ref.sha256).concat(failure.dependency_hashes));
-    const fresh = evidence.filter(ref => !known.has(ref.sha256));
+    const source = store.getTask(failure.created_by_task_id);
+    if (!source) fail("FAILURE_TASK_NOT_FOUND", "Failure source task no longer exists");
+    const baseline = new Set(source.input_refs.map(ref => ref.sha256));
+    const fresh = evidence.filter(ref => !known.has(ref.sha256) && !baseline.has(ref.sha256));
     const satisfied: string[] = [], unsatisfied: string[] = [];
     for (const condition of failure.retry_conditions) {
       if (options.verifyRetryCondition?.(failure, condition, evidence, input.task_id) === true) satisfied.push(condition);
