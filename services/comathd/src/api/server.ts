@@ -2611,7 +2611,8 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
             || /^\/research\/v1\/tasks\/[^/]+\/(retry|cancel)$/.test(url.pathname)
             || url.pathname === "/research/v1/validation/issues/resolve");
           const intakeRead = req.method === "GET" && /^\/research\/v1\/intakes\/[^/]+$/.test(url.pathname);
-          const operatorRead = req.method === "GET" && /^\/research\/v1\/campaigns\/[^/]+(?:\/(frontier|budget|events|dashboard))?$/.test(url.pathname);
+          const operatorRead = req.method === "GET" && (/^\/research\/v1\/campaigns\/[^/]+(?:\/(frontier|budget|events|dashboard))?$/.test(url.pathname)
+            || url.pathname === "/research/v1/validation/intake-preparations");
           const taskRead = req.method === "GET" && /^\/research\/v1\/tasks\/[^/]+(?:\/checkpoint)?$/.test(url.pathname);
           const operationRead = req.method === "GET" && /^\/research\/v1\/operations\/[^/]+$/.test(url.pathname);
           if (reference && (hostMutation || operatorMutation || intakeRead || operatorRead || taskRead || operationRead)) {

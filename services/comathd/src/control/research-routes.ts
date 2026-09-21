@@ -110,6 +110,11 @@ export async function dispatchResearchRoute(daemon: ResearchDaemon, method: stri
       task_id: typeof input.task_id === "string" ? input.task_id : "", evidence_refs: Array.isArray(input.evidence_refs) ? input.evidence_refs as { artifact_id: string; sha256: string }[] : []
     }) } };
   }
+  if (method === "GET" && pathname === "/research/v1/validation/intake-preparations") {
+    if (principal.kind !== "operator") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only an operator may read validated intake preparation candidates", 403);
+    const campaignId = url.searchParams.get("campaign_id") ?? undefined;
+    return { status: 200, body: { ok: true, data: { candidates: daemon.validationIntakePreparation?.list({ ...(campaignId === undefined ? {} : { campaign_id: campaignId }) }) ?? [] } } };
+  }
   if (method === "POST" && pathname === "/host/v1/validation/blind-comparisons") {
     if (principal.kind !== "host") fail("RESEARCH_PRINCIPAL_FORBIDDEN", "Only a host may interpret blind comparison evidence", 403);
     return { status: 200, body: { ok: true, data: daemon.recordBlindComparison({ kind: "host", id: principal.id }, record(body) as never) } };

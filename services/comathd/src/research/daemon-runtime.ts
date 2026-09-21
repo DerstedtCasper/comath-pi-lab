@@ -30,6 +30,7 @@ import { createSupervisorDriver, defaultResearchContextPolicy } from "./supervis
 import { createValidationFanout, validationStatementBriefSchema, type ValidationFanoutOptions } from "./validation-fanout.js";
 import { createValidationAggregation, type HostBlindComparisonInput, type ValidationAggregationOptions } from "./validation-aggregation.js";
 import { createValidationDriver } from "./validation-driver.js";
+import { createValidationIntakePreparationDriver } from "./validation-intake-preparation.js";
 import { requireApprovedFormalScope } from "../proof-kernel/campaign/formal-spec-store.js";
 import { createFormalizationIntake } from "./formalization-intake.js";
 import { createFormalCandidateDispatch, type FormalCandidateDispatchProfile } from "./formal-candidate-dispatch.js";
@@ -138,6 +139,7 @@ export class ResearchDaemon {
   readonly validationFanout?: ReturnType<typeof createValidationFanout>;
   readonly validationAggregation?: ReturnType<typeof createValidationAggregation>;
   readonly validationDriver?: ReturnType<typeof createValidationDriver>;
+  readonly validationIntakePreparation?: ReturnType<typeof createValidationIntakePreparationDriver>;
   readonly intake;
   readonly formalCandidates;
   readonly formalCandidateIntake;
@@ -307,6 +309,7 @@ export class ResearchDaemon {
           return receipt ? { policy_version: host.policy_version, approved_assumptions: receipt.approved_assumptions } : undefined;
         } });
       this.validationDriver = createValidationDriver(runtime, host.policy_version, this.validationFanout, this.validationAggregation);
+      this.validationIntakePreparation = createValidationIntakePreparationDriver(runtime);
     }
     this.intake = createFormalizationIntake(runtime, { results: this.resultService,
       authorizeArtifact: (_principal, ref, campaignId) => listArtifactRefs(runtime.root).some(record => record.id === ref.artifact_id && record.sha256 === ref.sha256
@@ -342,7 +345,7 @@ export class ResearchDaemon {
       drainResearchAuditOutbox(runtime.root);
       return daemon;
     } catch (error) {
-      await daemon?.supervisor?.close(); await daemon?.validationDriver?.close(); await daemon?.proofWorkflow?.close();
+      await daemon?.supervisor?.close(); await daemon?.validationDriver?.close(); await daemon?.validationIntakePreparation?.close(); await daemon?.proofWorkflow?.close();
       daemon?.reconciler.close(); daemon?.scheduler.close(); daemon?.app.close();
       try { await daemon?.adapters.close(); } finally { await runtime.release(); }
       throw error;
@@ -452,18 +455,19 @@ export class ResearchDaemon {
     if (this.closing) fail("DAEMON_CLOSING", "Daemon is closing");
     if (this.started) return;
     this.started = true; this.pauseUnsubscribe = this.app.events.subscribe(() => this.settlePausingCampaigns());
-    this.reconciler.start(); this.supervisor?.start(); this.validationDriver?.start(); this.proofWorkflow.start(); this.scheduler.start();
+    this.reconciler.start(); this.supervisor?.start(); this.validationIntakePreparation?.start(); this.validationDriver?.start(); this.proofWorkflow.start(); this.scheduler.start();
   }
   close(): Promise<void> {
     if (this.closing) return this.closing;
     this.supervisor?.stop();
+    this.validationIntakePreparation?.stop();
     this.validationDriver?.stop();
     this.proofWorkflow.stop();
     this.pauseUnsubscribe?.(); this.pauseUnsubscribe = undefined;
     this.scheduler.stopGrants();
     this.closing = Promise.resolve().then(async () => {
       const errors: unknown[] = [];
-      const draining: Promise<unknown>[] = [this.reconciler.drain(), this.supervisor?.close() ?? Promise.resolve(), this.validationDriver?.close() ?? Promise.resolve(), this.proofWorkflow.close()];
+      const draining: Promise<unknown>[] = [this.reconciler.drain(), this.supervisor?.close() ?? Promise.resolve(), this.validationIntakePreparation?.close() ?? Promise.resolve(), this.validationDriver?.close() ?? Promise.resolve(), this.proofWorkflow.close()];
       // Persist handoff intents before attempting cancellation. Unconfirmed work retains permits.
       for (const row of this.runtime.store.all("SELECT attempt_key,task_id FROM attempts WHERE state<>'terminated'")) {
         if (["legacy_run", "proof_workflow"].includes(this.runtime.store.getTask(String(row.task_id))?.kind ?? "")) continue;
