@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { existsSync } from 'node:fs';
 import { readFile, writeFile, rename, mkdir, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
@@ -21,6 +22,11 @@ function operatorEnvironment() {
   for (const key of Object.keys(env)) if (/HOST_APPROVAL|PROVIDER.*(KEY|TOKEN|SECRET)|WORKER.*(TOKEN|KEY|SECRET)/i.test(key)) delete env[key];
   return env;
 }
+function packageSkillPath(extension) {
+  const skill = resolve(dirname(extension), '..', 'skills', 'comath-pi-operator');
+  if (!existsSync(resolve(skill, 'SKILL.md'))) throw Error('PI_OPERATOR_PACKAGE_SKILL_MISSING');
+  return skill;
+}
 
 /** Run exactly one Pi RPC operator command. A process exit alone is never a receipt. */
 export async function runOperatorRequest(raw, options) {
@@ -28,7 +34,8 @@ export async function runOperatorRequest(raw, options) {
   if (!pi || !isAbsolute(pi) || !extension || !isAbsolute(extension) || !project || !isAbsolute(project)) throw Error('pi, extension, and project must be absolute paths');
   const timeout = Number.isSafeInteger(options?.timeout_ms) ? options.timeout_ms : 30000;
   if (timeout < 1 || timeout > 120000) throw Error('Invalid timeout_ms');
-  const child = spawn(pi, [...(options.piArgs ?? []), '--mode', 'rpc', '--no-session', '--no-tools', '--no-skills', '--no-prompt-templates', '--provider', 'openai', '--model', 'gpt-4o-mini', '--extension', extension],
+  const skills = options?.loadPackageSkill === true ? ['--no-skills', '--skill', packageSkillPath(extension)] : ['--no-skills'];
+  const child = spawn(pi, [...(options.piArgs ?? []), '--mode', 'rpc', '--no-session', '--no-tools', ...skills, '--no-prompt-templates', '--provider', 'openai', '--model', 'gpt-4o-mini', '--extension', extension],
     { cwd: project, env: operatorEnvironment(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let stderr = '', settled = false, timer;
   const finish = (resolve, reject, value, error) => {
@@ -119,6 +126,7 @@ function parseArgs(args) {
   for (let i = 0; i < args.length; i++) {
     const key = args[i];
     if (key === '--stdio') value.stdio = true;
+    else if (key === '--load-package-skill') value.load_package_skill = true;
     else if (key === '--pi-arg') value.piArgs.push(args[++i]);
     else if (['--pi', '--extension', '--project', '--request-file', '--handoff-file'].includes(key)) value[key.slice(2).replace(/-/g, '_')] = args[++i];
     else if (key === '--timeout-ms') value.timeout_ms = Number(args[++i]);
@@ -128,7 +136,7 @@ function parseArgs(args) {
 }
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const common = { pi: options.pi, piArgs: options.piArgs, extension: options.extension, project: options.project, timeout_ms: options.timeout_ms, ...(options.handoff_file ? { handoffFile: options.handoff_file } : {}) };
+  const common = { pi: options.pi, piArgs: options.piArgs, extension: options.extension, project: options.project, timeout_ms: options.timeout_ms, ...(options.load_package_skill ? { loadPackageSkill: true } : {}), ...(options.handoff_file ? { handoffFile: options.handoff_file } : {}) };
   const execute = request => options.handoff_file ? runWithHandoff(request, common) : runOperatorRequest(request, common);
   if (options.request_file) {
     const request = JSON.parse(await readFile(resolve(options.request_file), 'utf8')); process.stdout.write(`${JSON.stringify(await execute(request))}\n`); return;
