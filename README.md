@@ -144,6 +144,23 @@ The embeddable `createComathServer()` factory remains available for an in-proces
 
 中文：构建后通过 CLI 的 `doctor`、`serve` 与 `rollback` 操作服务，必须给出绝对 project/config 路径；`serve` 只接受 loopback operator listener。`rollback` 不开 listener，必须先停止新 daemon，并且只接受已验证的 `internal_restore` 快照；public-download 快照不能恢复。`createComathServer()` 仍可供嵌入式宿主使用；生产部署由宿主管理生命周期、日志、端口和配置密钥。
 
+### Host-only validation interpretation
+
+After both independent blind reproduction results and their accepted comparison
+task exist, a host confirmation surface may call
+`POST /host/v1/validation/blind-comparisons`. It requires the separate host
+approval credential, never the operator credential. The request binds
+`candidate_id`, `policy_version`, `task_id`, both current blind result refs,
+and `outcome` (`consistent` or `disagreement`). `comathd` rechecks the
+accepted task/result provenance, scope, event order, and both input/claim
+citations before recording an immutable host interpretation.
+
+Pi, workers, external harnesses, and the operator MCP facade cannot call this
+endpoint. A consistent interpretation only permits the existing research
+validation aggregation to advance when every other validation gate passes; a
+disagreement keeps a durable adverse issue open. Neither outcome confers Lean
+proof authority.
+
 ## Configuration
 
 Keep live secrets out of Git, Pi payloads, and evidence packs. Use environment variables or host-owned secret stores.
