@@ -7,7 +7,7 @@ import type { ResearchConfig } from "../../config/config.js";
 import type { ProjectRuntime } from "../../research/project-runtime.js";
 import type { ResearchGrant } from "../../research/portfolio-scheduler.js";
 import { canonicalJson } from "../../verification/runner-contracts.js";
-import { describeNativeWorkspace, requireNativeSandboxReady } from "./native-workspace.js";
+import { describeNativeWorkspace, preflightCodexNativeSandbox, requireNativeSandboxReady, type NativeSandboxPreflightInput } from "./native-workspace.js";
 import { startOwnedProcessSession } from "./owned-process-session.js";
 import { createCodexAppServerAdapter, type CodexOwnedTransport } from "./codex-app-server-adapter.js";
 import type { AgentRuntimeAdapter, StartWorkerInput } from "./agent-runtime-adapter.js";
@@ -59,6 +59,7 @@ export function renderCodexSandboxCommand(input: { binary: string; workspace: st
 export function createConfiguredCodexAdapter(runtime: ProjectRuntime, config: ResearchConfig, options: {
   buildPrompt: (input: StartWorkerInput) => Promise<string>;
   gatewayUrl: () => string;
+  preflightNativeSandbox?: (input: NativeSandboxPreflightInput) => Promise<NativeSandboxPreflightInput["workspace"]>;
 }): AgentRuntimeAdapter {
   function selection(input: StartWorkerInput) {
     const attempt = runtime.store.get("SELECT * FROM attempts WHERE attempt_key=?", input.attempt_key);
@@ -81,9 +82,10 @@ export function createConfiguredCodexAdapter(runtime: ProjectRuntime, config: Re
   async function launch(input: StartWorkerInput): Promise<CodexOwnedTransport> {
     input.signal.throwIfAborted();
     const { attempt, task, model, host, workspace } = selection(input);
-    // No credential read, private configuration write or child spawn may precede this guard.
-    requireNativeSandboxReady(workspace);
     if (!host.binary || !host.provider_endpoint || !host.provider_secret_env) fail("CODEX_HOST_CONFIG_INVALID");
+    // No credential read, private configuration write or child spawn may precede this official no-model preflight.
+    const verifiedWorkspace = await (options.preflightNativeSandbox ?? preflightCodexNativeSandbox)({ binary: host.binary, workspace, signal: input.signal });
+    requireNativeSandboxReady(verifiedWorkspace);
     const credential = process.env[host.provider_secret_env];
     if (!credential) fail("CODEX_PROVIDER_CREDENTIAL_UNAVAILABLE");
     const gateway = new URL(options.gatewayUrl());
