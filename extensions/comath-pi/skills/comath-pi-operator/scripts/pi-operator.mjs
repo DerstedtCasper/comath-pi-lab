@@ -35,7 +35,7 @@ export async function runOperatorRequest(raw, options) {
   const timeout = Number.isSafeInteger(options?.timeout_ms) ? options.timeout_ms : 30000;
   if (timeout < 1 || timeout > 120000) throw Error('Invalid timeout_ms');
   const skills = options?.loadPackageSkill === true ? ['--no-skills', '--skill', packageSkillPath(extension)] : ['--no-skills'];
-  const child = spawn(pi, [...(options.piArgs ?? []), '--mode', 'rpc', '--no-session', '--no-tools', ...skills, '--no-prompt-templates', '--provider', 'openai', '--model', 'gpt-4o-mini', '--extension', extension],
+  const child = spawn(pi, [...(options.piArgs ?? []), '--mode', 'rpc', '--no-session', '--no-tools', '--no-extensions', ...skills, '--no-prompt-templates', '--provider', 'openai', '--model', 'gpt-4o-mini', '--extension', extension],
     { cwd: project, env: operatorEnvironment(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let stderr = '', settled = false, timer;
   const finish = (resolve, reject, value, error) => {

@@ -49,8 +49,12 @@ separately accepted `dispute` or `referee` task, and newly cited artifact
 references. The service rejects non-independent tasks, old evidence, missing
 authorization policy, or any attempt to promote a proof.
 
-The package helper normally disables all discovered skills for a minimal RPC
-surface. Its explicit `--load-package-skill` option instead loads only the
-co-packaged `skills/comath-pi-operator` directory alongside the extension; it
-fails if that exact package resource is absent and does not enable global skill
-discovery, host approval, or model turns.
+The package helper normally disables discovered extensions and skills for a
+minimal RPC surface, then loads only its explicit CoMath extension. A host may
+pass selected additional Pi arguments (including another explicit
+`--extension` or `--skill`) through repeated `--pi-arg` values; discovery stays
+off and the other extension receives no worker, host-approval, scheduler, or
+Lean authority. Its explicit `--load-package-skill` option additionally loads
+only the co-packaged `skills/comath-pi-operator` directory; it fails if that
+exact package resource is absent and does not enable global discovery, host
+approval, or model turns.
