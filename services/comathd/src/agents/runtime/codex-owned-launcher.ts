@@ -21,19 +21,24 @@ const tomlString = (value: string) => {
 
 /** Secret-free generation configuration, usable by host tooling before sandbox rollout. */
 export function renderCodexWorkerConfig(input: { model: string; provider: string; endpoint: string; workspace: string;
-  node_binary: string; worker_mcp_script: string }): string {
+  gateway: string; node_binary: string; worker_mcp_script: string }): string {
   if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(input.provider) || !input.model.trim()
     || ![input.workspace, input.node_binary, input.worker_mcp_script].every(isAbsolute)) fail("CODEX_HOST_CONFIG_INVALID");
   let endpoint: URL; try { endpoint = new URL(input.endpoint); } catch { fail("CODEX_HOST_CONFIG_INVALID"); }
   if (!["http:", "https:"].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) fail("CODEX_HOST_CONFIG_INVALID");
+  let gateway: URL; try { gateway = new URL(input.gateway); } catch { fail("CODEX_HOST_CONFIG_INVALID"); }
+  if (!["http:", "https:"].includes(gateway.protocol) || gateway.username || gateway.password || gateway.search || gateway.hash) fail("CODEX_HOST_CONFIG_INVALID");
+  const allowedDomains = [...new Set([endpoint.hostname, gateway.hostname])];
   return [
     `model = ${tomlString(input.model)}`, `model_provider = ${tomlString(input.provider)}`,
-    'approval_policy = "never"', 'sandbox_mode = "workspace-write"', 'cli_auth_credentials_store = "ephemeral"',
+    'approval_policy = "never"', 'default_permissions = "comath-worker"', 'cli_auth_credentials_store = "ephemeral"',
     'web_search = "disabled"', 'check_for_update_on_startup = false',
     '[history]', 'persistence = "none"', '[agents]', 'enabled = false',
     '[features]', 'multi_agent = false', 'shell_tool = false', 'apps = false', 'hooks = false', 'memories = false',
-    'remote_plugin = false', 'goals = false', '[sandbox_workspace_write]', 'network_access = false',
-    `writable_roots = [${tomlString(input.workspace)}]`, '[shell_environment_policy]', 'inherit = "none"',
+    'remote_plugin = false', 'goals = false', 'network_proxy = true', '[permissions.comath-worker]', 'extends = ":workspace"',
+    '[permissions.comath-worker.network]', 'enabled = true', '[permissions.comath-worker.network.domains]',
+    ...allowedDomains.map(domain => `${tomlString(domain)} = "allow"`), '[windows]', 'sandbox = "elevated"',
+    '[shell_environment_policy]', 'inherit = "none"',
     `[model_providers.${input.provider}]`, `name = ${tomlString(input.provider)}`, `base_url = ${tomlString(endpoint.href)}`,
     'wire_api = "responses"', 'env_key = "COMATH_PROVIDER_API_KEY"', 'requires_openai_auth = false',
     'request_max_retries = 0', 'stream_max_retries = 0',
@@ -42,6 +47,13 @@ export function renderCodexWorkerConfig(input: { model: string; provider: string
     'env_vars = ["COMATH_WORKER_GATEWAY_URL", "COMATH_WORKER_TOKEN", "COMATH_TASK_ID", "COMATH_GENERATION"]',
     'required = true', ''
   ].join("\n");
+}
+
+/** Invoke the official Codex native sandbox rather than implementing an in-process substitute. */
+export function renderCodexSandboxCommand(input: { binary: string; workspace: string }): { program: string; args: string[] } {
+  if (![input.binary, input.workspace].every(isAbsolute)) fail("CODEX_HOST_CONFIG_INVALID");
+  return { program: input.binary, args: ["sandbox", "-P", "comath-worker", "-C", input.workspace, "--", input.binary,
+    "app-server", "--strict-config", "--listen", "stdio://"] };
 }
 
 export function createConfiguredCodexAdapter(runtime: ProjectRuntime, config: ResearchConfig, options: {
@@ -77,7 +89,7 @@ export function createConfiguredCodexAdapter(runtime: ProjectRuntime, config: Re
     const gateway = new URL(options.gatewayUrl());
     if (!["http:", "https:"].includes(gateway.protocol) || gateway.username || gateway.password || gateway.search || gateway.hash) fail("CODEX_GATEWAY_UNAVAILABLE");
     const contents = renderCodexWorkerConfig({ model: model.model, provider: host.model_provider, endpoint: host.provider_endpoint,
-      workspace: workspace.workspace, node_binary: process.execPath,
+      gateway: gateway.href, workspace: workspace.workspace, node_binary: process.execPath,
       worker_mcp_script: fileURLToPath(new URL("../../control/worker-mcp.js", import.meta.url)) });
     await mkdir(workspace.runtime_home, { recursive: true });
     await writeFile(join(workspace.runtime_home, "config.toml"), contents, { flag: "wx", flush: true });
@@ -85,7 +97,7 @@ export function createConfiguredCodexAdapter(runtime: ProjectRuntime, config: Re
     const grant: ResearchGrant = { task_id: task.task_id, campaign_id: task.campaign_id, generation: task.generation,
       attempt_key: input.attempt_key, run_id: String(attempt.run_id), lease_token: input.lease_capability,
       expires_at: String(attempt.expires_at), provider_id: model.provider_id, runtime_id: model.runtime_id, model_policy_id: task.model_policy_id };
-    const session = await startOwnedProcessSession({ runtime, grant, command: { program: host.binary, args: ["app-server", "--strict-config", "--listen", "stdio://"] },
+    const session = await startOwnedProcessSession({ runtime, grant, command: renderCodexSandboxCommand({ binary: host.binary, workspace: workspace.workspace }),
       cwd: workspace.workspace, allowed_programs: [host.binary], signal: input.signal, interactive: true,
       startup_timeout_ms: 30000, attempt_timeout_ms: task.budget.wall_ms, stop_timeout_ms: Math.min(120000, config.stop_grace_ms),
       onStarted: handle => {
