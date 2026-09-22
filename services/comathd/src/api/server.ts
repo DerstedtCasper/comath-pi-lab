@@ -2636,7 +2636,7 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
               control_ready: reference.daemon.config.enabled && reference.daemon.app.startup_blockers.length === 0,
               missing_configuration: reference.daemon.config.enabled ? [] : ["research.enabled"], operator_tools: [
                 "research_capabilities_get", "research_campaign_list", "research_campaign_start", "research_campaign_get", "research_frontier_get",
-                "research_budget_get", "research_budget_update", "research_dag_patch", "research_campaign_pause", "research_campaign_resume",
+                "research_budget_get", "research_dashboard_get", "research_budget_update", "research_dag_patch", "research_campaign_pause", "research_campaign_resume",
                 "research_campaign_cancel", "research_campaign_finish", "research_task_get", "research_task_cancel", "research_task_retry", "research_validation_issue_resolve", "research_validation_intake_preparations_list",
                 "research_checkpoint_get", "research_artifact_read", "research_events_read", "research_intake_prepare", "research_intake_request_approval",
                 "research_operation_get"

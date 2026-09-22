@@ -32,6 +32,17 @@ tool. It returns durable, non-authoritative candidates that are awaiting
 operator-supplied formal drafts; it cannot prepare a lock, issue a ticket,
 approve an intake, or promote a proof.
 
+`research_dashboard_get` is a read-only campaign snapshot. Use it only after
+`research_capabilities_get` reports it available; it does not subscribe, write
+state, or elevate any research or proof result.
+
+`research_artifact_read` is a read-only fixed operator tool for an
+operator-visible artifact. Its input is an `artifact_id` plus optional
+non-negative `offset` and `length` (at most 262144 bytes). It returns a bounded
+base64 byte slice with the full `artifact_sha256`, the slice `bytes_sha256`, and
+the returned range. A slice is evidence material, not a proof result; never
+invent a host path, worker credential, or approval from it.
+
 `research_validation_issue_resolve` is a fixed operator tool, not a free-form
 resolution assertion. Its input names a candidate, the existing issue, a
 separately accepted `dispute` or `referee` task, and newly cited artifact

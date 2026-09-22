@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 
@@ -30,6 +31,32 @@ export function createResearchOperatorMcp(config: OperatorMcpConfig): McpServer 
       return { content: [{ type: "text", text: JSON.stringify(structuredContent) }], structuredContent };
     } catch { return { isError: true, content: [{ type: "text", text: "RESEARCH_OPERATOR_UNAVAILABLE" }] }; }
   }
+  async function callArtifact(artifactId: string, offset: number, length: number): Promise<OperatorResponse> {
+    try {
+      const response = await fetch(new URL(`/research/v1/artifacts/${encodeURIComponent(artifactId)}`, base), { method: "GET", redirect: "error", signal: AbortSignal.timeout(60_000),
+        headers: { Authorization: `Bearer ${config.token}`, Range: `bytes=${offset}-${offset + length - 1}` } });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (!response.ok) {
+        try {
+          const body = JSON.parse(bytes.toString("utf8")) as { code?: string };
+          return { isError: true, content: [{ type: "text", text: body.code ?? "RESEARCH_OPERATOR_REJECTED" }] };
+        } catch { return { isError: true, content: [{ type: "text", text: "RESEARCH_OPERATOR_REJECTED" }] }; }
+      }
+      const artifactSha256 = /^"sha256-([a-f0-9]{64})"$/.exec(response.headers.get("etag") ?? "")?.[1];
+      const header = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
+      const range = header ? { start: Number(header[1]), end: Number(header[2]), total: Number(header[3]) }
+        : response.status === 200 && offset === 0 ? { start: 0, end: bytes.length - 1, total: bytes.length } : undefined;
+      if (!artifactSha256 || !range || bytes.length > length || bytes.length > 256 * 1024 || !Number.isSafeInteger(range.start) || !Number.isSafeInteger(range.end)
+        || !Number.isSafeInteger(range.total) || range.start !== offset || range.end < range.start || range.total <= range.end || range.end - range.start + 1 !== bytes.length) {
+        return { isError: true, content: [{ type: "text", text: "RESEARCH_ARTIFACT_RESPONSE_INVALID" }] };
+      }
+      const bytesSha256 = createHash("sha256").update(bytes).digest("hex");
+      if (response.status === 200 && bytesSha256 !== artifactSha256) return { isError: true, content: [{ type: "text", text: "RESEARCH_ARTIFACT_HASH_MISMATCH" }] };
+      const structuredContent = { artifact_id: artifactId, artifact_sha256: artifactSha256, bytes_sha256: bytesSha256,
+        content_type: response.headers.get("content-type") ?? "application/octet-stream", range, encoding: "base64", bytes_base64: bytes.toString("base64") };
+      return { content: [{ type: "text", text: JSON.stringify(structuredContent) }], structuredContent };
+    } catch { return { isError: true, content: [{ type: "text", text: "RESEARCH_OPERATOR_UNAVAILABLE" }] }; }
+  }
   const id = z.string().min(1).max(160), text = z.string().trim().min(1).max(8192);
   const campaignMutation = { command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative() };
   const charter = z.object({ goal: text, approach_hints: z.array(text).max(100).default([]), constraints: z.array(text).max(100), success_criteria: z.array(text).min(1).max(100) }).strict();
@@ -47,9 +74,13 @@ export function createResearchOperatorMcp(config: OperatorMcpConfig): McpServer 
     const query = new URLSearchParams(); if (args.after_task_id) query.set("after_task_id", args.after_task_id); if (args.limit !== undefined) query.set("limit", String(args.limit)); return call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/frontier${query.size ? `?${query}` : ""}`);
   });
   server.registerTool("research_budget_get", { description: "Read durable campaign budget, reservations, unknown dimensions, and overrun.", inputSchema: { campaign_id: id }, annotations: { readOnlyHint: true } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/budget`));
+  server.registerTool("research_dashboard_get", { description: "Read the bounded durable-research dashboard snapshot without mutating campaign state.", inputSchema: { campaign_id: id }, annotations: { readOnlyHint: true } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/dashboard`));
   server.registerTool("research_events_read", { description: "Read one bounded ordered durable event page; advance the cursor only after processing it.", inputSchema: { campaign_id: id, after_seq: z.number().int().nonnegative(), limit: z.number().int().min(1).max(200).default(100) }, annotations: { readOnlyHint: true } }, args => call(`/research/v1/campaigns/${encodeURIComponent(args.campaign_id)}/events?after_seq=${args.after_seq}&limit=${args.limit}`));
   server.registerTool("research_task_get", { description: "Read a task and safe attempt history without lease credentials.", inputSchema: { task_id: id }, annotations: { readOnlyHint: true } }, args => call(`/research/v1/tasks/${encodeURIComponent(args.task_id)}`));
   server.registerTool("research_checkpoint_get", { description: "Read the immutable committed checkpoint for a task.", inputSchema: { task_id: id }, annotations: { readOnlyHint: true } }, args => call(`/research/v1/tasks/${encodeURIComponent(args.task_id)}/checkpoint`));
+  server.registerTool("research_artifact_read", { description: "Read at most 256 KiB of an operator-visible immutable research artifact as exact base64 bytes. This cannot alter state or grant proof authority.",
+    inputSchema: { artifact_id: id, offset: z.number().int().nonnegative().default(0), length: z.number().int().min(1).max(256 * 1024).default(64 * 1024) }, annotations: { readOnlyHint: true } },
+    args => callArtifact(args.artifact_id, args.offset, args.length));
   server.registerTool("research_operation_get", { description: "Read a sanitized durable operation state without its internal trust-commit plan.", inputSchema: { operation_id: id }, annotations: { readOnlyHint: true } }, args => call(`/research/v1/operations/${encodeURIComponent(args.operation_id)}`));
   server.registerTool("research_campaign_start", { description: "Start a bounded charter-scoped research campaign. This does not grant formal proof authority.",
     inputSchema: { command_id: id, charter, budget, max_active_workers: z.number().int().min(1).max(64), model_policy_id: id, tool_policy_id: id, role_template: id } }, args => call("/research/v1/campaigns", args));
