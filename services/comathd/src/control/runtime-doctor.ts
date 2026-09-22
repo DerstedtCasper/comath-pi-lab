@@ -19,8 +19,7 @@ export type RuntimeDoctorReport = {
   sqlite: { available: boolean; node_version: string; version?: string; code?: string };
   runtimes: Record<string, {
     kind: string; binary: RuntimeBinaryInspection; credentials: CredentialPresence; model_policy_ids: string[];
-    sandbox: { requested: "deferred" | "native" | "oci"; readiness: "deferred" | "unverified"; verified: false };
-    oci?: { image_id: string; container_user: string; engine: RuntimeBinaryInspection };
+    sandbox: { requested: "deferred" | "native"; readiness: "deferred" | "unverified"; verified: false };
     live_verified: false;
   }>;
   credentials: { operator: CredentialPresence; host_approval: CredentialPresence };
@@ -83,17 +82,14 @@ export async function inspectRuntimeDoctor(projectRoot: string, input: ComathCon
     layout = { status: "error", code: error instanceof ComathError ? error.code : "RUNTIME_LAYOUT_UNREADABLE" };
   }
   const sqlite = await inspectSqlite();
-  const runtimes = Object.fromEntries(await Promise.all(Object.entries(research?.runtimes ?? {}).map(async ([id, runtime]) => {
-    const binary = await inspectBinary(runtime.binary);
-    const oci = runtime.oci ? { image_id: runtime.oci.image_id, container_user: runtime.oci.container_user,
-      engine: await inspectBinary(runtime.oci.engine_binary) } : undefined;
-    return [id, {
-      kind: runtime.kind, binary, credentials: presence(runtime.provider_secret_env),
-      model_policy_ids: Object.entries(research?.model_policies ?? {}).filter(([, model]) => model.runtime_id === id).map(([modelId]) => modelId).sort(),
-      sandbox: { requested: runtime.sandbox_mode, readiness: runtime.sandbox_mode === "deferred" ? "deferred" as const : "unverified" as const, verified: false as const },
-      ...(oci ? { oci } : {}), live_verified: false as const
-    }];
-  })));
+  const runtimes = Object.fromEntries(await Promise.all(Object.entries(research?.runtimes ?? {}).map(async ([id, runtime]) => [id, {
+    kind: runtime.kind,
+    binary: await inspectBinary(runtime.binary),
+    credentials: presence(runtime.provider_secret_env),
+    model_policy_ids: Object.entries(research?.model_policies ?? {}).filter(([, model]) => model.runtime_id === id).map(([modelId]) => modelId).sort(),
+    sandbox: { requested: runtime.sandbox_mode, readiness: runtime.sandbox_mode === "deferred" ? "deferred" as const : "unverified" as const, verified: false as const },
+    live_verified: false as const
+  }])));
   return { schema_version: 1, project_root: root, layout, sqlite, runtimes,
     credentials: { operator: presence(research?.operator_token_env), host_approval: presence(research?.host_approval_token_env) },
     research_enabled: research?.enabled ?? false, live_enabled: false, proof_authority: "none" };
