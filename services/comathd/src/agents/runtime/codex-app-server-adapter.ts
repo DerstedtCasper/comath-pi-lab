@@ -5,13 +5,14 @@ import type { AgentRuntimeAdapter, StartWorkerInput, WorkerHandle, UsageSnapshot
 import { createCodexJsonRpc, type CodexRpcMessage } from "./codex-jsonrpc.js";
 import type { WorkerEvent } from "./worker-event.js";
 
-export type CodexOwnedTransport = { stdin: Writable; stdout: Readable; owned_handle_id: string; terminate: () => Promise<boolean> };
+export type CodexOwnedTransport = { stdin: Writable; stdout: Readable; owned_handle_id: string; terminate: () => Promise<boolean>; workspace_path?: string };
 export type CodexAppServerOptions = {
   model: string; model_provider: string;
   resolvePolicy?: (input: StartWorkerInput) => { model: string; model_provider: string };
   /** Service-owned launcher enforces the configured sandbox readiness and supplies scoped MCP/environment. */
   launch: (input: StartWorkerInput) => Promise<CodexOwnedTransport>;
   buildPrompt: (input: StartWorkerInput) => Promise<string>;
+  isolation?: "oci" | "process_boundary_only";
 };
 type Session = { handle: WorkerHandle; transport: CodexOwnedTransport; rpc: ReturnType<typeof createCodexJsonRpc>;
   started: number; sequence: number; events: WorkerEvent[]; waiter?: () => void; ended: boolean; usage: UsageSnapshot | null;
@@ -105,7 +106,7 @@ export function createCodexAppServerAdapter(options: CodexAppServerOptions): Age
   }
   const adapter: AgentRuntimeAdapter = {
     capabilities: () => ({ durable_provider_session: true, streaming_usage: true, exact_output_cap: false,
-      exact_provider_request_quota: false, tool_events: true, steer: true, isolation: "process_boundary_only" }),
+      exact_provider_request_quota: false, tool_events: true, steer: true, isolation: options.isolation ?? "process_boundary_only" }),
     async start(input) {
       if (closing || sessions.has(input.attempt_key)) throw new ComathError("Codex attempt already exists or adapter is closed", { code: "CODEX_ATTEMPT_CONFLICT" });
       input.signal.throwIfAborted();
@@ -116,6 +117,7 @@ export function createCodexAppServerAdapter(options: CodexAppServerOptions): Age
       input.signal.throwIfAborted();
       const transport = await options.launch(input);
       const handle: WorkerHandle = { attempt_key: input.attempt_key, runtime_kind: "codex-app-server", owned_handle_id: transport.owned_handle_id };
+      const cwd = transport.workspace_path ?? input.workspace.workspace_path;
       const session = { handle, transport, started: Date.now(), sequence: 0, events: [], ended: false, usage: null,
         tools: new Set<string>(), signal: input.signal } as unknown as Session;
       session.rpc = createCodexJsonRpc({ input: transport.stdin, output: transport.stdout, onNotification: message => receive(session, message) });
@@ -127,13 +129,13 @@ export function createCodexAppServerAdapter(options: CodexAppServerOptions): Age
         session.rpc.notify("initialized");
         input.signal.throwIfAborted();
         const thread = await session.rpc.request("thread/start", { model: policy.model, modelProvider: policy.model_provider,
-          cwd: input.workspace.workspace_path, approvalPolicy: "never", config: { "features.multi_agent": false },
+          cwd, approvalPolicy: "never", config: { "features.multi_agent": false },
           developerInstructions: "Use only the service-provisioned task scope and checkpoint tools. Research output has no proof authority." }) as { thread: { id: string } };
         if (typeof thread.thread?.id !== "string") throw new Error("Missing provider thread ID");
         handle.provider_session = { thread_id: thread.thread.id };
         input.signal.throwIfAborted();
         const turn = await session.rpc.request("turn/start", { threadId: thread.thread.id, model: policy.model,
-          input: [{ type: "text", text: prompt }], cwd: input.workspace.workspace_path }) as { turn: { id: string } };
+          input: [{ type: "text", text: prompt }], cwd }) as { turn: { id: string } };
         if (typeof turn.turn?.id !== "string") throw new Error("Missing provider turn ID");
         handle.provider_session.turn_id = turn.turn.id;
         session.turnStarted = true;

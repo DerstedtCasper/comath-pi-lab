@@ -12,6 +12,14 @@ export type ComathConfig = {
 };
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/);
 const boundedMs = z.number().int().min(1).max(86400000);
+const immutableOciImage = z.string().regex(/^(?:[a-z0-9][a-z0-9._/:-]*@)?sha256:[a-f0-9]{64}$/);
+const ociRuntimeSchema = z.strictObject({
+  engine_binary: z.string().refine(isAbsolute), image_id: immutableOciImage,
+  container_user: z.string().regex(/^[1-9][0-9]{0,9}:[1-9][0-9]{0,9}$/),
+  memory_mb: z.number().int().min(128).max(65536).default(2048),
+  cpu_count: z.number().int().min(1).max(64).default(2),
+  pids_limit: z.number().int().min(32).max(8192).default(256)
+});
 const wheelTerms = z.strictObject({ license_note: z.string().min(1), terms_url: z.url().optional(), redistribution_policy: z.string().min(1) });
 const wheelHttp = z.strictObject({ endpoint: z.url(), wire_format: z.enum(["query_json", "query_text"]), credential_env: envName.optional(),
   timeout_ms: z.number().int().min(1).max(120000).optional(), max_response_bytes: z.number().int().min(1).max(2 * 1024 * 1024).optional(), terms: wheelTerms });
@@ -39,7 +47,7 @@ export const researchConfigSchema = z.strictObject({
   tool_policies: z.record(z.string(), z.strictObject({ allowed_tools: z.array(z.string().min(1)).max(100), visibility: z.enum(["task", "blind"]).default("task"), new_thread: z.boolean().default(false) })).default({}),
   runtimes: z.record(z.string(), z.strictObject({ kind: z.string().regex(/^[a-z][a-z0-9._-]{0,63}$/), binary: z.string().refine(isAbsolute).optional(),
     model_provider: z.string().default("comath"), provider_endpoint: z.url().optional(), provider_secret_env: envName.optional(),
-    sandbox_mode: z.enum(["deferred", "native"]).default("deferred") })).default({}),
+    sandbox_mode: z.enum(["deferred", "native", "oci"]).default("deferred"), oci: ociRuntimeSchema.optional() })).default({}),
   heartbeat_ms: boundedMs.default(30000), lease_ttl_ms: boundedMs.default(120000), max_fault_retries: z.number().int().min(0).max(10).default(3),
   checkpoint: z.strictObject({ first_tool_calls: z.number().int().min(1).max(100).default(10), periodic_tool_calls: z.number().int().min(1).max(1000).default(15),
     output_tokens: z.number().int().positive().default(12000), interval_ms: boundedMs.default(1200000), grace_ms: boundedMs.default(30000) }).prefault({}),
@@ -77,6 +85,13 @@ export const researchConfigSchema = z.strictObject({
   }
   if (config.lease_ttl_ms < 3 * config.heartbeat_ms) ctx.addIssue({ code: "custom", message: "Lease TTL must be at least three heartbeats" });
   for (const [id, policy] of Object.entries(config.model_policies)) if (!config.provider_policies[policy.provider_id] || !config.runtimes[policy.runtime_id]) ctx.addIssue({ code: "custom", message: `Model policy ${id} has an unknown provider/runtime` });
+  for (const [id, runtime] of Object.entries(config.runtimes)) {
+    if (runtime.sandbox_mode === "oci" && !runtime.oci) ctx.addIssue({ code: "custom", message: `OCI runtime ${id} requires an immutable image and configured engine` });
+    if (runtime.sandbox_mode !== "oci" && runtime.oci) ctx.addIssue({ code: "custom", message: `Runtime ${id} has OCI settings without OCI sandbox mode` });
+  }
+  if (Object.values(config.runtimes).some(runtime => runtime.sandbox_mode === "oci") && ["127.0.0.1", "::1", "localhost"].includes(config.worker_gateway_host)) {
+    ctx.addIssue({ code: "custom", message: "OCI workers require a container-reachable worker gateway listener" });
+  }
   for (const policy of Object.values(config.provider_policies)) if (policy.max_sessions > config.max_active_workers) ctx.addIssue({ code: "custom", message: "Provider session cap exceeds deployment cap" });
   if (config.operator_port !== 0 && config.worker_gateway_port === config.operator_port) ctx.addIssue({ code: "custom", message: "Worker and operator listeners must use distinct ports" });
   if (config.host_approval_token_env && config.host_approval_token_env === config.operator_token_env) ctx.addIssue({ code: "custom", message: "Host approval credential must be separate from operator credential" });

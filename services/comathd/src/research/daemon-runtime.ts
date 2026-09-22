@@ -194,9 +194,13 @@ export class ResearchDaemon {
     if (!suppliedAdapters && Object.values(config.runtimes).some(host => host.kind === "codex-app-server")) {
       configuredAdapters.set("codex-app-server", createConfiguredCodexAdapter(runtime, config, {
         buildPrompt: input => this.contextService?.buildPrompt(input) ?? Promise.reject(new ComathError("A host context policy is required", { code: "CONTEXT_POLICY_REQUIRED" })),
-        gatewayUrl: () => {
+        gatewayUrl: sandboxMode => {
           const address = this.workerGatewayAddress();
           if (!address || typeof address === "string") fail("WORKER_GATEWAY_UNAVAILABLE", "Worker gateway must be listening before launch");
+          if (sandboxMode === "oci") {
+            if (address.address !== "0.0.0.0" && address.address !== "::") fail("OCI_GATEWAY_UNAVAILABLE", "OCI workers require a non-loopback worker gateway listener");
+            return `http://host.docker.internal:${address.port}`;
+          }
           const host = address.address === "0.0.0.0" ? "127.0.0.1" : address.address === "::" ? "::1" : address.address;
           return `http://${host.includes(":") ? `[${host}]` : host}:${address.port}`;
         }
