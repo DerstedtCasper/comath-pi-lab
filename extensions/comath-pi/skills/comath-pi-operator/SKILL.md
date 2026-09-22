@@ -36,5 +36,19 @@ skill or the harness, schedules work and owns all durable state.
    `.comath/`. Retry a lost start response with the same command ID and payload;
    never generate a replacement campaign merely because a response was lost.
 
-See `references/protocol.md` for request/result wire shape, recovery rules, and
-the host-approval boundary.
+## Running the package helper
+
+Use an argv array and absolute paths. On Windows, invoke the Pi npm bundle
+through its Node executable rather than a `.cmd` shim; on POSIX, `--pi` may be
+the Pi executable. Read and process each bounded event page before supplying
+its exact processed sequence through `--processed-event-seq`; a snapshot is not
+an event cursor. A business `ok:false`, RPC failure, extension failure, or
+unexpected confirmation leaves a nonzero helper exit status and never grants
+approval.
+
+Supervise with one bounded event round every 30 seconds or an event wake-up.
+Drain backlog before waiting; unchanged state must not trigger another retry,
+synthesis, patch, or notification.
+
+See `references/protocol.md` for Windows and POSIX argv arrays, the optional
+configured `comathd serve` recovery path, and handoff/retry examples.
