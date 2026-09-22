@@ -46,7 +46,8 @@ export function createFormalCandidateProjectService(runtime: ProjectRuntime, opt
     if (!packageEntry || packageEntry.scope_package_sha256 !== submission.scope_package_sha256) fail("FORMAL_PROJECT_SCOPE_MISMATCH");
     const value = formalCandidateSubmissionSchema.parse(JSON.parse(readCommittedFile(runtime.root, submission.submission_path)));
     const integratedMaterial = collectIntegratedLemmaMaterialFromRuntime({ runtime, campaign_id: submission.campaign_id,
-      requested_dependencies: value.requested_dependencies, readSubmissionReceipt: options.readSubmissionReceipt });
+      requested_dependencies: value.requested_dependencies, required_obligation_ids: approved.obligation_binding.dependencies,
+      readSubmissionReceipt: options.readSubmissionReceipt });
     const configuration = hash(canonicalJson({ source_operation_id: submission.operation_id, lean_toolchain: input.lean_toolchain,
       scope_package_sha256: submission.scope_package_sha256, approved_lock_elaboration_version: 1 }));
     // Lake's native Windows trace/build paths can exceed MAX_PATH beneath the full canonical source hierarchy.
