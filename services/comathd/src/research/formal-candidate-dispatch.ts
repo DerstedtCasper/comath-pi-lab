@@ -11,7 +11,7 @@ import { assertProjectReadable } from "./project-commit.js";
 import { getAcquiredProjectRuntime } from "./project-runtime.js";
 import type { ResearchOrchestrator } from "./research-orchestrator.js";
 import type { WorkerPrincipal } from "../control/worker-auth.js";
-import { scopeBindingSchema, taskBudgetSchema, type ResearchTaskDraft, type ScopeBinding } from "./research-schemas.js";
+import { artifactPointerSchema, scopeBindingSchema, taskBudgetSchema, type ResearchTaskDraft, type ScopeBinding } from "./research-schemas.js";
 
 const id = z.string().min(1).max(160);
 const profileSchema = z.strictObject({ role_template: id, model_policy_id: id, tool_policy_id: id,
@@ -28,6 +28,7 @@ export type FormalCandidateReservation = { candidate_id: string; task_id: string
 export type FormalCandidateDispatchReceipt = { schema_version: "comath.formal_candidate_dispatch.v1";
   dispatch_id: string; campaign_id: string; obligation_id: string; stage_attempt: number; profile_sha256: string;
   bindings: FormalCandidateReservation[]; revision: number; event_seq: number; proof_authority: "none" };
+export type IntegratedDependencySource = { obligation_id: string; artifact_id: string; sha256: string };
 const hash = (value: unknown) => createHash("sha256").update(canonicalJson(value)).digest("hex");
 const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
 function fail(code: string): never { throw new ComathError(code, { code, statusCode: 409 }); }
@@ -36,6 +37,7 @@ const reservationKey = (candidateId: string) => `formal-reservation:${candidateI
 /** Creates queued tasks through ordinary policy admission. It neither starts workers nor verifies proofs. */
 export function createFormalCandidateDispatch(app: ResearchOrchestrator, options: {
   profile?: FormalCandidateDispatchProfile; fault?: (stage: "after_patch" | "after_reservations") => void;
+  resolveIntegratedDependencies?: (input: { campaign_id: string; obligation_id: string; required_obligation_ids: readonly string[] }) => IntegratedDependencySource[];
 }) {
   const runtime = app.runtime, store = runtime.store, profile = options.profile && profileSchema.parse(options.profile), profileHash = profile && hash(profile);
   function owner(campaignId?: string) {
@@ -123,6 +125,14 @@ export function createFormalCandidateDispatch(app: ResearchOrchestrator, options
       if (prior) { if (prior.profile_sha256 !== profileHash) fail("FORMAL_DISPATCH_PROFILE_CONFLICT"); return prior; }
       const { campaign, control, obligation, approved } = current(input);
       if (control.revision !== input.expected_revision) fail("RESEARCH_REVISION_CONFLICT");
+      const requiredDependencies = [...obligation.dependencies];
+      const dependencySources = requiredDependencies.length === 0 ? [] : options.resolveIntegratedDependencies?.({ campaign_id: campaign.campaign_id,
+        obligation_id: obligation.obligation_id, required_obligation_ids: requiredDependencies }) ?? fail("FORMAL_DISPATCH_DEPENDENCY_RESOLVER_UNAVAILABLE");
+      const resolvedDependencies = dependencySources.map(({ obligation_id, ...ref }) => ({ obligation_id: id.parse(obligation_id), ref: artifactPointerSchema.parse(ref) }));
+      if (resolvedDependencies.some(source => !requiredDependencies.includes(source.obligation_id))
+        || requiredDependencies.some(obligationId => !resolvedDependencies.some(source => source.obligation_id === obligationId))) fail("FORMAL_DISPATCH_DEPENDENCY_UNRESOLVED");
+      const inputRefs = [...new Map([approved.formal_spec_ref, approved.ledger_ref, ...resolvedDependencies.map(source => source.ref)]
+        .map(ref => [`${ref.artifact_id}:${ref.sha256}`, ref])).values()];
       // The pure strategy cards use proof-kernel stage names; the durable cursor remains candidate_generation.
       const cards = createGaAgentStageTaskCards({ campaign, obligation, stage: "lemma_sprint", locked_statement_hash: obligation.statement_hash });
       const bindings: FormalCandidateReservation[] = [];
@@ -137,7 +147,7 @@ export function createFormalCandidateDispatch(app: ResearchOrchestrator, options
           specialization: `formal_candidate:${card.variant_id}`, pool: "formalization", priority: profile.priority, budget: profile.budget,
           method_family: `formal_candidate/${card.variant_id}`, problem_slice: `obligation:${obligation.obligation_id}`,
           coupling_label: `formal:${obligation.obligation_id}:a${input.stage_attempt}`,
-          input_refs: [approved.formal_spec_ref, approved.ledger_ref], exclusions: ["Do not mutate trusted .comath state.", "Do not substitute a different theorem or undeclared hypothesis."] };
+          input_refs: inputRefs, exclusions: ["Do not mutate trusted .comath state.", "Do not substitute a different theorem or undeclared hypothesis."] };
         bindings.push({ candidate_id: candidateId, task_id: taskId, generation: 1, campaign_id: campaign.campaign_id,
           obligation_id: obligation.obligation_id, variant_id: card.variant_id, scope: approved.scope,
           stage_attempt: input.stage_attempt, dispatch_id: dispatchId, draft_sha256: hash(draft), proof_authority: "none" });

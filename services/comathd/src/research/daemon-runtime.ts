@@ -43,6 +43,7 @@ import { importArtifact, listArtifactRefs } from "../artifacts/store.js";
 import { initProject } from "../project/project-store.js";
 import { startCampaign as startFormalCampaign } from "../proof-kernel/campaign/campaign-tick.js";
 import { getCampaign as getFormalCampaign } from "../proof-kernel/campaign/research-campaign.js";
+import { resolveVerifiedIntegratedLemmaSourcesFromRuntime } from "../proof-kernel/campaign/integrated-lemma-material.js";
 
 export type ResearchExecutionConsumer = {
   validate(task: ResearchTask): void;
@@ -229,7 +230,13 @@ export class ResearchDaemon {
       if (!validation || !draft.specialization?.startsWith("validation:")) this.failureService?.validateRoute(draft, campaign);
     } });
     if (options.formalCandidateProfile && config.proof_workflow && canonicalJson(options.formalCandidateProfile) !== canonicalJson(config.proof_workflow.candidate)) fail("PROOF_PROFILE_CONFLICT", "Host proof workflow and candidate profiles disagree");
-    this.formalCandidates = createFormalCandidateDispatch(this.app, { profile: options.formalCandidateProfile ?? config.proof_workflow?.candidate });
+    this.formalCandidates = createFormalCandidateDispatch(this.app, { profile: options.formalCandidateProfile ?? config.proof_workflow?.candidate,
+      resolveIntegratedDependencies: input => {
+        if (!this.formalCandidateIntake) fail("FORMAL_DISPATCH_DEPENDENCY_RESOLVER_UNAVAILABLE", "Formal submission receipts are not ready");
+        return resolveVerifiedIntegratedLemmaSourcesFromRuntime({ runtime, campaign_id: input.campaign_id, required_obligation_ids: input.required_obligation_ids,
+          readSubmissionReceipt: this.formalCandidateIntake.readSubmissionReceipt }).map(source => ({ obligation_id: source.obligation_id,
+            artifact_id: source.source.artifact_id, sha256: source.source.sha256 }));
+      } });
     this.formalCandidateIntake = createFormalCandidateIntake(runtime, {
       authorizeArtifact: options.workerGateway?.authorizeArtifact ?? this.contextService.gatewayOptions.authorizeArtifact,
       readCandidateReservation: this.formalCandidates.readCandidateReservation
