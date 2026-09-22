@@ -17,6 +17,14 @@ function bearer(headers: IncomingHttpHeaders): string | undefined {
   const match = /^Bearer ([^\s]+)$/.exec(source ?? "");
   return match?.[1];
 }
+function sameCredential(left: string | undefined, right: string | undefined): boolean {
+  if (!left || !right) return false;
+  const leftBytes = Buffer.from(left), rightBytes = Buffer.from(right);
+  return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
+}
+function hostCredentialCollidesWithOperator(config: ResearchConfig): boolean {
+  return sameCredential(config.operator_token_env && process.env[config.operator_token_env], config.host_approval_token_env && process.env[config.host_approval_token_env]);
+}
 
 /**
  * Credentials are host configuration, never JSON request fields.  The stable
@@ -40,6 +48,9 @@ export function authenticateOperator(headers: IncomingHttpHeaders, config: Resea
   return authenticate(headers, config.operator_token_env, "operator") as AuthenticatedOperator;
 }
 export function authenticateHost(headers: IncomingHttpHeaders, config: ResearchConfig): AuthenticatedHost {
+  if (hostCredentialCollidesWithOperator(config)) {
+    fail("HOST_APPROVAL_CREDENTIAL_COLLISION", "Host approval and operator credentials must resolve to different values", 503);
+  }
   return authenticate(headers, config.host_approval_token_env, "host") as AuthenticatedHost;
 }
 /** A read may be made by either configured principal; mutations choose one explicitly. */
@@ -52,6 +63,7 @@ export function authenticateResearchReader(headers: IncomingHttpHeaders, config:
     const left = Buffer.from(expected), right = Buffer.from(token);
     return left.length === right.length && timingSafeEqual(left, right);
   };
+  if (matches(config.operator_token_env)) return authenticateOperator(headers, config);
   if (matches(config.host_approval_token_env)) return authenticateHost(headers, config);
   return authenticateOperator(headers, config);
 }
