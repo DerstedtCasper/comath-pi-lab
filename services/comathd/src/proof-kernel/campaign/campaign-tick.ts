@@ -5349,13 +5349,18 @@ export function advanceApprovedProofPlanning(input: CampaignTickInput): Campaign
 
 export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
   const runtime = getAcquiredProjectRuntime(input.project_root);
-  if (runtime?.store.getCampaign(input.campaign_id)) {
-    const bridge = getProofWorkflowBridge(runtime);
+  const control = runtime?.store.getCampaign(input.campaign_id), bridge = runtime ? getProofWorkflowBridge(runtime) : undefined;
+  if (control) {
     if (bridge) return bridge.requestAdvance(input);
     const current = getCampaign(input.project_root, input.campaign_id);
     if (!current) throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
     return { campaign: current, blocker: "proof_workflow_owner_unavailable" };
   }
+  if (bridge) return bridge.requestLegacyAdvance(input, () => tickLegacyCampaignInline(input));
+  return tickLegacyCampaignInline(input);
+}
+
+async function tickLegacyCampaignInline(input: CampaignTickInput): Promise<CampaignTickResult> {
   const actor = input.actor ?? "campaign";
   let campaign = getCampaign(input.project_root, input.campaign_id);
   if (!campaign) {

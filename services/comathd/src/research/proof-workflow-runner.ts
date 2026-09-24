@@ -42,6 +42,7 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
 }) {
   const runtime = app.runtime, store = runtime.store, events = createResearchEventStore(runtime), incarnation = randomUUID();
   const pending = new Map<string, Promise<void>>(), requested = new Set<string>();
+  const advancementTurns = new Map<string, Promise<void>>();
   const controllers = new Map<string, AbortController>();
   const verifyNative = options.config ? createProofNativeVerification(app, options.tools, options.config) : undefined;
   const executeCleanReplay = options.config ? createAsyncCleanReplayExecutor(app, options.tools, options.config) : undefined;
@@ -49,6 +50,20 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
   let running = false, closed = false, unsubscribe: (() => void) | undefined, timer: ReturnType<typeof setInterval> | undefined;
   function owner() { if (getAcquiredProjectRuntime(runtime.root) !== runtime || runtime.referenceCount < 1) fail("RESEARCH_OWNER_REQUIRED"); }
   function leaseKey(campaignId: string) { return `proof-workflow-owner:${campaignId}`; }
+  async function withAdvancementTurn<T>(campaignId: string, advance: () => Promise<T>): Promise<T> {
+    owner();
+    const previous = advancementTurns.get(campaignId);
+    let release!: () => void;
+    const turn = new Promise<void>(resolve => { release = resolve; });
+    advancementTurns.set(campaignId, turn);
+    await previous;
+    try {
+      owner(); if (closed) fail("PROOF_OWNER_CLOSED");
+      return await advance();
+    } finally {
+      release(); if (advancementTurns.get(campaignId) === turn) advancementTurns.delete(campaignId);
+    }
+  }
   function readLease(campaignId: string): Lease | undefined {
     const row = store.get("SELECT * FROM commands WHERE command_id=?", leaseKey(campaignId)); if (!row) return undefined;
     const value = JSON.parse(String(row.response_json)) as Lease;
@@ -397,6 +412,9 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     }
   }
   async function requestAdvance(input: CampaignTickInput): Promise<CampaignTickResult> {
+    return withAdvancementTurn(input.campaign_id, () => requestManagedAdvance(input));
+  }
+  async function requestManagedAdvance(input: CampaignTickInput): Promise<CampaignTickResult> {
     owner(); const campaign = getCampaign(runtime.root, input.campaign_id); if (!campaign) fail("CAMPAIGN_NOT_FOUND");
     if (input.command_id !== undefined && (typeof input.command_id !== "string" || !input.command_id.length || input.command_id.length > 160)
       || input.actor !== undefined && (typeof input.actor !== "string" || !input.actor.length || input.actor.length > 160)) fail("PROOF_INTENT_INVALID");
@@ -410,6 +428,10 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
       store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'service:proof-intent',?,?,'committed')", key, hash(payload), canonicalJson(payload));
     });
     wake(input.campaign_id); return { campaign: getCampaign(runtime.root, input.campaign_id)!, blocker: options.config ? "proof_advance_requested" : "proof_workflow_not_configured" };
+  }
+  async function requestLegacyAdvance(input: CampaignTickInput, advance: () => Promise<CampaignTickResult>): Promise<CampaignTickResult> {
+    return withAdvancementTurn(input.campaign_id, () =>
+      store.getCampaign(input.campaign_id) ? requestManagedAdvance(input) : advance());
   }
   async function cancel(campaignId: string, actor = "operator") {
     owner();
@@ -519,8 +541,9 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     wake(campaignId);
     return { campaign: projected ?? getCampaign(runtime.root, campaignId)!, research_campaign: store.getCampaign(campaignId)! };
   }
-  const unregister = registerProofWorkflowBridge(runtime, { requestAdvance, requestReplay, pause, resume, cancel });
-  return { requestAdvance, requestReplay, pause, resume, cancel,
+  const bridge = { requestAdvance, requestLegacyAdvance, requestReplay, pause, resume, cancel };
+  const unregister = registerProofWorkflowBridge(runtime, bridge);
+  return { ...bridge,
     status: readLease,
     start() { if (closed) fail("PROOF_OWNER_CLOSED"); if (running) return; running = true; unsubscribe = events.subscribe(() => wake());
       timer = setInterval(() => wake(), 15000); timer.unref(); wake(); },

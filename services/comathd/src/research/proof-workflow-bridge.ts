@@ -6,6 +6,7 @@ export type ProofWorkflowLifecycleResult = { campaign: CampaignTickResult["campa
 
 export type ProofWorkflowBridge = {
   requestAdvance(input: CampaignTickInput): Promise<CampaignTickResult>;
+  requestLegacyAdvance(input: CampaignTickInput, advance: () => Promise<CampaignTickResult>): Promise<CampaignTickResult>;
   requestReplay(input: CampaignTickInput): Promise<CampaignTickResult>;
   pause(input: CampaignTickInput): Promise<ProofWorkflowLifecycleResult>;
   resume(input: CampaignTickInput): Promise<ProofWorkflowLifecycleResult>;
