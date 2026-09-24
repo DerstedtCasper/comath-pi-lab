@@ -147,7 +147,8 @@ function readJsonInsideProject(projectRoot: string, path: string): unknown {
 function localImportsFromDependencyClosure(
   projectRoot: string,
   cleanWorkspacePath: string,
-  dependencyClosurePath: string
+  dependencyClosurePath: string,
+  localSourceRootPath?: string
 ): FinalReplayManifestV3["dependency_lock"]["local_imports"] {
   const raw = readJsonInsideProject(projectRoot, dependencyClosurePath);
   if (!raw || typeof raw !== "object") throw new Error("final_replay_dependency_closure_invalid");
@@ -163,6 +164,15 @@ function localImportsFromDependencyClosure(
     throw new Error("final_replay_dependency_closure_invalid");
   }
   const cleanRoot = assertPathAllowed(projectRoot, cleanWorkspacePath, { purpose: "read", resolveRealpath: true });
+  const sourceRootRel = localSourceRootPath === undefined ? "." : normalizedStoredPath(localSourceRootPath);
+  if (localSourceRootPath !== undefined && sourceRootRel !== localSourceRootPath) {
+    throw new Error("final_replay_dependency_closure_local_root_invalid");
+  }
+  const localRoot = sourceRootRel === "."
+    ? cleanRoot
+    : assertPathAllowed(projectRoot, join(cleanRoot, sourceRootRel), { purpose: "read", resolveRealpath: true });
+  const actualSourceRootRel = rel(cleanRoot, localRoot).replace(/\\/g, "/") || ".";
+  if (actualSourceRootRel !== sourceRootRel) throw new Error("final_replay_dependency_closure_local_root_mismatch");
   const importRecord = imports as Record<string, unknown>;
   const hashRecord = localHashes as Record<string, unknown>;
   const files = Object.keys(importRecord).sort((left, right) => left.localeCompare(right)).map(path => {
@@ -170,8 +180,8 @@ function localImportsFromDependencyClosure(
     if (normalized !== path || !path.endsWith(".lean") || !Array.isArray(rawImports) || !rawImports.every(value => typeof value === "string") || !isSha256(expectedHash)) {
       throw new Error("final_replay_dependency_closure_local_import_map_invalid");
     }
-    const source = assertPathAllowed(projectRoot, join(cleanRoot, path), { purpose: "read", resolveRealpath: true });
-    if (normalizedStoredPath(rel(cleanRoot, source)) !== path || sha256FileSync(source).sha256 !== expectedHash) {
+    const source = assertPathAllowed(projectRoot, join(localRoot, path), { purpose: "read", resolveRealpath: true });
+    if (normalizedStoredPath(rel(localRoot, source)) !== path || sha256FileSync(source).sha256 !== expectedHash) {
       throw new Error("final_replay_dependency_closure_local_source_mismatch");
     }
     return {
@@ -189,7 +199,12 @@ function localImportsFromDependencyClosure(
   if (canonicalJson(expectedClosure) !== canonicalJson(importClosure)) {
     throw new Error("final_replay_dependency_closure_import_closure_mismatch");
   }
-  return { schema_version: "comath.dependency_lock_local_imports.v1", import_closure: expectedClosure, files };
+  return {
+    schema_version: "comath.dependency_lock_local_imports.v2",
+    source_root_path: sourceRootRel,
+    import_closure: expectedClosure,
+    files
+  };
 }
 
 function dependencyLockFileHashVetoes(projectRoot: string, manifest: FinalReplayManifestV3): string[] {
@@ -254,7 +269,12 @@ function dependencyClosureV2ExternalRevisionVetoes(projectRoot: string, manifest
 
 function dependencyClosureV2LocalImportVetoes(projectRoot: string, manifest: FinalReplayManifestV3): string[] {
   try {
-    const expected = localImportsFromDependencyClosure(projectRoot, manifest.clean_workspace_path, manifest.report_paths.dependency_closure);
+    const expected = localImportsFromDependencyClosure(
+      projectRoot,
+      manifest.clean_workspace_path,
+      manifest.report_paths.dependency_closure,
+      manifest.dependency_lock.local_imports.source_root_path
+    );
     return canonicalJson(expected) === canonicalJson(manifest.dependency_lock.local_imports)
       ? [] : ["final_replay_dependency_lock_local_imports_mismatch"];
   } catch {
@@ -266,6 +286,7 @@ function dependencyLock(input: {
   projectRoot: string;
   clean_workspace_path: string;
   dependency_closure_path: string;
+  local_source_root_path?: string;
   lean_toolchain_path: string;
   lake_manifest_path: string;
   lakefile_path: string;
@@ -280,7 +301,12 @@ function dependencyLock(input: {
     resolveRealpath: true
   });
   const lakefilePath = assertPathAllowed(input.projectRoot, input.lakefile_path, { purpose: "read", resolveRealpath: true });
-  const local_imports = localImportsFromDependencyClosure(input.projectRoot, input.clean_workspace_path, input.dependency_closure_path);
+  const local_imports = localImportsFromDependencyClosure(
+    input.projectRoot,
+    input.clean_workspace_path,
+    input.dependency_closure_path,
+    input.local_source_root_path
+  );
   return {
     lean_toolchain_path: rel(input.projectRoot, leanToolchainPath),
     lean_toolchain: readFileSync(leanToolchainPath, "utf8").trim(),
@@ -324,6 +350,7 @@ export function createFinalReplayManifestV3(input: {
   };
   lean_run_manifest_paths: string[];
   dependency_lock: {
+    local_source_root_path?: string;
     lean_toolchain_path: string;
     lake_manifest_path: string;
     lakefile_path: string;

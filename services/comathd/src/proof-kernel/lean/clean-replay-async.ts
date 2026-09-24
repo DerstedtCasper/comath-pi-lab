@@ -646,7 +646,7 @@ export function createAsyncFinalAuthorityReplayExecutor(app: ResearchOrchestrato
             stdout_path: finalManifest.stdout_path, stderr_path: finalManifest.stderr_path, report_paths: { static_audit: replay.static_audit!.report_path,
               axiom_profile: replay.axiom_profile!.report_path, dependency_closure: replay.dependency_closure!.report_path,
               statement_equivalence: replay.formal_header_comparison!.report_path }, lean_run_manifest_paths: [value.manifest.manifest_path],
-            dependency_lock: { lean_toolchain_path: join(cwd, "lean-toolchain"), lake_manifest_path: join(cwd, "lake-manifest.json"), lakefile_path: join(cwd, "lakefile.lean"),
+            dependency_lock: { local_source_root_path: "source", lean_toolchain_path: join(cwd, "lean-toolchain"), lake_manifest_path: join(cwd, "lake-manifest.json"), lakefile_path: join(cwd, "lakefile.lean"),
               external_revisions: dependencyClosureV2PackagesToExternalRevisions(closure.packages) }, network_policy: "disabled",
             sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" }, resource_budget: { timeout_ms: config.tool_timeout_ms,
               max_stdout_bytes: 2 * 1024 * 1024, max_stderr_bytes: 2 * 1024 * 1024 }, binary_hashes: { lean: leanHash, lake: lakeHash } });
