@@ -5347,6 +5347,15 @@ export function advanceApprovedProofPlanning(input: CampaignTickInput): Campaign
   return consumeApprovedPlanning(input, getCampaign(input.project_root, input.campaign_id)!, prepared.obligation);
 }
 
+function legacyFinalReplayRequiresAsyncOwner(input: CampaignTickInput): CampaignTickResult | undefined {
+  const runtime = getAcquiredProjectRuntime(input.project_root);
+  if (!runtime || runtime.store.getCampaign(input.campaign_id)) return undefined;
+  const campaign = getCampaign(input.project_root, input.campaign_id);
+  if (!campaign || campaign.status !== "running" || campaign.current_stage !== "final_global_replay") return undefined;
+  const obligation = resolveActiveObligation(campaign);
+  return { campaign, ...(obligation ? { obligation } : {}), blocker: "legacy_final_replay_requires_async_owner" };
+}
+
 export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
   const runtime = getAcquiredProjectRuntime(input.project_root);
   const control = runtime?.store.getCampaign(input.campaign_id), bridge = runtime ? getProofWorkflowBridge(runtime) : undefined;
@@ -5356,7 +5365,10 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     if (!current) throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
     return { campaign: current, blocker: "proof_workflow_owner_unavailable" };
   }
-  if (bridge) return bridge.requestLegacyAdvance(input, () => tickLegacyCampaignInline(input));
+  if (bridge) return bridge.requestLegacyAdvance(input, async () =>
+    legacyFinalReplayRequiresAsyncOwner(input) ?? tickLegacyCampaignInline(input));
+  const legacyReplayBlocker = legacyFinalReplayRequiresAsyncOwner(input);
+  if (legacyReplayBlocker) return legacyReplayBlocker;
   return tickLegacyCampaignInline(input);
 }
 
