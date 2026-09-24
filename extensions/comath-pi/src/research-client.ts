@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
-export type ResearchOperatorClient = { call(tool: string, input: unknown): Promise<{ ok: boolean; data?: unknown; code?: string; error?: string }> };
+export type ResearchOperatorEvent = { seq: number; type: string; data: unknown };
+export type ResearchEventSubscription = { campaign_id: string; after_seq?: number; signal?: AbortSignal };
+export type ResearchOperatorClient = {
+  call(tool: string, input: unknown): Promise<{ ok: boolean; data?: unknown; code?: string; error?: string }>;
+  subscribeEvents?(input: ResearchEventSubscription): AsyncIterable<ResearchOperatorEvent>;
+};
 export type ResearchOperatorClientOptions = { baseUrl: string; token: string; fetch?: typeof globalThis.fetch };
 
 const id = (value: unknown): string => typeof value === "string" && value.length > 0 && value.length <= 160 ? value : "";
@@ -15,6 +20,43 @@ const contentRange = (value: string | null): { start: number; end: number; total
   return Number.isSafeInteger(start) && Number.isSafeInteger(end) && Number.isSafeInteger(total) && start >= 0 && end >= start && total > end
     ? { start, end, total } : undefined;
 };
+
+async function* readResearchEvents(response: Response, afterSeq: number): AsyncGenerator<ResearchOperatorEvent> {
+  const reader = response.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+  let buffered = "", eventId = "", eventType = "message", data: string[] = [];
+  const finish = (): ResearchOperatorEvent | undefined => {
+    const seq = Number(eventId), type = eventType, body = data.join("\n");
+    eventId = ""; eventType = "message"; data = [];
+    if (!Number.isSafeInteger(seq) || seq <= afterSeq || !body) return undefined;
+    try { return { seq, type, data: JSON.parse(body) }; } catch { return undefined; }
+  };
+  const consume = (line: string): ResearchOperatorEvent | undefined => {
+    if (!line) return finish();
+    if (line.startsWith(":")) return undefined;
+    const separator = line.indexOf(":"), field = separator === -1 ? line : line.slice(0, separator);
+    const value = separator === -1 ? "" : line.slice(separator + 1).replace(/^ /, "");
+    if (field === "id") eventId = value;
+    else if (field === "event") eventType = value;
+    else if (field === "data") data.push(value);
+    return undefined;
+  };
+  while (true) {
+    const chunk = await reader.read();
+    buffered += decoder.decode(chunk.value, { stream: !chunk.done });
+    let newline = buffered.indexOf("\n");
+    while (newline !== -1) {
+      const event = consume(buffered.slice(0, newline).replace(/\r$/, ""));
+      buffered = buffered.slice(newline + 1);
+      if (event) yield event;
+      newline = buffered.indexOf("\n");
+    }
+    if (chunk.done) break;
+  }
+  const event = consume(buffered.replace(/\r$/, ""));
+  if (event) yield event;
+}
 const route = (tool: string, input: unknown): OperatorRoute | undefined => {
   const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const campaign = id(value.campaign_id), task = id(value.task_id), intake = id(value.intake_id), operation = id(value.operation_id), command = id(value.command_id), artifact = id(value.artifact_id);
@@ -90,6 +132,18 @@ export function createResearchOperatorClient(options: ResearchOperatorClientOpti
       const data = body.ok === true ? body.data : body;
       return !response.ok || body.ok === false ? { ok: false, code: body.code ?? "RESEARCH_OPERATOR_REJECTED", error: body.error } : { ok: true, data };
     } catch { return { ok: false, code: "RESEARCH_OPERATOR_UNAVAILABLE", error: "Operator service is unavailable" }; }
+  }, async *subscribeEvents(input) {
+    const campaign = id(input.campaign_id), initialCursor = natural(input.after_seq, 0);
+    if (!campaign || initialCursor === undefined || input.signal?.aborted) return;
+    let response: Response;
+    try {
+      response = await fetcher(new URL(`/research/v1/campaigns/${encodeURIComponent(campaign)}/events/stream`, base), {
+        method: "GET", redirect: "error", signal: input.signal,
+        headers: { Authorization: `Bearer ${options.token}`, Accept: "text/event-stream", "Last-Event-ID": String(initialCursor) }
+      });
+    } catch { return; }
+    if (!response.ok) return;
+    try { yield* readResearchEvents(response, initialCursor); } catch { return; }
   } };
 }
 export function createDefaultResearchOperatorClient(): ResearchOperatorClient {

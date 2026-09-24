@@ -66,7 +66,7 @@ type PiExtensionApi = {
     handler(args: string, ctx: unknown): Promise<void> | void;
   }): void;
   sendMessage?(message: { customType: string; content: string; details: unknown; display: boolean }, options: { triggerTurn: false }): void;
-  on(event: "resources_discover", handler: (event: unknown, ctx: unknown) => unknown): void;
+  on(event: "resources_discover" | "session_shutdown", handler: (event: unknown, ctx: unknown) => unknown): void;
 };
 
 type PiRuntimeContext = {
@@ -6509,6 +6509,57 @@ export async function readDurableResearchDashboard(researchClient: ResearchOpera
   return { campaign: dashboard, frontier: dashboard, budget: dashboard, proof_authority: "none" as const };
 }
 
+type DurableDashboardSnapshot = Awaited<ReturnType<typeof readDurableResearchDashboard>>;
+type DashboardSubscriptionRegistry = {
+  start(ctx: unknown, client: ResearchOperatorClient, campaignId: string, afterSeq: number, refresh: () => Promise<void>): void;
+  close(ctx?: unknown): void;
+};
+
+function dashboardSnapshotSeq(snapshot: DurableDashboardSnapshot): number {
+  const campaign = snapshot.campaign as { result?: { data?: { snapshot_seq?: unknown } } };
+  return Number.isSafeInteger(campaign.result?.data?.snapshot_seq) ? campaign.result!.data!.snapshot_seq as number : 0;
+}
+
+function createDashboardSubscriptionRegistry(): DashboardSubscriptionRegistry {
+  const controllers = new Set<AbortController>();
+  const byContext = new WeakMap<object, AbortController>();
+  const contextKey = (ctx: unknown): object | undefined => ctx && typeof ctx === "object" ? ctx as object : undefined;
+  const close = (ctx?: unknown) => {
+    const key = contextKey(ctx);
+    if (key) {
+      const controller = byContext.get(key);
+      if (controller) { controller.abort(); controllers.delete(controller); }
+      byContext.delete(key);
+      return;
+    }
+    for (const controller of controllers) controller.abort();
+    controllers.clear();
+  };
+  return {
+    start(ctx, client, campaignId, afterSeq, refresh) {
+      close(ctx);
+      if (!client.subscribeEvents) return;
+      const controller = new AbortController(), key = contextKey(ctx);
+      controllers.add(controller); if (key) byContext.set(key, controller);
+      void (async () => {
+        try {
+          for await (const event of client.subscribeEvents!({ campaign_id: campaignId, after_seq: afterSeq, signal: controller.signal })) {
+            if (controller.signal.aborted) break;
+            await refresh();
+            afterSeq = event.seq;
+          }
+        } catch {
+          // A dashboard is a read-only projection; a dropped subscription leaves its last known snapshot visible.
+        } finally {
+          controllers.delete(controller);
+          if (key && byContext.get(key) === controller) byContext.delete(key);
+        }
+      })();
+    },
+    close
+  };
+}
+
 function optionValue(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   if (index === -1) {
@@ -7128,13 +7179,19 @@ async function handleResearchCommand(
   );
 }
 
-async function handleDashboardCommand(options: RegisterComathPiRuntimeOptions, args: string, ctx: unknown): Promise<void> {
+async function handleDashboardCommand(options: RegisterComathPiRuntimeOptions, args: string, ctx: unknown, subscriptions: DashboardSubscriptionRegistry): Promise<void> {
   const parsed = parseComathCommand(`/cm:dashboard ${args}`.trim());
   if (!parsed || parsed.action !== "dashboard") throw new Error("dashboard command is required");
   const campaignId = optionValue(parsed.args, "--campaign-id") ?? firstPositional(parsed.args);
-  const snapshot = await readDurableResearchDashboard(options.researchClient ?? createDefaultResearchOperatorClient(), requiredOption(campaignId, "campaign_id"));
-  const model = renderDurableResearchDashboard(snapshot);
-  await runtimeCtx(ctx).ui?.setWidget?.("comath-research", model.sections.flatMap(section => [section.title, ...section.rows]));
+  const resolvedCampaignId = requiredOption(campaignId, "campaign_id"), researchClient = options.researchClient ?? createDefaultResearchOperatorClient();
+  let snapshot: DurableDashboardSnapshot | undefined;
+  const refresh = async () => {
+    snapshot = await readDurableResearchDashboard(researchClient, resolvedCampaignId);
+    const model = renderDurableResearchDashboard(snapshot);
+    await runtimeCtx(ctx).ui?.setWidget?.("comath-research", model.sections.flatMap(section => [section.title, ...section.rows]));
+  };
+  await refresh();
+  subscriptions.start(ctx, researchClient, resolvedCampaignId, dashboardSnapshotSeq(snapshot!), refresh);
   await notifyRuntimeResult(ctx, snapshot);
 }
 
@@ -9154,6 +9211,7 @@ export function createDefaultComathClient(): ComathClient {
 export function registerComathPiRuntime(pi: PiExtensionApi, options: RegisterComathPiRuntimeOptions = {}): void {
   const client = options.client ?? createDefaultComathClient();
   const researchClient = options.researchClient ?? createDefaultResearchOperatorClient();
+  const dashboardSubscriptions = createDashboardSubscriptionRegistry();
 
   for (const tool of createComathTools().filter((descriptor) => PI_RUNTIME_EXECUTABLE_TOOL_NAMES.has(descriptor.name))) {
     pi.registerTool({
@@ -9191,7 +9249,7 @@ export function registerComathPiRuntime(pi: PiExtensionApi, options: RegisterCom
   pi.registerCommand("cm:dashboard", {
     description: "Read durable campaign, frontier, and budget facts without asserting proof authority.",
     handler: async (args, ctx) => {
-      await handleDashboardCommand(options, args, ctx);
+      await handleDashboardCommand(options, args, ctx, dashboardSubscriptions);
     }
   });
 
@@ -9253,6 +9311,10 @@ export function registerComathPiRuntime(pi: PiExtensionApi, options: RegisterCom
     skillPaths: ["skills"],
     promptPaths: ["prompts"]
   }));
+  pi.on("session_shutdown", async (_event, ctx) => {
+    dashboardSubscriptions.close(ctx);
+    await runtimeCtx(ctx).ui?.setWidget?.("comath-research", undefined);
+  });
 }
 export default registerComathPiRuntime;
 
