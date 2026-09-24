@@ -2348,6 +2348,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         if (!campaign) {
           return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
         }
+        const runtime = getAcquiredProjectRuntime(request.project_root), control = runtime?.store.getCampaign(campaign.campaign_id);
+        if (runtime && control) {
+          const bridge = getProofWorkflowBridge(runtime);
+          if (!bridge) throw new ComathError("Proof workflow owner is unavailable", { code: "PROOF_WORKFLOW_OWNER_UNAVAILABLE", statusCode: 503 });
+          const result = await bridge.pause({ project_root: request.project_root, campaign_id: campaign.campaign_id, actor: request.actor });
+          const state = result.research_campaign.state;
+          const terminal = result.campaign.status === "terminal" || ["completed", "cancelled"].includes(state);
+          return { status: terminal || state === "paused" ? 200 : state === "pausing" ? 202 : 409,
+            body: { campaign: withPublicExternalV3TerminalState(result.campaign, { projectRoot: request.project_root }),
+              research_campaign: result.research_campaign, ...(result.blocker ? { blocker: result.blocker } : {}) } };
+        }
         if (campaign.status === "terminal") {
           return success({ campaign: withPublicExternalV3TerminalState(campaign, { projectRoot: request.project_root }) });
         }
@@ -2369,6 +2380,15 @@ async function route(method: string, path: string, body: unknown, context: Route
         const campaign = getCampaignOr404(request.project_root, decodeURIComponent(resumeMatch[1] ?? ""));
         if (!campaign) {
           return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
+        }
+        const runtime = getAcquiredProjectRuntime(request.project_root), control = runtime?.store.getCampaign(campaign.campaign_id);
+        if (runtime && control) {
+          const bridge = getProofWorkflowBridge(runtime);
+          if (!bridge) throw new ComathError("Proof workflow owner is unavailable", { code: "PROOF_WORKFLOW_OWNER_UNAVAILABLE", statusCode: 503 });
+          const result = await bridge.resume({ project_root: request.project_root, campaign_id: campaign.campaign_id, actor: request.actor });
+          if (result.blocker) return { status: 409, body: { ok: false, code: result.blocker, error: result.blocker } };
+          return success({ campaign: withPublicExternalV3TerminalState(result.campaign, { projectRoot: request.project_root }),
+            research_campaign: result.research_campaign });
         }
         if (campaign.status === "terminal") {
           return success({ campaign: withPublicExternalV3TerminalState(campaign, { projectRoot: request.project_root }) });

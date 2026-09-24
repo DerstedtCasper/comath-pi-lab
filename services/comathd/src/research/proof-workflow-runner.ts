@@ -20,7 +20,7 @@ import type { createFormalCandidateDispatch, FormalCandidateDispatchReceipt } fr
 import type { createFormalCandidateIntake, FormalCandidateSubmissionReceipt } from "./formal-candidate-intake.js";
 import type { createFormalCandidateProjectService, FormalCandidateProjectReceipt } from "./formal-candidate-project.js";
 import type { createProofToolAttemptService } from "./proof-tool-attempt.js";
-import { registerProofWorkflowBridge } from "./proof-workflow-bridge.js";
+import { registerProofWorkflowBridge, type ProofWorkflowLifecycleResult } from "./proof-workflow-bridge.js";
 import { createProofNativeVerification, type ProofNativeVerificationResult } from "./proof-native-verification.js";
 import { createAsyncCleanReplayExecutor, createAsyncFinalAuthorityReplayExecutor, prepareAsyncCleanReplayWorkspace, verifyScopedFinalAuthorityPackagingV1, type AsyncFinalAuthorityReplayExecution } from "../proof-kernel/lean/clean-replay-async.js";
 
@@ -211,6 +211,20 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     }
     return sources;
   }
+  function syncControlProjection(campaignId: string) {
+    const control = store.getCampaign(campaignId), campaign = getCampaign(runtime.root, campaignId);
+    if (!control || !campaign || campaign.status === "terminal" || campaign.status === "blocked") return campaign;
+    const status = control.state === "paused" ? "paused" : control.state === "running" ? "running" : undefined;
+    if (!status || campaign.status === status) return campaign;
+    const operationId = `proof-control-projection:${hash({ campaign_id: campaignId, revision: control.revision, status })}`;
+    return withProjectCommit(runtime.root, { operation_id: operationId, campaign_id: campaignId, expected_revision: control.revision,
+      request: { status, proof_authority: "none" } }, () => {
+      const latestControl = store.getCampaign(campaignId), latest = getCampaign(runtime.root, campaignId);
+      if (!latestControl || latestControl.revision !== control.revision || latestControl.state !== control.state || !latest) fail("PROOF_CONTROL_PROJECTION_STALE");
+      if (latest.status === "terminal" || latest.status === "blocked" || latest.status === status) return latest;
+      return writeCampaign(runtime.root, { ...latest, status }, "service:proof-workflow");
+    });
+  }
   function integrateVerifiedLeaf(snapshot: Snapshot, executions: AsyncFinalAuthorityReplayExecution[]): boolean {
     const final = executions.find(value => value.result === "pass" && value.claim_id === snapshot.campaign.open_obligations.find(item => item.obligation_id === snapshot.obligation_id)?.claim_id
       && value.obligation_id === snapshot.obligation_id);
@@ -374,6 +388,8 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
   function wake(campaignId?: string) {
     if (!running || closed) return;
     for (const id of campaignId ? [campaignId] : store.listCampaigns().map(value => value.campaign_id)) {
+      try { syncControlProjection(id); }
+      catch { recordBlock(id, "PROOF_CONTROL_PROJECTION_FAILED"); }
       requested.add(id); if (pending.has(id)) continue;
       const work = Promise.resolve().then(async () => { while (requested.delete(id) && running && !closed) await runCampaign(id); });
       pending.set(id, work);
@@ -454,8 +470,57 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     // Legacy replay/final-audit requests join the same durable stage intent and owner.
     return requestAdvance(input);
   }
-  const unregister = registerProofWorkflowBridge(runtime, { requestAdvance, requestReplay, cancel });
-  return { requestAdvance, requestReplay, cancel,
+  async function pause(input: CampaignTickInput): Promise<ProofWorkflowLifecycleResult> {
+    owner();
+    const campaignId = input.campaign_id, actor = input.actor ?? "legacy-campaign-api";
+    if (typeof actor !== "string" || !actor.length || actor.length > 160) fail("PROOF_INTENT_INVALID");
+    const campaign = getCampaign(runtime.root, campaignId), initial = store.getCampaign(campaignId);
+    if (!campaign || !initial) fail("CAMPAIGN_NOT_FOUND");
+    if (campaign.status === "terminal" || ["completed", "cancelled"].includes(initial.state)) return { campaign, research_campaign: initial };
+    if (["running", "blocked"].includes(initial.state)) {
+      app.beginPauseCampaign({ kind: "operator", id: actor }, { campaign_id: campaignId,
+        command_id: `legacy-proof-pause-${hash({ campaignId, revision: initial.revision })}`,
+        expected_revision: initial.revision, reason: "Pause the managed proof campaign through its legacy route." });
+    } else if (!["pausing", "paused"].includes(initial.state)) fail("PROOF_PAUSE_STATE_CONFLICT");
+    if (initial.state !== "paused") {
+      store.transaction(() => {
+        const lease = readLease(campaignId); if (lease) saveLease({ ...lease, stop_requested: true });
+      });
+      controllers.get(campaignId)?.abort();
+      const attempts = store.all("SELECT a.attempt_key,a.runtime_kind FROM attempts a JOIN tasks t ON t.task_id=a.task_id WHERE t.campaign_id=? AND a.state<>'terminated'", campaignId);
+      await Promise.all(attempts.map(row => row.runtime_kind === "service-proof-tool"
+        ? Promise.resolve(options.tools.cancelAttempt(String(row.attempt_key), "pause"))
+        : options.stopWorker(String(row.attempt_key))));
+      await pending.get(campaignId);
+      if (store.getCampaign(campaignId)?.state === "pausing"
+        && !store.get("SELECT attempt_key FROM attempts WHERE task_id IN (SELECT task_id FROM tasks WHERE campaign_id=?) AND state<>'terminated' LIMIT 1", campaignId)) {
+        app.completePauseCampaign(campaignId);
+      }
+    }
+    const control = store.getCampaign(campaignId)!;
+    const projected = control.state === "paused" ? syncControlProjection(campaignId) : getCampaign(runtime.root, campaignId);
+    return { campaign: projected ?? getCampaign(runtime.root, campaignId)!, research_campaign: control,
+      ...(control.state === "pausing" ? { blocker: "CAMPAIGN_PAUSE_PENDING_TERMINATION" } : {}) };
+  }
+  async function resume(input: CampaignTickInput): Promise<ProofWorkflowLifecycleResult> {
+    owner();
+    const campaignId = input.campaign_id, actor = input.actor ?? "legacy-campaign-api";
+    if (typeof actor !== "string" || !actor.length || actor.length > 160) fail("PROOF_INTENT_INVALID");
+    const campaign = getCampaign(runtime.root, campaignId), control = store.getCampaign(campaignId);
+    if (!campaign || !control) fail("CAMPAIGN_NOT_FOUND");
+    if (campaign.status === "terminal" || ["completed", "cancelled"].includes(control.state)) return { campaign, research_campaign: control };
+    if (campaign.status === "blocked" || control.state === "blocked") return { campaign, research_campaign: control, blocker: "CAMPAIGN_REPAIR_REQUIRED" };
+    if (control.state === "pausing") return { campaign, research_campaign: control, blocker: "CAMPAIGN_PAUSE_PENDING_TERMINATION" };
+    if (control.state === "paused") {
+      app.resumeCampaign({ kind: "operator", id: actor }, { campaign_id: campaignId,
+        command_id: `legacy-proof-resume-${hash({ campaignId, revision: control.revision })}`, expected_revision: control.revision });
+    } else if (control.state !== "running") fail("PROOF_RESUME_STATE_CONFLICT");
+    const projected = syncControlProjection(campaignId);
+    wake(campaignId);
+    return { campaign: projected ?? getCampaign(runtime.root, campaignId)!, research_campaign: store.getCampaign(campaignId)! };
+  }
+  const unregister = registerProofWorkflowBridge(runtime, { requestAdvance, requestReplay, pause, resume, cancel });
+  return { requestAdvance, requestReplay, pause, resume, cancel,
     status: readLease,
     start() { if (closed) fail("PROOF_OWNER_CLOSED"); if (running) return; running = true; unsubscribe = events.subscribe(() => wake());
       timer = setInterval(() => wake(), 15000); timer.unref(); wake(); },
