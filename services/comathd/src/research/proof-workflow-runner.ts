@@ -248,7 +248,7 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
       && value.obligation_id === snapshot.obligation_id);
     const finalPackaging = final?.final_authority_packaging;
     if (!final || !finalPackaging?.evidence_id || finalPackaging.artifact_ids?.length !== 3 || !final.final_replay_manifest_v3_path) return false;
-    const artifactIds = finalPackaging.artifact_ids, finalManifestPath = final.final_replay_manifest_v3_path;
+    const artifactIds = finalPackaging.artifact_ids, evidenceId = finalPackaging.evidence_id, finalManifestPath = final.final_replay_manifest_v3_path;
     const packaging = JSON.parse(readCommittedFile(runtime.root, finalPackaging.packaging_path));
     if (!verifyScopedFinalAuthorityPackagingV1(runtime.root, packaging).ok) fail("PROOF_FINAL_AUTHORITY_PACKAGING_INVALID");
     const current = prepareStageWork(snapshot.campaign.campaign_id);
@@ -258,28 +258,28 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     const rootCompletion = obligation.claim_id === current.campaign.root_claim_id;
     const control = store.getCampaign(current.campaign.campaign_id);
     if (!control) fail("RESEARCH_CAMPAIGN_NOT_FOUND");
-    const claim = getClaim(runtime.root, control.project_id, obligation.claim_id);
-    if (!claim) fail("CLAIM_NOT_FOUND");
-    applyGatePromotedClaim(runtime.root, { ...claim, formalization_status: "kernel_checked", dependency_closure_status: "all_dependencies_present", audit_state: "audit_passed", updated_at: new Date(runtime.clock.now()).toISOString() });
-    const promotion = promoteClaim(runtime.root, { project_id: control.project_id, claim_id: obligation.claim_id, target_status: "formally_checked",
-      evidence_ids: [finalPackaging.evidence_id], artifact_ids: artifactIds, actor: "service:proof-workflow" });
-    if (!promotion.gate.ok) fail("PROOF_FINAL_AUTHORITY_GATE_REJECTED");
-    const authorityEvidence = rootCompletion ? {
-      schema_version: "comath.formal_replay_authority_evidence.v1" as const,
-      proof_authority: "lean_kernel_clean_replay" as const,
-      final_evidence_status: "verified_final_authority_evidence" as const,
-      final_replay_manifest_v3_path: finalManifestPath,
-      final_authority_packaging_path: finalPackaging.packaging_path,
-      replay_id: final.replay_id,
-      gate_result_id: promotion.gate.id,
-      artifact_hash: createHash("sha256").update(readCommittedFile(runtime.root, finalPackaging.packaging_path)).digest("hex"),
-      recorded_at: new Date(runtime.clock.now()).toISOString()
-    } : undefined;
     withProjectCommit(runtime.root, { operation_id: `${operation(current, "leaf-integrated")}:${final.replay_id}`, campaign_id: current.campaign.campaign_id,
-      expected_revision: current.revision, request: { obligation_id: obligation.obligation_id, claim_id: obligation.claim_id, gate_result_id: promotion.gate.id,
-        replay_id: final.replay_id, artifact_ids: artifactIds } }, () => {
+      expected_revision: current.revision, request: { obligation_id: obligation.obligation_id, claim_id: obligation.claim_id,
+        replay_id: final.replay_id, evidence_id: evidenceId, artifact_ids: artifactIds } }, () => {
       const latest = getCampaign(runtime.root, current.campaign.campaign_id), latestControl = store.getCampaign(current.campaign.campaign_id)!;
       if (!latest || hash(latest) !== hash(current.campaign) || latestControl.revision !== current.revision) fail("PROOF_STAGE_REVISION_CONFLICT");
+      const claim = getClaim(runtime.root, control.project_id, obligation.claim_id);
+      if (!claim) fail("CLAIM_NOT_FOUND");
+      applyGatePromotedClaim(runtime.root, { ...claim, formalization_status: "kernel_checked", dependency_closure_status: "all_dependencies_present", audit_state: "audit_passed", updated_at: new Date(runtime.clock.now()).toISOString() });
+      const promotion = promoteClaim(runtime.root, { project_id: control.project_id, claim_id: obligation.claim_id, target_status: "formally_checked",
+        evidence_ids: [evidenceId], artifact_ids: artifactIds, actor: "service:proof-workflow" });
+      if (!promotion.gate.ok) fail("PROOF_FINAL_AUTHORITY_GATE_REJECTED");
+      const authorityEvidence = rootCompletion ? {
+        schema_version: "comath.formal_replay_authority_evidence.v1" as const,
+        proof_authority: "lean_kernel_clean_replay" as const,
+        final_evidence_status: "verified_final_authority_evidence" as const,
+        final_replay_manifest_v3_path: finalManifestPath,
+        final_authority_packaging_path: finalPackaging.packaging_path,
+        replay_id: final.replay_id,
+        gate_result_id: promotion.gate.id,
+        artifact_hash: createHash("sha256").update(readCommittedFile(runtime.root, finalPackaging.packaging_path)).digest("hex"),
+        recorded_at: new Date(runtime.clock.now()).toISOString()
+      } : undefined;
       const obligations = replaceObligationById(latest.open_obligations, { ...obligation, status: "integrated" });
       const stageRun = { id: store.allocateId("SRUN"), stage: latest.current_stage, status: "completed" as const, artifact_paths: [
         finalPackaging.packaging_path, finalManifestPath, finalPackaging.derived_bindings_path],

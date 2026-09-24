@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { appendAuditEvent, readAuditEvents } from "../audit/jsonl-writer.js";
 import { listArtifactRefs } from "../artifacts/store.js";
 import { applyGatePromotedClaim, getClaim } from "../claim/claim-store.js";
@@ -30,6 +30,7 @@ import {
   verifyLeanRunManifestV3Evidence
 } from "../proof-kernel/lean/lean-run-manifest-v3.js";
 import { verifyScopedFinalAuthorityPackagingV1 } from "../proof-kernel/lean/clean-replay-async.js";
+import { existsCommittedFile, readCommittedFile, withTrustedWriter, writeCommittedFile } from "../research/project-commit.js";
 import { runnerResultSha256, sha256Text } from "./runner-contracts.js";
 
 export type ClaimPromotionRequest = {
@@ -48,32 +49,23 @@ export type ClaimPromotionDecision = {
   claim: Claim;
 };
 
-function gateResultsPath(projectRoot: string): string {
-  return assertPathAllowed(projectRoot, join(".comath", "claims", "gate-results.jsonl"), { purpose: "runtime-write" });
-}
+const gateResultsPath = join(".comath", "claims", "gate-results.jsonl");
 
 function now(): string {
   return new Date().toISOString();
 }
 
-function readJsonl(path: string): GateResult[] {
-  if (!existsSync(path)) {
-    return [];
-  }
-  return readFileSync(path, "utf8")
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => gateResultSchema.parse(JSON.parse(line)));
-}
-
 function writeGateResults(projectRoot: string, gates: GateResult[]): void {
-  const path = gateResultsPath(projectRoot);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${gates.map((gate) => JSON.stringify(gate)).join("\n")}${gates.length ? "\n" : ""}`, "utf8");
+  writeCommittedFile(projectRoot, gateResultsPath, `${gates.map((gate) => JSON.stringify(gate)).join("\n")}${gates.length ? "\n" : ""}`);
 }
 
 export function readGateResults(projectRoot: string, projectId?: string): GateResult[] {
-  const gates = readJsonl(gateResultsPath(projectRoot));
+  const gates = !existsCommittedFile(projectRoot, gateResultsPath)
+    ? []
+    : readCommittedFile(projectRoot, gateResultsPath)
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => gateResultSchema.parse(JSON.parse(line)));
   return projectId ? gates.filter((gate) => gate.project_id === projectId) : gates;
 }
 
@@ -1156,15 +1148,17 @@ function evidenceLevelForStatus(status: ClaimStatus, current: Claim["evidence_le
 }
 
 export function promoteClaim(projectRoot: string, request: ClaimPromotionRequest): ClaimPromotionDecision {
-  const claim = getClaim(projectRoot, request.project_id, request.claim_id);
-  if (!claim) {
-    throw new ComathError("claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
-  }
+  return withTrustedWriter(projectRoot, "claim.promote", request, () => {
+    const claim = getClaim(projectRoot, request.project_id, request.claim_id);
+    if (!claim) {
+      throw new ComathError("claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
+    }
 
-  const gate = runClaimPromotionGate(projectRoot, request);
-  writeGateResults(projectRoot, [...readGateResults(projectRoot), gate]);
-  return {
-    gate,
-    claim: applyClaimPromotionDecision(projectRoot, claim, gate, request.actor)
-  };
+    const gate = runClaimPromotionGate(projectRoot, request);
+    writeGateResults(projectRoot, [...readGateResults(projectRoot), gate]);
+    return {
+      gate,
+      claim: applyClaimPromotionDecision(projectRoot, claim, gate, request.actor)
+    };
+  });
 }
