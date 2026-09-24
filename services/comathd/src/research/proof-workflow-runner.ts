@@ -433,8 +433,26 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     });
   }
   async function requestReplay(input: CampaignTickInput): Promise<CampaignTickResult> {
-    owner(); const campaign = getCampaign(runtime.root, input.campaign_id); if (!campaign) fail("CAMPAIGN_NOT_FOUND");
-    return { campaign, blocker: "proof_replay_consumer_unavailable" };
+    owner(); const campaign = getCampaign(runtime.root, input.campaign_id), control = store.getCampaign(input.campaign_id);
+    if (!campaign || !control) fail("CAMPAIGN_NOT_FOUND");
+    if (campaign.status === "terminal") {
+      const obligation = campaign.active_obligation_id
+        ? campaign.open_obligations.find(value => value.obligation_id === campaign.active_obligation_id)
+        : campaign.open_obligations.find(value => value.status === "integrated");
+      if (campaign.terminal_state === "completed_formal_proof") return { campaign, ...(obligation ? { obligation } : {}) };
+      const blocker = campaign.terminal_state === "completed_refutation"
+        ? "completed refutation campaigns do not have a proof replay"
+        : campaign.blockers.map(value => value.reason).find((value): value is string => typeof value === "string")
+          ?? `terminal campaign state is ${campaign.terminal_state ?? "unknown"}`;
+      return { campaign, ...(obligation ? { obligation } : {}), blocker };
+    }
+    if (control.state !== "running" || campaign.status !== "running") {
+      const blocker = campaign.blockers.map(value => value.reason).find((value): value is string => typeof value === "string")
+        ?? `campaign is ${campaign.status}`;
+      return { campaign, blocker };
+    }
+    // Legacy replay/final-audit requests join the same durable stage intent and owner.
+    return requestAdvance(input);
   }
   const unregister = registerProofWorkflowBridge(runtime, { requestAdvance, requestReplay, cancel });
   return { requestAdvance, requestReplay, cancel,
