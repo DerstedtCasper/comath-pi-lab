@@ -23,6 +23,8 @@ export type ResearchTaskPolicies = {
   validateValidationRetry?: (previous: ResearchTask, newEvidenceRefs: ArtifactPointer[]) => void;
   /** Synchronous, inside the same transaction after slot replacement. Any failure rolls back the retry. */
   recordValidationRetry?: (previous: ResearchTask, next: ResearchTask, newEvidenceRefs: ArtifactPointer[]) => void;
+  /** Formal-candidate retries must reserve a fresh candidate identity in this retry transaction. */
+  recordFormalCandidateRetry?: (previous: ResearchTask, next: ResearchTask) => void;
 };
 const id = z.string().min(1).max(160);
 const retrySchema = z.strictObject({ command_id: id, campaign_id: id, expected_revision: z.number().int().nonnegative(),
@@ -311,6 +313,8 @@ export class ResearchOrchestrator {
       if (campaign.state === "completed" || campaign.state === "cancelled") fail("RESEARCH_CAMPAIGN_TERMINAL", "Terminal campaign cannot accept a retry");
       if (campaign.revision !== input.expected_revision) fail("RESEARCH_REVISION_CONFLICT", "Research revision changed");
       const previous = this.getTask(input.task_id);
+      const formalCandidateRetry = previous.kind === "formalize" && previous.specialization?.startsWith("formal_candidate:");
+      if (formalCandidateRetry && !this.policies.recordFormalCandidateRetry) fail("FORMAL_RETRY_CONSUMER_UNAVAILABLE", "A formal candidate retry requires a durable candidate binding consumer");
       const validationSlot = this.runtime.store.get("SELECT current_task_id FROM validation_tasks WHERE current_task_id=?", previous.task_id);
       if (previous.campaign_id !== campaign.campaign_id || !["failed", "cancelled", ...(validationSlot ? ["succeeded"] : [])].includes(previous.status)) fail("RESEARCH_RETRY_STATE_CONFLICT", "Only a failed/cancelled task or verified completed validation can be retried");
       if (validationSlot && !this.policies.recordValidationRetry) fail("VALIDATION_REPLACEMENT_CONTEXT_UNAVAILABLE", "A validation successor requires atomic host context materialization");
@@ -340,6 +344,7 @@ export class ResearchOrchestrator {
       });
       for (const id of input.rebind_dependents) if (!tasks.some(task => task.task_id === id)) fail("RESEARCH_TASK_UNKNOWN", "Selected retry dependent does not exist in this campaign");
       tasks.push(next); validateResearchTaskGraph(tasks); this.persistGraph(tasks);
+      if (formalCandidateRetry) this.policies.recordFormalCandidateRetry!(previous, next);
       for (const slot of this.runtime.store.all("SELECT candidate_id,policy_version,role_slot,prior_task_ids_json FROM validation_tasks WHERE current_task_id=?", previous.task_id)) {
         const history = JSON.parse(String(slot.prior_task_ids_json)) as string[]; history.push(previous.task_id);
         this.runtime.store.run("UPDATE validation_tasks SET current_task_id=?,prior_task_ids_json=? WHERE candidate_id=? AND policy_version=? AND role_slot=?",

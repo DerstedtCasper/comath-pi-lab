@@ -16,7 +16,7 @@ import { getAcquiredProjectRuntime } from "./project-runtime.js";
 import { readCommittedFile, resolveProjectCommitPath, stageResearchMutation, withProjectCommit } from "./project-commit.js";
 import { writeCommittedFile } from "./project-commit.js";
 import type { ResearchOrchestrator } from "./research-orchestrator.js";
-import type { createFormalCandidateDispatch, FormalCandidateDispatchReceipt } from "./formal-candidate-dispatch.js";
+import type { createFormalCandidateDispatch, FormalCandidateDispatchReceipt, FormalCandidateReservation } from "./formal-candidate-dispatch.js";
 import type { createFormalCandidateIntake, FormalCandidateSubmissionReceipt } from "./formal-candidate-intake.js";
 import type { createFormalCandidateProjectService, FormalCandidateProjectReceipt } from "./formal-candidate-project.js";
 import type { createProofToolAttemptService } from "./proof-tool-attempt.js";
@@ -206,16 +206,19 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     });
     notifyResearchEventsCommitted(runtime); return result;
   }
-  function acceptedSources(dispatch: FormalCandidateDispatchReceipt, snapshot: Snapshot) {
+  function acceptedSources(bindings: FormalCandidateReservation[], snapshot: Snapshot) {
     const sources: FormalCandidateSubmissionReceipt[] = [];
-    for (const binding of dispatch.bindings) {
+    for (const binding of bindings) {
       const task = store.getTask(binding.task_id);
       if (!task || task.status !== "succeeded") continue;
       const row = store.get("SELECT response_json FROM commands WHERE principal_id='service:formal-submission' AND json_extract(response_json,'$.task_id')=? AND json_extract(response_json,'$.generation')=?", task.task_id, task.generation);
       if (!row) continue; // A structured failed search is terminal, but is not a candidate source.
       const candidate = options.intake.readSubmissionReceipt(JSON.parse(String(row.response_json)).command_id);
+      const attemptBinding = options.candidates.readTaskCandidateReservation(task.task_id, task.generation);
       if (!candidate || candidate.commit_state !== "committed" || candidate.obligation_id !== snapshot.obligation_id
         || candidate.stage_attempt !== snapshot.stage_attempt || candidate.scope_package_sha256 !== snapshot.scope_package_sha256
+        || !attemptBinding || attemptBinding.dispatch_id !== binding.dispatch_id || attemptBinding.candidate_id !== candidate.candidate_id
+        || candidate.task_id !== task.task_id || candidate.generation !== task.generation || candidate.variant_id !== binding.variant_id
         || task.accepted_result_id !== candidate.result_ref.artifact_id) fail("PROOF_SOURCE_BINDING_INVALID");
       const ready = store.get("SELECT * FROM events WHERE type='FormalCandidateReadyForVerification' AND task_id=? AND generation=? AND json_extract(payload_json,'$.operation_id')=?", task.task_id, task.generation, candidate.operation_id);
       if (!ready || ready.actor !== "service:formal-submission" || ready.payload_sha256 !== hash(JSON.parse(String(ready.payload_json)))) fail("PROOF_SOURCE_NOT_READY");
@@ -318,9 +321,10 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
     if (campaign.current_stage === "candidate_generation") {
       const dispatch = options.candidates.submitCandidateGenerationTasks({ campaign_id: campaign.campaign_id, obligation_id: snapshot.obligation_id,
         stage_attempt: snapshot.stage_attempt, expected_revision: snapshot.revision });
-      const tasks = dispatch.bindings.map(binding => store.getTask(binding.task_id)!);
+      const bindings = options.candidates.readDispatchBindings(dispatch);
+      const tasks = bindings.map(binding => store.getTask(binding.task_id)!);
       if (tasks.some(task => !["succeeded", "failed", "cancelled"].includes(task.status))) return false;
-      const current = prepareStageWork(campaign.campaign_id)!; const sources = acceptedSources(dispatch, current);
+      const current = prepareStageWork(campaign.campaign_id)!; const sources = acceptedSources(bindings, current);
       commitStageResult(lease, current, { schema_version: "comath.proof_generation_results.v1", dispatch,
         sources, child_states: tasks.map(task => ({ task_id: task.task_id, generation: task.generation, status: task.status, accepted_result_id: task.accepted_result_id ?? null })), proof_authority: "none" }, sources.length ? "candidate_verification" : "blocked");
       return true;

@@ -220,6 +220,10 @@ export class ResearchDaemon {
         if (!this.validationFanout) fail("VALIDATION_REPLACEMENT_CONTEXT_UNAVAILABLE", "Validation context consumer is not ready");
         this.validationFanout.recordReplacementContext(previous, next, refs);
       } : policies.recordValidationRetry,
+      recordFormalCandidateRetry: (previous, next) => {
+        this.formalCandidates.recordTaskRetry(previous, next);
+        policies.recordFormalCandidateRetry?.(previous, next);
+      },
       validateRoute: (draft, campaign) => {
       policies.validateRoute?.(draft, campaign);
       // Validation fanout constructs its context and slot binding in the same
