@@ -191,21 +191,48 @@ export async function rollbackResearchControlSnapshot(projectRoot: string, manif
   if (!verification.manifest.can_restore || verification.manifest.snapshot_kind !== "internal_restore") {
     throw new ComathError("Public snapshot downloads cannot be used for rollback", { code: "SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE", statusCode: 409 });
   }
-  if (!verification.manifest.entries.some(entry => entry.relative_path === ".comath/control/research.sqlite")) {
-    throw blocked("Rollback snapshot has no research control database");
+  const snapshotHasDatabase = verification.manifest.entries.some(entry => entry.relative_path === ".comath/control/research.sqlite");
+  if (!snapshotHasDatabase) {
+    const receiptPath = migrationFile(root, "receipt");
+    if (!existsSync(receiptPath)) throw blocked("Rollback snapshot has no research control database");
+    let receipt: ResearchMigrationReceipt;
+    try { receipt = receiptSchema.parse(JSON.parse(readFileSync(receiptPath, "utf8"))); }
+    catch { throw blocked("Rollback migration receipt is invalid"); }
+    if (receipt.root !== root || receipt.origin !== "legacy" || !receipt.restore_verified_at
+      || !receipt.snapshot_manifest_path || !receipt.snapshot_manifest_sha256
+      || checkedSnapshotPath(root, receipt.snapshot_manifest_path) !== snapshot
+      || snapshotHash(snapshot) !== receipt.snapshot_manifest_sha256
+      || readVersion(root, true) !== RESEARCH_SCHEMA_VERSION) {
+      throw blocked("Rollback snapshot is not the verified pre-migration backup");
+    }
+    const metadata = JSON.parse(readFileSync(join(root, ".comath", "project.json"), "utf8")) as { project_id?: string };
+    if (metadata.project_id !== verification.manifest.project_id) throw blocked("Rollback snapshot belongs to another project");
   }
   let staging: string | undefined;
   try {
     staging = mkdtempSync(join(tmpdir(), "comath-rollback-verify-"));
     await restoreSnapshot(snapshot, staging, { actor: "research-rollback-verify" });
-    if (!existsSync(researchDatabasePath(staging))) throw blocked("Rollback staging restore has no research control database");
+    if (existsSync(researchDatabasePath(staging)) !== snapshotHasDatabase) throw blocked("Rollback staging control database differs from snapshot");
     return await withDaemonOwnerMaintenance(owner, async () => {
+      if (!snapshotHasDatabase) {
+        // Preserve the v1 control state before returning a pre-schema project to the old binary.
+        const backup = await exportSnapshot(root, { project_id: verification.manifest!.project_id, actor: "research-rollback", audience: "internal_restore" });
+        const checked = await verifySnapshot(backup.manifest_path);
+        if (!checked.ok || !checked.manifest?.can_restore || !checked.manifest.entries.some(entry => entry.relative_path === ".comath/control/research.sqlite")) {
+          throw blocked("New research control backup failed verification");
+        }
+        const backupStaging = mkdtempSync(join(tmpdir(), "comath-rollback-backup-"));
+        try {
+          await restoreSnapshot(backup.manifest_path, backupStaging, { actor: "research-rollback-backup-verify" });
+          if (readVersion(backupStaging, true) !== RESEARCH_SCHEMA_VERSION) throw blocked("New research control backup cannot restore its schema");
+        } finally { rmSync(backupStaging, { recursive: true, force: true }); }
+      }
       // SQLite sidecars from the newer daemon must never accompany old bytes.
       for (const path of [researchDatabasePath(root), resolveResearchControlPath(root, "research.sqlite-wal"), resolveResearchControlPath(root, "research.sqlite-shm"),
         migrationFile(root, "receipt"), migrationFile(root, "journal")]) rmSync(path, { force: true });
       const restored = await restoreSnapshot(snapshot, root, { actor: "research-rollback" });
-      if (!existsSync(researchDatabasePath(root))) throw blocked("Rollback restore did not install research control database");
-      return { ...restored, database_schema_version: readVersion(root, true) };
+      if (existsSync(researchDatabasePath(root)) !== snapshotHasDatabase) throw blocked("Rollback restore did not install the selected control database state");
+      return { ...restored, database_schema_version: snapshotHasDatabase ? readVersion(root, true) : 0 };
     });
   } finally {
     if (staging && resolve(staging).startsWith(resolve(tmpdir()) + sep)) rmSync(staging, { recursive: true, force: true });
