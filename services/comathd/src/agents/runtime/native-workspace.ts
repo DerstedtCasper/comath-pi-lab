@@ -29,10 +29,15 @@ export function prepareNativeWorkspace(root: string, input: z.infer<typeof scope
 
 export type NativeSandboxPreflightInput = { binary: string; workspace: NativeWorkspaceDescriptor; signal: AbortSignal };
 
-function preflightEnvironment() {
+function preflightEnvironment(workspace: string) {
   const env = { ...process.env };
   const credentialName = /(?:^|_)(?:API|ACCESS|AUTH(?:ORIZATION)?|BEARER|CREDENTIALS?|PASSWORD|PRIVATE|SECRET|TOKEN|KEY)(?:_|$)/i;
   for (const key of Object.keys(env)) if (credentialName.test(key) || /HOST_APPROVAL|PROVIDER|WORKER/i.test(key)) delete env[key];
+  // Codex grants sandbox write access to its process temp directory. Keep that
+  // directory inside this generation's workspace, never at a writable sibling.
+  const temporary = join(workspace, ".native-sandbox-tmp");
+  mkdirSync(temporary, { recursive: true });
+  env.TEMP = temporary; env.TMP = temporary; env.TMPDIR = temporary;
   return env;
 }
 
@@ -40,7 +45,7 @@ async function runSandboxCommand(input: NativeSandboxPreflightInput, target: str
   return await new Promise<number>((resolve, reject) => {
     const child = spawn(input.binary, ["sandbox", "-P", ":workspace", "-c", 'windows.sandbox="elevated"', "-C", input.workspace.workspace,
       "--", process.execPath, "-e", "require('node:fs').writeFileSync(process.argv[1], 'comath-native-sandbox-probe')", target], {
-      cwd: input.workspace.workspace, env: preflightEnvironment(), stdio: "ignore", windowsHide: true
+      cwd: input.workspace.workspace, env: preflightEnvironment(input.workspace.workspace), stdio: "ignore", windowsHide: true
     });
     let settled = false;
     const finish = (value?: number, error?: Error) => {

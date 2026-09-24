@@ -108,7 +108,9 @@ export function createConfiguredCodexAdapter(runtime: ProjectRuntime, config: Re
         runtime.store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'service:owned-process',?,?,'committed')",
           `owned-process:${handle.nonce}`, digest(value), value);
       }
-    }, { environment: { CODEX_HOME: workspace.runtime_home, COMATH_PROVIDER_API_KEY: credential,
+    }, { environment: { CODEX_HOME: workspace.runtime_home,
+      TEMP: join(workspace.workspace, ".native-sandbox-tmp"), TMP: join(workspace.workspace, ".native-sandbox-tmp"),
+      TMPDIR: join(workspace.workspace, ".native-sandbox-tmp"), COMATH_PROVIDER_API_KEY: credential,
       COMATH_WORKER_TOKEN: input.lease_capability, COMATH_WORKER_GATEWAY_URL: gateway.href,
       COMATH_TASK_ID: task.task_id, COMATH_GENERATION: String(task.generation) } });
     session.stderr.resume();
