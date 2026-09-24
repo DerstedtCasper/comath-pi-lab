@@ -723,6 +723,17 @@ export const finalReplayManifestV3Schema = z
         lake_manifest_sha256: sha256,
         lakefile_path: z.string().min(1),
         lakefile_sha256: sha256,
+        local_imports: z.object({
+          schema_version: z.literal("comath.dependency_lock_local_imports.v1"),
+          import_closure: z.array(z.string().min(1)),
+          files: z.array(z.object({
+            module: z.string().min(1),
+            path: z.string().min(1),
+            sha256,
+            imports: z.array(z.string().min(1))
+          }).strict())
+        }).strict(),
+        local_imports_sha256: sha256,
         external_revisions: z.array(z.unknown()).default([]),
         external_revisions_sha256: sha256
       })
