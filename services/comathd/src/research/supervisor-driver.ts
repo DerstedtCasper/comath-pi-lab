@@ -12,7 +12,7 @@ import { researchResultJsonSchema, type createResearchResultService } from "./re
 import { createResearchLoop } from "./research-loop.js";
 import { createTriageConsumer } from "./triage-consumer.js";
 import type { TriagePolicyContext } from "./supervisor-policy.js";
-import { artifactPointerSchema, researchJsonSchemas, type ResearchControlCampaign, type ResearchTask, type ResearchTaskDraft } from "./research-schemas.js";
+import { artifactPointerSchema, researchJsonSchemas, type ArtifactPointer, type ResearchControlCampaign, type ResearchTask, type ResearchTaskDraft } from "./research-schemas.js";
 import type { ContextPackPolicy, ContextSource } from "./context-pack-builder.js";
 import { prepareArtifact, commitArtifactReference } from "./research-artifacts.js";
 import { resolveProjectCommitPath, withProjectCommit } from "./project-commit.js";
@@ -113,17 +113,37 @@ export class SupervisorDriver {
       frontier.push(...page.tasks); cursor = page.next_cursor ?? undefined;
     } while (cursor !== undefined);
     const operatorEvents: ResearchEvent[] = [];
+    const unresolvedCandidates = new Map(this.app.runtime.store.all(
+      "SELECT c.candidate_id,c.validation_state FROM candidates c JOIN tasks t ON t.task_id=c.source_task_id WHERE t.campaign_id=? AND c.validation_state<>'research_validated'",
+      campaign.campaign_id).map(row => [String(row.candidate_id), String(row.validation_state)]));
+    const publishedCandidates: Array<{ source_event_seq: number; candidate_id: string; result_id: string; source_task_id: string;
+      source_generation: number; validation_state: string; result_ref: ArtifactPointer; proof_authority: "none" }> = [];
+    const seenCandidates = new Set<string>();
     let after = 0;
     while (true) {
       const events = this.app.events.readEventsAfter({ campaign_id: campaign.campaign_id, after_seq: after, limit: 200 });
       operatorEvents.push(...events.filter(event => this.operatorEvent(event)));
+      for (const event of events) {
+        const publication = event.payload as Record<string, unknown>, candidateId = publication.candidate_id;
+        if (event.seq > campaign.supervisor.last_event_seq || event.type !== "ResearchCandidatePublished"
+          || typeof candidateId !== "string" || !unresolvedCandidates.has(candidateId) || seenCandidates.has(candidateId)) continue;
+        const ref = artifactPointerSchema.safeParse(publication.result_ref), source = event.task_id ? this.app.runtime.store.getTask(event.task_id) : undefined;
+        const generation = event.generation;
+        if (!ref.success || !source || source.campaign_id !== campaign.campaign_id || typeof generation !== "number" || !Number.isSafeInteger(generation)
+          || typeof publication.result_id !== "string" || publication.proof_authority !== "none"
+          || this.results.verifyPublishedCandidate(event, source, ref.data) !== true) fail("SUPERVISOR_SOURCE_NOT_VERIFIED");
+        seenCandidates.add(candidateId);
+        publishedCandidates.push({ source_event_seq: event.seq, candidate_id: candidateId, result_id: publication.result_id,
+          source_task_id: source.task_id, source_generation: generation, validation_state: unresolvedCandidates.get(candidateId)!, result_ref: ref.data,
+          proof_authority: "none" });
+      }
       if (events.length < 200) break;
       after = events.at(-1)!.seq;
     }
     const snapshot = { schema_version: "comath.supervisor_input.v1", campaign_id: campaign.campaign_id,
       snapshot_revision: campaign.revision, proposal_base_revision: campaign.revision + 1,
       source_event_cursor: campaign.supervisor.last_event_seq, snapshot_event_seq: sourceSeq, charter: campaign.charter, operator_events: operatorEvents,
-      guidance_authority: "strategy_only_not_assumptions_or_evidence", frontier,
+      guidance_authority: "strategy_only_not_assumptions_or_evidence", frontier, published_candidates: publishedCandidates,
       proposal_schema: researchJsonSchemas.ResearchDagPatch,
       research_result_schema: researchResultJsonSchema,
       host_task_defaults: { model_policy_id: draft.model_policy_id, tool_policy_id: draft.tool_policy_id,
@@ -133,6 +153,7 @@ export class SupervisorDriver {
         "Use proposal_base_revision for the initial proposal; a stale proposal requires rereading state and a new proposal, never blind rebasing.",
         "Follow the human approach_hints as optional strategy only. They are not assumptions or evidence.",
         "For exploration triage, create a synthesize task with specialization=triage. Its input_refs must include every target's accepted result reference and this schema-bearing supervisor snapshot. Submit a progress ResearchResult containing a triage array conforming to research_result_schema; retain each target's exact scope and method_family. The service selects the eligible quarter and creates deepening successors under existing budgets.",
+        "Published candidates are immutable, nonterminal source artifacts. Their exact result_refs are included in task inputs for follow-up; they remain proof_authority none and are not accepted final results or proofs.",
         "Respect cancelled tasks, fixed host policy IDs, available pool balances, and explicit formal scope approval.",
         "Submit via research_worker_propose. Provider completion is not accepted research and no result is a mathematical proof."], proof_authority: "none" };
     const bytes = canonicalJson(snapshot);
@@ -149,7 +170,8 @@ export class SupervisorDriver {
       if (!current || current.state !== "running" || current.revision !== campaign.revision || current.supervisor.inflight_task_id || currentSeq !== sourceSeq) fail("SUPERVISOR_SNAPSHOT_STALE");
       const ref = withProjectCommit(runtime.root, { operation_id: `supervisor-input:${draft.task_id}:${prepared.sha256}`, campaign_id: campaign.campaign_id,
         expected_revision: campaign.revision, request: { sha256: prepared.sha256 } }, () => commitArtifactReference(runtime.root, prepared));
-      return { artifact_id: ref.id, sha256: ref.sha256 };
+      const candidateRefs = new Map(publishedCandidates.map(candidate => [candidate.result_ref.artifact_id, candidate.result_ref]));
+      return [{ artifact_id: ref.id, sha256: ref.sha256 }, ...candidateRefs.values()];
     } finally { await unlink(temporary); }
   }
   private async finish(campaign: ResearchControlCampaign): Promise<void> {
@@ -247,7 +269,7 @@ export class SupervisorDriver {
     if (!campaign.supervisor.dirty) return;
     const key = fingerprint({ campaign_id: campaignId, revision: campaign.revision, supervisor: campaign.supervisor });
     const draft = this.draft(campaign, key);
-    if (this.affordable(campaign, draft)) draft.input_refs = [await this.snapshot(campaign, draft)];
+    if (this.affordable(campaign, draft)) draft.input_refs = await this.snapshot(campaign, draft);
     if (this.closed) return;
     // Snapshot publication awaited I/O. Never claim with a context from an older revision.
     const current = this.app.runtime.store.getCampaign(campaignId)!;
