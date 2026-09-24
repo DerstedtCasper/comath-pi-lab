@@ -110,6 +110,10 @@ export function createCodexAppServerAdapter(options: CodexAppServerOptions): Age
       if (closing || sessions.has(input.attempt_key)) throw new ComathError("Codex attempt already exists or adapter is closed", { code: "CODEX_ATTEMPT_CONFLICT" });
       input.signal.throwIfAborted();
       if (input.budget.token_enforcement === "exact_output_cap") throw new ComathError("Codex cannot enforce an exact output cap", { code: "CAPABILITY_UNSUPPORTED", statusCode: 422 });
+      const allowedResearchTools = [...new Set(input.allowed_research_tools ?? [])];
+      if (allowedResearchTools.some(tool => typeof tool !== "string" || !/^[A-Za-z0-9_.-]{1,160}$/.test(tool))) {
+        throw new ComathError("Codex worker received an invalid research tool policy", { code: "RESEARCH_TOOL_POLICY_INVALID", statusCode: 409 });
+      }
       const policy = options.resolvePolicy?.(input) ?? { model: options.model, model_provider: options.model_provider };
       if (!policy.model || !policy.model_provider) throw new ComathError("Codex model policy is missing", { code: "RESEARCH_POLICY_UNKNOWN" });
       const prompt = await options.buildPrompt(input);
@@ -128,7 +132,10 @@ export function createCodexAppServerAdapter(options: CodexAppServerOptions): Age
         input.signal.throwIfAborted();
         const thread = await session.rpc.request("thread/start", { model: policy.model, modelProvider: policy.model_provider,
           cwd: input.workspace.workspace_path, approvalPolicy: "never", config: { "features.multi_agent": false },
-          developerInstructions: "Use only the service-provisioned task scope and checkpoint tools. Research output has no proof authority." }) as { thread: { id: string } };
+          developerInstructions: ["Use only the service-provisioned task scope, checkpoint/result tools, and research_worker_tool.",
+            allowedResearchTools.length ? `Allowed research tool IDs: ${allowedResearchTools.join(", ")}. Do not call an unlisted ID.`
+              : "No research tools are configured for this task; do not call research_worker_tool.",
+            "Research output has no proof authority."].join(" ") }) as { thread: { id: string } };
         if (typeof thread.thread?.id !== "string") throw new Error("Missing provider thread ID");
         handle.provider_session = { thread_id: thread.thread.id };
         input.signal.throwIfAborted();

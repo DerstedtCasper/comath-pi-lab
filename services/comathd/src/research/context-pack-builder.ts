@@ -19,6 +19,7 @@ export type ContextFailureRoute = { failure_id: string; sha256: string; route_fi
   retry_conditions: string[]; match: "exact" | "advisory" };
 export type ContextPackPolicy = {
   byte_cap: number; visibility: "task" | "blind";
+  allowed_tools?: readonly string[];
   formal_candidate?: FormalCandidateReservation;
   /** Host-selected sources and authorization; never deserialize this policy from worker input. */
   mandatory: readonly ContextSource[]; selected?: readonly ContextSource[]; lazy?: readonly ContextSource[];
@@ -31,6 +32,7 @@ export type ContextPackPolicy = {
 };
 export type ContextPack = {
   schema_version: "comath.context_pack.v1"; task_id: string; generation: number; scope: ScopeBinding;
+  allowed_tools: string[];
   formal_candidate?: FormalCandidateReservation;
   budget: { unit: "utf8_bytes"; limit: number; used: number; token_count: null; tokenizer_available: false; estimate: true };
   objective: { question: string; acceptance: string[] }; charter?: { goal: string; approach_hints: string[]; constraints: string[]; success_criteria: string[]; sha256: string };
@@ -65,6 +67,8 @@ export async function buildContextPack(runtime: ProjectRuntime, taskId: string, 
   assertProjectReadable(runtime.root, undefined, task.campaign_id);
   if (!Number.isSafeInteger(policy.byte_cap) || policy.byte_cap < 1024 || policy.byte_cap > 16 * 1024 * 1024) fail("CONTEXT_BUDGET_INVALID", "Context needs an explicit bounded host byte cap");
   if (!Array.isArray(policy.assumptions) || policy.assumptions.some(value => typeof value !== "string") || typeof policy.authorizeArtifact !== "function") fail("CONTEXT_POLICY_INVALID", "Context requires complete host assumptions and visibility policy");
+  const allowedTools = [...new Set(policy.allowed_tools ?? [])];
+  if (allowedTools.some(value => typeof value !== "string" || !/^[A-Za-z0-9_.-]{1,160}$/.test(value))) fail("CONTEXT_POLICY_INVALID", "Context tool IDs must be host-configured identifiers");
   const campaign = runtime.store.getCampaign(task.campaign_id)!;
   const mandatory = policy.mandatory.map(value => sourceSchema.parse(value));
   const selected = (policy.selected ?? []).map(value => sourceSchema.parse(value));
@@ -115,6 +119,7 @@ export async function buildContextPack(runtime: ProjectRuntime, taskId: string, 
     fail("CONTEXT_FORMAL_CANDIDATE_MISMATCH", "Formal candidate identity must match the current nonblind task generation");
   }
   const pack: ContextPack = { schema_version: "comath.context_pack.v1", task_id: task.task_id, generation, scope: task.scope,
+    allowed_tools: allowedTools,
     ...(policy.formal_candidate ? { formal_candidate: structuredClone(policy.formal_candidate) } : {}),
     budget: { unit: "utf8_bytes", limit: policy.byte_cap, used: 0, token_count: null, tokenizer_available: false, estimate: true },
     objective: blind ? { question: "Independently reproduce the supplied statement using only the whitelisted prerequisites.", acceptance: ["Report a reproducible argument or explicit obstruction without original proof access"] }

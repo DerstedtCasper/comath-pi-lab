@@ -34,6 +34,15 @@ export function createResearchToolExecutor(runtime: ProjectRuntime, scheduler: P
   let closing: Promise<void> | undefined;
   const timeout = options.timeout_ms ?? 30000;
   if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 120000) throw new Error("Tool timeout must be 1..120000 ms");
+  function hasExecutor(toolId: string): boolean {
+    return toolId === "retrieval.search" ? Boolean(options.wheels.retrieval_search)
+      : toolId === "retrieval.read" ? Boolean(options.wheels.retrieval_read)
+        : toolId === "theorem_search.query" ? Boolean(options.wheels.theorem_search)
+          : toolId === "computation.sympy_difference" ? Boolean(options.sympy) : false;
+  }
+  function availableTools(task: ResearchTask): string[] {
+    return [...new Set(options.allowedTools(task))].filter(hasExecutor);
+  }
   function current(principal: WorkerPrincipal): ResearchTask {
     const task = runtime.store.getTask(principal.task_id), attempt = runtime.store.get("SELECT * FROM attempts WHERE attempt_key=?", principal.attempt_key);
     if (!task || !attempt || task.generation !== principal.generation || task.campaign_id !== principal.campaign_id || attempt.task_id !== task.task_id
@@ -136,10 +145,7 @@ export function createResearchToolExecutor(runtime: ProjectRuntime, scheduler: P
     if (!/^[A-Za-z0-9:_-]{1,160}$/.test(input.execution_id)) fail("RESEARCH_TOOL_INVALID", "Invalid execution ID");
     const task = current(input.attempt);
     if (!options.allowedTools(task).includes(input.tool_id)) fail("RESEARCH_TOOL_DENIED", "Tool is outside this task's host policy");
-    const configured = input.tool_id === "retrieval.search" ? options.wheels.retrieval_search
-      : input.tool_id === "retrieval.read" ? options.wheels.retrieval_read : input.tool_id === "theorem_search.query" ? options.wheels.theorem_search
-        : input.tool_id === "computation.sympy_difference" ? options.sympy : undefined;
-    if (!configured) fail("RESEARCH_TOOL_UNAVAILABLE", "Tool has no configured live executor");
+    if (!hasExecutor(input.tool_id)) fail("RESEARCH_TOOL_UNAVAILABLE", "Tool has no configured live executor");
     if (input.tool_id === "retrieval.read") {
       const url = (input.args as { source_url?: unknown })?.source_url;
       if (typeof url !== "string" || !options.authorizeReaderUrl(task, url)) fail("RESEARCH_SOURCE_DENIED", "Reader source is not in the task's readable references");
@@ -170,6 +176,7 @@ export function createResearchToolExecutor(runtime: ProjectRuntime, scheduler: P
   }
   return {
     executeResearchTool,
+    availableTools,
     recover(): { terminated: string[]; unconfirmed: string[] } {
       const terminated: string[] = [], unconfirmed: string[] = [];
       for (const row of runtime.store.all("SELECT * FROM tool_executions WHERE state<>'terminated'")) {

@@ -168,6 +168,7 @@ export class ResearchDaemon {
     this.contextService = createResearchContextService(runtime, {
       prepareFormalCandidate: principal => { this.formalCandidates.ensureCandidateReservationForAttempt(principal); },
       formalCandidateForTask: task => this.formalCandidates.readTaskCandidateReservation(task.task_id, task.generation),
+      allowedToolsForTask: task => this.toolExecutor?.availableTools(task) ?? [],
       policyForTask: task => {
       const model = config.model_policies[task.model_policy_id], tools = config.tool_policies[task.tool_policy_id];
       if (!model || !tools) fail("RESEARCH_POLICY_UNKNOWN", "Context requires configured model and tool policies");
