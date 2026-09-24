@@ -411,7 +411,7 @@ export function createAsyncCleanReplayExecutor(app: ResearchOrchestrator, tools:
         const closureTemp = `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/dependency-closure.tmp.json`;
         const closure = checkDependencyClosureV2({ projectRoot: runtime.root, leanRoot: join(cwd, "source"), toolchainFile: join(cwd, "lean-toolchain"),
           lakefile: join(cwd, "lakefile.lean"), lakeManifestFile: lakeManifest, reportPath: closureTemp,
-          allowedImportPrefixes: [...new Set(["Mathlib", "Std", "Init", "Lake", "FormalSpec", "Audit", project.project.theorem_name.split(".")[0]!])], trustedExternalDependencies: ["mathlib"], buildStatus: "checked" });
+          allowedImportPrefixes: [...approved.lock.imports_allowed], trustedExternalDependencies: ["mathlib"], buildStatus: "checked" });
         const dependency_closure = { schema_version: "comath.async_clean_replay_dependency_closure.v1" as const, result: closure.result,
           report_path: `.comath/evidence/${project.claim_id}/lean/replays/${preparation.replay_id}/dependency-closure.json`, hard_vetoes: closure.hard_vetoes, proof_authority: "none" as const };
         save(`${operation_id}:dependency-closure`, dependency_closure.report_path, project.campaign_id, closure);
