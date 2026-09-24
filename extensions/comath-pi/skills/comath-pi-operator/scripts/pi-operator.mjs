@@ -269,6 +269,8 @@ export async function runWithHandoff(raw, options) {
         operation_id: prior.operation_id ?? null, start_command_id: prior.start_command_id ?? null, last_event_seq: prior.last_event_seq ?? 0, last_request_id: prior.last_request_id ?? null, pending_mutation: pending });
       return runOperatorRequest(request, options);
     })();
+    // A transport failure cannot tell whether the service committed the command.
+    if (mutation && !result.result.ok && result.result.code === 'RESEARCH_OPERATOR_UNAVAILABLE') return result;
     const data = result.result.ok && result.result.data && typeof result.result.data === 'object' ? result.result.data : {};
     await writeHandoff(handoff, { version: 1, project_root: resolve(options.project), project_id: data.project_id ?? prior.project_id ?? null,
       campaign_id: data.campaign_id ?? prior.campaign_id ?? null, operation_id: data.operation_id ?? prior.operation_id ?? null,

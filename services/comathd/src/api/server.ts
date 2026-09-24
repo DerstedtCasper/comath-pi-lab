@@ -2631,8 +2631,8 @@ export function createComathServer(options: ComathServerOptions = {}): ComathSer
           }
           if (req.method === "GET" && url.pathname === "/research/v1/capabilities" && reference) {
             authenticateOperator(req.headers, reference.daemon.config);
-            const campaign = reference.daemon.runtime.store.listCampaigns().at(0);
-            writeJson(res, { status: 200, body: { ok: true, data: { protocol_version: 1, project_id: campaign?.project_id ?? null,
+            const project = getProjectStatus({ root_path: reference.daemon.runtime.root }).project;
+            writeJson(res, { status: 200, body: { ok: true, data: { protocol_version: 1, project_id: project?.project_id ?? null,
               control_ready: reference.daemon.config.enabled && reference.daemon.app.startup_blockers.length === 0,
               missing_configuration: reference.daemon.config.enabled ? [] : ["research.enabled"], operator_tools: [
                 "research_capabilities_get", "research_campaign_list", "research_campaign_start", "research_campaign_get", "research_frontier_get",
