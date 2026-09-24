@@ -14,8 +14,13 @@ const receiptSchema = z.strictObject({ schema_version: z.literal(1), database_sc
   snapshot_manifest_path: z.string().optional(), snapshot_manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   restore_verified_at: z.iso.datetime().optional() });
 const journalSchema = receiptSchema.extend({ phase: z.enum(["started", "backup_created", "restore_verified"]) });
+const rollbackIntentSchema = z.strictObject({ schema_version: z.literal(1), root: z.string(), project_id: z.string(),
+  snapshot_manifest_path: z.string(), snapshot_manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  control_backup_manifest_path: z.string(), control_backup_manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  migration_receipt_sha256: z.string().regex(/^[a-f0-9]{64}$/), phase: z.enum(["restoring", "restored"]), created_at: z.iso.datetime() });
 export type ResearchMigrationReceipt = z.infer<typeof receiptSchema>;
 type MigrationJournal = z.infer<typeof journalSchema>;
+type ResearchRollbackIntent = z.infer<typeof rollbackIntentSchema>;
 export type ResearchLayout = { kind: "fresh" | "legacy" | "current" | "partial"; root: string; schemaVersion: number;
   receipt?: ResearchMigrationReceipt; journal?: MigrationJournal };
 export type MigrationQuiescence = {
@@ -32,6 +37,7 @@ export type ResearchRollbackResult = { restored_entries: number; target_root: st
 function migrationFile(root: string, name: "journal" | "receipt"): string {
   return resolveResearchControlPath(root, `migration-${name}.json`);
 }
+function rollbackIntentFile(root: string): string { return resolveResearchControlPath(root, "migration-rollback.json"); }
 function blocked(message: string): ComathError { return new ComathError(message, { code: "MIGRATION_BLOCKED", statusCode: 409 }); }
 function readVersion(root: string, strictReadOnly = false): number {
   const path = researchDatabasePath(root); if (!existsSync(path)) return 0;
@@ -192,7 +198,29 @@ export async function rollbackResearchControlSnapshot(projectRoot: string, manif
     throw new ComathError("Public snapshot downloads cannot be used for rollback", { code: "SNAPSHOT_PUBLIC_DOWNLOAD_NOT_RESTORABLE", statusCode: 409 });
   }
   const snapshotHasDatabase = verification.manifest.entries.some(entry => entry.relative_path === ".comath/control/research.sqlite");
-  if (!snapshotHasDatabase) {
+  const rollbackPath = rollbackIntentFile(root);
+  let rollbackIntent: ResearchRollbackIntent | undefined;
+  if (!snapshotHasDatabase && existsSync(rollbackPath)) {
+    try { rollbackIntent = rollbackIntentSchema.parse(JSON.parse(readFileSync(rollbackPath, "utf8"))); }
+    catch { throw blocked("Rollback recovery intent is invalid"); }
+    const backupPath = checkedSnapshotPath(root, rollbackIntent.control_backup_manifest_path);
+    const backupVerification = await verifySnapshot(backupPath);
+    if (rollbackIntent.root !== root || rollbackIntent.project_id !== verification.manifest.project_id
+      || checkedSnapshotPath(root, rollbackIntent.snapshot_manifest_path) !== snapshot
+      || rollbackIntent.snapshot_manifest_sha256 !== snapshotHash(snapshot)
+      || snapshotHash(backupPath) !== rollbackIntent.control_backup_manifest_sha256
+      || !backupVerification.ok || !backupVerification.manifest?.can_restore || backupVerification.manifest.snapshot_kind !== "internal_restore"
+      || backupVerification.manifest.project_id !== rollbackIntent.project_id
+      || !backupVerification.manifest.entries.some(entry => entry.relative_path === ".comath/control/research.sqlite")) {
+      throw blocked("Rollback recovery intent no longer matches its verified snapshots");
+    }
+    const receiptPath = migrationFile(root, "receipt");
+    if (rollbackIntent.phase === "restoring" && (!existsSync(receiptPath)
+      || snapshotHash(receiptPath) !== rollbackIntent.migration_receipt_sha256
+      || readVersion(root, true) !== RESEARCH_SCHEMA_VERSION)) throw blocked("Interrupted rollback lost its migration authorization state");
+    if (existsSync(receiptPath) && snapshotHash(receiptPath) !== rollbackIntent.migration_receipt_sha256) throw blocked("Rollback migration receipt changed during recovery");
+  }
+  if (!snapshotHasDatabase && !rollbackIntent) {
     const receiptPath = migrationFile(root, "receipt");
     if (!existsSync(receiptPath)) throw blocked("Rollback snapshot has no research control database");
     let receipt: ResearchMigrationReceipt;
@@ -214,7 +242,7 @@ export async function rollbackResearchControlSnapshot(projectRoot: string, manif
     await restoreSnapshot(snapshot, staging, { actor: "research-rollback-verify" });
     if (existsSync(researchDatabasePath(staging)) !== snapshotHasDatabase) throw blocked("Rollback staging control database differs from snapshot");
     return await withDaemonOwnerMaintenance(owner, async () => {
-      if (!snapshotHasDatabase) {
+      if (!snapshotHasDatabase && !rollbackIntent) {
         // Preserve the v1 control state before returning a pre-schema project to the old binary.
         const backup = await exportSnapshot(root, { project_id: verification.manifest!.project_id, actor: "research-rollback", audience: "internal_restore" });
         const checked = await verifySnapshot(backup.manifest_path);
@@ -226,12 +254,26 @@ export async function rollbackResearchControlSnapshot(projectRoot: string, manif
           await restoreSnapshot(backup.manifest_path, backupStaging, { actor: "research-rollback-backup-verify" });
           if (readVersion(backupStaging, true) !== RESEARCH_SCHEMA_VERSION) throw blocked("New research control backup cannot restore its schema");
         } finally { rmSync(backupStaging, { recursive: true, force: true }); }
+        rollbackIntent = rollbackIntentSchema.parse({ schema_version: 1, root, project_id: verification.manifest!.project_id,
+          snapshot_manifest_path: snapshot, snapshot_manifest_sha256: snapshotHash(snapshot),
+          control_backup_manifest_path: backup.manifest_path, control_backup_manifest_sha256: snapshotHash(backup.manifest_path),
+          migration_receipt_sha256: snapshotHash(migrationFile(root, "receipt")), phase: "restoring", created_at: new Date().toISOString() });
+        writeAtomic(rollbackPath, rollbackIntent);
       }
       // SQLite sidecars from the newer daemon must never accompany old bytes.
-      for (const path of [researchDatabasePath(root), resolveResearchControlPath(root, "research.sqlite-wal"), resolveResearchControlPath(root, "research.sqlite-shm"),
+      if (snapshotHasDatabase) for (const path of [researchDatabasePath(root), resolveResearchControlPath(root, "research.sqlite-wal"), resolveResearchControlPath(root, "research.sqlite-shm"),
         migrationFile(root, "receipt"), migrationFile(root, "journal")]) rmSync(path, { force: true });
       const restored = await restoreSnapshot(snapshot, root, { actor: "research-rollback" });
-      if (existsSync(researchDatabasePath(root)) !== snapshotHasDatabase) throw blocked("Rollback restore did not install the selected control database state");
+      if (snapshotHasDatabase && !existsSync(researchDatabasePath(root))) throw blocked("Rollback restore did not install the selected control database state");
+      if (!snapshotHasDatabase) {
+        if (!rollbackIntent) throw blocked("Pre-schema rollback intent is unavailable");
+        rollbackIntent = rollbackIntentSchema.parse({ ...rollbackIntent, phase: "restored" });
+        writeAtomic(rollbackPath, rollbackIntent);
+        for (const path of [researchDatabasePath(root), resolveResearchControlPath(root, "research.sqlite-wal"), resolveResearchControlPath(root, "research.sqlite-shm"),
+          migrationFile(root, "receipt"), migrationFile(root, "journal")]) rmSync(path, { force: true });
+        if (existsSync(researchDatabasePath(root))) throw blocked("Pre-schema rollback retained the newer control database");
+        rmSync(rollbackPath, { force: true });
+      }
       return { ...restored, database_schema_version: snapshotHasDatabase ? readVersion(root, true) : 0 };
     });
   } finally {
