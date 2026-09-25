@@ -129,10 +129,22 @@ async function runOperatorRequestOnce(request, options) {
   const commandDiscoveryId = `comath-operator-commands-${process.pid}-${Date.now()}`;
   const child = spawn(pi, [...(options.piArgs ?? []), '--mode', 'rpc', '--no-session', '--no-tools', '--no-extensions', ...skills, '--no-prompt-templates', '--provider', 'openai', '--model', 'gpt-4o-mini', '--extension', extension],
     { cwd: project, env: operatorEnvironment(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-  let stderr = '', settled = false, timer;
+  let stderr = '', settled = false, timer, closeTimer;
   const finish = (resolve, reject, value, error) => {
-    if (settled) return; settled = true; clearTimeout(timer); child.stdout.destroy(); child.stderr.destroy(); child.stdin.end();
-    if (!child.killed) child.kill(); error ? reject(error) : resolve(value);
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    child.stdout.destroy();
+    child.stderr.destroy();
+    const settle = () => {
+      clearTimeout(closeTimer);
+      child.stdin.destroy();
+      if (error) reject(error); else resolve(value);
+    };
+    if (child.exitCode !== null || child.signalCode !== null) return settle();
+    child.once('close', settle);
+    child.stdin.end();
+    closeTimer = setTimeout(() => { if (!child.killed) child.kill(); }, Math.min(timeout, 1000));
   };
   const result = await new Promise((resolve, reject) => {
     timer = setTimeout(() => finish(resolve, reject, undefined, Error('PI_OPERATOR_TIMEOUT')), timeout);
