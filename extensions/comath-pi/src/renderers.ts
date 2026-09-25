@@ -348,6 +348,14 @@ export function renderDurableResearchDashboard(snapshot: DurableResearchDashboar
     const metric = value as { value?: unknown; incomplete?: unknown; pending?: unknown };
     return [`${name}:${typeof metric.value === "number" ? metric.value : "unknown"}${metric.incomplete === true ? " incomplete" : ""}${Number.isSafeInteger(metric.pending) ? ` pending:${metric.pending}` : ""}`];
   });
+  const killedBranches = metrics.budget_wasted_on_killed_branches && typeof metrics.budget_wasted_on_killed_branches === "object"
+    ? metrics.budget_wasted_on_killed_branches as { known_output_tokens?: unknown; unknown_reservations?: unknown; incomplete?: unknown } : undefined;
+  const killedBranchRows = killedBranches ? (() => {
+    const known = Number.isSafeInteger(killedBranches.known_output_tokens) && Number(killedBranches.known_output_tokens) >= 0 ? killedBranches.known_output_tokens : "unknown";
+    const unknownReservations = Number.isSafeInteger(killedBranches.unknown_reservations) && Number(killedBranches.unknown_reservations) >= 0 ? killedBranches.unknown_reservations : "unknown";
+    const incomplete = killedBranches.incomplete !== false || known === "unknown" || unknownReservations === "unknown";
+    return [`killed_branch_known_output_tokens:${known} unknown_reservations:${unknownReservations}${incomplete ? " incomplete" : ""}`];
+  })() : [];
   const curve = metrics.branch_survival_curve && typeof metrics.branch_survival_curve === "object" ? metrics.branch_survival_curve : {};
   const curveRows = Object.entries(curve).flatMap(([pool, value]) => {
     if (!value || typeof value !== "object") return [];
@@ -363,7 +371,7 @@ export function renderDurableResearchDashboard(snapshot: DurableResearchDashboar
       { id: "research-budget", title: "Research Budget", rows: [`charged_output:${Number.isSafeInteger(charged.output_tokens) ? charged.output_tokens : "unknown"}`, `reserved_output:${Number.isSafeInteger(reserved.output_tokens) ? reserved.output_tokens : "unknown"}`, `unknown:${unknown.length ? unknown.join(",") : "none"}`, `overrun_output:${Number.isSafeInteger(overrun.output_tokens) ? overrun.output_tokens : "unknown"}`] },
       { id: "research-validation", title: "Research Validation", rows: [`open_issues:${Number.isSafeInteger(validation.open_issue_count) ? validation.open_issue_count : "unknown"}`, ...(validationCurrent.length ? validationCurrent.map((slot: any) => `${typeof slot.role_slot === "string" ? slot.role_slot : "unknown"} ${typeof slot.validation_state === "string" ? slot.validation_state : "unknown"} task:${typeof slot.current_task_id === "string" ? slot.current_task_id : "unknown"}`) : ["none"])] },
       { id: "research-formalization", title: "Research Formalization", rows: [activeClaim ? `${typeof activeClaim.claim_id === "string" ? activeClaim.claim_id : "unknown"} ${typeof activeClaim.status === "string" ? activeClaim.status : "unknown"} formalization:${typeof activeClaim.formalization_status === "string" ? activeClaim.formalization_status : "unknown"}` : "claim:none", activeObligation ? `${typeof activeObligation.obligation_id === "string" ? activeObligation.obligation_id : "unknown"} ${typeof activeObligation.status === "string" ? activeObligation.status : "unknown"}` : "obligation:none"] },
-      { id: "research-metrics", title: "Research Metrics", rows: [...(metricRows.length ? metricRows : ["none"]), ...curveRows] },
+      { id: "research-metrics", title: "Research Metrics", rows: [...(metricRows.length ? metricRows : ["none"]), ...killedBranchRows, ...curveRows] },
       { id: "research-snapshot", title: "Research Snapshot", rows: [`snapshot_seq:${Number.isSafeInteger(frontier.snapshot_seq) ? frontier.snapshot_seq : "unknown"}`] }
     ]
   };
