@@ -9,13 +9,9 @@ function requireRequest(value) {
   if (!value || value.version !== 1 || typeof value.request_id !== 'string' || !value.request_id || typeof value.tool !== 'string' || !value.tool) throw Error('Invalid Pi operator request');
   return value;
 }
-function customDetails(value) {
-  if (!value || typeof value !== 'object') return undefined;
-  if (value.customType === 'comath.operator.response.v1' && value.details) return value.details;
-  for (const key of ['message', 'data', 'params', 'payload']) {
-    const found = customDetails(value[key]); if (found) return found;
-  }
-  return undefined;
+function messageEndDetails(value) {
+  const message = value?.type === 'message_end' && value.message;
+  return message?.customType === 'comath.operator.response.v1' && message.details ? message.details : undefined;
 }
 function rpcResponse(value, requestId, command) {
   return value && typeof value === 'object' && value.type === 'response' && value.id === requestId && value.command === command && typeof value.success === 'boolean'
@@ -174,7 +170,7 @@ async function runOperatorRequestOnce(request, options) {
           promptSucceeded = true;
           return finishWhenComplete();
         }
-        const details = customDetails(parsed);
+        const details = messageEndDetails(parsed);
         if (!details || details.request_id !== request.request_id) return;
         if (details.version !== 1 || details.tool !== request.tool || !details.result) return finish(resolve, reject, undefined, Error('PI_OPERATOR_PROTOCOL_INVALID'));
         businessReceipt = details;
