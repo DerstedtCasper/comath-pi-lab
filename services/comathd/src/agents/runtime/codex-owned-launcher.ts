@@ -83,7 +83,7 @@ export function createConfiguredCodexAdapter(runtime: ProjectRuntime, config: Re
     input.signal.throwIfAborted();
     const { attempt, task, model, host, workspace } = selection(input);
     if (!host.binary || !host.provider_endpoint || !host.provider_secret_env) fail("CODEX_HOST_CONFIG_INVALID");
-    // No credential read, private configuration write or child spawn may precede this official no-model preflight.
+    // No credential read, secret-free worker configuration write or child spawn may precede this official no-model preflight.
     const verifiedWorkspace = await (options.preflightNativeSandbox ?? preflightCodexNativeSandbox)({ binary: host.binary, workspace, signal: input.signal });
     requireNativeSandboxReady(verifiedWorkspace);
     const credential = process.env[host.provider_secret_env];

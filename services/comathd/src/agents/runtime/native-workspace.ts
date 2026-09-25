@@ -17,7 +17,7 @@ export function describeNativeWorkspace(root: string, input: z.infer<typeof scop
   const scope = scopeSchema.parse(input);
   const base = `.tmp/comath/research/${scope.campaign_id}/${scope.task_id}/g${scope.generation}`;
   const paths = { workspace: resolveProjectCommitPath(root, `${base}/workspace`), context: resolveProjectCommitPath(root, `${base}/context`),
-    tool_tmp: resolveProjectCommitPath(root, `${base}/tool-tmp`), runtime_home: resolveProjectCommitPath(root, `${base}/runtime/codex`) };
+    tool_tmp: resolveProjectCommitPath(root, `${base}/tool-tmp`), runtime_home: resolveProjectCommitPath(root, `${base}/workspace/runtime-home`) };
   return { ...scope, ...paths, readiness: "deferred_by_operator", isolation_verified: false };
 }
 /** Nonintrusive scaffold requested by the operator; it performs no sandbox setup or ACL changes. */
