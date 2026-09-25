@@ -11,10 +11,10 @@ import { parseResearchInput, researchControlCampaignSchema, researchEventInputSc
 export interface ResearchClock { now(): number }
 export type ResearchStoreOptions = { clock: ResearchClock };
 export type ResearchEvent = Omit<ResearchEventInput, "created_at"> & { seq: number; payload_sha256: string; created_at: string };
-export const RESEARCH_SCHEMA_VERSION = 1;
+export const RESEARCH_SCHEMA_VERSION = 2;
 export function researchDatabasePath(root: string): string { return resolveResearchControlPath(root, "research.sqlite"); }
 
-const schemaV1 = `
+const schemaV2 = `
 CREATE TABLE campaigns (
  campaign_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>=0),
  state TEXT NOT NULL CHECK(state IN ('preparing','running','pausing','paused','blocked','completed','cancelled')),
@@ -40,7 +40,7 @@ CREATE TABLE attempts (
  attempt_key TEXT NOT NULL UNIQUE, run_id TEXT NOT NULL UNIQUE, state TEXT NOT NULL,
  worker_id TEXT, lease_token_hash TEXT CHECK(lease_token_hash IS NULL OR length(lease_token_hash)=64),
  expires_at TEXT, last_heartbeat_at TEXT, runtime_kind TEXT, runtime_handle_json TEXT CHECK(runtime_handle_json IS NULL OR json_valid(runtime_handle_json)),
- start_deadline_at TEXT, context_pack_ref TEXT, fault_reason TEXT,
+ start_deadline_at TEXT, context_pack_ref TEXT, resume_checkpoint_id TEXT, fault_reason TEXT,
  stop_reason TEXT, stop_requested_at TEXT, grace_deadline_at TEXT, fenced_at TEXT, termination_confirmed INTEGER NOT NULL DEFAULT 0,
  checkpoint_requested_at TEXT, last_checkpoint_tool_calls INTEGER NOT NULL DEFAULT 0,
  last_checkpoint_output_tokens INTEGER NOT NULL DEFAULT 0, last_checkpoint_at TEXT,
@@ -95,12 +95,13 @@ CREATE INDEX tasks_status_priority ON tasks(status,priority,created_at);
 CREATE INDEX tasks_generation ON tasks(task_id,generation);
 CREATE INDEX dependencies_prerequisite ON dependencies(prerequisite_id);
 CREATE INDEX attempts_state_expiry ON attempts(state,expires_at);
+CREATE INDEX attempts_resume_checkpoint ON attempts(resume_checkpoint_id);
 CREATE INDEX events_campaign_seq ON events(campaign_id,seq);
 CREATE INDEX events_task_generation ON events(task_id,generation,seq);
 CREATE INDEX tools_attempt_state ON tool_executions(attempt_key,state);
 CREATE INDEX permits_resource_deadline ON permits(resource_key,deadline);
 CREATE INDEX commits_campaign_phase ON trust_commits(campaign_id,phase);
-PRAGMA user_version=1;
+PRAGMA user_version=2;
 `;
 
 /** Service-owned connection only. Production opens this after owner + migration readiness. */
@@ -181,8 +182,16 @@ export class ResearchStore {
     this.assertOpen();
     const version = Number(this.db.prepare("PRAGMA user_version").get()?.user_version);
     if (version === RESEARCH_SCHEMA_VERSION) return;
-    if (version !== 0) throw new Error(`Unsupported research schema version ${version}`);
-    this.transaction(() => this.db.exec(schemaV1));
+    if (version === 0) {
+      this.transaction(() => this.db.exec(schemaV2));
+      return;
+    }
+    if (version !== 1) throw new Error(`Unsupported research schema version ${version}`);
+    this.transaction(() => {
+      const hasResumeCheckpoint = this.db.prepare("SELECT 1 FROM pragma_table_info('attempts') WHERE name='resume_checkpoint_id'").get();
+      if (!hasResumeCheckpoint) this.db.exec("ALTER TABLE attempts ADD COLUMN resume_checkpoint_id TEXT");
+      this.db.exec("CREATE INDEX IF NOT EXISTS attempts_resume_checkpoint ON attempts(resume_checkpoint_id); PRAGMA user_version=2;");
+    });
   }
   putCampaign(input: ResearchControlCampaign): ResearchControlCampaign {
     const value = parseResearchInput(researchControlCampaignSchema, input);

@@ -93,11 +93,12 @@ export class PortfolioScheduler {
           const token = randomBytes(32).toString("base64url");
           const now = this.runtime.clock.now(), expires = new Date(now + (this.config.lease_ttl_ms ?? 120000)).toISOString();
           const runId = task.kind === "legacy_run" && task.legacy_run_id ? task.legacy_run_id : this.runtime.store.allocateId("ARUN");
+          const resumeCheckpointId = task.checkpoint_head ?? null;
           const leased: ResearchTask = { ...task, status: "leased", generation, updated_at: new Date(now).toISOString() };
           this.runtime.store.putTask(leased);
-          this.runtime.store.run("INSERT INTO attempts(task_id,generation,attempt_key,run_id,state,worker_id,lease_token_hash,expires_at,last_heartbeat_at,runtime_kind,start_deadline_at) VALUES (?,?,?,?,'leased',?,?,?,?,?,?)",
+          this.runtime.store.run("INSERT INTO attempts(task_id,generation,attempt_key,run_id,state,worker_id,lease_token_hash,expires_at,last_heartbeat_at,runtime_kind,start_deadline_at,resume_checkpoint_id) VALUES (?,?,?,?,'leased',?,?,?,?,?,?,?)",
             task.task_id, generation, attemptKey, runId, `WORKER-${randomUUID()}`, createHash("sha256").update(token).digest("hex"), expires,
-            new Date(now).toISOString(), model.runtime_id, new Date(now + 60000).toISOString());
+            new Date(now).toISOString(), model.runtime_id, new Date(now + 60000).toISOString(), resumeCheckpointId);
           this.budget.reserve(leased, attemptKey);
           this.resources.acquireAttemptPermits(leased, attemptKey, expires);
           const grant: ResearchGrant = { task_id: task.task_id, campaign_id: task.campaign_id, generation, attempt_key: attemptKey, run_id: runId,

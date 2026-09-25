@@ -57,6 +57,26 @@ export function createResearchMetrics(runtime: ProjectRuntime): ResearchMetricsR
       ? { value: firstValidated.at - start.at, incomplete: false, numerator: firstValidated.at - start.at, denominator: 1 }
       : unavailable();
 
+    const resumedAttempts = store.all(`SELECT a.attempt_key,a.task_id,a.generation,a.state,a.resume_checkpoint_id,
+      source_attempt.task_id AS source_task_id,source_attempt.generation AS source_generation,
+      EXISTS(SELECT 1 FROM checkpoints committed_checkpoint WHERE committed_checkpoint.attempt_key=a.attempt_key) AS committed_checkpoint
+      FROM attempts a JOIN tasks t ON t.task_id=a.task_id
+      LEFT JOIN checkpoints source_checkpoint ON source_checkpoint.checkpoint_id=a.resume_checkpoint_id
+      LEFT JOIN attempts source_attempt ON source_attempt.attempt_key=source_checkpoint.attempt_key
+      WHERE t.campaign_id=? AND a.resume_checkpoint_id IS NOT NULL`, campaignId);
+    let resumedSuccesses = 0, resumedPending = 0, resumeBindingIncomplete = false;
+    for (const row of resumedAttempts) {
+      const validBinding = String(row.source_task_id ?? "") === String(row.task_id)
+        && Number(row.source_generation) < Number(row.generation);
+      if (!validBinding) { resumeBindingIncomplete = true; continue; }
+      if (Number(row.committed_checkpoint) === 1) resumedSuccesses++;
+      else if (String(row.state) !== "terminated") resumedPending++;
+    }
+    const checkpointResume = resumedAttempts.length === 0 ? unavailable()
+      : resumeBindingIncomplete || resumedPending > 0
+        ? { value: null, incomplete: true, numerator: resumedSuccesses, denominator: resumedAttempts.length, pending: resumedPending }
+        : { value: resumedSuccesses / resumedAttempts.length, incomplete: false, numerator: resumedSuccesses, denominator: resumedAttempts.length, pending: 0 };
+
     const approved = new Set<string>(), completed = new Set<string>();
     let formalizationIncomplete = false;
     for (const event of events) {
@@ -82,7 +102,7 @@ export function createResearchMetrics(runtime: ProjectRuntime): ResearchMetricsR
       : formalizationIncomplete ? { value: null, incomplete: true, numerator: completed.size, denominator: approved.size, pending: Math.max(0, approved.size - completed.size) }
       : { value: completed.size / approved.size, incomplete: false, numerator: completed.size, denominator: approved.size, pending: approved.size - completed.size };
 
-    return { campaign_id: campaignId, proof_authority: "none", checkpoint_resume_success_rate: unavailable(), duplicate_work_ratio: unavailable(), repeated_failed_route_ratio: unavailable(),
+    return { campaign_id: campaignId, proof_authority: "none", checkpoint_resume_success_rate: checkpointResume, duplicate_work_ratio: unavailable(), repeated_failed_route_ratio: unavailable(),
       validator_disagreement_rate: unavailable(), scheduler_slot_utilization: unavailable(), straggler_block_time: unavailable(), validated_claims_per_1m_output_tokens: validatedPerMillion,
       time_to_first_validated_lemma: timeToFirstValidated, formalization_conversion_rate: formalizationConversion, budget_wasted_on_killed_branches: { known_output_tokens: knownKilledOutput, unknown_reservations: unknownKilledReservations, incomplete: !completeUsage || unknownKilledReservations > 0 }, branch_survival_curve: curve };
   }

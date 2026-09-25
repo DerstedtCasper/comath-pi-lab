@@ -9,7 +9,7 @@ import { ComathError } from "../errors.js";
 import { resolveResearchControlPath, withDaemonOwnerMaintenance, type DaemonOwner } from "./daemon-owner.js";
 import { researchDatabasePath, RESEARCH_SCHEMA_VERSION, type ResearchClock } from "./research-store.js";
 
-const receiptSchema = z.strictObject({ schema_version: z.literal(1), database_schema_version: z.literal(1),
+const receiptSchema = z.strictObject({ schema_version: z.literal(1), database_schema_version: z.union([z.literal(1), z.literal(2)]),
   root: z.string(), origin: z.enum(["fresh", "legacy"]), created_at: z.iso.datetime(),
   snapshot_manifest_path: z.string().optional(), snapshot_manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   restore_verified_at: z.iso.datetime().optional() });
@@ -153,7 +153,7 @@ export async function ensureResearchControlReady(layout: ResearchLayout, owner: 
   const root = layout.root;
   let journal = layout.journal;
   if (!journal) {
-    journal = { schema_version: 1, database_schema_version: 1, root, origin: layout.kind === "fresh" ? "fresh" : "legacy",
+    journal = { schema_version: 1, database_schema_version: RESEARCH_SCHEMA_VERSION, root, origin: layout.kind === "fresh" ? "fresh" : "legacy",
       created_at: new Date(clock.now()).toISOString(), phase: "started" };
     writeAtomic(migrationFile(root, "journal"), journal);
   }
