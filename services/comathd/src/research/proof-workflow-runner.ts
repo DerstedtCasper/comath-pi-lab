@@ -173,7 +173,8 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
       store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'service:proof-block',?,?,'committed')", key, hash(payload), canonicalJson({ ...payload, event_seq: event.seq }));
     });
   }
-  function commitStageResult(lease: Lease, snapshot: Snapshot, report: Record<string, unknown>, nextStage?: "candidate_verification" | "blocked", native = false) {
+  function commitStageResult(lease: Lease, snapshot: Snapshot, report: Record<string, unknown>, nextStage?: "candidate_verification" | "blocked", native = false,
+    verifyCurrent?: (current: Snapshot) => void) {
     assertLease(lease);
     // Reread and rebuild from current campaign state. A revision change never authorizes writing an old campaign object.
     const current = prepareStageWork(snapshot.campaign.campaign_id);
@@ -184,6 +185,7 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
       assertLease(lease);
       const latest = getCampaign(runtime.root, campaign.campaign_id), control = store.getCampaign(campaign.campaign_id)!;
       if (!latest || hash(latest) !== hash(campaign) || control.revision !== current.revision) fail("PROOF_STAGE_REVISION_CONFLICT");
+      verifyCurrent?.(current);
       writeCommittedFile(runtime.root, reportPath, canonicalJson(report));
       if (nextStage) {
         const failed = nextStage === "blocked", active = latest.open_obligations.find(value => value.obligation_id === current.obligation_id)!;
@@ -326,7 +328,11 @@ export function createProofWorkflowRunner(app: ResearchOrchestrator, options: {
       if (tasks.some(task => !["succeeded", "failed", "cancelled"].includes(task.status))) return false;
       const current = prepareStageWork(campaign.campaign_id)!; const sources = acceptedSources(bindings, current);
       commitStageResult(lease, current, { schema_version: "comath.proof_generation_results.v1", dispatch,
-        sources, child_states: tasks.map(task => ({ task_id: task.task_id, generation: task.generation, status: task.status, accepted_result_id: task.accepted_result_id ?? null })), proof_authority: "none" }, sources.length ? "candidate_verification" : "blocked");
+        sources, child_states: tasks.map(task => ({ task_id: task.task_id, generation: task.generation, status: task.status, accepted_result_id: task.accepted_result_id ?? null })), proof_authority: "none" }, sources.length ? "candidate_verification" : "blocked", false,
+      sources.length ? latest => {
+        const currentSources = acceptedSources(options.candidates.readDispatchBindings(dispatch), latest);
+        if (canonicalJson(currentSources) !== canonicalJson(sources)) fail("PROOF_SOURCE_NOT_READY");
+      } : undefined);
       return true;
     }
     if (campaign.current_stage === "candidate_verification") {
