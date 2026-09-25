@@ -189,6 +189,15 @@ async function startSession(input: Omit<StartOwnedProcessSessionInput, "grant">,
       const child = spawn(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
         ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", wrapper], { windowsHide: true, env: wrapperEnvironment, stdio: ["pipe", "pipe", "pipe"] });
       handle.wrapper_pid = child.pid ?? 0;
+      const providerAlive = () => {
+        if (!handle.pid) return false;
+        try { process.kill(handle.pid, 0); return true; }
+        catch (error) { return (error as NodeJS.ErrnoException).code !== "ESRCH"; }
+      };
+      const waitForProviderExit = async () => {
+        const deadline = Date.now() + input.stop_timeout_ms;
+        while (providerAlive() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+      };
       const frame = (type: string, data?: string) => JSON.stringify({ type, nonce, ...(data !== undefined ? { data } : {}) }) + "\n";
       sendCancel = () => { if (!child.stdin.destroyed) child.stdin.write(frame("cancel")); };
       forceClose = () => { child.kill(); };
@@ -239,9 +248,10 @@ async function startSession(input: Omit<StartOwnedProcessSessionInput, "grant">,
       // Wrapper diagnostics are not provider stderr and must never enter its protocol stream.
       child.stderr.resume(); child.stdin.on("error", () => {});
       child.once("error", () => { errorCode ??= "AGENT_PROCESS_START_FAILED"; finish(false); });
-      child.once("close", (code, signal) => {
+      child.once("close", async (code, signal) => {
         if (!completed || buffer.trim() || code !== 0 || signal) errorCode ??= "AGENT_PROCESS_TERMINATION_UNCONFIRMED";
         const protocolOkay = !errorCode || ["AGENT_PROCESS_OUTPUT_LIMIT", "AGENT_PROCESS_INPUT_LIMIT"].includes(errorCode);
+        await waitForProviderExit();
         finish(completed && terminationEvidence && code === 0 && !signal && protocolOkay); child.stdin.destroy();
       });
       child.stdin.write(JSON.stringify({ program, args: input.command.args ?? [], cwd, env, nonce,
