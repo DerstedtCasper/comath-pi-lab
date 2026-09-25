@@ -345,8 +345,8 @@ export function renderDurableResearchDashboard(snapshot: DurableResearchDashboar
   const metrics = campaign.metrics && typeof campaign.metrics === "object" ? campaign.metrics : {};
   const metricRows = Object.entries(metrics).flatMap(([name, value]) => {
     if (!value || typeof value !== "object" || !Object.prototype.hasOwnProperty.call(value, "value")) return [];
-    const metric = value as { value?: unknown; incomplete?: unknown };
-    return [`${name}:${typeof metric.value === "number" ? metric.value : "unknown"}${metric.incomplete === true ? " incomplete" : ""}`];
+    const metric = value as { value?: unknown; incomplete?: unknown; pending?: unknown };
+    return [`${name}:${typeof metric.value === "number" ? metric.value : "unknown"}${metric.incomplete === true ? " incomplete" : ""}${Number.isSafeInteger(metric.pending) ? ` pending:${metric.pending}` : ""}`];
   });
   const curve = metrics.branch_survival_curve && typeof metrics.branch_survival_curve === "object" ? metrics.branch_survival_curve : {};
   const curveRows = Object.entries(curve).flatMap(([pool, value]) => {
