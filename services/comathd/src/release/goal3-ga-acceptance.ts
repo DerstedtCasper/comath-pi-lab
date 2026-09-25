@@ -17,6 +17,7 @@ import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { nextSequentialId } from "../utils/id.js";
 import { promoteClaim } from "../verification/gate.js";
 import { evaluateStatementDiffGate } from "../proof-kernel/lean/statement-diff-gate.js";
+import { checkDependencyClosureV2, dependencyClosureV2PackagesToExternalRevisions } from "../proof-kernel/lean/dependency-closure.js";
 import {
   createServiceOwnedLeanRunManifestV3,
   hasLeanRunManifestProvenanceIndexV1,
@@ -1435,7 +1436,19 @@ function createPositiveWorkflow(projectRoot: string) {
   };
   const staticAudit = writeProjectFile(projectRoot, `.comath/evidence/${claimId}/lean/final_static_audit.json`, JSON.stringify({ result: "pass", hard_vetoes: [], structured_audit: structuredAudit }));
   const axiomProfile = writeProjectFile(projectRoot, `.comath/evidence/${claimId}/lean/axiom_profile.json`, JSON.stringify({ result: "pass", hard_vetoes: [], structured_audit_bound: true, detected_axioms: [] }));
-  const dependencyClosure = writeProjectFile(projectRoot, `.comath/evidence/${claimId}/lean/dependency_closure.json`, JSON.stringify({ result: "pass", hard_vetoes: [], allowed_import_prefixes: ["Std", "MathResearch"] }));
+  const dependencyClosurePathRel = `.comath/evidence/${claimId}/lean/dependency_closure.json`;
+  const dependencyClosure = checkDependencyClosureV2({
+    projectRoot,
+    leanRoot: join(projectRoot, cleanRootRel),
+    toolchainFile: toolchain,
+    lakefile,
+    lakeManifestFile: lakeManifest,
+    reportPath: dependencyClosurePathRel,
+    allowedImportPrefixes: ["Std", "MathResearch.Target"],
+    trustedExternalDependencies: [],
+    buildStatus: "unknown"
+  });
+  const dependencyClosurePath = join(projectRoot, dependencyClosurePathRel);
   const statementEquivalence = writeProjectFile(projectRoot, `.comath/evidence/${claimId}/lean/statement_equivalence.json`, JSON.stringify({ result: "pass", hard_vetoes: [], locked_statement_hash: lockedHash }));
 
   const sourceHashesBefore = {
@@ -1456,14 +1469,14 @@ function createPositiveWorkflow(projectRoot: string) {
     clean_workspace_path: join(projectRoot, cleanRootRel),
     command: ["lake", "build", "MathResearch.Target"],
     exit_code: 0,
-    result: "pass",
+    result: dependencyClosure.result === "pass" ? "pass" : "fail",
     source_hashes_before: sourceHashesBefore,
     stdout_path: stdout,
     stderr_path: stderr,
     report_paths: {
       static_audit: staticAudit,
       axiom_profile: axiomProfile,
-      dependency_closure: dependencyClosure,
+      dependency_closure: dependencyClosurePath,
       statement_equivalence: statementEquivalence
     },
     lean_run_manifest_paths: [leanRunManifestPath],
@@ -1471,7 +1484,7 @@ function createPositiveWorkflow(projectRoot: string) {
       lean_toolchain_path: toolchain,
       lake_manifest_path: lakeManifest,
       lakefile_path: lakefile,
-      external_revisions: []
+      external_revisions: dependencyClosureV2PackagesToExternalRevisions(dependencyClosure.packages)
     },
     network_policy: "disabled",
     sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" },
@@ -2417,11 +2430,16 @@ function completePositiveMatrixFinalAuthorityEvidence(input: {
     generated_by_run_id: finalRunId,
     structured_audit_path: structuredAuditPath
   });
-  const dependencyClosure = writeJsonProjectFile(input.projectRoot, dependencyClosurePath, {
-    result: "pass",
-    hard_vetoes: [],
-    dependency_lock_path: input.materialSource.dependency_lock_path,
-    lean_run_manifest_paths: leanRunManifestPaths
+  const dependencyClosure = checkDependencyClosureV2({
+    projectRoot: input.projectRoot,
+    leanRoot: cleanRoot,
+    toolchainFile: toolchain,
+    lakefile,
+    lakeManifestFile: lakeManifest,
+    reportPath: dependencyClosurePath,
+    allowedImportPrefixes: [...new Set([...input.task.formal_spec_lock_input.imports_allowed, "MathResearch.Target"])],
+    trustedExternalDependencies: ["mathlib"],
+    buildStatus: "checked"
   });
   const axiomProfile = writeJsonProjectFile(input.projectRoot, axiomProfilePath, {
     result: "pass",
@@ -2445,7 +2463,7 @@ function completePositiveMatrixFinalAuthorityEvidence(input: {
     clean_workspace_path: cleanRoot,
     command: finalReplayCommand,
     exit_code: finalRun.manifest.exit_code,
-    result: "pass",
+    result: dependencyClosure.result === "pass" ? "pass" : "fail",
     source_hashes_before: {
       "MathResearch/Target.lean": hashRef(target),
       "Audit/TargetAudit.lean": hashRef(audit),
@@ -2460,7 +2478,7 @@ function completePositiveMatrixFinalAuthorityEvidence(input: {
     report_paths: {
       static_audit: staticAudit,
       axiom_profile: axiomProfile,
-      dependency_closure: dependencyClosure,
+      dependency_closure: join(input.projectRoot, dependencyClosurePath),
       statement_equivalence: statementCheck
     },
     lean_run_manifest_paths: leanRunManifestPaths.map((path) => join(input.projectRoot, path)),
@@ -2468,7 +2486,7 @@ function completePositiveMatrixFinalAuthorityEvidence(input: {
       lean_toolchain_path: toolchain,
       lake_manifest_path: lakeManifest,
       lakefile_path: lakefile,
-      external_revisions: []
+      external_revisions: dependencyClosureV2PackagesToExternalRevisions(dependencyClosure.packages)
     },
     network_policy: "disabled",
     sandbox_policy: { network: "disabled", os_isolation: "process_boundary_only" },

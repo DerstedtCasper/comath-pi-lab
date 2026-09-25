@@ -18,4 +18,31 @@ Runtime boundary:
 - The runtime tool schema must not expose `confirmation_id` as a model-supplied parameter.
 - Descriptor-only tools may be listed before executable handlers exist, but production registration should expose only supported handlers.
 
-Remaining caveat: full interactive validation with a live `comathd` install/start flow is a deployment-level check.
+## External harness operator path
+
+An external harness may use the packaged `comath-pi-operator` command through Pi. It sends a versioned request with a stable `request_id` and an allowlisted operator tool name; Pi returns a `comath.operator.response.v1` custom message that echoes the same request ID. A transport-level response means the operator request was handled, not that research or proof work completed. Clients read the durable campaign receipt or event cursor for business state.
+
+Handoff state is non-authoritative and remains outside `.comath/`. It may retain the project binding, campaign ID, start command ID, last event sequence, and one pending mutation. A lost response is retried with the identical command ID and payload. It must not cause a second campaign to be created.
+
+The operator credential can control research but cannot issue host approval tickets or approve a formal scope. `ctx.hasUI`, a model tool call, or a harness message is not a human confirmation and cannot establish proof authority.
+
+## Verified compatibility envelope
+
+The local 2026-09-22 package probe used `@earendil-works/pi-coding-agent`
+0.86.0. It verified the package metadata, explicit extension and skill loading,
+Pi RPC `get_commands` provenance for `cm:operator`, a no-model-turn capability
+receipt, and coexistence with one ordinary explicit extension/skill. This is a
+tested compatibility envelope, not a claim that every third-party Pi package is
+compatible.
+
+The helper disables discovered extensions/skills, reads Pi version, pins the
+unique selected `cm:operator` registration, and exposes only the operator
+credential to Pi. It waits for the RPC and business receipts separately; an
+unexpected extension dialog is cancelled. Its non-authoritative handoff records
+project, campaign, operation, start command, explicitly processed event cursor,
+and at most one pending mutation. Direct helper options are documented in the
+co-packaged `comath-pi-operator` protocol reference.
+
+Remaining caveat: full interactive validation with a production `comathd`
+install/start flow, provider, and external third-party harness is a
+deployment-level check.

@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { withTrustedWriter, existsCommittedFile, readCommittedFile, writeCommittedFile, listCommittedDirectory, allocateProjectId, projectCommitTime, assertProjectReadable } from "../research/project-commit.js";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
@@ -69,8 +70,8 @@ const requiredReportHeadings = [
   "## Next Actions"
 ] as const;
 
-function now(): string {
-  return new Date().toISOString();
+function now(projectRoot: string): string {
+  return projectCommitTime(projectRoot);
 }
 
 function runsRoot(projectRoot: string): string {
@@ -146,28 +147,24 @@ function assertProjectMatches(actualProjectId: string, inputProjectId: string): 
 function readRun(projectRoot: string, runId: string): AgentRun {
   assertAgentRunId(runId);
   const path = runStatusPath(projectRoot, runId);
-  if (!existsSync(path)) {
+  if (!existsCommittedFile(projectRoot, path)) {
     throw new ComathError("AgentRun not found", { statusCode: 404, code: "AGENT_RUN_NOT_FOUND" });
   }
-  return agentRunSchema.parse(JSON.parse(readFileSync(path, "utf8")));
+  const run = agentRunSchema.parse(JSON.parse(readCommittedFile(projectRoot, path)));
+  assertProjectReadable(projectRoot, undefined, run.campaign_id);
+  return run;
 }
 
 function writeRun(projectRoot: string, run: AgentRun): AgentRun {
   const parsed = agentRunSchema.parse(run);
   const path = runStatusPath(projectRoot, parsed.id);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+
+  writeCommittedFile(projectRoot, path, `${JSON.stringify(parsed, null, 2)}\n`);
   return parsed;
 }
 
 function existingRunIds(projectRoot: string): string[] {
-  const root = runsRoot(projectRoot);
-  if (!existsSync(root)) {
-    return [];
-  }
-  return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name);
+  return listCommittedDirectory(projectRoot, runsRoot(projectRoot));
 }
 
 function existingFailureIds(projectRoot: string): string[] {
@@ -176,10 +173,10 @@ function existingFailureIds(projectRoot: string): string[] {
 
 function readFailureRegistry(projectRoot: string): MemoryNode[] {
   const path = failureRegistryPath(projectRoot);
-  if (!existsSync(path)) {
+  if (!existsCommittedFile(projectRoot, path)) {
     return [];
   }
-  return readFileSync(path, "utf8")
+  return readCommittedFile(projectRoot, path)
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => memoryNodeSchema.parse(JSON.parse(line)));
@@ -287,139 +284,151 @@ function validateAgentRunMetadataPath(projectRoot: string, run: AgentRun, candid
 }
 
 export function createAgentRun(projectRoot: string, input: CreateAgentRunInput): AgentRun {
-  const status = readWorkstreamStatus(projectRoot, input.workstream_id);
-  assertProjectMatches(status.project_id, input.project_id);
-  const createdAt = now();
-  const id = nextSequentialId("ARUN", existingRunIds(projectRoot));
-  const run = writeRun(
-    projectRoot,
-    agentRunSchema.parse({
-      id,
+  return withTrustedWriter(projectRoot, "agent-run.create", input, () => {
+    const status = readWorkstreamStatus(projectRoot, input.workstream_id);
+    assertProjectMatches(status.project_id, input.project_id);
+    const createdAt = now(projectRoot);
+    const id = allocateProjectId(projectRoot, "ARUN", () => nextSequentialId("ARUN", existingRunIds(projectRoot)));
+    const run = writeRun(
+      projectRoot,
+      agentRunSchema.parse({
+        id,
+        project_id: input.project_id,
+        campaign_id: input.campaign_id,
+        workstream_id: input.workstream_id,
+        role: input.role,
+        model: input.model ?? "service-default",
+        tool_profile: input.tool_profile,
+        status: "queued",
+        write_scope: [`.comath/workstreams/${input.workstream_id}/`, `.tmp/comath/${id}/`],
+        created_by: input.actor,
+        created_at: createdAt,
+        updated_at: createdAt
+      })
+    );
+    appendAuditEvent(projectRoot, {
       project_id: input.project_id,
-      campaign_id: input.campaign_id,
-      workstream_id: input.workstream_id,
-      role: input.role,
-      model: input.model ?? "service-default",
-      tool_profile: input.tool_profile,
-      status: "queued",
-      write_scope: [`.comath/workstreams/${input.workstream_id}/`, `.tmp/comath/${id}/`],
-      created_by: input.actor,
-      created_at: createdAt,
-      updated_at: createdAt
-    })
-  );
-  appendAuditEvent(projectRoot, {
-    project_id: input.project_id,
-    event_type: "agent_run.created",
-    actor: input.actor,
-    target_id: id,
-    payload: {
-      campaign_id: input.campaign_id,
-      workstream_id: input.workstream_id,
-      role: input.role,
-      write_scope: run.write_scope
-    }
-  });
-  return run;
+      event_type: "agent_run.created",
+      actor: input.actor,
+      target_id: id,
+      payload: {
+        campaign_id: input.campaign_id,
+        workstream_id: input.workstream_id,
+        role: input.role,
+        write_scope: run.write_scope
+      }
+    });
+    return run;
+
+  }, input.campaign_id);
 }
 
 export function startAgentRun(projectRoot: string, input: StartAgentRunInput): AgentRun {
-  const run = readRun(projectRoot, input.run_id);
-  assertProjectMatches(run.project_id, input.project_id);
-  assertCanStart(run);
-  const startedAt = now();
-  const next = writeRun(projectRoot, {
-    ...run,
-    status: "running",
-    started_at: startedAt,
-    updated_at: startedAt
-  });
-  mkdirSync(assertAgentRunWriteAllowed(projectRoot, next, `.tmp/comath/${next.id}/`), { recursive: true });
-  appendAuditEvent(projectRoot, {
-    project_id: input.project_id,
-    event_type: "agent_run.started",
-    actor: input.actor,
-    target_id: input.run_id,
-    payload: {
-      workstream_id: next.workstream_id,
-      campaign_id: next.campaign_id
-    }
-  });
-  return next;
+  return withTrustedWriter(projectRoot, "agent-run.start", input, () => {
+    const run = readRun(projectRoot, input.run_id);
+    assertProjectMatches(run.project_id, input.project_id);
+    assertCanStart(run);
+    const startedAt = now(projectRoot);
+    const next = writeRun(projectRoot, {
+      ...run,
+      status: "running",
+      started_at: startedAt,
+      updated_at: startedAt
+    });
+    mkdirSync(assertAgentRunWriteAllowed(projectRoot, next, `.tmp/comath/${next.id}/`), { recursive: true });
+    appendAuditEvent(projectRoot, {
+      project_id: input.project_id,
+      event_type: "agent_run.started",
+      actor: input.actor,
+      target_id: input.run_id,
+      payload: {
+        workstream_id: next.workstream_id,
+        campaign_id: next.campaign_id
+      }
+    });
+    return next;
+
+  }, readRun(projectRoot, input.run_id).campaign_id);
 }
 
 export function cancelQueuedAgentRun(projectRoot: string, input: CancelQueuedAgentRunInput): AgentRun {
-  const run = readRun(projectRoot, input.run_id);
-  assertProjectMatches(run.project_id, input.project_id);
-  assertCanCancelQueued(run);
-  assertReportHeadings(input.report_markdown);
-  const reportPath = `.comath/workstreams/${run.workstream_id}/agent_runs/${run.id}/report.md`;
-  const absoluteReportPath = assertAgentRunWriteAllowed(projectRoot, run, reportPath);
-  mkdirSync(dirname(absoluteReportPath), { recursive: true });
-  writeFileSync(absoluteReportPath, `${input.report_markdown.trimEnd()}\n`, "utf8");
+  return withTrustedWriter(projectRoot, "agent-run.cancel-queued", input, () => {
+    const run = readRun(projectRoot, input.run_id);
+    assertProjectMatches(run.project_id, input.project_id);
+    assertCanCancelQueued(run);
+    assertReportHeadings(input.report_markdown);
+    const reportPath = `.comath/workstreams/${run.workstream_id}/agent_runs/${run.id}/report.md`;
+    const absoluteReportPath = assertAgentRunWriteAllowed(projectRoot, run, reportPath);
 
-  const completedAt = now();
-  const next = writeRun(projectRoot, {
-    ...run,
-    status: "cancelled",
-    report_path: reportPath,
-    exit_reason: input.exit_reason,
-    completed_at: completedAt,
-    updated_at: completedAt
-  });
-  appendAuditEvent(projectRoot, {
-    project_id: input.project_id,
-    event_type: "agent_run.queued_cancelled",
-    actor: input.actor,
-    target_id: run.id,
-    payload: {
-      status: next.status,
-      workstream_id: next.workstream_id,
-      report_path: next.report_path,
-      exit_reason: next.exit_reason
-    }
-  });
-  return next;
+    writeCommittedFile(projectRoot, absoluteReportPath, `${input.report_markdown.trimEnd()}\n`);
+
+    const completedAt = now(projectRoot);
+    const next = writeRun(projectRoot, {
+      ...run,
+      status: "cancelled",
+      report_path: reportPath,
+      exit_reason: input.exit_reason,
+      completed_at: completedAt,
+      updated_at: completedAt
+    });
+    appendAuditEvent(projectRoot, {
+      project_id: input.project_id,
+      event_type: "agent_run.queued_cancelled",
+      actor: input.actor,
+      target_id: run.id,
+      payload: {
+        status: next.status,
+        workstream_id: next.workstream_id,
+        report_path: next.report_path,
+        exit_reason: next.exit_reason
+      }
+    });
+    return next;
+
+  }, readRun(projectRoot, input.run_id).campaign_id);
 }
 
 export function submitAgentRunReport(projectRoot: string, input: SubmitAgentRunReportInput): AgentRun {
-  const run = readRun(projectRoot, input.run_id);
-  assertProjectMatches(run.project_id, input.project_id);
-  assertCanSubmit(run);
-  assertReportHeadings(input.report_markdown);
-  const graphPatchPath = validateAgentRunMetadataPath(projectRoot, run, input.graph_patch_path);
-  const artifactManifestPath = validateAgentRunMetadataPath(projectRoot, run, input.artifact_manifest_path);
-  const reportPath = `.comath/workstreams/${run.workstream_id}/agent_runs/${run.id}/report.md`;
-  const absoluteReportPath = assertAgentRunWriteAllowed(projectRoot, run, reportPath);
-  mkdirSync(dirname(absoluteReportPath), { recursive: true });
-  writeFileSync(absoluteReportPath, `${input.report_markdown.trimEnd()}\n`, "utf8");
+  return withTrustedWriter(projectRoot, "agent-run.report", input, () => {
+    const run = readRun(projectRoot, input.run_id);
+    assertProjectMatches(run.project_id, input.project_id);
+    assertCanSubmit(run);
+    assertReportHeadings(input.report_markdown);
+    const graphPatchPath = validateAgentRunMetadataPath(projectRoot, run, input.graph_patch_path);
+    const artifactManifestPath = validateAgentRunMetadataPath(projectRoot, run, input.artifact_manifest_path);
+    const reportPath = `.comath/workstreams/${run.workstream_id}/agent_runs/${run.id}/report.md`;
+    const absoluteReportPath = assertAgentRunWriteAllowed(projectRoot, run, reportPath);
 
-  const completedAt = now();
-  const next = writeRun(projectRoot, {
-    ...run,
-    status: input.status,
-    report_path: reportPath,
-    graph_patch_path: graphPatchPath,
-    artifact_manifest_path: artifactManifestPath,
-    exit_reason: input.exit_reason,
-    completed_at: completedAt,
-    updated_at: completedAt
-  });
-  appendAuditEvent(projectRoot, {
-    project_id: input.project_id,
-    event_type: "agent_run.report_submitted",
-    actor: input.actor,
-    target_id: run.id,
-    payload: {
-      status: next.status,
-      workstream_id: next.workstream_id,
-      report_path: next.report_path,
-      graph_patch_path: next.graph_patch_path,
-      artifact_manifest_path: next.artifact_manifest_path,
-      exit_reason: next.exit_reason
-    }
-  });
-  return next;
+    writeCommittedFile(projectRoot, absoluteReportPath, `${input.report_markdown.trimEnd()}\n`);
+
+    const completedAt = now(projectRoot);
+    const next = writeRun(projectRoot, {
+      ...run,
+      status: input.status,
+      report_path: reportPath,
+      graph_patch_path: graphPatchPath,
+      artifact_manifest_path: artifactManifestPath,
+      exit_reason: input.exit_reason,
+      completed_at: completedAt,
+      updated_at: completedAt
+    });
+    appendAuditEvent(projectRoot, {
+      project_id: input.project_id,
+      event_type: "agent_run.report_submitted",
+      actor: input.actor,
+      target_id: run.id,
+      payload: {
+        status: next.status,
+        workstream_id: next.workstream_id,
+        report_path: next.report_path,
+        graph_patch_path: next.graph_patch_path,
+        artifact_manifest_path: next.artifact_manifest_path,
+        exit_reason: next.exit_reason
+      }
+    });
+    return next;
+
+  }, readRun(projectRoot, input.run_id).campaign_id);
 }
 
 export function getAgentRun(projectRoot: string, projectId: string, runId: string): AgentRun {
@@ -449,43 +458,44 @@ export async function recordAgentRunFailureToMemory(
       code: "AGENT_RUN_NOT_FAILED"
     });
   }
-  const existingFailureNode = readFailureNodeForRun(projectRoot, run.id);
-  if (existingFailureNode) {
-    await input.db.upsertNode(existingFailureNode);
-    return existingFailureNode;
-  }
-  const createdAt = now();
-  const failureNode = memoryNodeSchema.parse({
-    id: nextSequentialId("FR", existingFailureIds(projectRoot)),
-    project_id: input.project_id,
-    type: "FailureRoute",
-    title: `Failed AgentRun ${run.id}: ${run.exit_reason ?? "unspecified failure"}`,
-    payload: {
-      agent_run_id: run.id,
-      campaign_id: run.campaign_id,
-      workstream_id: run.workstream_id,
-      role: run.role,
-      report_path: run.report_path,
-      exit_reason: run.exit_reason ?? "unspecified failure"
-    },
-    created_at: createdAt,
-    updated_at: createdAt
-  });
+  const failureNode = withTrustedWriter(projectRoot, "agent-run.failure", { project_id: input.project_id, run_id: input.run_id, actor: input.actor }, () => {
+    const existing = readFailureNodeForRun(projectRoot, run.id);
+    if (existing) return existing;
+    const createdAt = now(projectRoot);
+    const failureNode = memoryNodeSchema.parse({
+      id: allocateProjectId(projectRoot, "FR", () => nextSequentialId("FR", existingFailureIds(projectRoot))),
+      project_id: input.project_id,
+      type: "FailureRoute",
+      title: `Failed AgentRun ${run.id}: ${run.exit_reason ?? "unspecified failure"}`,
+      payload: {
+        agent_run_id: run.id,
+        campaign_id: run.campaign_id,
+        workstream_id: run.workstream_id,
+        role: run.role,
+        report_path: run.report_path,
+        exit_reason: run.exit_reason ?? "unspecified failure"
+      },
+      created_at: createdAt,
+      updated_at: createdAt
+    });
+    const registryPath = failureRegistryPath(projectRoot);
+
+    const previous = existsCommittedFile(projectRoot, registryPath) ? readCommittedFile(projectRoot, registryPath) : "";
+    writeCommittedFile(projectRoot, registryPath, previous + `${JSON.stringify(failureNode)}\n`);
+    appendAuditEvent(projectRoot, {
+      project_id: input.project_id,
+      event_type: "agent_run.failure_recorded",
+      actor: input.actor,
+      target_id: failureNode.id,
+      payload: {
+        agent_run_id: run.id,
+        campaign_id: run.campaign_id,
+        workstream_id: run.workstream_id,
+        exit_reason: run.exit_reason
+      }
+    });
+    return failureNode;
+  }, run.campaign_id);
   await input.db.upsertNode(failureNode);
-  const registryPath = failureRegistryPath(projectRoot);
-  mkdirSync(dirname(registryPath), { recursive: true });
-  writeFileSync(registryPath, `${JSON.stringify(failureNode)}\n`, { encoding: "utf8", flag: "a" });
-  appendAuditEvent(projectRoot, {
-    project_id: input.project_id,
-    event_type: "agent_run.failure_recorded",
-    actor: input.actor,
-    target_id: failureNode.id,
-    payload: {
-      agent_run_id: run.id,
-      campaign_id: run.campaign_id,
-      workstream_id: run.workstream_id,
-      exit_reason: run.exit_reason
-    }
-  });
   return failureNode;
 }

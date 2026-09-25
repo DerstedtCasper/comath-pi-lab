@@ -27,7 +27,6 @@ export type CleanReplayResult = {
   third_party_replay_pack_path?: string;
 };
 
-const finalReplayAllowedImportPrefixes = ["Mathlib", "Std", "Init", "Lake", "MathResearch", "Audit"];
 const finalReplayTrustedExternalDependencies = ["mathlib"];
 
 function write(path: string, content: string): void {
@@ -127,6 +126,11 @@ export function runCleanLeanReplay(input: {
     leanRoot: cleanRoot,
     reportPath: staticAuditPathRel
   });
+  const formalSpecLock = JSON.parse(readFileSync(join(cleanRoot, "FormalSpec", "formal_spec_lock.json"), "utf8")) as Record<string, unknown>;
+  if (!Array.isArray(formalSpecLock.imports_allowed) || !formalSpecLock.imports_allowed.every(value => typeof value === "string")) {
+    throw new Error("final_replay_formal_spec_imports_invalid");
+  }
+  const theoremModule = input.leanProject.theoremFileRel.replace(/\\/g, "/").replace(/\.lean$/, "").replace(/\//g, ".");
   const dependency_closure = checkDependencyClosureV2({
     projectRoot: input.projectRoot,
     leanRoot: cleanRoot,
@@ -134,7 +138,7 @@ export function runCleanLeanReplay(input: {
     lakefile: join(cleanRoot, "lakefile.lean"),
     lakeManifestFile: join(cleanRoot, "lake-manifest.json"),
     reportPath: dependencyPathRel,
-    allowedImportPrefixes: finalReplayAllowedImportPrefixes,
+    allowedImportPrefixes: [...new Set([...formalSpecLock.imports_allowed, theoremModule])],
     trustedExternalDependencies: finalReplayTrustedExternalDependencies
   });
 

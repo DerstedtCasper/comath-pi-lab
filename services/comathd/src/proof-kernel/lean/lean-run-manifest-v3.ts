@@ -3,8 +3,14 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { appendAuditEvent } from "../../audit/jsonl-writer.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import { leanRunManifestV3Schema, type LeanRunManifestV3 } from "../../types/schemas.js";
-import { runLeanToolCommand } from "./lean-host-tools.js";
+import { runLeanToolCommand, runLeanToolCommandAsync, parseLeanVersionOutput, parseLakeVersionOutput, serviceToolBinary,
+  type LeanHostAsyncCommandOptions, type LeanHostAsyncCommandResult } from "./lean-host-tools.js";
 import { sha256Buffer, sha256FileSync } from "./lean-project.js";
+import { canonicalJson } from "../../verification/runner-contracts.js";
+import { getAcquiredProjectRuntime, type ProjectRuntime } from "../../research/project-runtime.js";
+import { assertProjectReadable, existsCommittedFile, readCommittedFile, withProjectCommit, writeCommittedFile, type ProjectCommitOperation } from "../../research/project-commit.js";
+import { ComathError } from "../../errors.js";
+import { requireApprovedFormalScope } from "../campaign/formal-spec-store.js";
 
 export type LeanRunPurpose = LeanRunManifestV3["purpose"];
 
@@ -166,11 +172,11 @@ export function hasLeanRunManifestProvenanceIndexV1(input: {
 }
 
 function parseLeanVersion(output: string): string | undefined {
-  return /version\s+([0-9]+\.[0-9]+\.[0-9]+)/i.exec(output)?.[1];
+  return parseLeanVersionOutput(output);
 }
 
 function parseLakeVersion(output: string): string | undefined {
-  return /lake\s+version\s+([^\r\n]+)/i.exec(output)?.[1]?.trim();
+  return parseLakeVersionOutput(output);
 }
 
 function parseToolchainVersion(leanToolchain: string): string | undefined {
@@ -397,6 +403,153 @@ export function runServiceOwnedLeanCommandV3(input: {
   });
 
   return { manifest, stdout: result.stdout, stderr: result.stderr };
+}
+
+export type AsyncLeanCommandInput = {
+  runtime: ProjectRuntime; command_id: string; claim_id: string; campaign_id: string; candidate_id?: string;
+  purpose: LeanRunPurpose; command: ["lean" | "lake", ...string[]]; cwd: string; input_files: string[];
+  leanVersionOutput: string; lakeVersionOutput: string; leanToolchain: string;
+  network_policy: LeanRunManifestV3["network_policy"]; proof_authority: LeanRunManifestV3["proof_authority"];
+  execution: LeanHostAsyncCommandOptions; commitFault?: ProjectCommitOperation["fault"];
+};
+export type AsyncLeanCommandReceipt = { schema_version: "comath.async_lean_command.v1"; operation_id: string; run_id: string;
+  manifest_path: string; manifest: LeanRunManifestV3; execution: LeanHostAsyncCommandResult["completion"];
+  input_changed: boolean; wall_ms: number; commit_state: "pending" | "committed"; proof_authority: "none" };
+
+/**
+ * Returns an LRUN receipt only when its reservation, immutable commit, manifest bytes and
+ * append-only index still agree. Callers must separately bind it to their task/handle before
+ * treating it as a known completed process; pending and reservation-only commands are opaque.
+ */
+export function readCommittedAsyncLeanCommandV3Receipt(runtime: ProjectRuntime, commandId: string): AsyncLeanCommandReceipt | undefined {
+  if (!commandId || commandId.length > 160) return undefined;
+  const store = runtime.store, key = sha256Buffer(canonicalJson(commandId));
+  const reservationId = `lean-command:${key}`, operationId = `lean-command-result:${key}`;
+  try {
+    const reservation = store.get("SELECT principal_id,request_sha256,response_json,status FROM commands WHERE command_id=?", reservationId);
+    if (!reservation || reservation.principal_id !== "service:lean-command-reservation" || reservation.status !== "committed") return undefined;
+    const reserved = JSON.parse(String(reservation.response_json));
+    if (!reserved || typeof reserved !== "object" || typeof reserved.run_id !== "string" || !reserved.request
+      || reserved.request.command_id !== commandId || reservation.request_sha256 !== sha256Buffer(canonicalJson(reserved.request))) return undefined;
+    const committed = store.get("SELECT phase,plan_json FROM trust_commits WHERE operation_id=?", operationId);
+    if (!committed || committed.phase !== "committed") return undefined;
+    const receipt = JSON.parse(String(committed.plan_json)).response as AsyncLeanCommandReceipt;
+    if (!receipt || receipt.schema_version !== "comath.async_lean_command.v1" || receipt.operation_id !== operationId
+      || receipt.run_id !== reserved.run_id || receipt.commit_state !== "committed" || receipt.proof_authority !== "none"
+      || !receipt.manifest || receipt.manifest.run_id !== receipt.run_id || typeof receipt.manifest_path !== "string"
+      || !receipt.execution || receipt.execution.termination_confirmed !== true
+      || !Number.isSafeInteger(receipt.wall_ms) || receipt.wall_ms < 0) return undefined;
+    if (!verifyLeanRunManifestV3Evidence(runtime.root, receipt.manifest).ok
+      || readCommittedFile(runtime.root, receipt.manifest_path) !== canonicalJson(receipt.manifest)
+      || !hasLeanRunManifestProvenanceIndexV1({ projectRoot: runtime.root, manifest: receipt.manifest, manifest_path: receipt.manifest_path })) return undefined;
+    return receipt;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Prepare immutable identity and hashes, execute outside a writer transaction, then commit actual evidence. */
+export async function runServiceOwnedLeanCommandV3Async(input: AsyncLeanCommandInput): Promise<AsyncLeanCommandReceipt> {
+  const runtime = input.runtime, store = runtime.store, root = runtime.root;
+  function fail(code: string): never { throw new ComathError(code, { code, statusCode: 409 }); }
+  if (getAcquiredProjectRuntime(root) !== runtime || runtime.referenceCount < 1) fail("RESEARCH_OWNER_REQUIRED");
+  if (store.inTransaction) fail("LEAN_ASYNC_WRITER_TRANSACTION_FORBIDDEN");
+  if (!input.command_id || input.command_id.length > 160 || !/^[A-Za-z0-9_-]{1,160}$/.test(input.claim_id)
+    || !["lean", "lake"].includes(input.command[0]) || input.execution.runtime !== runtime) fail("LEAN_ASYNC_INPUT_INVALID");
+  const ownership = input.execution.ownership, task = store.getTask(ownership.task_id);
+  if (!task || task.scope.kind !== "formal" || task.scope.claim_id !== input.claim_id || task.campaign_id !== input.campaign_id
+    || ownership.campaign_id !== input.campaign_id || ownership.generation !== task.generation) fail("LEAN_ASYNC_SCOPE_MISMATCH");
+  const scope = task.scope;
+  requireApprovedFormalScope(runtime, input.campaign_id, scope);
+  const metadata = parseLeanToolchainMetadata(input);
+  const cwd = assertPathAllowed(root, input.cwd, { purpose: "read", resolveRealpath: true });
+  const files = [...new Set(input.input_files.map(path => assertPathAllowed(root, path, { purpose: "read", resolveRealpath: true })))];
+  if (!files.length || files.length > 10000) fail("LEAN_ASYNC_INPUT_INVALID");
+  const toolchainFile = files.find(path => path.replace(/\\/g, "/").endsWith("/lean-toolchain"));
+  if (!toolchainFile || readFileSync(toolchainFile, "utf8").trim() !== input.leanToolchain.trim()) fail("LEAN_ASYNC_TOOLCHAIN_MISMATCH");
+  const leanBinary = serviceToolBinary("lean", input.leanToolchain), lakeBinary = serviceToolBinary("lake", input.leanToolchain);
+  if (!leanBinary || !lakeBinary) fail("LEAN_ASYNC_BINARY_UNAVAILABLE");
+  const sourceSnapshot = files.map(path => ({ path: normalizeRel(root, path), ...sha256FileSync(path) }));
+  const beforeDigest = cwdDigest(cwd, files), leanHash = sha256FileSync(leanBinary).sha256, lakeHash = sha256FileSync(lakeBinary).sha256;
+  const request = { command_id: input.command_id, claim_id: input.claim_id, campaign_id: input.campaign_id, candidate_id: input.candidate_id,
+    purpose: input.purpose, command: input.command, cwd: normalizeRel(root, cwd), input_files: sourceSnapshot,
+    scope, metadata, lean_binary_sha256: leanHash, lake_binary_sha256: lakeHash, ownership,
+    network_policy: input.network_policy, proof_authority: input.proof_authority };
+  const key = sha256Buffer(canonicalJson(input.command_id)), reservationId = `lean-command:${key}`, operationId = `lean-command-result:${key}`;
+  const requestHash = sha256Buffer(canonicalJson(request));
+  const existing = store.get("SELECT * FROM commands WHERE command_id=?", reservationId);
+  if (existing) {
+    if (existing.principal_id !== "service:lean-command-reservation" || existing.request_sha256 !== requestHash) fail("LEAN_COMMAND_CONFLICT");
+    const result = store.get("SELECT phase,plan_json FROM trust_commits WHERE operation_id=?", operationId);
+    if (!result) fail("LEAN_COMMAND_EXECUTION_PENDING");
+    const receipt = JSON.parse(String(result.plan_json)).response as AsyncLeanCommandReceipt;
+    if (result.phase === "committed" && (!verifyLeanRunManifestV3Evidence(root, receipt.manifest).ok
+      || readCommittedFile(root, receipt.manifest_path) !== canonicalJson(receipt.manifest)
+      || !hasLeanRunManifestProvenanceIndexV1({ projectRoot: root, manifest: receipt.manifest, manifest_path: receipt.manifest_path }))) fail("LEAN_COMMAND_EVIDENCE_CHANGED");
+    return { ...receipt, commit_state: result.phase === "committed" ? "committed" : "pending" };
+  }
+  assertProjectReadable(root, undefined, input.campaign_id);
+  const reserved = store.transaction(() => {
+    if (store.get("SELECT command_id FROM commands WHERE command_id=?", reservationId)) fail("LEAN_COMMAND_EXECUTION_PENDING");
+    const value = { run_id: store.allocateId("LRUN"), request, started_at: new Date(runtime.clock.now()).toISOString() };
+    store.run("INSERT INTO commands(command_id,principal_id,request_sha256,response_json,status) VALUES (?,'service:lean-command-reservation',?,?,'committed')",
+      reservationId, requestHash, canonicalJson(value));
+    return value;
+  });
+  const wallStarted = performance.now();
+  const result = await runLeanToolCommandAsync(input.command[0], input.command.slice(1), cwd, input.leanToolchain, input.execution,
+    { COMATH_RUNNER_NETWORK: input.network_policy === "disabled" ? "disabled" : "unknown" });
+  const wallMs = Math.ceil(performance.now() - wallStarted);
+  const endedAt = new Date(runtime.clock.now()).toISOString();
+  let changed = false;
+  try { changed = sourceSnapshot.some((snapshot, index) => sha256FileSync(files[index]!).sha256 !== snapshot.sha256)
+    || sha256FileSync(leanBinary).sha256 !== leanHash || sha256FileSync(lakeBinary).sha256 !== lakeHash
+    || result.completion.handle.binary_sha256 !== (input.command[0] === "lean" ? leanHash : lakeHash); } catch { changed = true; }
+  let scopeCurrent = true;
+  try { requireApprovedFormalScope(runtime, input.campaign_id, scope); } catch { scopeCurrent = false; }
+  const attempt = store.get("SELECT * FROM attempts WHERE attempt_key=?", ownership.attempt_key);
+  const currentTask = store.getTask(ownership.task_id);
+  const admittedCurrent = attempt?.task_id === ownership.task_id && Number(attempt.generation) === ownership.generation
+    && !attempt.fenced_at && !attempt.stop_requested_at && !attempt.stop_reason && currentTask?.generation === ownership.generation
+    && canonicalJson(currentTask.scope) === canonicalJson(scope);
+  const authority = result.exit_code === 0 && !changed && scopeCurrent && admittedCurrent ? input.proof_authority : "none";
+  const base = `.comath/evidence/${input.claim_id}/lean/${reserved.run_id}`;
+  const stdoutPath = `${base}.stdout.log`, stderrPath = `${base}.stderr.log`, manifestPath = `${base}.manifest.json`;
+  const manifest = leanRunManifestV3Schema.parse({ schema_version: "comath.lean_run_manifest.v3", run_id: reserved.run_id,
+    claim_id: input.claim_id, campaign_id: input.campaign_id, ...(input.candidate_id ? { candidate_id: input.candidate_id } : {}), purpose: input.purpose,
+    command: [...input.command], cwd: normalizeRel(root, cwd), cwd_sha256_before: beforeDigest, input_files: sourceSnapshot,
+    lean_version: metadata.lean_version, lake_version: metadata.lake_version, elan_toolchain: metadata.elan_toolchain,
+    lean_binary_sha256: leanHash, lake_binary_sha256: lakeHash, lean_toolchain_file_sha256: sourceSnapshot[files.indexOf(toolchainFile)].sha256,
+    ...(sourceSnapshot.find(file => file.path.endsWith("/lake-manifest.json")) ? { lake_manifest_sha256: sourceSnapshot.find(file => file.path.endsWith("/lake-manifest.json"))!.sha256 } : {}),
+    network_policy: input.network_policy, sandbox: "none", exit_code: result.exit_code,
+    stdout_path: stdoutPath, stderr_path: stderrPath, stdout_sha256: sha256Buffer(result.stdout), stderr_sha256: sha256Buffer(result.stderr),
+    started_at: reserved.started_at, ended_at: endedAt, runner: "comathd.LeanRunner", proof_authority: authority });
+  const receipt: AsyncLeanCommandReceipt = { schema_version: "comath.async_lean_command.v1", operation_id: operationId, run_id: reserved.run_id,
+    manifest_path: manifestPath, manifest, execution: result.completion, input_changed: changed, wall_ms: wallMs, commit_state: "committed", proof_authority: "none" };
+  try {
+    return withProjectCommit(root, { operation_id: operationId, campaign_id: input.campaign_id, request: { request_sha256: requestHash }, fault: input.commitFault }, () => {
+      for (const path of [stdoutPath, stderrPath, manifestPath]) if (existsCommittedFile(root, path)) fail("LEAN_EVIDENCE_APPEND_ONLY_VIOLATION");
+      writeCommittedFile(root, stdoutPath, result.stdout); writeCommittedFile(root, stderrPath, result.stderr);
+      const manifestBytes = canonicalJson(manifest); writeCommittedFile(root, manifestPath, manifestBytes);
+      const indexPath = `.comath/evidence/${input.claim_id}/lean/lean_run_manifest_index.jsonl`;
+      const row = { schema_version: "comath.lean_run_manifest_index.v1", claim_id: input.claim_id, campaign_id: input.campaign_id,
+        candidate_id: input.candidate_id, run_id: reserved.run_id, purpose: input.purpose, manifest_path: manifestPath,
+        manifest_sha256: sha256Buffer(manifestBytes), stdout_path: stdoutPath, stdout_sha256: manifest.stdout_sha256,
+        stderr_path: stderrPath, stderr_sha256: manifest.stderr_sha256, exit_code: manifest.exit_code, runner: manifest.runner,
+        append_only: true, proof_authority: manifest.proof_authority, recorded_at: endedAt };
+      writeCommittedFile(root, indexPath, (existsCommittedFile(root, indexPath) ? readCommittedFile(root, indexPath) : "") + canonicalJson(row));
+      appendAuditEvent(root, { project_id: store.getCampaign(input.campaign_id)!.project_id, event_type: "lean_run_manifest.written",
+        actor: "service:async-lean-runner", target_id: input.claim_id, payload: {
+          run_id: reserved.run_id, campaign_id: input.campaign_id, candidate_id: input.candidate_id, purpose: input.purpose,
+          manifest_path: manifestPath, manifest_sha256: row.manifest_sha256, stdout_path: stdoutPath, stdout_sha256: manifest.stdout_sha256,
+          stderr_path: stderrPath, stderr_sha256: manifest.stderr_sha256, exit_code: manifest.exit_code, runner: manifest.runner,
+          append_only: true, proof_authority: manifest.proof_authority } });
+      return receipt;
+    });
+  } catch (error) {
+    if (store.get("SELECT operation_id FROM trust_commits WHERE operation_id=?", operationId)) return { ...receipt, commit_state: "pending" };
+    throw error;
+  }
 }
 
 export function verifyLeanRunManifestV3Evidence(

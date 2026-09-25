@@ -1,12 +1,9 @@
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { appendAuditEvent } from "../audit/jsonl-writer.js";
+import { join } from "node:path";
 import { ComathError } from "../errors.js";
-import { scanForSecrets } from "../security/secret-scan.js";
 import { assertPathAllowed } from "../security/path-policy.js";
 import { artifactRefSchema, type ArtifactRef } from "../types/schemas.js";
-import { nextSequentialId } from "../utils/id.js";
-import { sha256File } from "./hash.js";
+import { existsCommittedFile, readCommittedFile, writeCommittedFile, withTrustedWriter } from "../research/project-commit.js";
+import { prepareArtifact, commitArtifactReference } from "../research/research-artifacts.js";
 
 export type ArtifactPath = {
   relative_path: string;
@@ -27,10 +24,10 @@ function metadataPath(projectRoot: string): string {
 
 function readArtifactRefs(projectRoot: string): ArtifactRef[] {
   const path = metadataPath(projectRoot);
-  if (!existsSync(path)) {
+  if (!existsCommittedFile(projectRoot, path)) {
     return [];
   }
-  return readFileSync(path, "utf8")
+  return readCommittedFile(projectRoot, path)
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => artifactRefSchema.parse(JSON.parse(line)));
@@ -47,80 +44,22 @@ export function artifactPathForHash(projectRoot: string, sha256: string): Artifa
 }
 
 export async function importArtifact(input: ImportArtifactInput): Promise<ArtifactRef> {
-  const source = assertPathAllowed(input.projectRoot, input.source_path, { purpose: "read", resolveRealpath: true });
-  const quarantine = assertPathAllowed(
-    input.projectRoot,
-    join(".comath", "artifacts", "quarantine", `${Date.now()}-${Math.random().toString(16).slice(2)}`),
-    { purpose: "runtime-write" }
-  );
-  mkdirSync(dirname(quarantine), { recursive: true });
-  copyFileSync(source, quarantine);
-
-  const scan = scanForSecrets(quarantine);
-  if (scan.blocks_import) {
-    rmSync(quarantine, { force: true });
-    appendAuditEvent(input.projectRoot, {
-      project_id: input.project_id,
-      event_type: "artifact.import_blocked",
-      actor: input.actor,
-      payload: {
-        reason: "secret_scan",
-        secret_scan: scan.status,
-        findings: scan.findings,
-        warnings: scan.warnings,
-        source_descriptor: "policy-approved-file"
-      }
-    });
-    throw new ComathError("secret scan blocked artifact import", {
-      statusCode: 400,
-      code: "ARTIFACT_SECRET_SCAN_BLOCKED"
-    });
-  }
-
-  const hash = await sha256File(quarantine);
-  const target = artifactPathForHash(input.projectRoot, hash.sha256);
-  mkdirSync(dirname(target.absolute_path), { recursive: true });
-  if (!existsSync(target.absolute_path)) {
-    copyFileSync(quarantine, target.absolute_path);
-  }
-  rmSync(quarantine, { force: true });
-
-  const existingRefs = readArtifactRefs(input.projectRoot);
-  const artifact = artifactRefSchema.parse({
-    id: nextSequentialId("AR", existingRefs.map((item) => item.id)),
-    project_id: input.project_id,
-    path: target.relative_path,
-    kind: input.kind,
-    sha256: hash.sha256,
-    size_bytes: hash.size_bytes,
-    created_at: new Date().toISOString()
-  });
-
-  registerArtifact(input.projectRoot, artifact);
-  appendAuditEvent(input.projectRoot, {
-    project_id: input.project_id,
-    event_type: "artifact.imported",
-    actor: input.actor,
-    target_id: artifact.id,
-    payload: {
-      kind: artifact.kind,
-      sha256: artifact.sha256,
-      size_bytes: artifact.size_bytes,
-      artifact_path: artifact.path,
-      secret_scan: scan.status,
-      source_descriptor: "policy-approved-file"
-    }
-  });
-
-  return artifact;
+  return commitArtifactReference(input.projectRoot, await prepareArtifact(input));
 }
 
 export function registerArtifact(projectRoot: string, artifact: ArtifactRef): ArtifactRef {
+  return withTrustedWriter(projectRoot, "artifact.register", artifact, () => {
   const parsed = artifactRefSchema.parse(artifact);
+  const previous = readArtifactRefs(projectRoot).find(ref => ref.id === parsed.id);
+  if (previous) {
+    if (JSON.stringify(previous) !== JSON.stringify(parsed)) throw new ComathError("Artifact ID already refers to different metadata", { code: "ARTIFACT_ID_CONFLICT", statusCode: 409 });
+    return previous;
+  }
   const path = metadataPath(projectRoot);
-  mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, `${JSON.stringify(parsed)}\n`, "utf8");
+  const before = existsCommittedFile(projectRoot, path) ? readCommittedFile(projectRoot, path) : "";
+  writeCommittedFile(projectRoot, path, `${before}${JSON.stringify(parsed)}\n`);
   return parsed;
+  });
 }
 
 export function listArtifactRefs(projectRoot: string): ArtifactRef[] {

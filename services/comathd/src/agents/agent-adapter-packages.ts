@@ -1,3 +1,9 @@
+import { defaultCodexApiBackendClient as runtimeCodexApiClient, invokeCodexApiWithRetry as runtimeCodexApiRetry } from "./runtime/codex-api-adapter.js";
+import { withLegacyRuntime, runLegacyExecution } from "./runtime/legacy-runtime-facade.js";
+import { cancelQueuedAgentRun } from "./agent-run-store.js";
+import type { Usage } from "../research/research-schemas.js";
+import { scanForSecrets } from "../security/secret-scan.js";
+import { importArtifact } from "../artifacts/store.js";
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -112,6 +118,7 @@ const moduleDir = dirname(fileURLToPath(import.meta.url));
 const installedCliProbeOutputLimit = 16 * 1024;
 
 export type CodexApiBackendRequest = {
+  signal?: AbortSignal;
   url: string;
   headers: {
     authorization: string;
@@ -508,20 +515,7 @@ function extractCodexApiOutputText(json: unknown): { responseId: string; text: s
   return { responseId, text: "" };
 }
 
-async function defaultCodexApiBackendClient(request: CodexApiBackendRequest): Promise<CodexApiBackendResponse> {
-  const response = await fetch(request.url, {
-    method: "POST",
-    headers: request.headers,
-    body: JSON.stringify(request.body)
-  });
-  let json: unknown;
-  try {
-    json = await response.json();
-  } catch {
-    json = { error: { message: "Codex API returned non-JSON response" } };
-  }
-  return { status: response.status, headers: Object.fromEntries(response.headers.entries()), json };
-}
+async function defaultCodexApiBackendClient(request: CodexApiBackendRequest): Promise<CodexApiBackendResponse> { return runtimeCodexApiClient(request); }
 
 function codexApiMaxAttempts(): number {
   const rawValue = process.env.COMATH_CODEX_API_MAX_ATTEMPTS;
@@ -575,33 +569,7 @@ type CodexApiAttemptResult = {
   rateLimited: boolean;
 };
 
-async function invokeCodexApiWithRetry(client: CodexApiBackendClient, request: CodexApiBackendRequest): Promise<CodexApiAttemptResult> {
-  const maxAttempts = codexApiMaxAttempts();
-  const statuses: number[] = [];
-  let rateLimited = false;
-  let response: CodexApiBackendResponse | undefined;
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    response = await client(request);
-    statuses.push(response.status);
-    if (response.status === 429) {
-      rateLimited = true;
-    }
-    if (response.status >= 200 && response.status < 300) {
-      return { response, attempts: attempt, statuses, rateLimited };
-    }
-    if (attempt >= maxAttempts || !isCodexApiRetryableStatus(response.status)) {
-      return { response, attempts: attempt, statuses, rateLimited };
-    }
-    await sleep(parseRetryAfterMs(response.headers));
-  }
-  if (!response) {
-    throw new ComathError("Codex API backend produced no response", {
-      statusCode: 500,
-      code: "AGENT_ADAPTER_PACKAGE_CODEX_API_EMPTY_RESPONSE"
-    });
-  }
-  return { response, attempts: maxAttempts, statuses, rateLimited };
-}
+async function invokeCodexApiWithRetry(client: CodexApiBackendClient, request: CodexApiBackendRequest, signal?: AbortSignal, timeoutMs = 600000): Promise<CodexApiAttemptResult> { return runtimeCodexApiRetry(client, request, { signal, timeout_ms: timeoutMs, max_attempts: codexApiMaxAttempts() }); }
 
 export async function validateCodexApiAccountNetworkConnectivity(
   input: ValidateCodexApiAccountNetworkInput
@@ -769,7 +737,7 @@ function processResultForApiRun(
     exit_code: status === "succeeded" ? 0 : 1,
     signal: null,
     timed_out: false,
-    cancelled: false,
+    cancelled: status === "cancelled",
     started_at_ms: startedAtMs,
     completed_at_ms: Date.now(),
     stdout_path: stdoutPath,
@@ -783,7 +751,9 @@ async function executeCodexApiAdapterPackage(
   input: ExecuteAgentAdapterPackageInput,
   pkg: AgentAdapterPackage,
   profile: AgentProfile,
-  run: AgentRun
+  run: AgentRun,
+  signal?: AbortSignal,
+  observeUsage?: (usage: Usage) => void
 ): Promise<ExecuteAgentAdapterPackageResult> {
   const startedAtMs = Date.now();
   const running = startAgentRun(projectRoot, { project_id: input.project_id, run_id: run.id, actor: input.actor });
@@ -814,8 +784,13 @@ async function executeCodexApiAdapterPackage(
       }
     };
     const client = codexApiBackendClientForTests ?? defaultCodexApiBackendClient;
-    const attemptResult = await invokeCodexApiWithRetry(client, request);
+    const attemptResult = await invokeCodexApiWithRetry(client, request, signal, profile.scheduler.timeout_ms);
     const response = attemptResult.response;
+    const payload = response.json as { usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number }; output_tokens_details?: { reasoning_tokens?: number } } } | null;
+    const count = (value: unknown): number | null => Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
+    observeUsage?.({ input_tokens: count(payload?.usage?.input_tokens), cached_input_tokens: count(payload?.usage?.input_tokens_details?.cached_tokens),
+      output_tokens: count(payload?.usage?.output_tokens), reasoning_output_tokens: count(payload?.usage?.output_tokens_details?.reasoning_tokens),
+      tool_calls: null, wall_ms: Date.now() - startedAtMs, cost_microusd: null });
     if (response.status < 200 || response.status >= 300) {
       writeFileSync(absoluteStdoutPath, "", "utf8");
       writeFileSync(
@@ -876,6 +851,12 @@ async function executeCodexApiAdapterPackage(
     });
     writeFileSync(absoluteStdoutPath, `${report.trimEnd()}\n`, "utf8");
     writeFileSync(absoluteStderrPath, "", "utf8");
+    if (scanForSecrets(absoluteStdoutPath).blocks_import) {
+      writeFileSync(absoluteStdoutPath, "", "utf8");
+      throw new ComathError("API output failed the secret scan", { code: "AGENT_API_OUTPUT_BLOCKED" });
+    }
+    const logArtifact = await importArtifact({ projectRoot, project_id: input.project_id, source_path: stdoutPath, kind: "other", actor: "service:api-log" });
+    signal?.throwIfAborted();
     const submitted = submitAgentRunReport(projectRoot, {
       project_id: input.project_id,
       run_id: run.id,
@@ -894,6 +875,7 @@ async function executeCodexApiAdapterPackage(
         model: config.model,
         base_url_configured: true,
         response_id: extracted.responseId,
+        log_artifact_id: logArtifact.id,
         attempts: attemptResult.attempts,
         statuses: attemptResult.statuses,
         status: response.status,
@@ -918,15 +900,17 @@ async function executeCodexApiAdapterPackage(
       result: processResultForApiRun(submitted, "succeeded", startedAtMs, stdoutPath, stderrPath, submitted.report_path)
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const wasCancelled = signal?.aborted === true || error instanceof ComathError && error.code === "AGENT_API_CANCELLED";
+    const wasTimedOut = error instanceof ComathError && error.code === "AGENT_API_TIMEOUT";
+    const message = error instanceof ComathError && error.code === "AGENT_ADAPTER_PACKAGE_CODEX_API_KEY_MISSING" ? "Codex API key is not configured" : error instanceof ComathError ? error.code : "AGENT_API_EXECUTION_FAILED";
     writeFileSync(absoluteStdoutPath, "", "utf8");
     writeFileSync(absoluteStderrPath, `${message}\n`, "utf8");
     const failed = submitAgentRunReport(projectRoot, {
       project_id: input.project_id,
       run_id: run.id,
-      status: "failed",
+      status: wasCancelled ? "cancelled" : "failed",
       report_markdown: renderCodexApiReport(input, running, profile, "<failed>", ""),
-      exit_reason: "codex_api_backend_failed",
+      exit_reason: wasCancelled ? "cancelled" : wasTimedOut ? "timeout" : "codex_api_backend_failed",
       actor: input.actor
     });
     return {
@@ -943,7 +927,7 @@ async function executeCodexApiAdapterPackage(
         context_path: input.context_path,
         actor: input.actor
       }).launch,
-      result: processResultForApiRun(failed, "failed", startedAtMs, stdoutPath, stderrPath, failed.report_path)
+      result: { ...processResultForApiRun(failed, wasCancelled ? "cancelled" : "failed", startedAtMs, stdoutPath, stderrPath, failed.report_path), cancelled: wasCancelled, timed_out: wasTimedOut }
     };
   }
 }
@@ -1027,6 +1011,7 @@ export async function executeAgentAdapterPackage(
   projectRoot: string,
   input: ExecuteAgentAdapterPackageInput
 ): Promise<ExecuteAgentAdapterPackageResult> {
+  return withLegacyRuntime(projectRoot, async () => {
   const run = createAgentRunForProfile(projectRoot, {
     project_id: input.project_id,
     campaign_id: input.campaign_id,
@@ -1038,7 +1023,16 @@ export async function executeAgentAdapterPackage(
     const pkg = getAgentAdapterPackage(input.adapter_id);
     const profile = getAgentProfile(input.profile_id);
     assertProfileSupported(pkg, profile.id);
-    return executeCodexApiAdapterPackage(projectRoot, input, pkg, profile, run);
+    return runLegacyExecution(projectRoot, { project_id: input.project_id, run_id: run.id, backend: "codex-api", timeout_ms: profile.scheduler.timeout_ms, actor: input.actor }, async (_grant, signal) => {
+      let usage: Usage | undefined;
+      const value = await executeCodexApiAdapterPackage(projectRoot, input, pkg, profile, run, signal, observed => { usage = observed; });
+      return { value, status: value.result.status, termination_confirmed: true, usage };
+    }, () => {
+      const cancelled = cancelQueuedAgentRun(projectRoot, { project_id: input.project_id, run_id: run.id, actor: input.actor,
+        report_markdown: renderCodexApiReport(input, run, profile, "<cancelled>", ""), exit_reason: "queued_cancelled" });
+      return { package: clonePackage(pkg), profile, run: cancelled, launch: buildAgentAdapterPackageLaunch(projectRoot, { ...input, run_id: run.id }).launch,
+        result: processResultForApiRun(cancelled, "cancelled", Date.now(), `.tmp/comath/${run.id}/logs/stdout.log`, `.tmp/comath/${run.id}/logs/stderr.log`, cancelled.report_path) };
+    });
   }
   const prepared = buildAgentAdapterPackageLaunch(projectRoot, {
     project_id: input.project_id,
@@ -1077,4 +1071,5 @@ export async function executeAgentAdapterPackage(
     launch: prepared.launch,
     result
   };
+  });
 }

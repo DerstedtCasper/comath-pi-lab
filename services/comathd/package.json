@@ -6,6 +6,7 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": { "comathd": "dist/cli.js" },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-agent-adapters.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -14,6 +15,7 @@
     "eval:trivium": "node -e \"console.log('Internal Trivium evaluation suites are not shipped in the public product snapshot.')\""
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "zod": "4.1.12"
   }
 }

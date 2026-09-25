@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { ComathError } from "../../errors.js";
+import { createLiveWheelExecutors, mapWheelExecutionToRepairEnvelope,
+  type WheelSearchExecution, type WheelTheoremExecution } from "../../adapters/live-wheel-executors.js";
 import {
   createDefaultExternalWheelRegistry,
   getExternalWheelAdapter,
@@ -9,8 +12,7 @@ import {
   type ExternalWheelKind,
   type ComputationAdapterReport,
   type PromptInjectionScan,
-  type RetrievalResult,
-  type TheoremSearchResult
+  type RetrievalResult
 } from "../../adapters/external-wheel-registry.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
 import type { LeanRunManifestV3, ProofObligation, ResearchCampaign } from "../../types/schemas.js";
@@ -629,8 +631,7 @@ function shouldExecuteLiveJinaSearch(hint: LeanCandidateAttemptRepairHintBundle[
     hint.kind === "retrieval" &&
     hint.provider === "jina_search" &&
     liveRepairHintExecutionEnabled() &&
-    liveRepairHintProviderEnabled(hint.kind, hint.provider) &&
-    Boolean(jinaSearchBaseUrl())
+    liveRepairHintProviderEnabled(hint.kind, hint.provider)
   );
 }
 
@@ -639,8 +640,7 @@ function shouldExecuteLiveLoogleSearch(hint: LeanCandidateAttemptRepairHintBundl
     hint.kind === "theorem_search" &&
     hint.provider === "loogle" &&
     liveRepairHintExecutionEnabled() &&
-    liveRepairHintProviderEnabled(hint.kind, hint.provider) &&
-    Boolean(loogleSearchBaseUrl())
+    liveRepairHintProviderEnabled(hint.kind, hint.provider)
   );
 }
 
@@ -654,128 +654,53 @@ function shouldExecuteLiveSympyCompute(hint: LeanCandidateAttemptRepairHintBundl
   );
 }
 
+type RepairExecutionControl = { signal?: AbortSignal; deadline?: number };
+
+function assertRepairExecutionActive(input: RepairExecutionControl): void {
+  if (input.signal?.aborted) throw new ComathError("WHEEL_CANCELLED", { code: "WHEEL_CANCELLED", statusCode: 409 });
+  if (input.deadline !== undefined && (!Number.isFinite(input.deadline) || Date.now() >= input.deadline)) {
+    throw new ComathError("WHEEL_TIMEOUT", { code: "WHEEL_TIMEOUT", statusCode: 409 });
+  }
+}
+
+function legacyWheelEnvelope(execution: WheelSearchExecution | WheelTheoremExecution, input: {
+  adapter: ExternalWheelAdapterDescriptor;
+  hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number];
+  credentialPresent: boolean;
+}): RepairHintAdapterExecution {
+  const mapped = mapWheelExecutionToRepairEnvelope(execution);
+  const requestForHash = { ...mapped.requestForHash, adapter_id: input.adapter.id, kind: input.adapter.kind,
+    query_hash: input.hint.query_hash, request_url: null, auth_header_present: input.credentialPresent };
+  return { ...mapped, requestForHash, resultPayloadSummary: { ...mapped.resultPayloadSummary,
+    live_provider: { ...mapped.resultPayloadSummary.live_provider,
+      // Host URLs can contain credentials. Keep the old field with explicit redaction;
+      // the actual URL is still bound by the shared executor's request digest.
+      request_url: null, request_url_policy: "host_endpoint_not_persisted",
+      transport_request_sha256: execution.metadata.request_sha256, request_sha256: canonicalHash(requestForHash) } } };
+}
+
 async function liveJinaSearchResultPayloadSummary(input: {
   adapter: ExternalWheelAdapterDescriptor;
   hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number];
   createdAt: string;
-}): Promise<RepairHintAdapterExecution> {
-  const baseUrl = jinaSearchBaseUrl();
-  if (!baseUrl) {
-    throw new Error("comath_live_jina_search_base_url_missing");
-  }
-  const requestUrl = new URL(baseUrl);
-  requestUrl.searchParams.set("q", input.hint.query_text);
-  requestUrl.searchParams.set("limit", "3");
-  const apiKey = process.env.COMATH_JINA_API_KEY;
-  const headers: Record<string, string> = {
-    accept: "text/plain, text/markdown, application/json"
-  };
-  if (apiKey) {
-    headers.authorization = `Bearer ${apiKey}`;
-  }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-  let response: Response;
-  let bodyText: string;
-  try {
-    response = await fetch(requestUrl, {
-      method: "GET",
-      headers,
-      signal: controller.signal
-    });
-    bodyText = await response.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-  const responseBodySha256 = sha256Text(bodyText);
-  const promptInjectionScan = goalModeTextPromptInjectionScan(bodyText);
-  const extractedLeanSuggestions = extractLiveLeanRepairSuggestions(bodyText, promptInjectionScan);
-  const queryHash = canonicalHash({
-    provider: input.adapter.provider,
-    kind: input.adapter.kind,
-    input: {
-      query: input.hint.query_text,
-      limit: 3,
-      request_url: requestUrl.toString()
-    }
-  });
-  const result: RetrievalResult = {
-    evidence_id: `LITLIVE-${queryHash.slice(0, 12)}`,
-    adapter_id: input.adapter.id,
-    provider: input.adapter.provider,
-    source_kind: "html",
-    query_hash: queryHash,
-    title: `${input.adapter.provider} live repair hint response`,
-    source_ref: requestUrl.toString(),
-    source_url: requestUrl.toString(),
-    retrieved_at: input.createdAt,
-    content_sha256: responseBodySha256,
-    anchors: [
-      {
-        kind: "live_response_body",
-        line_range: `1-${Math.max(1, bodyText.split(/\r?\n/u).length)}`,
-        content_sha256: responseBodySha256
-      }
-    ],
-    prompt_injection_scan: promptInjectionScan,
-    capability_metadata: adapterCapabilityMetadata(input.adapter),
-    terms: { ...input.adapter.terms },
-    proof_authority: "none",
-    can_promote_claim: false,
-    promotion_vetoes: ["external_adapter_result_has_no_proof_authority"]
-  };
-  const requestForHash = {
-    adapter_id: input.adapter.id,
-    kind: input.adapter.kind,
-    provider: input.adapter.provider,
-    query_hash: input.hint.query_hash,
-    request_url: requestUrl.toString(),
-    auth_header_present: Boolean(apiKey)
-  };
-  return {
-    requestForHash,
-    resultPayloadSummary: {
-      result_kind: "retrieval_results",
-      result_count: 1,
-      extracted_lean_suggestions: extractedLeanSuggestions,
-      live_provider: {
-        provider: input.adapter.provider,
-        request_url: requestUrl.toString(),
-        request_sha256: canonicalHash(requestForHash),
-        response_status: response.status,
-        response_content_type: response.headers.get("content-type") ?? null,
-        response_body_sha256: responseBodySha256,
-        network_execution_performed: true,
-        live_provider_execution_performed: true,
-        prompt_injection_scan: promptInjectionScan
-      },
-      results: [result]
-    },
-    adapterExecutionState: "live_provider_result_recorded",
-    networkExecutionPerformed: true,
-    liveProviderExecutionPerformed: true
-  };
-}
-
-function liveTheoremSearchResponseItems(bodyText: string): Record<string, unknown>[] {
-  try {
-    const parsed = JSON.parse(bodyText) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item));
-    }
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const record = parsed as Record<string, unknown>;
-      for (const key of ["results", "items", "hits", "data"]) {
-        const value = record[key];
-        if (Array.isArray(value)) {
-          return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item));
-        }
-      }
-    }
-  } catch {
-    return [];
-  }
-  return [];
+} & RepairExecutionControl): Promise<RepairHintAdapterExecution> {
+  assertRepairExecutionActive(input);
+  const endpoint = jinaSearchBaseUrl();
+  if (!endpoint) throw new ComathError("WHEEL_UNAVAILABLE", { code: "WHEEL_UNAVAILABLE", statusCode: 503 });
+  const credentialPresent = Boolean(process.env.COMATH_JINA_API_KEY);
+  // This legacy host env explicitly declares the existing q/limit raw-response
+  // protocol. It does not assert compatibility with any unconfigured official URL.
+  const executors = createLiveWheelExecutors({ retrieval_search: {
+    endpoint, wire_format: "query_text", terms: input.adapter.terms,
+    ...(credentialPresent ? { credential_env: "COMATH_JINA_API_KEY" } : {})
+  } });
+  const execution = await executors.search({ query: input.hint.query_text, limit: 3 },
+    { signal: input.signal ?? new AbortController().signal, deadline: input.deadline });
+  assertRepairExecutionActive(input);
+  const envelope = legacyWheelEnvelope(execution, { ...input, credentialPresent });
+  envelope.resultPayloadSummary.extracted_lean_suggestions = extractLiveLeanRepairSuggestions(
+    execution.results.map(result => result.snippet).join("\n"), execution.metadata.prompt_injection_scan);
+  return envelope;
 }
 
 function stringField(record: Record<string, unknown>, keys: string[]): string | undefined {
@@ -858,7 +783,8 @@ async function liveSympyComputeResultPayloadSummary(input: {
   hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number];
   obligation: ProofObligation;
   createdAt: string;
-}): Promise<RepairHintAdapterExecution> {
+} & RepairExecutionControl): Promise<RepairHintAdapterExecution> {
+  assertRepairExecutionActive(input);
   const baseUrl = sympyComputeBaseUrl();
   if (!baseUrl) {
     throw new Error("comath_live_sympy_compute_base_url_missing");
@@ -885,7 +811,10 @@ async function liveSympyComputeResultPayloadSummary(input: {
     headers.authorization = `Bearer ${apiKey}`;
   }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const abort = () => controller.abort(input.signal?.reason);
+  input.signal?.addEventListener("abort", abort, { once: true });
+  if (input.signal?.aborted) abort();
+  const timeout = setTimeout(() => controller.abort(), Math.max(1, Math.min(10_000, (input.deadline ?? Infinity) - Date.now())));
   let response: Response;
   let bodyText: string;
   try {
@@ -893,11 +822,35 @@ async function liveSympyComputeResultPayloadSummary(input: {
       method: "POST",
       headers,
       body: JSON.stringify(requestBody),
+      redirect: "error",
       signal: controller.signal
     });
-    bodyText = await response.text();
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new ComathError("WHEEL_HTTP_ERROR", { code: "WHEEL_HTTP_ERROR", statusCode: 502 });
+    }
+    const reader = response.body?.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    if (reader) {
+      try {
+        for (;;) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          bytes += chunk.value.byteLength;
+          if (bytes > 512 * 1024) {
+            await reader.cancel();
+            throw new ComathError("WHEEL_RESPONSE_TOO_LARGE", { code: "WHEEL_RESPONSE_TOO_LARGE", statusCode: 502 });
+          }
+          chunks.push(chunk.value);
+        }
+      } finally { reader.releaseLock(); }
+    }
+    bodyText = Buffer.concat(chunks).toString("utf8");
+    assertRepairExecutionActive(input);
   } finally {
     clearTimeout(timeout);
+    input.signal?.removeEventListener("abort", abort);
   }
   const responseBodySha256 = sha256Text(bodyText);
   const promptInjectionScan = goalModeTextPromptInjectionScan(bodyText);
@@ -907,7 +860,7 @@ async function liveSympyComputeResultPayloadSummary(input: {
     kind: input.adapter.kind,
     provider: input.adapter.provider,
     query_hash: input.hint.query_hash,
-    request_url: requestUrl.toString(),
+    request_url_sha256: sha256Text(requestUrl.toString()),
     request_body_sha256: canonicalHash(requestBody),
     auth_header_present: Boolean(apiKey)
   };
@@ -941,7 +894,8 @@ async function liveSympyComputeResultPayloadSummary(input: {
       result_kind: "computation_report",
       live_provider: {
         provider: input.adapter.provider,
-        request_url: requestUrl.toString(),
+        request_url: null,
+        request_url_policy: "host_endpoint_not_persisted",
         request_sha256: canonicalHash(requestForHash),
         response_status: response.status,
         response_content_type: response.headers.get("content-type") ?? null,
@@ -958,126 +912,23 @@ async function liveSympyComputeResultPayloadSummary(input: {
   };
 }
 
-function liveTheoremSearchResults(input: {
-  adapter: ExternalWheelAdapterDescriptor;
-  bodyText: string;
-  queryHash: string;
-  createdAt: string;
-}): TheoremSearchResult[] {
-  const items = liveTheoremSearchResponseItems(input.bodyText).slice(0, 3);
-  const sourceItems = items.length > 0 ? items : [{ declaration_name: `${input.adapter.provider}_live_response` }];
-  return sourceItems.map((item, index) => {
-    const declarationName =
-      stringField(item, ["declaration_name", "name", "declaration", "constant", "full_name"]) ?? `${input.adapter.provider}_result_${index + 1}`;
-    const resultHash = canonicalHash({
-      provider: input.adapter.provider,
-      query_hash: input.queryHash,
-      index,
-      declaration_name: declarationName,
-      item
-    });
-    return {
-      result_id: `TSLIVE-${resultHash.slice(0, 12)}`,
-      adapter_id: input.adapter.id,
-      provider: input.adapter.provider,
-      query_hash: input.queryHash,
-      declaration_name: declarationName,
-      declaration_type: stringField(item, ["declaration_type", "type", "signature"]),
-      module: stringField(item, ["module", "import", "namespace"]),
-      import_hint: stringField(item, ["import_hint", "import", "module"]),
-      source_url: stringField(item, ["source_url", "url"]),
-      mathlib_revision: stringField(item, ["mathlib_revision", "revision", "commit"]),
-      score: typeof item.score === "number" ? item.score : undefined,
-      retrieved_at: input.createdAt,
-      capability_metadata: adapterCapabilityMetadata(input.adapter),
-      terms: { ...input.adapter.terms },
-      proof_authority: "none",
-      can_promote_claim: false,
-      promotion_vetoes: ["external_adapter_result_has_no_proof_authority"]
-    };
-  });
-}
-
 async function liveLoogleSearchResultPayloadSummary(input: {
   adapter: ExternalWheelAdapterDescriptor;
   hint: LeanCandidateAttemptRepairHintBundle["adapter_repair_hints"][number];
   createdAt: string;
-}): Promise<RepairHintAdapterExecution> {
-  const baseUrl = loogleSearchBaseUrl();
-  if (!baseUrl) {
-    throw new Error("comath_live_loogle_search_base_url_missing");
-  }
-  const requestUrl = new URL(baseUrl);
-  requestUrl.searchParams.set("q", input.hint.query_text);
-  requestUrl.searchParams.set("limit", "3");
-  const apiKey = process.env.COMATH_LOOGLE_API_KEY;
-  const headers: Record<string, string> = {
-    accept: "application/json, text/plain, text/markdown"
-  };
-  if (apiKey) {
-    headers.authorization = `Bearer ${apiKey}`;
-  }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-  let response: Response;
-  let bodyText: string;
-  try {
-    response = await fetch(requestUrl, {
-      method: "GET",
-      headers,
-      signal: controller.signal
-    });
-    bodyText = await response.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-  const responseBodySha256 = sha256Text(bodyText);
-  const promptInjectionScan = goalModeTextPromptInjectionScan(bodyText);
-  const queryHash = canonicalHash({
-    provider: input.adapter.provider,
-    kind: input.adapter.kind,
-    input: {
-      query: input.hint.query_text,
-      limit: 3,
-      request_url: requestUrl.toString()
-    }
-  });
-  const results = liveTheoremSearchResults({
-    adapter: input.adapter,
-    bodyText,
-    queryHash,
-    createdAt: input.createdAt
-  });
-  const requestForHash = {
-    adapter_id: input.adapter.id,
-    kind: input.adapter.kind,
-    provider: input.adapter.provider,
-    query_hash: input.hint.query_hash,
-    request_url: requestUrl.toString(),
-    auth_header_present: Boolean(apiKey)
-  };
-  return {
-    requestForHash,
-    resultPayloadSummary: {
-      result_kind: "theorem_search_results",
-      result_count: results.length,
-      live_provider: {
-        provider: input.adapter.provider,
-        request_url: requestUrl.toString(),
-        request_sha256: canonicalHash(requestForHash),
-        response_status: response.status,
-        response_content_type: response.headers.get("content-type") ?? null,
-        response_body_sha256: responseBodySha256,
-        network_execution_performed: true,
-        live_provider_execution_performed: true,
-        prompt_injection_scan: promptInjectionScan
-      },
-      results
-    },
-    adapterExecutionState: "live_provider_result_recorded",
-    networkExecutionPerformed: true,
-    liveProviderExecutionPerformed: true
-  };
+} & RepairExecutionControl): Promise<RepairHintAdapterExecution> {
+  assertRepairExecutionActive(input);
+  const endpoint = loogleSearchBaseUrl();
+  if (!endpoint) throw new ComathError("WHEEL_UNAVAILABLE", { code: "WHEEL_UNAVAILABLE", statusCode: 503 });
+  const credentialPresent = Boolean(process.env.COMATH_LOOGLE_API_KEY);
+  const executors = createLiveWheelExecutors({ theorem_search: {
+    endpoint, wire_format: "query_json", terms: input.adapter.terms,
+    ...(credentialPresent ? { credential_env: "COMATH_LOOGLE_API_KEY" } : {})
+  } });
+  const execution = await executors.query({ query: input.hint.query_text, limit: 3 },
+    { signal: input.signal ?? new AbortController().signal, deadline: input.deadline });
+  assertRepairExecutionActive(input);
+  return legacyWheelEnvelope(execution, { ...input, credentialPresent });
 }
 
 async function repairHintAdapterExecution(input: {
@@ -1087,19 +938,24 @@ async function repairHintAdapterExecution(input: {
   obligation: ProofObligation;
   createdAt: string;
   defaultRequestForHash: Record<string, unknown>;
-}): Promise<RepairHintAdapterExecution> {
+} & RepairExecutionControl): Promise<RepairHintAdapterExecution> {
+  assertRepairExecutionActive(input);
   if (shouldExecuteLiveJinaSearch(input.hint)) {
     return liveJinaSearchResultPayloadSummary({
       adapter: input.adapter,
       hint: input.hint,
-      createdAt: input.createdAt
+      createdAt: input.createdAt,
+      signal: input.signal,
+      deadline: input.deadline
     });
   }
   if (shouldExecuteLiveLoogleSearch(input.hint)) {
     return liveLoogleSearchResultPayloadSummary({
       adapter: input.adapter,
       hint: input.hint,
-      createdAt: input.createdAt
+      createdAt: input.createdAt,
+      signal: input.signal,
+      deadline: input.deadline
     });
   }
   if (shouldExecuteLiveSympyCompute(input.hint)) {
@@ -1107,7 +963,9 @@ async function repairHintAdapterExecution(input: {
       adapter: input.adapter,
       hint: input.hint,
       obligation: input.obligation,
-      createdAt: input.createdAt
+      createdAt: input.createdAt,
+      signal: input.signal,
+      deadline: input.deadline
     });
   }
   return {
@@ -1136,7 +994,7 @@ async function writeRepairHintExecution(input: {
   hintBundleSha256: string;
   feedbackRows: LeanCandidateAttemptRepairFeedbackBatch["per_candidate_feedback"];
   createdAt: string;
-}): Promise<{
+} & RepairExecutionControl): Promise<{
   execution: LeanCandidateAttemptRepairHintExecution;
   execution_path: string;
   execution_sha256: string;
@@ -1165,7 +1023,9 @@ async function writeRepairHintExecution(input: {
         hint,
         obligation: input.obligation,
         createdAt: input.createdAt,
-        defaultRequestForHash: request
+        defaultRequestForHash: request,
+        signal: input.signal,
+        deadline: input.deadline
       });
       return {
         adapter_result_id: `RHINTEXEC-${String(index + 1).padStart(4, "0")}`,
@@ -1197,6 +1057,7 @@ async function writeRepairHintExecution(input: {
       };
     })
   );
+  assertRepairExecutionActive(input);
   const adapterResultIds = adapterResults.map((result) => result.adapter_result_id);
   const liveProviderExecutionPerformed = adapterResults.some((result) => result.live_provider_execution_performed);
   const networkExecutionPerformed = adapterResults.some((result) => result.network_execution_performed);
@@ -1360,7 +1221,8 @@ export async function writeLeanCandidateAttemptRepairFeedbackBatch(input: {
   obligation: ProofObligation;
   executionPath: string;
   execution: LeanCandidateAttemptLeanRunnerExecution;
-}): Promise<WriteLeanCandidateAttemptRepairFeedbackResult> {
+} & RepairExecutionControl): Promise<WriteLeanCandidateAttemptRepairFeedbackResult> {
+  assertRepairExecutionActive(input);
   if (input.execution.execution_result !== "all_attempts_rejected") {
     throw new Error("lean_candidate_repair_feedback_requires_all_rejected_execution");
   }
@@ -1440,7 +1302,9 @@ export async function writeLeanCandidateAttemptRepairFeedbackBatch(input: {
     hintBundlePath: hintBundle.bundle_path,
     hintBundleSha256: hintBundle.bundle_sha256,
     feedbackRows,
-    createdAt
+    createdAt,
+    signal: input.signal,
+    deadline: input.deadline
   });
 
   const taskPaths: string[] = [];

@@ -1,6 +1,26 @@
 {
   "version": 1,
   "allowShell": false,
+  "research": {
+    "enabled": false,
+    "max_active_workers": 4,
+    "provider_policies": {},
+    "model_policies": {},
+    "tool_policies": {},
+    "runtimes": {},
+    "live_tools": {},
+    "heartbeat_ms": 30000,
+    "lease_ttl_ms": 120000,
+    "max_fault_retries": 3,
+    "checkpoint": { "first_tool_calls": 10, "periodic_tool_calls": 15, "output_tokens": 12000, "interval_ms": 1200000, "grace_ms": 30000 },
+    "stop_grace_ms": 10000,
+    "sqlite_busy_timeout_ms": 1000,
+    "operator_host": "127.0.0.1",
+    "operator_port": 8787,
+    "worker_gateway_host": "127.0.0.1",
+    "worker_gateway_port": 8788,
+    "tool_limits": { "lean": 1, "cas": 2, "retrieval": 4 }
+  },
   "proofAuthority": {
     "finalAuthority": "lean4_mathlib_clean_replay",
     "allowAgentVoteAsProof": false,

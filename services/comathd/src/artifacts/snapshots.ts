@@ -12,6 +12,8 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
+import { assertProjectReadable } from "../research/project-commit.js";
+import { isDaemonMaintenanceAuditAllowed } from "../research/daemon-owner.js";
 import {
   sanitizePublicFormalAuthorityText,
   sanitizePublicFormalAuthorityVocabulary
@@ -239,6 +241,14 @@ function collectRuntimeFiles(projectRoot: string): string[] {
         continue;
       }
       const absolutePath = join(absoluteDir, name);
+      const runtimeRelative = normalizeRelativePath(relative(root, absolutePath));
+      // Lifetime ownership and migration bookkeeping are local coordination,
+      // never restorable research facts. Provider homes live outside .comath.
+      if (/^\.comath\/control\/owner\.sqlite(?:-journal|-wal|-shm)?$/.test(runtimeRelative)
+        || runtimeRelative === ".comath/control/migration-journal.json"
+        || runtimeRelative === ".comath/control/migration-receipt.json") {
+        continue;
+      }
       const stat = lstatSync(absolutePath);
       if (stat.isSymbolicLink() || stat.isBlockDevice() || stat.isCharacterDevice()) {
         throw new ComathError("snapshot source contains unsafe link", {
@@ -429,6 +439,9 @@ function secretScanSummary(scans: SecretScanResult[]): SnapshotManifest["secret_
 
 export async function exportSnapshot(projectRoot: string, input: ExportSnapshotInput): Promise<ExportSnapshotResult> {
   const root = resolve(projectRoot);
+  // Reject ownerless control state before creating any snapshot files. Migration
+  // uses a live-owner maintenance scope after its explicit quiescence barrier.
+  if (!isDaemonMaintenanceAuditAllowed(root)) assertProjectReadable(root, ".comath", undefined, true);
   const snapshotKind = input.audience ?? "public_download";
   const snapshotBase = snapshotsDir(root);
   mkdirSync(snapshotBase, { recursive: true });

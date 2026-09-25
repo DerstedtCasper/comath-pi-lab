@@ -62,7 +62,7 @@ Key directories:
 - `services/comathd/src/adapters/`: external wheel registry contracts.
 - `services/comathd/src/release/`: release, audit, certificate, proof-breadth, and source-review gates.
 - `config/`: non-secret sample configuration.
-- `docs/architecture/`: GA release criteria, threat model, adapter contracts, evidence-pack policy, and module boundaries.
+- `docs/architecture/`: durable research orchestration, GA release criteria, threat model, adapter contracts, evidence-pack policy, and module boundaries.
 - `.comath/`: runtime state written by `comathd`; ignored by Git and never committed.
 
 中文目录说明：
@@ -73,7 +73,7 @@ Key directories:
 - `services/comathd/src/adapters/`：external wheel registry 合约。
 - `services/comathd/src/release/`：发布、审计、证书、proof-breadth 与 source-review 门控。
 - `config/`：非密钥配置样例。
-- `docs/architecture/`：GA release criteria、threat model、adapter contracts、evidence-pack policy 和 module boundaries。
+- `docs/architecture/`：durable research orchestration、GA release criteria、threat model、adapter contracts、evidence-pack policy 和 module boundaries。
 - `.comath/`：由 `comathd` 写入的运行时状态，已被 Git 忽略，禁止提交。
 
 ## Deployment
@@ -122,38 +122,44 @@ The public product snapshot intentionally does not ship the maintainers' interna
 
 ### Local HTTP Service
 
-`comathd` is currently exposed as an embeddable service factory rather than a packaged daemon binary. After building, start a local HTTP server by embedding `createComathServer()`:
+After building, use the service CLI with explicit absolute project and host-config paths. `doctor` opens no listener; `serve` is restricted to a loopback operator listener.
 
 PowerShell:
 
 ```powershell
-$env:COMATHD_PORT = "8787"
-@'
-import { createComathServer } from "./services/comathd/dist/index.js";
-
-const server = createComathServer();
-const http = await server.listen(Number(process.env.COMATHD_PORT ?? 8787), "127.0.0.1");
-const address = http.address();
-const port = typeof address === "object" && address ? address.port : process.env.COMATHD_PORT;
-console.log(`comathd listening on http://127.0.0.1:${port}`);
-'@ | node --input-type=module
+node .\services\comathd\dist\cli.js doctor --project-root D:\work\example --config D:\work\example\comath.json
+node .\services\comathd\dist\cli.js serve --project-root D:\work\example --config D:\work\example\comath.json --host 127.0.0.1 --port 8787
+node .\services\comathd\dist\cli.js rollback --project-root D:\work\example --config D:\work\example\comath.json --snapshot D:\work\example\.comath\snapshots\SNAPSHOT\manifest.json
 ```
 
 POSIX shell:
 
 ```sh
-COMATHD_PORT=8787 node --input-type=module <<'EOF'
-import { createComathServer } from "./services/comathd/dist/index.js";
-
-const server = createComathServer();
-const http = await server.listen(Number(process.env.COMATHD_PORT ?? 8787), "127.0.0.1");
-const address = http.address();
-const port = typeof address === "object" && address ? address.port : process.env.COMATHD_PORT;
-console.log(`comathd listening on http://127.0.0.1:${port}`);
-EOF
+node services/comathd/dist/cli.js doctor --project-root /srv/comath/example --config /srv/comath/example/comath.json
+node services/comathd/dist/cli.js serve --project-root /srv/comath/example --config /srv/comath/example/comath.json --host 127.0.0.1 --port 8787
+node services/comathd/dist/cli.js rollback --project-root /srv/comath/example --config /srv/comath/example/comath.json --snapshot /srv/comath/example/.comath/snapshots/SNAPSHOT/manifest.json
 ```
 
-中文：当前 `comathd` 以 embeddable service factory 形式暴露，而不是独立 daemon binary。构建后通过 `createComathServer().listen()` 在本机启动 HTTP 服务；生产化部署应由宿主进程管理生命周期、日志、端口和权限。
+The embeddable `createComathServer()` factory remains available for an in-process host. Host deployment owns lifecycle, logs, ports, and configuration secrets. `rollback` opens no listener and only accepts a verified `internal_restore` snapshot after the new daemon has stopped; public-download snapshots cannot be restored.
+
+中文：构建后通过 CLI 的 `doctor`、`serve` 与 `rollback` 操作服务，必须给出绝对 project/config 路径；`serve` 只接受 loopback operator listener。`rollback` 不开 listener，必须先停止新 daemon，并且只接受已验证的 `internal_restore` 快照；public-download 快照不能恢复。`createComathServer()` 仍可供嵌入式宿主使用；生产部署由宿主管理生命周期、日志、端口和配置密钥。
+
+### Host-only validation interpretation
+
+After both independent blind reproduction results and their accepted comparison
+task exist, a host confirmation surface may call
+`POST /host/v1/validation/blind-comparisons`. It requires the separate host
+approval credential, never the operator credential. The request binds
+`candidate_id`, `policy_version`, `task_id`, both current blind result refs,
+and `outcome` (`consistent` or `disagreement`). `comathd` rechecks the
+accepted task/result provenance, scope, event order, and both input/claim
+citations before recording an immutable host interpretation.
+
+Pi, workers, external harnesses, and the operator MCP facade cannot call this
+endpoint. A consistent interpretation only permits the existing research
+validation aggregation to advance when every other validation gate passes; a
+disagreement keeps a durable adverse issue open. Neither outcome confers Lean
+proof authority.
 
 ## Configuration
 
@@ -319,6 +325,7 @@ git ls-files | rg "(^tests/|/tests/|\\.test\\.|phase0-smoke|docs/progress|docs/s
 - [External Lean Supply Chain](docs/architecture/external-lean-supply-chain.md)
 - [Evidence Pack Policy](docs/architecture/evidence-pack-policy.md)
 - [Module Boundaries](docs/architecture/module-boundaries.md)
+- [Durable Research Orchestration](docs/architecture/durable-research-orchestration.md)
 - [Config Samples](config/README.md)
 - [Contributing](CONTRIBUTING.md)
 

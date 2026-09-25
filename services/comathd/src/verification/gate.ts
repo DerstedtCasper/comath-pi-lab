@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { appendAuditEvent, readAuditEvents } from "../audit/jsonl-writer.js";
 import { listArtifactRefs } from "../artifacts/store.js";
 import { applyGatePromotedClaim, getClaim } from "../claim/claim-store.js";
@@ -29,6 +29,8 @@ import {
   hasLeanRunManifestProvenanceIndexV1,
   verifyLeanRunManifestV3Evidence
 } from "../proof-kernel/lean/lean-run-manifest-v3.js";
+import { verifyScopedFinalAuthorityPackagingV1 } from "../proof-kernel/lean/clean-replay-async.js";
+import { existsCommittedFile, readCommittedFile, withTrustedWriter, writeCommittedFile } from "../research/project-commit.js";
 import { runnerResultSha256, sha256Text } from "./runner-contracts.js";
 
 export type ClaimPromotionRequest = {
@@ -47,32 +49,23 @@ export type ClaimPromotionDecision = {
   claim: Claim;
 };
 
-function gateResultsPath(projectRoot: string): string {
-  return assertPathAllowed(projectRoot, join(".comath", "claims", "gate-results.jsonl"), { purpose: "runtime-write" });
-}
+const gateResultsPath = join(".comath", "claims", "gate-results.jsonl");
 
 function now(): string {
   return new Date().toISOString();
 }
 
-function readJsonl(path: string): GateResult[] {
-  if (!existsSync(path)) {
-    return [];
-  }
-  return readFileSync(path, "utf8")
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => gateResultSchema.parse(JSON.parse(line)));
-}
-
 function writeGateResults(projectRoot: string, gates: GateResult[]): void {
-  const path = gateResultsPath(projectRoot);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${gates.map((gate) => JSON.stringify(gate)).join("\n")}${gates.length ? "\n" : ""}`, "utf8");
+  writeCommittedFile(projectRoot, gateResultsPath, `${gates.map((gate) => JSON.stringify(gate)).join("\n")}${gates.length ? "\n" : ""}`);
 }
 
 export function readGateResults(projectRoot: string, projectId?: string): GateResult[] {
-  const gates = readJsonl(gateResultsPath(projectRoot));
+  const gates = !existsCommittedFile(projectRoot, gateResultsPath)
+    ? []
+    : readCommittedFile(projectRoot, gateResultsPath)
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => gateResultSchema.parse(JSON.parse(line)));
   return projectId ? gates.filter((gate) => gate.project_id === projectId) : gates;
 }
 
@@ -708,12 +701,26 @@ function hasVerifiedFinalAuthorityPackagingV3(
   return false;
 }
 
+function hasVerifiedScopedFinalAuthorityPackagingV1(projectRoot: string, request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string }, artifacts: ArtifactRef[]): boolean {
+  return artifacts.some(artifact => {
+    if (artifact.kind !== "runner_output") return false;
+    const packaging = readJsonArtifact(projectRoot, artifact);
+    if (!packaging || typeof packaging !== "object") return false;
+    const record = packaging as Record<string, unknown>;
+    if (record.schema_version !== "comath.scoped_final_authority_packaging.v1" || (record.scope as Record<string, unknown> | undefined)?.claim_id !== request.claim_id
+      || !verifyScopedFinalAuthorityPackagingV1(projectRoot, packaging).ok) return false;
+    const approved = (record.evidence as Record<string, unknown> | undefined)?.approved_scope as Record<string, unknown> | undefined;
+    const lock = approved?.clean_formal_spec as Record<string, unknown> | undefined;
+    return typeof lock?.path === "string" && projectJsonStringField(projectRoot, lock.path, "statement_hash") === request.locked_statement_hash;
+  });
+}
+
 function hasPromotionGradeLeanAuthorityEvidence(
   projectRoot: string,
   request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
   artifacts: ArtifactRef[]
 ): boolean {
-  return hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts);
+  return hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts) || hasVerifiedScopedFinalAuthorityPackagingV1(projectRoot, request, artifacts);
 }
 
 function finalAuthorityDerivedBindingVetoes(
@@ -865,7 +872,7 @@ function hasPassedLeanAuthorityReplayEvidence(
   request: Pick<ClaimPromotionRequest, "claim_id"> & { locked_statement_hash: string },
   artifacts: ArtifactRef[]
 ): boolean {
-  return hasVerifiedFinalAuthorityPackagingV3(projectRoot, request, artifacts);
+  return hasPromotionGradeLeanAuthorityEvidence(projectRoot, request, artifacts);
 }
 
 function evidenceBindingVetoes(projectRoot: string, request: ClaimPromotionRequest): string[] {
@@ -1001,7 +1008,7 @@ function statusEvidenceVetoes(projectRoot: string, claim: Claim, request: ClaimP
     if (!hasPromotionGradeLeanAuthorityEvidence(projectRoot, authorityRequest, artifacts)) {
       vetoes.push("formally_checked requires hash-bound fresh final replay artifacts");
     }
-    if (!hasVerifiedFinalAuthorityPackagingV3(projectRoot, authorityRequest, artifacts)) {
+    if (!hasPromotionGradeLeanAuthorityEvidence(projectRoot, authorityRequest, artifacts)) {
       vetoes.push("formally_checked requires Lean Authority v3 final replay packaging");
     }
     vetoes.push(...finalAuthorityDerivedBindingVetoes(projectRoot, authorityRequest, artifacts));
@@ -1141,15 +1148,17 @@ function evidenceLevelForStatus(status: ClaimStatus, current: Claim["evidence_le
 }
 
 export function promoteClaim(projectRoot: string, request: ClaimPromotionRequest): ClaimPromotionDecision {
-  const claim = getClaim(projectRoot, request.project_id, request.claim_id);
-  if (!claim) {
-    throw new ComathError("claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
-  }
+  return withTrustedWriter(projectRoot, "claim.promote", request, () => {
+    const claim = getClaim(projectRoot, request.project_id, request.claim_id);
+    if (!claim) {
+      throw new ComathError("claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
+    }
 
-  const gate = runClaimPromotionGate(projectRoot, request);
-  writeGateResults(projectRoot, [...readGateResults(projectRoot), gate]);
-  return {
-    gate,
-    claim: applyClaimPromotionDecision(projectRoot, claim, gate, request.actor)
-  };
+    const gate = runClaimPromotionGate(projectRoot, request);
+    writeGateResults(projectRoot, [...readGateResults(projectRoot), gate]);
+    return {
+      gate,
+      claim: applyClaimPromotionDecision(projectRoot, claim, gate, request.actor)
+    };
+  });
 }
