@@ -1,4 +1,5 @@
 import type { ProjectRuntime } from "./project-runtime.js";
+import { VALIDATION_SLOTS } from "./validation-contracts.js";
 
 export type ResearchMetric = { value: number | null; incomplete: boolean; numerator: number; denominator: number; pending?: number };
 export type ResearchMetrics = {
@@ -77,6 +78,65 @@ export function createResearchMetrics(runtime: ProjectRuntime): ResearchMetricsR
         ? { value: null, incomplete: true, numerator: resumedSuccesses, denominator: resumedAttempts.length, pending: resumedPending }
         : { value: resumedSuccesses / resumedAttempts.length, incomplete: false, numerator: resumedSuccesses, denominator: resumedAttempts.length, pending: 0 };
 
+    const latestValidationReports = new Map<string, { candidateId: string; policyVersion: string; payload: Record<string, unknown> }>();
+    let validationDisagreementIncomplete = false;
+    for (const row of store.all("SELECT seq,payload_json FROM events WHERE campaign_id=? AND type='ValidationAggregated' ORDER BY seq", campaignId)) {
+      const payload = parseJson(row.payload_json), candidateId = payload.candidate_id, policyVersion = payload.policy_version;
+      if (typeof candidateId !== "string" || !candidateId || typeof policyVersion !== "string" || !policyVersion || candidateCampaigns.get(candidateId) !== campaignId) {
+        validationDisagreementIncomplete = true;
+        continue;
+      }
+      latestValidationReports.set(`${candidateId}\u0000${policyVersion}`, { candidateId, policyVersion, payload });
+    }
+    let disagreementSets = 0;
+    for (const report of latestValidationReports.values()) {
+      const currentSlots = store.all("SELECT role_slot,current_task_id FROM validation_tasks WHERE candidate_id=? AND policy_version=?", report.candidateId, report.policyVersion);
+      const expectedSlots = new Map<string, string>();
+      for (const row of currentSlots) {
+        const role = String(row.role_slot), taskId = String(row.current_task_id);
+        if (!VALIDATION_SLOTS.includes(role as typeof VALIDATION_SLOTS[number]) || expectedSlots.has(role)) validationDisagreementIncomplete = true;
+        expectedSlots.set(role, taskId);
+      }
+      const reportedSlots = Array.isArray(report.payload.slots) ? report.payload.slots.map(asRecord) : [];
+      const reportedSlotMap = new Map<string, string>();
+      for (const slot of reportedSlots) {
+        const role = slot.role_slot, taskId = slot.task_id;
+        if (typeof role !== "string" || typeof taskId !== "string" || reportedSlotMap.has(role)) validationDisagreementIncomplete = true;
+        else reportedSlotMap.set(role, taskId);
+      }
+      const resultRefs = Array.isArray(report.payload.result_refs) ? report.payload.result_refs.map(asRecord) : [];
+      const resultTaskIds = new Set<string>();
+      for (const result of resultRefs) {
+        const taskId = result.task_id, ref = asRecord(result.ref);
+        if (typeof taskId !== "string" || resultTaskIds.has(taskId) || typeof ref.artifact_id !== "string" || typeof ref.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(ref.sha256)) validationDisagreementIncomplete = true;
+        else resultTaskIds.add(taskId);
+      }
+      const completeSlots = expectedSlots.size === VALIDATION_SLOTS.length && reportedSlotMap.size === VALIDATION_SLOTS.length
+        && resultTaskIds.size === VALIDATION_SLOTS.length && VALIDATION_SLOTS.every(role => expectedSlots.get(role) === reportedSlotMap.get(role)
+          && resultTaskIds.has(expectedSlots.get(role)!))
+        && [...expectedSlots.values()].every(taskId => store.getTask(taskId)?.status === "succeeded");
+      if (!completeSlots) { validationDisagreementIncomplete = true; continue; }
+      const issueRefs = Array.isArray(report.payload.open_issue_refs) ? report.payload.open_issue_refs.map(asRecord) : [];
+      let hasDisagreement = false;
+      for (const ref of issueRefs) {
+        const issueId = ref.issue_id, eventSeq = ref.event_seq, payloadSha256 = ref.payload_sha256;
+        const issue = typeof issueId === "string" && typeof eventSeq === "number" && Number.isSafeInteger(eventSeq) && typeof payloadSha256 === "string"
+          ? store.get("SELECT type,actor,payload_json,payload_sha256 FROM events WHERE seq=?", eventSeq) : undefined;
+        const payload = issue ? parseJson(issue.payload_json) : {};
+        if (!issue || issue.type !== "ValidationIssueOpened" || issue.actor !== "service:validation-aggregation" || issue.payload_sha256 !== payloadSha256
+          || payload.issue_id !== issueId || payload.candidate_id !== report.candidateId || typeof payload.reason !== "string") {
+          validationDisagreementIncomplete = true;
+          continue;
+        }
+        if (["disagreement", "blind_disagreement"].includes(payload.reason)) hasDisagreement = true;
+      }
+      if (hasDisagreement) disagreementSets++;
+    }
+    const validatorDisagreement = latestValidationReports.size === 0 ? unavailable()
+      : validationDisagreementIncomplete
+        ? { value: null, incomplete: true, numerator: disagreementSets, denominator: latestValidationReports.size }
+        : { value: disagreementSets / latestValidationReports.size, incomplete: false, numerator: disagreementSets, denominator: latestValidationReports.size };
+
     const approved = new Set<string>(), completed = new Set<string>();
     let formalizationIncomplete = false;
     for (const event of events) {
@@ -103,7 +163,7 @@ export function createResearchMetrics(runtime: ProjectRuntime): ResearchMetricsR
       : { value: completed.size / approved.size, incomplete: false, numerator: completed.size, denominator: approved.size, pending: approved.size - completed.size };
 
     return { campaign_id: campaignId, proof_authority: "none", checkpoint_resume_success_rate: checkpointResume, duplicate_work_ratio: unavailable(), repeated_failed_route_ratio: unavailable(),
-      validator_disagreement_rate: unavailable(), scheduler_slot_utilization: unavailable(), straggler_block_time: unavailable(), validated_claims_per_1m_output_tokens: validatedPerMillion,
+      validator_disagreement_rate: validatorDisagreement, scheduler_slot_utilization: unavailable(), straggler_block_time: unavailable(), validated_claims_per_1m_output_tokens: validatedPerMillion,
       time_to_first_validated_lemma: timeToFirstValidated, formalization_conversion_rate: formalizationConversion, budget_wasted_on_killed_branches: { known_output_tokens: knownKilledOutput, unknown_reservations: unknownKilledReservations, incomplete: !completeUsage || unknownKilledReservations > 0 }, branch_survival_curve: curve };
   }
   return { readCampaign };
