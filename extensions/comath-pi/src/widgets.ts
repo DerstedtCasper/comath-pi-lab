@@ -83,3 +83,11 @@ export type TuiDashboardModel = {
   generated_at: string;
   sections: TuiDashboardSection[];
 };
+
+/** A display-only projection of the durable operator read model. */
+export type DurableResearchDashboardSnapshot = {
+  campaign: unknown;
+  frontier: unknown;
+  budget: unknown;
+  proof_authority: "none";
+};

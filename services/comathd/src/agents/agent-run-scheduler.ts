@@ -1,3 +1,8 @@
+import { withLegacyRuntime, runLegacyExecution, cancelLegacyExecution } from "./runtime/legacy-runtime-facade.js";
+import { executeAgentProcess } from "./runtime/agent-process-executor.js";
+import { getAcquiredProjectRuntime } from "../research/project-runtime.js";
+import { importArtifact } from "../artifacts/store.js";
+import { scanForSecrets } from "../security/secret-scan.js";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
@@ -163,7 +168,8 @@ function getActiveScheduler(projectRoot: string, projectId: string, runId: strin
 }
 
 export function isAgentRunCancellableByOperator(projectRoot: string, projectId: string, runId: string): boolean {
-  return Boolean(getActiveScheduler(projectRoot, projectId, runId));
+  const task = getAcquiredProjectRuntime(projectRoot)?.store.getTask(`LEGACY-${runId}`);
+  return Boolean(task && ["queued", "leased", "running", "cancelling"].includes(task.status));
 }
 
 export function cancelAgentRunFromOperator(projectRoot: string, input: OperatorCancelAgentRunInput): OperatorCancelAgentRunResult {
@@ -175,13 +181,13 @@ export function cancelAgentRunFromOperator(projectRoot: string, input: OperatorC
     });
   }
   const active = getActiveScheduler(projectRoot, input.project_id, input.run_id);
-  if (!active) {
+  if (!active && !isAgentRunCancellableByOperator(projectRoot, input.project_id, input.run_id)) {
     throw new ComathError("AgentRun is not cancellable in this service process", {
       statusCode: 409,
       code: "AGENT_RUN_NOT_CANCELLABLE"
     });
   }
-  const cancelled = active.scheduler.cancel(input.run_id, input.actor);
+  const cancelled = active ? active.scheduler.cancel(input.run_id, input.actor) : cancelLegacyExecution(projectRoot, input.run_id, input.actor);
   appendAuditEvent(projectRoot, {
     project_id: input.project_id,
     event_type: "agent_run.operator_cancel_requested",
@@ -398,369 +404,75 @@ function terminateChildProcessTree(child: ChildProcessWithoutNullStreams): Termi
 }
 
 export class AgentRunScheduler {
-  private active = 0;
-  private readonly queue: QueuedLaunch[] = [];
-  private readonly running = new Map<string, RunningLaunch>();
-  private readonly launchReservationsAtMs: number[] = [];
   private readonly allowedPrograms: Set<string>;
-
+  // Connection lookup only. Admission state and cancellation intent live in SQLite.
+  private readonly connectionRoots = new Map<string, string>();
   constructor(private readonly options: AgentRunSchedulerOptions) {
     assertPositiveInteger(options.max_concurrent, "max_concurrent");
     assertPositiveInteger(options.rpm, "rpm");
-    if (options.allowed_programs.length === 0) {
-      throw new ComathError("allowed_programs must not be empty", {
-        statusCode: 400,
-        code: "AGENT_RUN_SCHEDULER_INVALID_CONFIG"
-      });
-    }
-    this.allowedPrograms = new Set(options.allowed_programs.map((program) => canonicalProgramPath(program, "allowed_program")));
+    if (!options.allowed_programs.length) throw new ComathError("allowed_programs must not be empty", { code: "AGENT_RUN_SCHEDULER_INVALID_CONFIG" });
+    this.allowedPrograms = new Set(options.allowed_programs.map(program => canonicalProgramPath(program, "allowed_program")));
   }
-
-  launch(projectRoot: string, input: AgentRunLaunchInput): Promise<AgentRunProcessResult> {
-    let command: AgentRunLaunchCommand;
-    try {
-      command = this.assertLaunchAllowed(projectRoot, input);
-      this.reserveRateSlot(projectRoot, input);
-    } catch (error) {
-      return Promise.reject(error);
-    }
-    return new Promise((resolve, reject) => {
-      registerActiveScheduler(projectRoot, input.project_id, input.run_id, this);
-      this.queue.push({
-        projectRoot,
-        input,
-        command,
-        resolve: (result) => {
-          unregisterActiveScheduler(projectRoot, input.project_id, input.run_id);
-          resolve(result);
-        },
-        reject: (error) => {
-          unregisterActiveScheduler(projectRoot, input.project_id, input.run_id);
-          reject(error);
-        }
-      });
-      this.pump();
-    });
-  }
-
-  cancel(runId: string, actor: string): boolean {
-    const launch = this.running.get(runId);
-    if (launch) {
-      launch.cancel_actor = actor;
-      terminateChildProcessTree(launch.child);
-      return true;
-    }
-    const queuedIndex = this.queue.findIndex((task) => task.input.run_id === runId);
-    if (queuedIndex === -1) {
-      return false;
-    }
-    const [task] = this.queue.splice(queuedIndex, 1);
-    const completedAtMs = Date.now();
-    const cancelled = cancelQueuedAgentRun(task.projectRoot, {
-      project_id: task.input.project_id,
-      run_id: task.input.run_id,
-      report_markdown: fallbackReport("queued_cancelled"),
-      exit_reason: "queued_cancelled",
-      actor
-    });
-    task.resolve({
-      run_id: task.input.run_id,
-      project_id: task.input.project_id,
-      status: "cancelled",
-      exit_code: null,
-      signal: null,
-      timed_out: false,
-      cancelled: true,
-      started_at_ms: completedAtMs,
-      completed_at_ms: completedAtMs,
-      stdout_path: `.tmp/comath/${cancelled.id}/logs/stdout.log`,
-      stderr_path: `.tmp/comath/${cancelled.id}/logs/stderr.log`,
-      report_path: cancelled.report_path
-    });
-    return true;
-  }
-
-  private assertLaunchAllowed(projectRoot: string, input: AgentRunLaunchInput): AgentRunLaunchCommand {
-    getAgentRun(projectRoot, input.project_id, input.run_id);
-    assertPositiveInteger(input.timeout_ms, "timeout_ms");
+  async launch(projectRoot: string, input: AgentRunLaunchInput): Promise<AgentRunProcessResult> {
+    const program = canonicalProgramPath(input.command.program, "command.program");
+    if (!this.allowedPrograms.has(program)) throw new ComathError("program is not host allowlisted", { code: "AGENT_RUN_PROGRAM_NOT_ALLOWLISTED", statusCode: 403 });
     assertCommandEnvAllowed(input.command.env);
-    const commandProgram = canonicalProgramPath(input.command.program, "command.program");
-    if (!this.allowedPrograms.has(commandProgram)) {
-      throw new ComathError(`program is not allowlisted: ${input.command.program}`, {
-        statusCode: 403,
-        code: "AGENT_RUN_PROGRAM_NOT_ALLOWLISTED"
-      });
-    }
-    return {
-      ...input.command,
-      program: commandProgram
-    };
-  }
-
-  private reserveRateSlot(projectRoot: string, input: AgentRunLaunchInput): void {
-    this.pruneRateWindow();
-    if (this.launchReservationsAtMs.length >= this.options.rpm) {
-      appendAuditEvent(projectRoot, {
-        project_id: input.project_id,
-        event_type: "agent_run.rate_limited",
-        actor: input.actor,
-        target_id: input.run_id,
-        payload: {
-          rpm: this.options.rpm
-        }
-      });
-      throw new ComathError("AgentRun scheduler rate limit exceeded", {
-        statusCode: 429,
-        code: "AGENT_RUN_RATE_LIMITED"
-      });
-    }
-    this.launchReservationsAtMs.push(Date.now());
-  }
-
-  private pruneRateWindow(nowMs = Date.now()): void {
-    const cutoff = nowMs - 60_000;
-    while (this.launchReservationsAtMs.length > 0 && this.launchReservationsAtMs[0] < cutoff) {
-      this.launchReservationsAtMs.shift();
-    }
-  }
-
-  private pump(): void {
-    while (this.active < this.options.max_concurrent && this.queue.length > 0) {
-      const task = this.queue.shift() as QueuedLaunch;
-      this.active += 1;
-      this.execute(task)
-        .then(task.resolve, task.reject)
-        .finally(() => {
-          this.active -= 1;
-          this.pump();
+    return withLegacyRuntime(projectRoot, async () => {
+      getAgentRun(projectRoot, input.project_id, input.run_id);
+      this.connectionRoots.set(input.run_id, projectRoot);
+      registerActiveScheduler(projectRoot, input.project_id, input.run_id, this);
+      try {
+        return await runLegacyExecution(projectRoot, { project_id: input.project_id, run_id: input.run_id, backend: "process", timeout_ms: input.timeout_ms, actor: input.actor }, async (grant, signal) => {
+          const runtime = getAcquiredProjectRuntime(projectRoot)!;
+          const run = startAgentRun(projectRoot, { project_id: input.project_id, run_id: input.run_id, actor: input.actor });
+          const stdoutPath = `.tmp/comath/${run.id}/logs/stdout.log`, stderrPath = `.tmp/comath/${run.id}/logs/stderr.log`;
+          const started = Date.now();
+          let processResult;
+          try { processResult = await executeAgentProcess({ runtime, grant, command: { ...input.command, program, env: buildChildEnvironment(input, run) as Record<string,string> },
+            cwd: assertAgentRunWriteAllowed(projectRoot, run, `.tmp/comath/${run.id}/`), timeout_ms: input.timeout_ms, signal,
+            stdout_path: stdoutPath, stderr_path: stderrPath, allowed_programs: [...this.allowedPrograms], onStarted: handle => {
+              appendAuditEvent(projectRoot, { project_id: input.project_id, event_type: "agent_run.process_started", actor: input.actor, target_id: run.id,
+                payload: { program: handle.binary_path, binary_sha256: handle.binary_sha256, pid: handle.pid, attempt_key: grant.attempt_key, stdout_path: stdoutPath, stderr_path: stderrPath } });
+            } }); }
+          catch (cause) {
+            const attempt = runtime.store.get("SELECT runtime_handle_json FROM attempts WHERE attempt_key=?", grant.attempt_key);
+            if (!signal.aborted || attempt?.runtime_handle_json) throw cause;
+            const submitted = submitAgentRunReport(projectRoot, { project_id: input.project_id, run_id: run.id, status: "cancelled", actor: input.actor, report_markdown: fallbackReport("cancelled"), exit_reason: "cancelled" });
+            appendAuditEvent(projectRoot, { project_id: input.project_id, event_type: "agent_run.process_cancelled", actor: input.actor, target_id: run.id, payload: { started: false, termination_confirmed: true } });
+            return { value: { run_id: run.id, project_id: input.project_id, status: "cancelled" as const, exit_code: null, signal: null, timed_out: false, cancelled: true,
+              started_at_ms: started, completed_at_ms: Date.now(), stdout_path: stdoutPath, stderr_path: stderrPath, report_path: submitted.report_path }, status: "cancelled" as const, termination_confirmed: true };
+          }
+          let status: AgentRunProcessStatus = processResult.cancelled ? "cancelled" : processResult.timed_out || processResult.exit_code !== 0 ? "failed" : "succeeded";
+          let reason = processResult.cancelled ? "cancelled" : processResult.timed_out ? "timeout" : status === "succeeded" ? "process_completed" : "process_failed";
+          const reportSource = hasRequiredReportHeadings(processResult.stdout.tail) ? processResult.stdout.tail : processResult.stdout.text;
+          if (status === "succeeded" && !hasRequiredReportHeadings(reportSource)) { status = "failed"; reason = "invalid_report"; }
+          const logArtifacts: string[] = [];
+          for (const logPath of [stdoutPath, stderrPath]) {
+            const absolute = assertAgentRunWriteAllowed(projectRoot, run, logPath);
+            if (scanForSecrets(absolute).blocks_import) { writeFileSync(absolute, "[COMATH_LOG_BLOCKED_BY_SECRET_SCAN]\n", "utf8"); status = "failed"; reason = "secret_scan_blocked"; }
+            else logArtifacts.push((await importArtifact({ projectRoot, project_id: input.project_id, source_path: logPath, kind: "other", actor: "service:process-log" })).id);
+          }
+          if (signal.aborted) { status = "cancelled"; reason = "cancelled"; }
+          const submitted = submitAgentRunReport(projectRoot, { project_id: input.project_id, run_id: run.id, status,
+            report_markdown: status === "succeeded" ? schedulerReport(reason, reportSource) : fallbackReport(reason), exit_reason: reason, actor: input.actor });
+          appendAuditEvent(projectRoot, { project_id: input.project_id, event_type: processResult.cancelled ? "agent_run.process_cancelled" : processResult.timed_out ? "agent_run.process_timed_out" : "agent_run.process_completed",
+            actor: input.actor, target_id: run.id, payload: { status, exit_code: processResult.exit_code, signal: processResult.signal, timed_out: processResult.timed_out,
+              termination_confirmed: processResult.termination_confirmed, stdout_truncated: processResult.stdout.truncated, stderr_truncated: processResult.stderr.truncated,
+              stdout_bytes_seen: processResult.stdout.bytes_seen, stderr_bytes_seen: processResult.stderr.bytes_seen, log_artifact_ids: logArtifacts, stdout_path: stdoutPath, stderr_path: stderrPath, report_path: submitted.report_path } });
+          return { value: { run_id: run.id, project_id: input.project_id, status, exit_code: processResult.exit_code, signal: processResult.signal,
+            timed_out: processResult.timed_out, cancelled: processResult.cancelled, started_at_ms: started, completed_at_ms: Date.now(), stdout_path: stdoutPath, stderr_path: stderrPath, report_path: submitted.report_path }, status, termination_confirmed: processResult.termination_confirmed };
+        }, () => {
+          const run = cancelQueuedAgentRun(projectRoot, { project_id: input.project_id, run_id: input.run_id, actor: input.actor, report_markdown: fallbackReport("queued_cancelled"), exit_reason: "queued_cancelled" });
+          const now = Date.now();
+          return { run_id: run.id, project_id: input.project_id, status: "cancelled", exit_code: null, signal: null, timed_out: false, cancelled: true,
+            started_at_ms: now, completed_at_ms: now, stdout_path: `.tmp/comath/${run.id}/logs/stdout.log`, stderr_path: `.tmp/comath/${run.id}/logs/stderr.log`, report_path: run.report_path };
         });
-    }
-  }
-
-  private async execute(task: QueuedLaunch): Promise<AgentRunProcessResult> {
-    const { projectRoot, input } = task;
-    task.command = this.assertLaunchAllowed(projectRoot, input);
-    const writerLock = this.acquireWriterSession(projectRoot, input);
-    try {
-      return await this.executeWithWriterSession(task, writerLock);
-    } finally {
-      this.releaseWriterSession(projectRoot, input, writerLock);
-    }
-  }
-
-  private acquireWriterSession(projectRoot: string, input: AgentRunLaunchInput): ProjectSessionLock {
-    const acquired = acquireProjectSessionLock(projectRoot, {
-      owner: `agent-run-scheduler:${input.run_id}`
-    });
-    if (!acquired.acquired) {
-      appendAuditEvent(projectRoot, {
-        project_id: input.project_id,
-        event_type: "agent_run.writer_lock_blocked",
-        actor: input.actor,
-        target_id: input.run_id,
-        payload: {
-          reason: acquired.reason,
-          active_session_id: acquired.lock.session_id,
-          active_owner: acquired.lock.owner,
-          lock_path: acquired.lock_path
-        }
-      });
-      throw new ComathError("active writer session lock exists", {
-        statusCode: 409,
-        code: "AGENT_RUN_WRITER_LOCK_ACTIVE"
-      });
-    }
-    appendAuditEvent(projectRoot, {
-      project_id: input.project_id,
-      event_type: "agent_run.writer_lock_acquired",
-      actor: input.actor,
-      target_id: input.run_id,
-      payload: {
-        session_id: acquired.lock.session_id,
-        owner: acquired.lock.owner,
-        lock_path: acquired.lock_path,
-        replaced_stale_session_id: acquired.replaced_stale_session_id
-      }
-    });
-    return acquired.lock;
-  }
-
-  private releaseWriterSession(projectRoot: string, input: AgentRunLaunchInput, writerLock: ProjectSessionLock): void {
-    const released = releaseProjectSessionLock(projectRoot, {
-      sessionId: writerLock.session_id,
-      token: writerLock.token
-    });
-    appendAuditEvent(projectRoot, {
-      project_id: input.project_id,
-      event_type: "agent_run.writer_lock_released",
-      actor: input.actor,
-      target_id: input.run_id,
-      payload: {
-        session_id: released.lock.session_id,
-        lock_path: released.lock_path,
-        released_at: released.lock.released_at
-      }
+      } finally { unregisterActiveScheduler(projectRoot, input.project_id, input.run_id); this.connectionRoots.delete(input.run_id); }
     });
   }
-
-  private async executeWithWriterSession(task: QueuedLaunch, writerLock: ProjectSessionLock): Promise<AgentRunProcessResult> {
-    const { projectRoot, input } = task;
-    const run = startAgentRun(projectRoot, {
-      project_id: input.project_id,
-      run_id: input.run_id,
-      actor: input.actor
-    });
-    const stdoutPathRel = `.tmp/comath/${run.id}/logs/stdout.log`;
-    const stderrPathRel = `.tmp/comath/${run.id}/logs/stderr.log`;
-    const stdoutPath = assertAgentRunWriteAllowed(projectRoot, run, stdoutPathRel);
-    const stderrPath = assertAgentRunWriteAllowed(projectRoot, run, stderrPathRel);
-    mkdirSync(dirname(stdoutPath), { recursive: true });
-
-    const startedAtMs = Date.now();
-    appendAuditEvent(projectRoot, {
-      project_id: input.project_id,
-      event_type: "agent_run.process_started",
-      actor: input.actor,
-      target_id: input.run_id,
-      payload: {
-        program: task.command.program,
-        args: task.command.args ?? [],
-        timeout_ms: input.timeout_ms,
-        writer_session_id: writerLock.session_id,
-        stdout_path: stdoutPathRel,
-        stderr_path: stderrPathRel
-      }
-    });
-
-    const child = spawn(task.command.program, task.command.args ?? [], {
-      cwd: assertAgentRunWriteAllowed(projectRoot, run, `.tmp/comath/${run.id}/`),
-      shell: false,
-      windowsHide: true,
-      detached: process.platform !== "win32",
-      env: buildChildEnvironment(input, run)
-    });
-    this.running.set(input.run_id, { child });
-
-    const stdoutCollector = createBoundedOutputCollector();
-    const stderrCollector = createBoundedOutputCollector();
-    let timedOut = false;
-    let timeoutTermination: TerminationResult | undefined;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      timeoutTermination = terminateChildProcessTree(child);
-    }, input.timeout_ms);
-
-    child.stdout.on("data", (chunk: Buffer) => stdoutCollector.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderrCollector.push(chunk));
-
-    const { code, signal } = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-      child.on("close", (exitCode, exitSignal) => {
-        resolve({ code: exitCode, signal: exitSignal });
-      });
-      child.on("error", () => {
-        resolve({ code: null, signal: null });
-      });
-    });
-    clearTimeout(timer);
-    const running = this.running.get(input.run_id);
-    const cancelled = Boolean(running?.cancel_actor);
-    this.running.delete(input.run_id);
-    const stdout = stdoutCollector.text();
-    const stderr = stderrCollector.text();
-    writeFileSync(stdoutPath, stdout, "utf8");
-    writeFileSync(stderrPath, stderr, "utf8");
-
-    let status: AgentRunProcessStatus = cancelled ? "cancelled" : timedOut || code !== 0 ? "failed" : "succeeded";
-    let exitReason = cancelled ? "cancelled" : timedOut ? "timeout" : code === 0 ? "process_completed" : "process_failed";
-    if (status === "succeeded" && !hasRequiredReportHeadings(stdout)) {
-      status = "failed";
-      exitReason = "invalid_report";
-    }
-    let submitted = this.submitProcessReport(
-      projectRoot,
-      input,
-      status,
-      status === "succeeded" ? schedulerReport(exitReason, stdout) : fallbackReport(exitReason),
-      exitReason,
-      running?.cancel_actor
-    );
-    if (status === "succeeded" && submitted.status === "failed") {
-      status = "failed";
-      exitReason = submitted.exit_reason ?? "invalid_report";
-    }
-    const completedAtMs = Date.now();
-    appendAuditEvent(projectRoot, {
-      project_id: input.project_id,
-      event_type: cancelled
-        ? "agent_run.process_cancelled"
-        : timedOut
-          ? "agent_run.process_timed_out"
-          : "agent_run.process_completed",
-      actor: running?.cancel_actor ?? input.actor,
-      target_id: input.run_id,
-      payload: {
-        status,
-        exit_code: code,
-        signal,
-        timed_out: timedOut,
-        termination: timeoutTermination,
-        stdout_truncated: stdoutCollector.truncated(),
-        stderr_truncated: stderrCollector.truncated(),
-        stdout_path: stdoutPathRel,
-        stderr_path: stderrPathRel,
-        report_path: submitted.report_path
-      }
-    });
-
-    return {
-      run_id: input.run_id,
-      project_id: input.project_id,
-      status,
-      exit_code: code,
-      signal,
-      timed_out: timedOut,
-      cancelled,
-      started_at_ms: startedAtMs,
-      completed_at_ms: completedAtMs,
-      stdout_path: stdoutPathRel,
-      stderr_path: stderrPathRel,
-      report_path: submitted.report_path
-    };
-  }
-
-  private submitProcessReport(
-    projectRoot: string,
-    input: AgentRunLaunchInput,
-    status: AgentRunProcessStatus,
-    reportMarkdown: string,
-    exitReason: string,
-    cancelActor?: string
-  ): AgentRun {
-    try {
-      return submitAgentRunReport(projectRoot, {
-        project_id: input.project_id,
-        run_id: input.run_id,
-        status,
-        report_markdown: reportMarkdown,
-        exit_reason: exitReason,
-        actor: cancelActor ?? input.actor
-      });
-    } catch (error) {
-      if (status === "succeeded" && error instanceof ComathError && error.code === "AGENT_RUN_REPORT_INVALID") {
-        return submitAgentRunReport(projectRoot, {
-          project_id: input.project_id,
-          run_id: input.run_id,
-          status: "failed",
-          report_markdown: fallbackReport("invalid_report"),
-          exit_reason: "invalid_report",
-          actor: input.actor
-        });
-      }
-      throw error;
-    }
+  cancel(runId: string, actor: string): boolean {
+    const root = this.connectionRoots.get(runId);
+    return root ? cancelLegacyExecution(root, runId, actor) : false;
   }
 }
-
-export function createAgentRunScheduler(options: AgentRunSchedulerOptions): AgentRunScheduler {
-  return new AgentRunScheduler(options);
-}
+export function createAgentRunScheduler(options: AgentRunSchedulerOptions): AgentRunScheduler { return new AgentRunScheduler(options); }

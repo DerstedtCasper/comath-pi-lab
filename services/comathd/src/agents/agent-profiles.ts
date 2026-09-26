@@ -1,3 +1,4 @@
+import { withLegacyRuntime, legacyHostPrograms } from "./runtime/legacy-runtime-facade.js";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
 import type { AgentRun, AgentRole } from "../types/schemas.js";
@@ -325,7 +326,7 @@ export function buildAgentProfileLaunch(projectRoot: string, input: BuildAgentPr
     scheduler_options: {
       max_concurrent: profile.scheduler.max_concurrent,
       rpm: profile.scheduler.rpm,
-      allowed_programs: [input.program]
+      allowed_programs: legacyHostPrograms(projectRoot)
     },
     launch_input: {
       project_id: input.project_id,
@@ -371,6 +372,7 @@ export async function executeProfileAgentRun(
   projectRoot: string,
   input: ExecuteProfileAgentRunInput
 ): Promise<ExecuteProfileAgentRunResult> {
+  return withLegacyRuntime(projectRoot, async () => {
   const run = createAgentRunForProfile(projectRoot, {
     project_id: input.project_id,
     campaign_id: input.campaign_id,
@@ -416,4 +418,5 @@ export async function executeProfileAgentRun(
     launch,
     result
   };
+  });
 }

@@ -16,6 +16,40 @@ export * from "./artifacts/hash.js";
 export * from "./artifacts/store.js";
 export * from "./artifacts/snapshot-manifest.js";
 export * from "./artifacts/snapshots.js";
+export { ProjectRuntime, getAcquiredProjectRuntime } from "./research/project-runtime.js";
+export { ResearchOrchestrator, createResearchOrchestrator, applyResearchCommand } from "./research/research-orchestrator.js";
+export type { ResearchPrincipal, ResearchTaskPolicies, ResearchCommand } from "./research/research-orchestrator.js";
+export { validateResearchDagPatch, validateResearchTaskGraph } from "./research/research-dag.js";
+export { createResearchEventStore } from "./research/event-store.js";
+export { createBudgetLedger } from "./research/budget-ledger.js";
+export type { BudgetLedger, BudgetLimits, BudgetAccountView, BudgetReservationView, BudgetDebitResult } from "./research/budget-ledger.js";
+export { PortfolioScheduler, createPortfolioScheduler } from "./research/portfolio-scheduler.js";
+export type { ResearchGrant, PortfolioSchedulerHooks } from "./research/portfolio-scheduler.js";
+export { createResourceAdmission, validateResourceConfig } from "./research/resource-admission.js";
+export { createCheckpointStore, renderCheckpointMarkdown, researchCheckpointSchema, researchCheckpointJsonSchema } from "./research/checkpoint-store.js";
+export type { ResearchCheckpoint, CheckpointReceipt, CheckpointStore, CheckpointStoreOptions } from "./research/checkpoint-store.js";
+export { AttemptReconciler, createAttemptReconciler } from "./research/reconciliation.js";
+export type { AttemptStopReason, AttemptTermination, AttemptLifecycleHooks } from "./research/reconciliation.js";
+export type { ResearchResourceConfig, ToolPermitRequest } from "./research/resource-admission.js";
+export { withProjectCommit, withTrustedWriter, prepareTrustCommit, finalizeTrustCommit, reconcileTrustCommits,
+  assertProjectReadable, readCommittedFile, existsCommittedFile, writeCommittedFile, listCommittedDirectory,
+  allocateProjectId, projectCommitTime, hasProjectCommit, stageResearchMutation, drainResearchAuditOutbox, getResearchAuditProjectionStatus } from "./research/project-commit.js";
+export type { ProjectCommitOperation, ProjectCommitFault, ResearchAuditProjectionStatus } from "./research/project-commit.js";
+export { prepareArtifact, commitArtifactReference } from "./research/research-artifacts.js";
+export type { PreparedArtifact } from "./research/research-artifacts.js";
+export type { ProjectRuntimeDependencies } from "./research/project-runtime.js";
+export { acquireDaemonOwner } from "./research/daemon-owner.js";
+export type { DaemonOwner } from "./research/daemon-owner.js";
+export { ResearchStore, openResearchStore, researchDatabasePath, RESEARCH_SCHEMA_VERSION } from "./research/research-store.js";
+export type { ResearchClock, ResearchStoreOptions, ResearchEvent } from "./research/research-store.js";
+export { probeResearchLayout, ensureResearchControlReady, rollbackResearchControlSnapshot } from "./research/research-migration.js";
+export type { ResearchLayout, ResearchMigrationOptions, ResearchMigrationReceipt, MigrationQuiescence, ResearchRollbackResult } from "./research/research-migration.js";
+export { sha256Schema, artifactPointerSchema, scopeBindingSchema, taskKindSchema, taskStatusSchema,
+  researchPoolSchema, usageSchema, taskBudgetSchema, researchTaskDraftSchema, researchTaskSchema,
+  researchControlCampaignSchema, researchDagPatchSchema, researchEventInputSchema,
+  parseResearchInput, researchJsonSchemas } from "./research/research-schemas.js";
+export type { ScopeBinding, TaskKind, TaskStatus, TaskBudget, ResearchTaskDraft, ResearchTask,
+  ResearchControlCampaign, ResearchDagPatch, ResearchEventInput } from "./research/research-schemas.js";
 export * from "./artifacts/replay.js";
 export * from "./artifacts/bibtex.js";
 export * from "./artifacts/paper.js";
@@ -120,3 +154,10 @@ export * from "./release/goal3-source-release-external-evidence-binding.js";
 export * from "./release/goal3-source-release-external-provider-verification.js";
 export * from "./release/goal3-source-release-external-provider-policy-inspection.js";
 export * from "./release/goal3-source-release-os-immutability-attestation.js";
+export { acquireResearchDaemon, ResearchDaemon } from "./research/daemon-runtime.js";
+export type { ResearchDaemonOptions, ResearchExecutionConsumer } from "./research/daemon-runtime.js";
+export { configureLegacyRuntimeHost, withLegacyRuntime, closeLegacyRuntime, shutdownLegacyRuntime } from "./agents/runtime/legacy-runtime-facade.js";
+export { createRuntimeRegistry } from "./agents/runtime/runtime-registry.js";
+export type { RuntimeRegistry, RuntimeRegistryConfig } from "./agents/runtime/runtime-registry.js";
+export { inspectRuntimeDoctor } from "./control/runtime-doctor.js";
+export { createWorkerExecutionHost } from "./agents/runtime/worker-execution-host.js";

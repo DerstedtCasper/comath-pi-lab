@@ -48,7 +48,9 @@ Only `trusted_replay_dependency` may be imported by final proof artifacts.
 - Campaign-native Mathlib replay has a host replay diagnostic with service-owned Lean/Lake version probes, expected toolchain match, binary hashes, safe replay arguments, and lakefile-declared build targets captured before final replay allocation.
 - Campaign-native Mathlib replay has an import-graph diagnostic with service-owned `lake env lean --deps` theorem/audit probes, stdout/stderr/output hashes, host-diagnostic hash, deps-stdout-only coarse Mathlib presence, option-argument rejection, and FinalReplayManifest v3 / replay-pack path-hash binding captured before final replay allocation.
 - FinalReplayManifest binds the dependency lock hash.
-- FinalReplayManifest verification keeps dependency-lock file paths inside the clean workspace, recomputes their hashes, binds the toolchain text to `lean-toolchain`, and matches V2 dependency package material before accepting the manifest.
+- `DependencyLock.local_imports` (schema `comath.dependency_lock_local_imports.v2`) records the clean-workspace-relative source root, each local Lean module/path/hash/direct-import list, the union import closure, and a canonical hash. The mapping is produced from `DependencyClosureV2`, then checked against the files at that source root.
+- `FormalSpecLock.imports_allowed` is the approved import-prefix source for clean replay. An existing local module outside that set remains blocked; adding a local lemma dependency requires an explicit approved lock change, not namespace-wide auto-allow.
+- FinalReplayManifest verification keeps dependency-lock file paths inside the clean workspace, recomputes their hashes, binds the toolchain text to `lean-toolchain`, and matches V2 package and local-source/import material before accepting the manifest. A non-passing DependencyClosureV2 report cannot be paired with a pass-shaped final manifest.
 
 ## Fail-Closed Cases
 
@@ -60,11 +62,13 @@ Only `trusted_replay_dependency` may be imported by final proof artifacts.
 - Symlink escape.
 - Network fetch during final proof replay.
 - Import prefix outside the approved set.
+- Existing local Lean lemma/source imported by a claim but omitted from its approved `FormalSpecLock.imports_allowed` list.
 - Agent-generated dependency metadata without service verification.
 - Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without dependency-material checks: a Mathlib `require`, pinned mathlib package revision, trusted mathlib4 source URL, recorded non-unknown license, and local `Mathlib` shadowing scan.
 - Final clean replay dependency artifacts using the legacy nonempty-file closure instead of `DependencyClosureV2` content and FinalReplayManifest v3 package revision binding.
 - Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without local Mathlib package materialization diagnostics: missing, empty, symlink-bearing, or rootless `.lake/packages/mathlib` material blocks before final replay workspace allocation and remains `proof_authority=none`.
 - FinalReplayManifest v3 artifacts whose dependency-lock file paths, hashes, toolchain text, or V2 external revision material no longer match the clean workspace and `dependency_closure.json`.
+- FinalReplayManifest v3 local-import mappings whose source root, per-file module/path/hash/import edges, import closure, or canonical hash no longer matches DependencyClosureV2 and the clean workspace; a failed or missing closure cannot be reported as a passing replay.
 - Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without host replay availability diagnostics: missing Lean/Lake binaries, failed version probes, Lean toolchain mismatch, unsafe replay arguments, or undeclared build targets block before final replay workspace allocation and remain `proof_authority=none`.
 - Campaign-native Mathlib final replay requests using `campaign_live_mathlib_non_toy` without Lean/Lake-produced import-graph diagnostics: failed `lake env lean --deps` probes, empty deps stdout, stderr-only dependency mentions, option-shaped theorem/audit file args, or missing primary-dependency evidence block before final replay workspace allocation and remain `proof_authority=none`.
 

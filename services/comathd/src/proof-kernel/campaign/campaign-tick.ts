@@ -1,4 +1,14 @@
 import { createHash } from "node:crypto";
+import { getAcquiredProjectRuntime } from "../../research/project-runtime.js";
+import { getProofWorkflowBridge } from "../../research/proof-workflow-bridge.js";
+import { scopeBindingSchema } from "../../research/research-schemas.js";
+import { requireApprovedFormalScope } from "./formal-spec-store.js";
+import { createProofObligationFromFormalSpecLock } from "./formal-spec-lock.js";
+import { replaceObligationById, resolveActiveObligation, selectReadyObligation } from "./active-obligation.js";
+import { advanceObligationStage, obligationStagePath } from "./obligation-stage.js";
+import { readCommittedFile, writeCommittedFile, withProjectCommit, stageResearchMutation } from "../../research/project-commit.js";
+import { notifyResearchEventsCommitted } from "../../research/event-store.js";
+import { canonicalJson as canonicalScopeJson } from "../../verification/runner-contracts.js";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative } from "node:path";
 import {
@@ -54,7 +64,7 @@ import { listLeanProjectFiles, sha256FileSync, type LeanProjectFiles } from "../
 import { ensembleCandidatesRel, ensembleDecisionRel } from "../ensemble/paths.js";
 import { writeProofPlanningArtifacts, type GoalModeProofPlanningInput } from "../stages/proof-obligation-dag.js";
 import { hasFormalReplayAuthorityPassEvidence, sanitizePublicFormalAuthorityVocabulary } from "./external-terminal-vocabulary.js";
-import { getCampaign, nextCampaignId, writeCampaign } from "./research-campaign.js";
+import { getCampaign, nextCampaignId, writeCampaign as writeCampaignState } from "./research-campaign.js";
 import {
   packageCampaignFinalAuthorityEvidenceWithDerivedBindingsV3,
   packageGoal3GaPositiveMatrixFinalAuthorityEvidenceWithDerivedBindingsV3,
@@ -76,6 +86,8 @@ import {
 
 export type StartCampaignInput = {
   project_root: string;
+  /** The durable control plane reserves this before writing its matching formal campaign. */
+  campaign_id?: string;
   project_name?: string;
   user_goal: string;
   domain?: string;
@@ -90,6 +102,7 @@ export type StartCampaignInput = {
 };
 
 export type CampaignTickInput = {
+  command_id?: string;
   project_root: string;
   campaign_id: string;
   actor?: string;
@@ -143,8 +156,39 @@ function now(): string {
 function writeRuntimeFile(projectRoot: string, rel: string, content: string): string {
   const path = assertPathAllowed(projectRoot, rel, { purpose: "runtime-write" });
   mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, content, "utf8");
+  writeCommittedFile(projectRoot, path, content);
   return path;
+}
+
+/** The flat run list remains history; only the active PO owns the stage view/cursor. */
+function writeCampaign(projectRoot: string, campaign: ResearchCampaign, actor = "campaign"): ResearchCampaign {
+  const active = campaign.active_obligation_id ? campaign.open_obligations.find(value => value.obligation_id === campaign.active_obligation_id)
+    : campaign.open_obligations.length === 1 ? campaign.open_obligations[0] : selectReadyObligation(campaign.open_obligations);
+  if (campaign.active_obligation_id && !active) throw new ComathError("Active PO was removed", { code: "ACTIVE_OBLIGATION_UNKNOWN" });
+  if (!active) return writeCampaignState(projectRoot, campaign, actor);
+  const before = getCampaign(projectRoot, campaign.campaign_id), known = new Set(before?.stage_runs.map(value => value.id) ?? []);
+  if (before && (campaign.stage_runs.length < before.stage_runs.length
+    || before.stage_runs.some((value, index) => canonicalScopeJson(value) !== canonicalScopeJson(campaign.stage_runs[index])))) {
+    throw new ComathError("Stage history cannot be rewritten", { code: "OBLIGATION_STAGE_HISTORY_CONFLICT" });
+  }
+  let packageHash: string | undefined;
+  try {
+    const runtime = getAcquiredProjectRuntime(projectRoot), scope = scopeBindingSchema.parse(active.locked_statement_structured.approved_scope);
+    if (runtime) packageHash = requireApprovedFormalScope(runtime, campaign.campaign_id, scope).receipt.packages.find(value => value.obligation_id === active.obligation_id)?.scope_package_sha256;
+  } catch (error) { if (error instanceof ComathError && error.code === "COMMIT_PENDING") throw error; }
+  const runs = campaign.stage_runs.map(run => {
+    if (known.has(run.id)) return run;
+    if (run.obligation_id && run.obligation_id !== active.obligation_id) throw new ComathError("Stage result belongs to another PO", { code: "OBLIGATION_STAGE_MISMATCH" });
+    if (packageHash && run.scope_package_sha256 && run.scope_package_sha256 !== packageHash) throw new ComathError("Stage result belongs to another scope", { code: "OBLIGATION_STAGE_SCOPE_MISMATCH" });
+    const cursor = campaign.obligation_cursors?.[active.obligation_id];
+    const attempt = cursor?.current_stage === run.stage ? cursor.stage_attempt : Math.max(0, ...campaign.stage_runs.filter(value => known.has(value.id) && value.obligation_id === active.obligation_id && value.stage === run.stage).map(value => value.stage_attempt ?? 1)) + 1;
+    return { ...run, obligation_id: active.obligation_id, stage_attempt: run.stage_attempt ?? attempt, ...(packageHash ? { scope_package_sha256: packageHash } : {}) };
+  });
+  const priorBlockers = new Set(before?.blockers.map(value => canonicalScopeJson(value)) ?? []);
+  const blockers = campaign.blockers.map(value => value.obligation_id || priorBlockers.has(canonicalScopeJson(value)) ? value : { ...value, obligation_id: active.obligation_id });
+  const updated = advanceObligationStage({ ...campaign, stage_runs: runs, blockers }, campaign.current_stage, { obligation_id: active.obligation_id,
+    blocked_reason: campaign.status === "blocked" ? String(blockers.find(value => value.obligation_id === active.obligation_id && !value.resolved)?.reason ?? "stage_blocked") : undefined });
+  return writeCampaignState(projectRoot, updated, actor);
 }
 
 function nextStageRunId(campaign: ResearchCampaign): string {
@@ -336,7 +380,7 @@ function blockForMissingArtifacts(input: {
       current_stage: rewindTarget,
       status: "blocked",
       blockers: [...input.campaign.blockers, blocker],
-      open_obligations: [{ ...input.obligation, status: "blocked" }],
+      open_obligations: replaceObligationById(input.campaign.open_obligations, { ...input.obligation, status: "blocked" }),
       stage_runs: [...input.campaign.stage_runs, stageRun(input.campaign, input.attemptedStage, "blocked", [blockerRel])],
       next_actions: [`repair ${rewindTarget} artifacts before retrying ${input.attemptedStage}`]
     }),
@@ -441,9 +485,11 @@ export function repairStageGateAndResume(input: StageGateRepairResumeInput): Sta
     can_promote_claim: false,
     created_at: now()
   });
-  const openObligations = campaign.open_obligations.map((obligation, index) =>
-    index === 0 && obligation.status === "blocked" ? { ...obligation, status: "queued" as const } : obligation
-  );
+  const active = resolveActiveObligation(campaign);
+  if (!active || blocker.obligation_id && blocker.obligation_id !== active.obligation_id) {
+    throw new ComathError("Repair does not belong to the active PO", { code: "OBLIGATION_REPAIR_SCOPE_MISMATCH" });
+  }
+  const openObligations = replaceObligationById(campaign.open_obligations, { ...active, status: "queued" });
   const repairedBlockers = campaign.blockers.map((item) =>
     item === blocker
       ? {
@@ -640,23 +686,23 @@ function lockedStatement(goal: string): string {
   return classifyLockedProblem(goal).statement;
 }
 
-function needsFormalSpecLock(goal: string): boolean {
-  const trimmed = goal.trim();
-  return !/^(prove|show|formalize|theorem|lemma)\b/i.test(trimmed);
+function needsFormalSpecLock(): boolean {
+  // A newly allocated campaign cannot already have a committed host approval.
+  // Wording such as "Prove" is task data, never authority to enter formal search.
+  return true;
 }
 
 function createProblemLock(projectRoot: string, input: { claim_id: string; goal: string; domain: string }): void {
-  const problem = classifyLockedProblem(input.goal);
   writeRuntimeFile(
     projectRoot,
     join(".comath", "lock", "problem_lock.md"),
-    [`# Problem Lock`, "", `claim_id: ${input.claim_id}`, "", problem.statement, ""].join("\n")
+    [`# Problem Draft`, "", `claim_id: ${input.claim_id}`, "", input.goal, "", "Awaiting host-approved FormalSpecLock.", ""].join("\n")
   );
   writeRuntimeFile(projectRoot, join(".comath", "lock", "assumptions.md"), "# Assumptions\n\n");
   writeRuntimeFile(
     projectRoot,
     join(".comath", "lock", "notation.md"),
-    ["# Notation", "", "No notation conventions are locked until FormalSpecLock approval.", ...problem.notation_lines, ""].join("\n")
+    ["# Notation", "", "No notation conventions are locked until FormalSpecLock approval.", ""].join("\n")
   );
   writeRuntimeFile(
     projectRoot,
@@ -665,7 +711,7 @@ function createProblemLock(projectRoot: string, input: { claim_id: string; goal:
       `claim_id: ${input.claim_id}`,
       `domain: ${input.domain}`,
       "target_formal_system: Lean4",
-      `theorem_name: ${problem.theorem_name ?? "unresolved"}`,
+      "theorem_name: unresolved",
       ""
     ].join("\n")
   );
@@ -2400,10 +2446,10 @@ function writeGoalModeSkeletonBlueprint(input: {
 export function startCampaign(input: StartCampaignInput): CampaignTickResult {
   const actor = input.actor ?? "campaign";
   const { project } = initProject({ name: input.project_name ?? "CoMath Research Campaign", root_path: input.project_root });
-  const requiresFormalSpecLock = needsFormalSpecLock(input.user_goal);
+  const requiresFormalSpecLock = needsFormalSpecLock();
   const claim = registerClaim(input.project_root, {
     project_id: project.project_id,
-    statement: lockedStatement(input.user_goal),
+    statement: input.user_goal,
     assumptions: [],
     domain: input.domain ?? "elementary",
     actor,
@@ -2411,7 +2457,7 @@ export function startCampaign(input: StartCampaignInput): CampaignTickResult {
   });
   createProblemLock(input.project_root, { claim_id: claim.id, goal: input.user_goal, domain: input.domain ?? "elementary" });
   const timestamp = now();
-  const campaignId = nextCampaignId(input.project_root);
+  const campaignId = input.campaign_id ?? nextCampaignId(input.project_root);
   if (requiresFormalSpecLock) {
     const blockerRel = join(".comath", "campaign", campaignId, "formal_spec_lock_blocker.json").replace(/\\/g, "/");
     writeRuntimeFile(
@@ -2803,10 +2849,10 @@ function blockForBroadSynthesisPlanning(input: {
     researchCampaignSchema.parse({
       ...input.campaign,
       current_stage: "blocked",
-      status: "terminal",
-      terminal_state: "blocked_with_replayable_reason",
-      open_obligations: [{ ...input.obligation, status: "blocked" }],
-      blockers: [blocker],
+      status: input.obligation.claim_id === input.campaign.root_claim_id ? "terminal" : "blocked",
+      terminal_state: input.obligation.claim_id === input.campaign.root_claim_id ? "blocked_with_replayable_reason" : undefined,
+      open_obligations: replaceObligationById(input.campaign.open_obligations, { ...input.obligation, status: "blocked" }),
+      blockers: [...input.campaign.blockers, blocker],
       stage_runs: [
         ...input.campaign.stage_runs,
         stageRun(input.campaign, "candidate_generation", "blocked", stageArtifacts)
@@ -3150,7 +3196,7 @@ function readSelectedCandidateRepairProvenanceForExport(input: {
   projectRoot: string;
   campaign: ResearchCampaign;
 }): Record<string, unknown> | undefined {
-  const obligation = input.campaign.open_obligations[0];
+  const obligation = resolveActiveObligation(input.campaign);
   if (!obligation) {
     return undefined;
   }
@@ -3277,10 +3323,10 @@ function blockCampaignAtFinalReplay(input: {
     researchCampaignSchema.parse({
       ...input.campaign,
       current_stage: "blocked",
-      status: "terminal",
-      terminal_state: "blocked_with_replayable_reason",
-      open_obligations: [{ ...input.obligation, status: "blocked" }],
-      blockers: [blocker],
+      status: input.obligation.claim_id === input.campaign.root_claim_id ? "terminal" : "blocked",
+      terminal_state: input.obligation.claim_id === input.campaign.root_claim_id ? "blocked_with_replayable_reason" : undefined,
+      open_obligations: replaceObligationById(input.campaign.open_obligations, { ...input.obligation, status: "blocked" }),
+      blockers: [...input.campaign.blockers, blocker],
       stage_runs: [...input.campaign.stage_runs, stageRun(input.campaign, stage, "blocked", [blockerRel])],
       next_actions: ["general proof planning and theorem-specific Lean project generation are required before replay"]
     }),
@@ -3306,7 +3352,7 @@ async function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
   ) {
     return undefined;
   }
-  const obligation = input.campaign.open_obligations[0];
+  const obligation = resolveActiveObligation(input.campaign);
   if (!obligation) {
     return undefined;
   }
@@ -3353,7 +3399,7 @@ async function resumeLeanRunnerRejectedAttemptsFromTerminal(input: {
       current_stage: "repair",
       status: "repairing",
       terminal_state: undefined,
-      open_obligations: [nextObligation],
+      open_obligations: replaceObligationById(input.campaign.open_obligations, nextObligation),
       stage_runs: [...input.campaign.stage_runs, completedStageRun(input.campaign, "blocked", stageArtifacts)],
       next_actions: [
         "execute repair tasks using LeanRunner stderr/stdout feedback",
@@ -5028,6 +5074,9 @@ async function completeCampaignAtFinalGlobalReplay(input: {
       reason: "service-owned Lean Authority v3 replay target is not available"
     });
   }
+  if (request.claimId !== input.obligation.claim_id) {
+    return blockCampaignAtFinalReplay({ ...input, reason: "final replay request does not belong to the active obligation claim" });
+  }
 
   let replay: CleanReplayResult;
   try {
@@ -5095,7 +5144,7 @@ async function completeCampaignAtFinalGlobalReplay(input: {
     });
   }
 
-  const claim = getClaim(input.projectRoot, input.campaign.project_id, input.campaign.root_claim_id);
+  const claim = getClaim(input.projectRoot, input.campaign.project_id, input.obligation.claim_id);
   if (!claim) {
     throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
   }
@@ -5139,6 +5188,18 @@ async function completeCampaignAtFinalGlobalReplay(input: {
     packaging.source_packaging_report_path,
     replay.third_party_replay_pack_path
   ].filter((path): path is string => typeof path === "string" && path.length > 0);
+  if (input.obligation.claim_id !== input.campaign.root_claim_id) {
+    const integrated = { ...input.obligation, status: "integrated" as const };
+    const all = replaceObligationById(input.campaign.open_obligations, integrated);
+    const completedRun = { ...completedStageRun(input.campaign, "final_global_replay", artifactPaths), obligation_id: integrated.obligation_id,
+      stage_attempt: input.campaign.obligation_cursors?.[integrated.obligation_id]?.stage_attempt ?? 1 };
+    const leafDone = advanceObligationStage({ ...input.campaign, open_obligations: all, stage_runs: [...input.campaign.stage_runs, completedRun] }, "completed_formal_proof", { obligation_id: integrated.obligation_id });
+    const ready = selectReadyObligation(all);
+    const { active_obligation_id: _finished, ...withoutActive } = leafDone;
+    const next = ready ? advanceObligationStage({ ...leafDone, status: "running" }, leafDone.obligation_cursors?.[ready.obligation_id]?.current_stage ?? "planning", { obligation_id: ready.obligation_id })
+      : { ...withoutActive, current_stage: "blocked" as const, status: "blocked" as const, next_actions: ["Resolve the remaining proof obligation prerequisites"] };
+    return { campaign: writeCampaignState(input.projectRoot, next, input.actor), obligation: integrated, final_replay: replay.final_replay, static_audit: replay.static_audit };
+  }
   const completed = writeCampaign(
     input.projectRoot,
     researchCampaignSchema.parse({
@@ -5146,7 +5207,7 @@ async function completeCampaignAtFinalGlobalReplay(input: {
       current_stage: "completed_formal_proof",
       status: "terminal",
       terminal_state: "completed_formal_proof",
-      open_obligations: [{ ...input.obligation, status: "kernel_checked" }],
+      open_obligations: replaceObligationById(input.campaign.open_obligations, { ...input.obligation, status: "integrated" }),
       formal_replay_authority_passed: true,
       formal_replay_authority_evidence: promotion.formal_replay_authority_evidence,
       stage_runs: [...input.campaign.stage_runs, completedStageRun(input.campaign, "final_global_replay", artifactPaths)],
@@ -5156,19 +5217,171 @@ async function completeCampaignAtFinalGlobalReplay(input: {
   );
   return {
     campaign: completed,
-    obligation: { ...input.obligation, status: "kernel_checked" },
+    obligation: { ...input.obligation, status: "integrated" },
     final_replay: replay.final_replay,
     static_audit: replay.static_audit
   };
 }
 
-export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
+function requireObligationApproval(projectRoot: string, campaign: ResearchCampaign, obligation: ProofObligation): void {
+  const runtime = getAcquiredProjectRuntime(projectRoot);
+  if (!runtime) throw new ComathError("Formal execution requires the service owner and committed host scope", { code: "FORMAL_SCOPE_NOT_APPROVED" });
+  const scope = scopeBindingSchema.parse(obligation.locked_statement_structured.approved_scope);
+  const approved = requireApprovedFormalScope(runtime, campaign.campaign_id, scope);
+  const expected = createProofObligationFromFormalSpecLock({ obligation_id: obligation.obligation_id, formal_spec_lock: approved.lock, assumption_ledger: approved.ledger });
+  const { approved_scope: _scope, ...locked } = obligation.locked_statement_structured;
+  if (approved.obligation_binding.obligation_id !== obligation.obligation_id || obligation.claim_id !== expected.claim_id
+    || obligation.statement_hash !== expected.statement_hash || obligation.locked_statement_nl !== expected.locked_statement_nl || obligation.lean_target !== expected.lean_target
+    || canonicalScopeJson(locked) !== canonicalScopeJson(expected.locked_statement_structured) || canonicalScopeJson(obligation.assumptions) !== canonicalScopeJson(expected.assumptions)
+    || canonicalScopeJson(obligation.dependencies) !== canonicalScopeJson(approved.obligation_binding.dependencies)
+    || obligation.parent_obligation_id !== approved.obligation_binding.parent_obligation_id) {
+    throw new ComathError("Proof obligation differs from its approved package", { code: "FORMAL_SCOPE_NOT_APPROVED" });
+  }
+}
+function blockUnapprovedObligation(input: CampaignTickInput, campaign: ResearchCampaign, error: unknown): CampaignTickResult {
+  if (error instanceof ComathError && error.code === "COMMIT_PENDING") throw error;
+  if (campaign.status === "terminal") return { campaign, blocker: "formal_scope_not_approved" };
+  const active = campaign.open_obligations.find(value => value.obligation_id === campaign.active_obligation_id);
+  const blocker = { code: "FORMAL_SCOPE_NOT_APPROVED", reason: "formal_scope_not_approved", ...(active ? { obligation_id: active.obligation_id } : {}) };
+  return { campaign: writeCampaign(input.project_root, { ...campaign, status: "blocked", current_stage: "blocked",
+    ...(active ? { open_obligations: replaceObligationById(campaign.open_obligations, { ...active, status: "blocked" }) } : {}),
+    blockers: [...campaign.blockers.filter(value => value.code !== blocker.code || value.obligation_id !== blocker.obligation_id), blocker],
+    next_actions: ["Prepare and obtain host approval for the exact formal scope before formal execution"] }, input.actor ?? "campaign"), blocker: blocker.reason };
+}
+
+/** Consume the exact approved planning after-images; no re-render or synthetic proof generation. */
+function consumeApprovedPlanning(input: CampaignTickInput, rawCampaign: ResearchCampaign, obligation: ProofObligation): CampaignTickResult {
+  const runtime = getAcquiredProjectRuntime(input.project_root)!;
+  const scope = scopeBindingSchema.parse(obligation.locked_statement_structured.approved_scope);
+  const approved = requireApprovedFormalScope(runtime, rawCampaign.campaign_id, scope);
+  const bound = approved.receipt.packages.find(value => value.obligation_id === obligation.obligation_id)!;
+  const campaign = advanceObligationStage(rawCampaign, "planning", { obligation_id: obligation.obligation_id });
+  const cursor = campaign.obligation_cursors![obligation.obligation_id]!;
+  const control = runtime.store.getCampaign(campaign.campaign_id)!;
+  const sourceCommit = runtime.store.get("SELECT plan_json FROM trust_commits WHERE operation_id=? AND phase='committed'", approved.receipt.operation_id);
+  if (!sourceCommit) throw new ComathError("Approved planning operation is missing", { code: "APPROVED_PLANNING_INVALID" });
+  const plan = JSON.parse(String(sourceCommit.plan_json));
+  const prefix = `.comath/campaign/${campaign.campaign_id}/proof/plans/${approved.receipt.prepared_sha256}/`;
+  const targets = (plan.targets as { relative_path: string; after_sha256: string }[]).filter(value => value.relative_path.startsWith(prefix));
+  const required = ["lemma_dag.json", "line_map.json", "Skeleton.lean", "skeleton_report.md", `obligations/${obligation.obligation_id}.yaml`];
+  if (required.some(name => !targets.some(value => value.relative_path === prefix + name))) throw new ComathError("Approved planning is incomplete", { code: "APPROVED_PLANNING_INVALID" });
+  const sources = targets.map(target => {
+    const bytes = readCommittedFile(input.project_root, target.relative_path);
+    if (createHash("sha256").update(bytes).digest("hex") !== target.after_sha256) throw new ComathError("Approved planning bytes changed", { code: "APPROVED_PLANNING_INVALID" });
+    return { path: target.relative_path, sha256: target.after_sha256 };
+  });
+  const lineMap = JSON.parse(readCommittedFile(input.project_root, prefix + "line_map.json"));
+  const line = lineMap.lines?.find((value: { obligation_id: string }) => value.obligation_id === obligation.obligation_id);
+  if (!line || line.formal_theorem_header !== approved.lock.theorem_header || line.informal_statement !== obligation.locked_statement_nl
+    || canonicalScopeJson(line.dependencies) !== canonicalScopeJson(obligation.dependencies)) throw new ComathError("Planning does not bind the active declaration", { code: "APPROVED_PLANNING_INVALID" });
+  const manifestPath = obligationStagePath(campaign, "planning-consumed.json");
+  const operationId = `proof-plan:${campaign.campaign_id}:${obligation.obligation_id}:a${cursor.stage_attempt}:${bound.scope_package_sha256}`;
+  const result = withProjectCommit(input.project_root, { operation_id: operationId, campaign_id: campaign.campaign_id, expected_revision: control.revision,
+    request: { scope, stage_attempt: cursor.stage_attempt, sources } }, () => {
+    if (canonicalScopeJson(getCampaign(input.project_root, campaign.campaign_id)) !== canonicalScopeJson(rawCampaign)
+      || runtime.store.getCampaign(campaign.campaign_id)?.revision !== control.revision) throw new ComathError("Stage state changed", { code: "OBLIGATION_STAGE_CONFLICT" });
+    writeCommittedFile(input.project_root, manifestPath, canonicalScopeJson({ schema_version: "comath.approved_planning_consumption.v1", campaign_id: campaign.campaign_id,
+      obligation_id: obligation.obligation_id, claim_id: obligation.claim_id, scope, scope_package_sha256: bound.scope_package_sha256,
+      intake_id: approved.receipt.intake_id, prepared_sha256: approved.receipt.prepared_sha256, stage_attempt: cursor.stage_attempt, sources, proof_authority: "none" }));
+    const run = { ...completedStageRun(campaign, "planning", [manifestPath]), obligation_id: obligation.obligation_id, stage_attempt: cursor.stage_attempt, scope_package_sha256: bound.scope_package_sha256 };
+    const next = advanceObligationStage({ ...campaign, stage_runs: [...campaign.stage_runs, run], next_actions: ["Dispatch formal candidate tasks and await their accepted source artifacts"] }, "candidate_generation", { obligation_id: obligation.obligation_id });
+    const saved = writeCampaignState(input.project_root, next, input.actor ?? "campaign");
+    const payload = { obligation_id: obligation.obligation_id, stage: "planning", stage_attempt: cursor.stage_attempt, next_stage: "candidate_generation", manifest_path: manifestPath,
+      scope_package_sha256: bound.scope_package_sha256, proof_authority: "none" };
+    stageResearchMutation(input.project_root, "INSERT INTO events(campaign_id,type,actor,payload_json,payload_sha256,created_at) VALUES (?,'ProofStageAdvanced','service:proof-workflow',?,?,?)",
+      [campaign.campaign_id, canonicalScopeJson(payload), createHash("sha256").update(canonicalScopeJson(payload)).digest("hex"), now()]);
+    stageResearchMutation(input.project_root, "UPDATE campaigns SET revision=?,control_json=json_set(control_json,'$.revision',?,'$.snapshot_seq',(SELECT MAX(seq) FROM events WHERE campaign_id=?)) WHERE campaign_id=? AND revision=?",
+      [control.revision + 1, control.revision + 1, campaign.campaign_id, campaign.campaign_id, control.revision]);
+    return { campaign: saved, obligation };
+  });
+  notifyResearchEventsCommitted(runtime);
+  return result;
+}
+
+/** Shared approved-state preparation; this never invokes a legacy candidate or Lean execution. */
+function prepareApprovedCampaignStage(input: CampaignTickInput, campaign: ResearchCampaign): CampaignTickResult {
   const actor = input.actor ?? "campaign";
+  if (campaign.status === "paused") {
+    throw new ComathError("campaign is paused; resume it before ticking", {
+      statusCode: 409,
+      code: "CAMPAIGN_PAUSED"
+    });
+  }
+  if (campaign.status === "blocked") {
+    const globalBlocker = campaign.blockers.some(value => !value.resolved && !value.obligation_id);
+    const ready = globalBlocker ? null : selectReadyObligation(campaign.open_obligations);
+    if (ready) {
+      campaign = writeCampaign(input.project_root, advanceObligationStage({ ...campaign, status: "running" }, campaign.obligation_cursors?.[ready.obligation_id]?.current_stage ?? "planning", { obligation_id: ready.obligation_id }), actor);
+    } else {
+    return {
+      campaign,
+      blocker: campaign.blockers
+        .map((blocker) => blocker.reason)
+        .find((reason): reason is string => typeof reason === "string")
+    };
+    }
+  }
+  let obligation = resolveActiveObligation(campaign);
+  if (!obligation && campaign.open_obligations.length) {
+    const ready = selectReadyObligation(campaign.open_obligations);
+    if (ready) { campaign = writeCampaign(input.project_root, advanceObligationStage(campaign, campaign.obligation_cursors?.[ready.obligation_id]?.current_stage ?? "planning", { obligation_id: ready.obligation_id }), actor); obligation = ready; }
+  }
+  if (!obligation) {
+    return { campaign, blocker: `no_ready_obligation:${campaign.open_obligations.filter(value => value.status !== "integrated").map(value => value.obligation_id).join(",")}` };
+  }
+  campaign = advanceObligationStage(campaign, campaign.current_stage, { obligation_id: obligation.obligation_id });
+  try { requireObligationApproval(input.project_root, campaign, obligation); } catch (error) { return blockUnapprovedObligation(input, campaign, error); }
+  return { campaign, obligation };
+}
+export function inspectApprovedProofStage(input: CampaignTickInput): CampaignTickResult {
   const campaign = getCampaign(input.project_root, input.campaign_id);
+  if (!campaign) throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
+  if (campaign.status === "terminal") return { campaign };
+  return prepareApprovedCampaignStage(input, campaign);
+}
+/** Internal owner stage entry. Public tick/replay use the registered owner instead. */
+export function advanceApprovedProofPlanning(input: CampaignTickInput): CampaignTickResult {
+  const prepared = inspectApprovedProofStage(input);
+  if (prepared.blocker || !prepared.obligation) return prepared;
+  if (prepared.campaign.current_stage !== "planning") return { ...prepared, blocker: "formal_candidate_consumer_unavailable" };
+  return consumeApprovedPlanning(input, getCampaign(input.project_root, input.campaign_id)!, prepared.obligation);
+}
+
+function legacyFinalReplayRequiresAsyncOwner(input: CampaignTickInput): CampaignTickResult | undefined {
+  const runtime = getAcquiredProjectRuntime(input.project_root);
+  if (!runtime || runtime.store.getCampaign(input.campaign_id)) return undefined;
+  const campaign = getCampaign(input.project_root, input.campaign_id);
+  if (!campaign || campaign.status !== "running" || campaign.current_stage !== "final_global_replay") return undefined;
+  const obligation = resolveActiveObligation(campaign);
+  return { campaign, ...(obligation ? { obligation } : {}), blocker: "legacy_final_replay_requires_async_owner" };
+}
+
+export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
+  const runtime = getAcquiredProjectRuntime(input.project_root);
+  const control = runtime?.store.getCampaign(input.campaign_id), bridge = runtime ? getProofWorkflowBridge(runtime) : undefined;
+  if (control) {
+    if (bridge) return bridge.requestAdvance(input);
+    const current = getCampaign(input.project_root, input.campaign_id);
+    if (!current) throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
+    return { campaign: current, blocker: "proof_workflow_owner_unavailable" };
+  }
+  if (bridge) return bridge.requestLegacyAdvance(input, async () =>
+    legacyFinalReplayRequiresAsyncOwner(input) ?? tickLegacyCampaignInline(input));
+  const legacyReplayBlocker = legacyFinalReplayRequiresAsyncOwner(input);
+  if (legacyReplayBlocker) return legacyReplayBlocker;
+  return tickLegacyCampaignInline(input);
+}
+
+async function tickLegacyCampaignInline(input: CampaignTickInput): Promise<CampaignTickResult> {
+  const actor = input.actor ?? "campaign";
+  let campaign = getCampaign(input.project_root, input.campaign_id);
   if (!campaign) {
     throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
   }
   if (campaign.status === "terminal") {
+    const obligation = resolveActiveObligation(campaign);
+    if (!obligation) return { campaign };
+    try { requireObligationApproval(input.project_root, campaign, obligation); } catch (error) { return blockUnapprovedObligation(input, campaign, error); }
     const resumed = await resumeLeanRunnerRejectedAttemptsFromTerminal({
       projectRoot: input.project_root,
       campaign,
@@ -5179,24 +5392,16 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
     }
     return { campaign };
   }
-  if (campaign.status === "paused") {
-    throw new ComathError("campaign is paused; resume it before ticking", {
-      statusCode: 409,
-      code: "CAMPAIGN_PAUSED"
-    });
+  const prepared = prepareApprovedCampaignStage(input, campaign);
+  if (prepared.blocker || !prepared.obligation) return prepared;
+  campaign = prepared.campaign;
+  let obligation = prepared.obligation;
+  const serviceOwnedScope = obligation.locked_statement_structured.approved_scope !== undefined;
+  if (serviceOwnedScope && campaign.current_stage === "planning") {
+    const stored = getCampaign(input.project_root, campaign.campaign_id)!;
+    return consumeApprovedPlanning(input, stored, obligation);
   }
-  if (campaign.status === "blocked") {
-    return {
-      campaign,
-      blocker: campaign.blockers
-        .map((blocker) => blocker.reason)
-        .find((reason): reason is string => typeof reason === "string")
-    };
-  }
-  const obligation = campaign.open_obligations[0];
-  if (!obligation) {
-    throw new ComathError("campaign has no open proof obligation", { statusCode: 400, code: "CAMPAIGN_NO_OBLIGATION" });
-  }
+  if (serviceOwnedScope && campaign.current_stage === "candidate_generation") return { campaign, obligation, blocker: "formal_candidate_consumer_unavailable" };
   const artifactBlocker = enforceRequiredArtifacts({ projectRoot: input.project_root, campaign, obligation, actor });
   if (artifactBlocker) {
     return artifactBlocker;
@@ -5682,7 +5887,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "candidate_verification",
-        open_obligations: [{ ...obligation, status: "candidate_search" }],
+        open_obligations: replaceObligationById(campaign.open_obligations, { ...obligation, status: "candidate_search" }),
         stage_runs: [
           ...campaign.stage_runs,
           completedStageRun(campaign, "candidate_generation", [generationRel, candidatesRel])
@@ -5812,7 +6017,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
             ...campaign,
             current_stage: "candidate_verification",
             status: "running",
-            open_obligations: [{ ...obligation, status: "candidate_search" }],
+            open_obligations: replaceObligationById(campaign.open_obligations, { ...obligation, status: "candidate_search" }),
             stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "candidate_verification", [verificationRel, attemptCheckReportRel])],
             next_actions: [
               "run service-owned LeanRunner over ready repaired attempts",
@@ -5877,9 +6082,9 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
           researchCampaignSchema.parse({
             ...campaign,
             current_stage: "blocked",
-            status: "terminal",
-            terminal_state: "blocked_with_replayable_reason",
-            open_obligations: [{ ...obligation, status: "blocked" }],
+            status: obligation.claim_id === campaign.root_claim_id ? "terminal" : "blocked",
+            terminal_state: obligation.claim_id === campaign.root_claim_id ? "blocked_with_replayable_reason" : undefined,
+            open_obligations: replaceObligationById(campaign.open_obligations, { ...obligation, status: "blocked" }),
             blockers: [
               ...campaign.blockers,
               {
@@ -5921,7 +6126,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
           ...campaign,
           current_stage: "candidate_arbitration",
           status: "running",
-          open_obligations: [{ ...obligation, status: "candidate_search" }],
+          open_obligations: replaceObligationById(campaign.open_obligations, { ...obligation, status: "candidate_search" }),
           stage_runs: [
             ...campaign.stage_runs,
             completedStageRun(campaign, "candidate_verification", [
@@ -6011,7 +6216,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
             ...campaign,
             current_stage: "repair",
             status: "repairing",
-            open_obligations: [{ ...obligation, status: "blocked" }],
+            open_obligations: replaceObligationById(campaign.open_obligations, { ...obligation, status: "blocked" }),
             blockers: [
               ...campaign.blockers,
               {
@@ -6069,9 +6274,9 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         researchCampaignSchema.parse({
           ...campaign,
           current_stage: "blocked",
-          status: "terminal",
-          terminal_state: "blocked_with_replayable_reason",
-          open_obligations: [{ ...obligation, status: "blocked" }],
+          status: obligation.claim_id === campaign.root_claim_id ? "terminal" : "blocked",
+          terminal_state: obligation.claim_id === campaign.root_claim_id ? "blocked_with_replayable_reason" : undefined,
+          open_obligations: replaceObligationById(campaign.open_obligations, { ...obligation, status: "blocked" }),
           blockers: [
             {
               reason: "native candidate arbitration requires proof-grade candidate evidence",
@@ -6099,7 +6304,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "refutation_red_team",
-        open_obligations: [{ ...obligation, status: "candidate_selected" }],
+        open_obligations: replaceObligationById(campaign.open_obligations, { ...obligation, status: "candidate_selected" }),
         stage_runs: [
           ...campaign.stage_runs,
           completedStageRun(
@@ -6146,7 +6351,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
         ...campaign,
         status: "running",
         current_stage: "candidate_verification",
-        open_obligations: [nextObligation],
+        open_obligations: replaceObligationById(campaign.open_obligations, nextObligation),
         stage_runs: [
           ...campaign.stage_runs,
           completedStageRun(campaign, "repair", repairStageArtifacts)
@@ -6192,7 +6397,7 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
       researchCampaignSchema.parse({
         ...campaign,
         current_stage: "integration_refactor",
-        open_obligations: [{ ...obligation, status: "candidate_selected" }],
+        open_obligations: replaceObligationById(campaign.open_obligations, { ...obligation, status: "candidate_selected" }),
         stage_runs: [...campaign.stage_runs, completedStageRun(campaign, "refutation_red_team", [reviewRel])],
         next_actions: ["integrate and refactor selected candidate after red-team gate"]
       }),
@@ -6379,18 +6584,26 @@ export async function tickCampaign(input: CampaignTickInput): Promise<CampaignTi
 }
 
 export async function replayCampaign(input: CampaignTickInput): Promise<CampaignTickResult> {
+  const runtime = getAcquiredProjectRuntime(input.project_root);
+  if (runtime?.store.getCampaign(input.campaign_id)) {
+    const bridge = getProofWorkflowBridge(runtime);
+    if (bridge) return bridge.requestReplay(input);
+    const current = getCampaign(input.project_root, input.campaign_id);
+    if (!current) throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
+    return { campaign: current, blocker: "proof_workflow_owner_unavailable" };
+  }
   const campaign = getCampaign(input.project_root, input.campaign_id);
   if (!campaign) {
     throw new ComathError("campaign not found", { statusCode: 404, code: "CAMPAIGN_NOT_FOUND" });
   }
-  const claim = getClaim(input.project_root, campaign.project_id, campaign.root_claim_id);
+  const activeId = campaign.active_obligation_id;
+  const obligation = activeId ? campaign.open_obligations.find(value => value.obligation_id === activeId) : resolveActiveObligation(campaign);
+  if (!obligation) throw new ComathError("Replay requires a concrete obligation", { statusCode: 400, code: "CAMPAIGN_NO_OBLIGATION" });
+  const claim = getClaim(input.project_root, campaign.project_id, obligation.claim_id);
   if (!claim) {
     throw new ComathError("campaign root claim not found", { statusCode: 404, code: "CLAIM_NOT_FOUND" });
   }
-  const obligation = campaign.open_obligations[0];
-  if (!obligation) {
-    throw new ComathError("campaign has no open proof obligation", { statusCode: 400, code: "CAMPAIGN_NO_OBLIGATION" });
-  }
+  try { requireObligationApproval(input.project_root, campaign, obligation); } catch (error) { return blockUnapprovedObligation(input, campaign, error); }
   if (campaign.terminal_state === "completed_refutation") {
     return {
       campaign,

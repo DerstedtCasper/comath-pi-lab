@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { appendAuditEvent } from "../audit/jsonl-writer.js";
 import { ComathError } from "../errors.js";
@@ -230,10 +230,12 @@ function readBoundedText(path: string, maxBytes: number): { text: string; trunca
   if (!existsSync(path)) {
     return { text: "", truncated: false };
   }
-  const buffer = readFileSync(path);
-  const truncated = buffer.byteLength > maxBytes;
+  const size = statSync(path).size, buffer = Buffer.alloc(Math.min(size, maxBytes)), fd = openSync(path, "r");
+  let count: number;
+  try { count = readSync(fd, buffer, 0, buffer.length, 0); } finally { closeSync(fd); }
+  const truncated = size > maxBytes;
   return {
-    text: buffer.subarray(0, maxBytes).toString("utf8"),
+    text: buffer.subarray(0, count).toString("utf8"),
     truncated
   };
 }
@@ -242,13 +244,15 @@ function readStreamChunk(path: string, cursor: number, maxBytes: number): { text
   if (!existsSync(path)) {
     return { text: "", next: cursor, size: 0, truncated: false };
   }
-  const buffer = readFileSync(path);
-  const size = buffer.byteLength;
+  const size = statSync(path).size;
   const safeCursor = Math.min(cursor, size);
   const end = Math.min(safeCursor + maxBytes, size);
+  const buffer = Buffer.alloc(end - safeCursor), fd = openSync(path, "r");
+  let count: number;
+  try { count = readSync(fd, buffer, 0, buffer.length, safeCursor); } finally { closeSync(fd); }
   return {
-    text: buffer.subarray(safeCursor, end).toString("utf8"),
-    next: end,
+    text: buffer.subarray(0, count).toString("utf8"),
+    next: safeCursor + count,
     size,
     truncated: end < size
   };

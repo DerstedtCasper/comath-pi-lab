@@ -5,6 +5,9 @@ import {
   issueCampaignLoopCapability,
   runResearchCampaignLoop
 } from "./research-loop.js";
+import { createDefaultResearchOperatorClient, type ResearchOperatorClient } from "./research-client.js";
+import { dispatchResearchOperatorRequest } from "./research-tools.js";
+import { renderDurableResearchDashboard } from "./renderers.js";
 
 export * from "./subagents.js";
 export * from "./widgets.js";
@@ -12,6 +15,8 @@ export * from "./renderers.js";
 export * from "./research-loop.js";
 export * from "./runtime-registration.js";
 export * from "./tools/review.js";
+export * from "./research-client.js";
+export * from "./research-tools.js";
 
 export type ParsedComathCommand = {
   namespace: "cm";
@@ -60,13 +65,15 @@ type PiExtensionApi = {
     description?: string;
     handler(args: string, ctx: unknown): Promise<void> | void;
   }): void;
-  on(event: "resources_discover", handler: (event: unknown, ctx: unknown) => unknown): void;
+  sendMessage?(message: { customType: string; content: string; details: unknown; display: boolean }, options: { triggerTurn: false }): void;
+  on(event: "resources_discover" | "session_shutdown", handler: (event: unknown, ctx: unknown) => unknown): void;
 };
 
 type PiRuntimeContext = {
   ui?: {
     confirm?(title: string, body?: string): Promise<boolean> | boolean;
     notify?(message: string, level?: "info" | "warning" | "error"): Promise<void> | void;
+    setWidget?(key: string, lines: string[] | undefined): Promise<void> | void;
   };
 };
 
@@ -76,6 +83,7 @@ type RegisterComathPiRuntimeOptions = {
   project_root?: string;
   project_name?: string;
   max_ticks?: number;
+  researchClient?: ResearchOperatorClient;
 };
 
 export type ToolDescriptor = {
@@ -217,6 +225,7 @@ const COMATH_EXTENSION_COMMANDS = [
 
 const PI_RUNTIME_COMMANDS = [
   "/cm:research",
+  "/cm:dashboard",
   "/cm:campaign",
   "/cm:agent",
   "/cm:audit",
@@ -6453,6 +6462,104 @@ export async function runComathResearchCommand(
   );
 }
 
+const durableResearchTools: Record<string, string> = {
+  capabilities: "research_capabilities_get", status: "research_campaign_get", frontier: "research_frontier_get", budget: "research_budget_get", events: "research_events_read",
+  start: "research_campaign_start", patch: "research_dag_patch", synthesize: "research_dag_patch", "budget-update": "research_budget_update",
+  pause: "research_campaign_pause", resume: "research_campaign_resume", cancel: "research_campaign_cancel", finish: "research_campaign_finish",
+  task: "research_task_get", "task-cancel": "research_task_cancel", retry: "research_task_retry", "resolve-issue": "research_validation_issue_resolve", preparations: "research_validation_intake_preparations_list", checkpoint: "research_checkpoint_get", operation: "research_operation_get",
+  "prepare-lock": "research_intake_prepare", "request-approval": "research_intake_request_approval"
+};
+
+function durableJsonInput(args: string[]): Record<string, unknown> | undefined {
+  const value = optionValue(args, "--input");
+  if (value === undefined) return undefined;
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { throw new Error("--input must be a JSON object"); }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("--input must be a JSON object");
+  return parsed as Record<string, unknown>;
+}
+
+function durableReadInput(subcommand: string, args: string[]): Record<string, unknown> {
+  const campaignId = optionValue(args, "--campaign-id"), taskId = optionValue(args, "--task-id"), operationId = optionValue(args, "--operation-id");
+  if (subcommand === "capabilities") return {};
+  if (subcommand === "preparations") return campaignId ? { campaign_id: campaignId } : {};
+  if (subcommand === "status" || subcommand === "budget") return { campaign_id: requiredOption(campaignId, "campaign_id") };
+  if (subcommand === "frontier") return { campaign_id: requiredOption(campaignId, "campaign_id"), ...(optionValue(args, "--after-task-id") ? { after_task_id: optionValue(args, "--after-task-id") } : {}), ...(numberOptionValue(args, "--limit") !== undefined ? { limit: numberOptionValue(args, "--limit") } : {}) };
+  if (subcommand === "events") return { campaign_id: requiredOption(campaignId, "campaign_id"), after_seq: numberOptionValue(args, "--after-seq") ?? 0, limit: numberOptionValue(args, "--limit") ?? 100 };
+  if (subcommand === "task" || subcommand === "checkpoint") return { task_id: requiredOption(taskId, "task_id") };
+  if (subcommand === "operation") return { operation_id: requiredOption(operationId, "operation_id") };
+  throw new Error(`durable ${subcommand} requires --input with the documented service request body`);
+}
+
+/** The durable command family never falls through to the legacy goal-mode loop. */
+export async function runDurableResearchCommand(researchClient: ResearchOperatorClient, command: string) {
+  const parsed = parseComathCommand(command);
+  if (!parsed || parsed.action !== "research" || parsed.subcommand !== "durable") throw new Error("durable research command is required");
+  const [subcommand, ...args] = parsed.args;
+  const tool = subcommand ? durableResearchTools[subcommand] : undefined;
+  if (!tool) throw new Error(`unsupported durable research command: ${subcommand ?? ""}`);
+  const input = durableJsonInput(args) ?? durableReadInput(subcommand!, args);
+  const requestId = optionValue(args, "--request-id") ?? `pi-durable-${subcommand}-${Date.now().toString(36)}`;
+  return dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: requestId, tool, input });
+}
+
+/** Read-only dashboard facts; like all operator output, this has no proof authority. */
+export async function readDurableResearchDashboard(researchClient: ResearchOperatorClient, campaignId: string) {
+  const dashboard = await dispatchResearchOperatorRequest(researchClient, { version: 1, request_id: `pi-dashboard-${Date.now().toString(36)}`, tool: "research_dashboard_get", input: { campaign_id: campaignId } });
+  return { campaign: dashboard, frontier: dashboard, budget: dashboard, proof_authority: "none" as const };
+}
+
+type DurableDashboardSnapshot = Awaited<ReturnType<typeof readDurableResearchDashboard>>;
+type DashboardSubscriptionRegistry = {
+  start(ctx: unknown, client: ResearchOperatorClient, campaignId: string, afterSeq: number, refresh: () => Promise<void>): void;
+  close(ctx?: unknown): void;
+};
+
+function dashboardSnapshotSeq(snapshot: DurableDashboardSnapshot): number {
+  const campaign = snapshot.campaign as { result?: { data?: { snapshot_seq?: unknown } } };
+  return Number.isSafeInteger(campaign.result?.data?.snapshot_seq) ? campaign.result!.data!.snapshot_seq as number : 0;
+}
+
+function createDashboardSubscriptionRegistry(): DashboardSubscriptionRegistry {
+  const controllers = new Set<AbortController>();
+  const byContext = new WeakMap<object, AbortController>();
+  const contextKey = (ctx: unknown): object | undefined => ctx && typeof ctx === "object" ? ctx as object : undefined;
+  const close = (ctx?: unknown) => {
+    const key = contextKey(ctx);
+    if (key) {
+      const controller = byContext.get(key);
+      if (controller) { controller.abort(); controllers.delete(controller); }
+      byContext.delete(key);
+      return;
+    }
+    for (const controller of controllers) controller.abort();
+    controllers.clear();
+  };
+  return {
+    start(ctx, client, campaignId, afterSeq, refresh) {
+      close(ctx);
+      if (!client.subscribeEvents) return;
+      const controller = new AbortController(), key = contextKey(ctx);
+      controllers.add(controller); if (key) byContext.set(key, controller);
+      void (async () => {
+        try {
+          for await (const event of client.subscribeEvents!({ campaign_id: campaignId, after_seq: afterSeq, signal: controller.signal })) {
+            if (controller.signal.aborted) break;
+            await refresh();
+            afterSeq = event.seq;
+          }
+        } catch {
+          // A dashboard is a read-only projection; a dropped subscription leaves its last known snapshot visible.
+        } finally {
+          controllers.delete(controller);
+          if (key && byContext.get(key) === controller) byContext.delete(key);
+        }
+      })();
+    },
+    close
+  };
+}
+
 function optionValue(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   if (index === -1) {
@@ -7048,6 +7155,10 @@ async function handleResearchCommand(
   if (!parsed || parsed.action !== "research") {
     throw new Error("research command is required");
   }
+  if (parsed.subcommand === "durable") {
+    await notifyRuntimeResult(ctx, await runDurableResearchCommand(options.researchClient ?? createDefaultResearchOperatorClient(), `/cm:research ${args}`.trim()));
+    return;
+  }
   const projectRoot = projectRootFrom(options, parsed.args);
   const actor = actorFrom(options, parsed.args);
   const confirmationId = await requirePiHostConfirmation(ctx, "/cm:research", {
@@ -7066,6 +7177,22 @@ async function handleResearchCommand(
       max_ticks: numberOptionValue(parsed.args, "--max-ticks") ?? options.max_ticks
     })
   );
+}
+
+async function handleDashboardCommand(options: RegisterComathPiRuntimeOptions, args: string, ctx: unknown, subscriptions: DashboardSubscriptionRegistry): Promise<void> {
+  const parsed = parseComathCommand(`/cm:dashboard ${args}`.trim());
+  if (!parsed || parsed.action !== "dashboard") throw new Error("dashboard command is required");
+  const campaignId = optionValue(parsed.args, "--campaign-id") ?? firstPositional(parsed.args);
+  const resolvedCampaignId = requiredOption(campaignId, "campaign_id"), researchClient = options.researchClient ?? createDefaultResearchOperatorClient();
+  let snapshot: DurableDashboardSnapshot | undefined;
+  const refresh = async () => {
+    snapshot = await readDurableResearchDashboard(researchClient, resolvedCampaignId);
+    const model = renderDurableResearchDashboard(snapshot);
+    await runtimeCtx(ctx).ui?.setWidget?.("comath-research", model.sections.flatMap(section => [section.title, ...section.rows]));
+  };
+  await refresh();
+  subscriptions.start(ctx, researchClient, resolvedCampaignId, dashboardSnapshotSeq(snapshot!), refresh);
+  await notifyRuntimeResult(ctx, snapshot);
 }
 
 async function handleAgentCommand(
@@ -9081,8 +9208,10 @@ export function createDefaultComathClient(): ComathClient {
   });
 }
 
-export default function registerComathPiRuntime(pi: PiExtensionApi, options: RegisterComathPiRuntimeOptions = {}): void {
+export function registerComathPiRuntime(pi: PiExtensionApi, options: RegisterComathPiRuntimeOptions = {}): void {
   const client = options.client ?? createDefaultComathClient();
+  const researchClient = options.researchClient ?? createDefaultResearchOperatorClient();
+  const dashboardSubscriptions = createDashboardSubscriptionRegistry();
 
   for (const tool of createComathTools().filter((descriptor) => PI_RUNTIME_EXECUTABLE_TOOL_NAMES.has(descriptor.name))) {
     pi.registerTool({
@@ -9111,9 +9240,28 @@ export default function registerComathPiRuntime(pi: PiExtensionApi, options: Reg
   }
 
   pi.registerCommand("cm:research", {
-    description: "Start or continue a goal-mode CoMath ResearchCampaign through comathd.",
+    description: "Run a legacy goal-mode campaign or an explicit durable research operator command through comathd.",
     handler: async (args, ctx) => {
       await handleResearchCommand(client, options, args, ctx);
+    }
+  });
+
+  pi.registerCommand("cm:dashboard", {
+    description: "Read durable campaign, frontier, and budget facts without asserting proof authority.",
+    handler: async (args, ctx) => {
+      await handleDashboardCommand(options, args, ctx, dashboardSubscriptions);
+    }
+  });
+
+  pi.registerCommand("cm:operator", {
+    description: "Execute one allowlisted durable-research operator request and emit a non-turn custom response.",
+    handler: async (args, ctx) => {
+      let raw: unknown;
+      try { raw = JSON.parse(args); } catch { raw = undefined; }
+      const result = await dispatchResearchOperatorRequest(researchClient, raw);
+      pi.sendMessage?.({ customType: "comath.operator.response.v1", content: "CoMath operator response", details: result, display: false }, { triggerTurn: false });
+      const ui = (ctx as PiRuntimeContext | undefined)?.ui;
+      if (!pi.sendMessage && ui?.notify) await ui.notify(JSON.stringify(result), result.result.ok ? "info" : "error");
     }
   });
 
@@ -9163,7 +9311,12 @@ export default function registerComathPiRuntime(pi: PiExtensionApi, options: Reg
     skillPaths: ["skills"],
     promptPaths: ["prompts"]
   }));
+  pi.on("session_shutdown", async (_event, ctx) => {
+    dashboardSubscriptions.close(ctx);
+    await runtimeCtx(ctx).ui?.setWidget?.("comath-research", undefined);
+  });
 }
+export default registerComathPiRuntime;
 
 export function renderTextDashboard(input: DashboardInput): string {
   const projectLabel = input.project

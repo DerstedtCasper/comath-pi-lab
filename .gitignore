@@ -39,6 +39,7 @@ coverage/
 /tests/
 **/tests/
 /services/comathd/scripts/run-default-tests.mjs
+/services/comathd/scripts/run-research-tests.mjs
 /services/comathd/scripts/run-trivium-target-evaluation.mjs
 *.tsbuildinfo
 .env

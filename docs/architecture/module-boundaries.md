@@ -6,6 +6,8 @@
 | `docs/architecture/` | public architecture | Release criteria, threat model, adapter contracts, evidence policy, runtime layout, and workflow boundaries. |
 | `config/` | sample configuration | Non-secret examples only; live credentials remain host-owned and out of Git, Pi payloads, and evidence packs. |
 | `services/comathd/src/types` | shared contracts | Schema and type boundary for projects, claims, evidence, artifacts, campaigns, agent runs, and audit records. |
+| `services/comathd/src/research` | durable control plane | Project-owner lifecycle, SQLite control state, task generations, leases, checkpoints, admission, research receipts, and short trusted commits. |
+| `services/comathd/src/control` | operator/worker transport | Capability-separated HTTP, SSE, MCP, CLI, and worker interfaces; routes do not grant host approval or direct trusted writes. |
 | `services/comathd/src/security` | path and process policy | Deny-by-default path, secret, runner, and adapter controls. |
 | `services/comathd/src/artifacts` | artifact store | Content-addressed ingestion, snapshot/replay material, and evidence-pack helpers. |
 | `services/comathd/src/claim` | claim registry | Claim status may not be escalated outside service gates. |

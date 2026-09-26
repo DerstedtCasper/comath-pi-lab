@@ -15,11 +15,16 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "skills"
   ],
+  "keywords": ["pi-package", "comath", "durable-research"],
   "pi": {
     "extensions": [
       "./dist/index.js"
+    ],
+    "skills": [
+      "./skills"
     ],
     "runtime_policy": {
       "registration_export": "runtime_registration",

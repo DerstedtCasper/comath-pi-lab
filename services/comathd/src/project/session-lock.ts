@@ -1,3 +1,4 @@
+import { withTrustedWriter, hasProjectCommit, existsCommittedFile, readCommittedFile, writeCommittedFile, allocateProjectId, projectCommitTime } from "../research/project-commit.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { assertPathAllowed } from "../security/path-policy.js";
@@ -42,8 +43,8 @@ export type ProjectSessionLockReleaseResult = {
 
 const lockPath = ".comath/sessions/writer.lock.json";
 
-function nowIso(now: (() => string) | undefined): string {
-  return now ? now() : new Date().toISOString();
+function nowIso(projectRoot: string, now: (() => string) | undefined): string {
+  return now ? now() : projectCommitTime(projectRoot);
 }
 
 function absoluteLockPath(projectRoot: string): string {
@@ -54,18 +55,22 @@ function generateToken(input: { sessionId: string; owner: string; acquiredAt: st
   return Buffer.from(`${input.sessionId}:${input.owner}:${input.acquiredAt}:${Math.random().toString(16).slice(2)}`).toString("base64url");
 }
 
-function readLockFile(path: string): ProjectSessionLock | null {
-  if (!existsSync(path)) {
+function readLockFile(projectRoot: string, path: string): ProjectSessionLock | null {
+  if (!existsCommittedFile(projectRoot, path)) {
     return null;
   }
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as ProjectSessionLock;
+    return JSON.parse(readCommittedFile(projectRoot, path)) as ProjectSessionLock;
   } catch (error) {
     throw new Error(`active writer session lock is unreadable: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-function writeLockFile(path: string, lock: ProjectSessionLock, flag: "w" | "wx" = "w"): void {
+function writeLockFile(projectRoot: string, path: string, lock: ProjectSessionLock, flag: "w" | "wx" = "w"): void {
+  if (hasProjectCommit(projectRoot)) {
+    writeCommittedFile(projectRoot, path, `${JSON.stringify(lock, null, 2)}\n`);
+    return;
+  }
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(lock, null, 2)}\n`, { encoding: "utf8", flag });
 }
@@ -82,13 +87,13 @@ function isActive(lock: ProjectSessionLock, at: string): boolean {
   return atMs - heartbeatMs <= lock.stale_after_ms;
 }
 
-function makeLock(input: {
+function makeLock(projectRoot: string, input: {
   existing: ProjectSessionLock | null;
   owner: string;
   staleAfterMs: number;
   acquiredAt: string;
 }): ProjectSessionLock {
-  const session_id = nextSequentialId("SESS", input.existing ? [input.existing.session_id] : []);
+  const session_id = allocateProjectId(projectRoot, "SESS", () => nextSequentialId("SESS", input.existing ? [input.existing.session_id] : []));
   return {
     session_id,
     token: generateToken({ sessionId: session_id, owner: input.owner, acquiredAt: input.acquiredAt }),
@@ -101,52 +106,58 @@ function makeLock(input: {
 }
 
 export function readProjectSessionLock(projectRoot: string): ProjectSessionLock | null {
-  return readLockFile(absoluteLockPath(projectRoot));
+  return readLockFile(projectRoot, absoluteLockPath(projectRoot));
 }
 
 export function acquireProjectSessionLock(
   projectRoot: string,
   options: ProjectSessionLockAcquireOptions
 ): ProjectSessionLockAcquireResult {
-  const path = absoluteLockPath(projectRoot);
-  const at = nowIso(options.now);
-  const staleAfterMs = options.staleAfterMs ?? 5 * 60_000;
-  const existing = readLockFile(path);
-  if (existing && isActive(existing, at)) {
-    return {
-      acquired: false,
-      lock_path: lockPath,
-      reason: "active_writer_session_lock_exists",
-      lock: existing
-    };
-  }
+  return withTrustedWriter(projectRoot, "acquireProjectSessionLock", options, () => {
+    const path = absoluteLockPath(projectRoot);
+    const at = nowIso(projectRoot, options.now);
+    const staleAfterMs = options.staleAfterMs ?? 5 * 60_000;
+    const existing = readLockFile(projectRoot, path);
+    if (existing && isActive(existing, at)) {
+      return {
+        acquired: false,
+        lock_path: lockPath,
+        reason: "active_writer_session_lock_exists",
+        lock: existing
+      };
+    }
 
-  const lock = makeLock({ existing, owner: options.owner, staleAfterMs, acquiredAt: at });
-  writeLockFile(path, lock, existing ? "w" : "wx");
-  return {
-    acquired: true,
-    lock_path: lockPath,
-    lock,
-    ...(existing && !existing.released_at ? { replaced_stale_session_id: existing.session_id } : {})
-  };
+    const lock = makeLock(projectRoot, { existing, owner: options.owner, staleAfterMs, acquiredAt: at });
+    writeLockFile(projectRoot, path, lock, existing ? "w" : "wx");
+    return {
+      acquired: true,
+      lock_path: lockPath,
+      lock,
+      ...(existing && !existing.released_at ? { replaced_stale_session_id: existing.session_id } : {})
+    };
+
+  });
 }
 
 export function releaseProjectSessionLock(
   projectRoot: string,
   options: { sessionId: string; token: string; now?: () => string }
 ): ProjectSessionLockReleaseResult {
-  const path = absoluteLockPath(projectRoot);
-  const lock = readLockFile(path);
-  if (!lock || lock.session_id !== options.sessionId) {
-    throw new Error("session lock not found");
-  }
-  if (lock.token !== options.token) {
-    throw new Error("session lock token mismatch");
-  }
-  const released = {
-    ...lock,
-    released_at: nowIso(options.now)
-  };
-  writeLockFile(path, released);
-  return { released: true, lock_path: lockPath, lock: released };
+  return withTrustedWriter(projectRoot, "releaseProjectSessionLock", options, () => {
+    const path = absoluteLockPath(projectRoot);
+    const lock = readLockFile(projectRoot, path);
+    if (!lock || lock.session_id !== options.sessionId) {
+      throw new Error("session lock not found");
+    }
+    if (lock.token !== options.token) {
+      throw new Error("session lock token mismatch");
+    }
+    const released = {
+      ...lock,
+      released_at: nowIso(projectRoot, options.now)
+    };
+    writeLockFile(projectRoot, path, released);
+    return { released: true, lock_path: lockPath, lock: released };
+
+  });
 }

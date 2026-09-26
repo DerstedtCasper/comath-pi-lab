@@ -1,7 +1,17 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { isAbsolute, relative, resolve } from "node:path";
 import { URL } from "node:url";
-import { toComathError } from "../errors.js";
+import { createHash } from "node:crypto";
+import { realpathSync, readFileSync, statSync } from "node:fs";
+import { ComathError, toComathError } from "../errors.js";
+import { loadConfig, researchConfigSchema } from "../config/config.js";
+import { acquireResearchDaemon, type ResearchDaemonOptions, type ResearchDaemonReference } from "../research/daemon-runtime.js";
+import { authenticateHost, authenticateOperator, authenticateResearchReader } from "../control/operator-auth.js";
+import { dispatchResearchRoute } from "../control/research-routes.js";
+import { getAcquiredProjectRuntime } from "../research/project-runtime.js";
+import { getProofWorkflowBridge } from "../research/proof-workflow-bridge.js";
+import { shutdownLegacyRuntime } from "../agents/runtime/legacy-runtime-facade.js";
+import { artifactPathForHash, listArtifactRefs } from "../artifacts/store.js";
 import { getComathdStatus } from "../status.js";
 import { getProjectStatus, initProject, openProject } from "../project/project-store.js";
 import { getClaim, linkClaims, readClaims, registerClaim, updateClaim } from "../claim/claim-store.js";
@@ -173,6 +183,7 @@ type RouteHandler = (body: unknown, url: URL) => unknown | Promise<unknown>;
 
 type RouteContext = {
   memoryDbs: Map<string, InMemoryResearchMemoryDB>;
+  boundRoot?: string;
 };
 
 function memoryKey(projectRoot: string, projectId: string): string {
@@ -365,6 +376,17 @@ function routeSnapshotManifestPath(body: SnapshotManifestRouteBody): string {
 
 async function route(method: string, path: string, body: unknown, context: RouteContext): Promise<InjectResponse> {
   const url = new URL(path, "http://127.0.0.1");
+  if (context.boundRoot) {
+    const payload = body && typeof body === "object" ? body as Record<string, unknown> : {};
+    const roots = [payload.project_root, payload.root_path, url.searchParams.get("project_root"), url.searchParams.get("root_path")];
+    for (const candidate of roots) if (candidate !== undefined && candidate !== null) {
+      let matches = false;
+      try { matches = typeof candidate === "string" && isAbsolute(candidate) && canonicalServerRoot(candidate) === canonicalServerRoot(context.boundRoot); } catch { /* Unknown roots cannot match this service. */ }
+      if (!matches) {
+        return { status: 409, body: { ok: false, code: "PROJECT_ROOT_MISMATCH", error: "Request does not match the bound project" } };
+      }
+    }
+  }
 
   const handlers = new Map<string, RouteHandler>([
     [
@@ -2248,13 +2270,13 @@ async function route(method: string, path: string, body: unknown, context: Route
     const tickMatch = /^\/campaign\/([^/]+)\/tick$/.exec(url.pathname);
     if (tickMatch) {
       try {
-        const request = body as { project_root: string; actor?: string };
+        const request = body as { project_root: string; actor?: string; command_id?: string };
         return success(
           withPublicExternalV3CampaignResult(
             await tickCampaign({
               project_root: request.project_root,
               campaign_id: decodeURIComponent(tickMatch[1] ?? ""),
-              actor: request.actor
+              actor: request.actor, command_id: request.command_id
             }),
             { projectRoot: request.project_root }
           )
@@ -2326,6 +2348,17 @@ async function route(method: string, path: string, body: unknown, context: Route
         if (!campaign) {
           return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
         }
+        const runtime = getAcquiredProjectRuntime(request.project_root), control = runtime?.store.getCampaign(campaign.campaign_id);
+        if (runtime && control) {
+          const bridge = getProofWorkflowBridge(runtime);
+          if (!bridge) throw new ComathError("Proof workflow owner is unavailable", { code: "PROOF_WORKFLOW_OWNER_UNAVAILABLE", statusCode: 503 });
+          const result = await bridge.pause({ project_root: request.project_root, campaign_id: campaign.campaign_id, actor: request.actor });
+          const state = result.research_campaign.state;
+          const terminal = result.campaign.status === "terminal" || ["completed", "cancelled"].includes(state);
+          return { status: terminal || state === "paused" ? 200 : state === "pausing" ? 202 : 409,
+            body: { campaign: withPublicExternalV3TerminalState(result.campaign, { projectRoot: request.project_root }),
+              research_campaign: result.research_campaign, ...(result.blocker ? { blocker: result.blocker } : {}) } };
+        }
         if (campaign.status === "terminal") {
           return success({ campaign: withPublicExternalV3TerminalState(campaign, { projectRoot: request.project_root }) });
         }
@@ -2347,6 +2380,15 @@ async function route(method: string, path: string, body: unknown, context: Route
         const campaign = getCampaignOr404(request.project_root, decodeURIComponent(resumeMatch[1] ?? ""));
         if (!campaign) {
           return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
+        }
+        const runtime = getAcquiredProjectRuntime(request.project_root), control = runtime?.store.getCampaign(campaign.campaign_id);
+        if (runtime && control) {
+          const bridge = getProofWorkflowBridge(runtime);
+          if (!bridge) throw new ComathError("Proof workflow owner is unavailable", { code: "PROOF_WORKFLOW_OWNER_UNAVAILABLE", statusCode: 503 });
+          const result = await bridge.resume({ project_root: request.project_root, campaign_id: campaign.campaign_id, actor: request.actor });
+          if (result.blocker) return { status: 409, body: { ok: false, code: result.blocker, error: result.blocker } };
+          return success({ campaign: withPublicExternalV3TerminalState(result.campaign, { projectRoot: request.project_root }),
+            research_campaign: result.research_campaign });
         }
         if (campaign.status === "terminal") {
           return success({ campaign: withPublicExternalV3TerminalState(campaign, { projectRoot: request.project_root }) });
@@ -2382,6 +2424,13 @@ async function route(method: string, path: string, body: unknown, context: Route
         const campaign = getCampaignOr404(request.project_root, decodeURIComponent(cancelMatch[1] ?? ""));
         if (!campaign) {
           return { status: 404, body: { ok: false, code: "CAMPAIGN_NOT_FOUND", error: "campaign not found" } };
+        }
+        const runtime = getAcquiredProjectRuntime(request.project_root);
+        if (runtime?.store.getCampaign(campaign.campaign_id)) {
+          const bridge = getProofWorkflowBridge(runtime);
+          if (!bridge) throw new ComathError("Proof workflow owner is unavailable", { code: "PROOF_WORKFLOW_OWNER_UNAVAILABLE", statusCode: 503 });
+          await bridge.cancel(campaign.campaign_id, request.actor);
+          return success({ campaign: withPublicExternalV3TerminalState(getCampaignOr404(request.project_root, campaign.campaign_id)!, { projectRoot: request.project_root }) });
         }
         if (campaign.status === "terminal") {
           return success({ campaign: withPublicExternalV3TerminalState(campaign, { projectRoot: request.project_root }) });
@@ -2480,40 +2529,246 @@ export type ComathServer = {
   close(): Promise<void>;
 };
 
-export function createComathServer(): ComathServer {
+export type ComathServerOptions = { project_root?: string; config_path?: string; research?: ResearchDaemonOptions };
+function canonicalServerRoot(root: string): string {
+  const value = realpathSync(root); return process.platform === "win32" ? value.toLowerCase() : value;
+}
+function lifecycleRouteError(cause: unknown): InjectResponse {
+  const error = toComathError(cause);
+  return { status: error.statusCode, body: { ok: false, code: error.code, error: error.message } };
+}
+function readOperatorArtifact(reference: ResearchDaemonReference, artifactId: string): { bytes: Buffer; sha256: string } {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/.test(artifactId)) throw new ComathError("Invalid artifact ID", { code: "RESEARCH_ARTIFACT_ID_INVALID", statusCode: 400 });
+  const record = listArtifactRefs(reference.daemon.runtime.root).find(value => value.id === artifactId);
+  if (!record) throw new ComathError("Artifact does not exist", { code: "RESEARCH_ARTIFACT_NOT_FOUND", statusCode: 404 });
+  const taskReference = reference.daemon.runtime.store.all("SELECT task_json FROM tasks").some(row => {
+    const task = JSON.parse(String(row.task_json)) as { input_refs?: { artifact_id: string; sha256: string }[]; accepted_result_id?: string; campaign_id: string };
+    return task.accepted_result_id === record.id || task.input_refs?.some(value => value.artifact_id === record.id && value.sha256 === record.sha256) === true;
+  });
+  const checkpointReference = reference.daemon.runtime.store.all("SELECT artifact_ref FROM checkpoints").some(row => {
+    try { const value = JSON.parse(String(row.artifact_ref)) as { artifact_id: string; sha256: string }; return value.artifact_id === record.id && value.sha256 === record.sha256; } catch { return false; }
+  });
+  if (!taskReference && !checkpointReference) throw new ComathError("Artifact is not referenced by readable research state", { code: "RESEARCH_ARTIFACT_FORBIDDEN", statusCode: 404 });
+  const target = artifactPathForHash(reference.daemon.runtime.root, record.sha256);
+  if (record.path.replace(/\\/g, "/") !== target.relative_path.replace(/\\/g, "/")) throw new ComathError("Artifact CAS path is invalid", { code: "RESEARCH_ARTIFACT_CORRUPT", statusCode: 409 });
+  const info = statSync(target.absolute_path);
+  if (!info.isFile() || info.size !== record.size_bytes || info.size > 16 * 1024 * 1024) throw new ComathError("Artifact bytes are unavailable", { code: "RESEARCH_ARTIFACT_UNAVAILABLE", statusCode: 413 });
+  const bytes = readFileSync(target.absolute_path);
+  if (createHash("sha256").update(bytes).digest("hex") !== record.sha256) throw new ComathError("Artifact hash is invalid", { code: "RESEARCH_ARTIFACT_CORRUPT", statusCode: 409 });
+  return { bytes, sha256: record.sha256 };
+}
+function parseByteRange(header: string | string[] | undefined, size: number): { start: number; end: number; partial: boolean } {
+  const value = Array.isArray(header) ? header[0] : header;
+  if (!value) return { start: 0, end: Math.max(0, size - 1), partial: false };
+  const match = /^bytes=(\d+)-(\d*)$/.exec(value);
+  if (!match) throw new ComathError("Only a single bytes=start-end range is supported", { code: "RESEARCH_ARTIFACT_RANGE_INVALID", statusCode: 416 });
+  const start = Number(match[1]), end = match[2] ? Number(match[2]) : size - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || start >= size) throw new ComathError("Artifact byte range is unsatisfied", { code: "RESEARCH_ARTIFACT_RANGE_INVALID", statusCode: 416 });
+  return { start, end: Math.min(end, size - 1), partial: true };
+}
+
+export function createComathServer(options: ComathServerOptions = {}): ComathServer {
   let server: Server | undefined;
+  let starting: Promise<ResearchDaemonReference> | undefined;
+  let closing: Promise<void> | undefined;
+  let listening = false;
+  const sseClosers = new Set<() => void>();
+  if (options.project_root && !isAbsolute(options.project_root)) throw new Error("Bound project root must be absolute");
   const context: RouteContext = {
-    memoryDbs: new Map()
+    memoryDbs: new Map(), boundRoot: options.project_root ? realpathSync(options.project_root) : undefined
   };
+  function initialize(): Promise<ResearchDaemonReference> | undefined {
+    if (!context.boundRoot) return;
+    // Legacy embedders may already own the runtime. Their existing facade and queue stay authoritative.
+    if (!starting && !options.project_root && !options.research && !options.config_path && getAcquiredProjectRuntime(context.boundRoot)) return;
+    if (!starting) {
+      const config = options.research?.config ?? loadConfig(context.boundRoot, { config_path: options.config_path }).research ?? researchConfigSchema.parse({});
+      starting = acquireResearchDaemon(context.boundRoot, options.research ?? { config });
+    }
+    return starting;
+  }
+  async function dispatch(request: InjectRequest): Promise<InjectResponse> {
+    if (closing) return { status: 503, body: { ok: false, code: "DAEMON_CLOSING", error: "Service is closing" } };
+    try {
+      if (!context.boundRoot && request.method === "POST" && request.path !== "/project/init") {
+        const payload = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+        const root = payload.project_root ?? payload.root_path;
+        if (typeof root === "string" && isAbsolute(root)) context.boundRoot = realpathSync(root);
+      }
+      const reference = await initialize();
+      if (closing) return { status: 503, body: { ok: false, code: "DAEMON_CLOSING" } };
+      const work = route(request.method, request.path, request.body, context);
+      reference?.daemon.trackApplicationWork(work);
+      return await work;
+    } catch (error) { return lifecycleRouteError(error); }
+  }
 
   return {
-    inject(request) {
-      return route(request.method, request.path, request.body, context);
-    },
-    listen(port = 0, hostname = "127.0.0.1") {
+    inject: dispatch,
+    async listen(port = 0, hostname = "127.0.0.1") {
+      if (closing || listening) throw new ComathError("Server is already listening or closing", { code: "SERVER_LIFECYCLE_CONFLICT", statusCode: 409 });
+      listening = true;
+      const reference = await initialize();
+      await reference?.daemon.listenWorkerGateway();
       server = createServer(async (req, res) => {
-        const response = await route(req.method ?? "GET", req.url ?? "/", await readJson(req), context);
-        writeJson(res, response);
+        try {
+          const url = new URL(req.url ?? "/", "http://localhost");
+          const artifactMatch = /^\/research\/v1\/artifacts\/([^/]+)$/.exec(url.pathname);
+          if (req.method === "GET" && artifactMatch && reference) {
+            authenticateOperator(req.headers, reference.daemon.config);
+            const artifact = readOperatorArtifact(reference, decodeURIComponent(artifactMatch[1]!)), range = parseByteRange(req.headers.range, artifact.bytes.length);
+            const body = artifact.bytes.subarray(range.start, range.end + 1);
+            res.writeHead(range.partial ? 206 : 200, { "content-type": "application/octet-stream", "content-length": String(body.length), "accept-ranges": "bytes",
+              etag: `\"sha256-${artifact.sha256}\"`, ...(range.partial ? { "content-range": `bytes ${range.start}-${range.end}/${artifact.bytes.length}` } : {}) });
+            res.end(body); return;
+          }
+          const hostMutation = req.method === "POST" && (/^\/host\/v1\/intakes\/[^/]+\/(tickets|approve)$/.test(url.pathname)
+            || url.pathname === "/host/v1/validation/blind-comparisons");
+          const operatorMutation = req.method === "POST" && (/^\/research\/v1\/campaigns\/[^/]+\/intakes$/.test(url.pathname)
+            || /^\/research\/v1\/intakes\/[^/]+\/approval-requests$/.test(url.pathname)
+            || /^\/research\/v1\/campaigns\/[^/]+\/(patches|budget)$/.test(url.pathname)
+            || /^\/research\/v1\/campaigns\/[^/]+\/(pause|resume|cancel|finish)$/.test(url.pathname)
+            || /^\/research\/v1\/tasks\/[^/]+\/(retry|cancel)$/.test(url.pathname)
+            || url.pathname === "/research/v1/validation/issues/resolve");
+          const intakeRead = req.method === "GET" && /^\/research\/v1\/intakes\/[^/]+$/.test(url.pathname);
+          const operatorRead = req.method === "GET" && (/^\/research\/v1\/campaigns\/[^/]+(?:\/(frontier|budget|events|dashboard))?$/.test(url.pathname)
+            || url.pathname === "/research/v1/validation/intake-preparations");
+          const taskRead = req.method === "GET" && /^\/research\/v1\/tasks\/[^/]+(?:\/checkpoint)?$/.test(url.pathname);
+          const operationRead = req.method === "GET" && /^\/research\/v1\/operations\/[^/]+$/.test(url.pathname);
+          if (reference && (hostMutation || operatorMutation || intakeRead || operatorRead || taskRead || operationRead)) {
+            const principal = hostMutation ? authenticateHost(req.headers, reference.daemon.config)
+              : intakeRead ? authenticateResearchReader(req.headers, reference.daemon.config) : authenticateOperator(req.headers, reference.daemon.config);
+            const work = dispatchResearchRoute(reference.daemon, req.method ?? "GET", url,
+              req.method === "GET" ? undefined : await readJson(req), principal);
+            reference.daemon.trackApplicationWork(work);
+            const response = await work;
+            if (response) { writeJson(res, response); return; }
+          }
+          if (req.method === "POST" && url.pathname === "/research/v1/campaigns" && reference) {
+            const result = reference.daemon.startCampaign(authenticateOperator(req.headers, reference.daemon.config), await readJson(req));
+            writeJson(res, { status: 202, body: { ok: true, data: result } });
+            return;
+          }
+          if (req.method === "GET" && url.pathname === "/research/v1/capabilities" && reference) {
+            authenticateOperator(req.headers, reference.daemon.config);
+            const project = getProjectStatus({ root_path: reference.daemon.runtime.root }).project;
+            writeJson(res, { status: 200, body: { ok: true, data: { protocol_version: 1, project_id: project?.project_id ?? null,
+              control_ready: reference.daemon.config.enabled && reference.daemon.app.startup_blockers.length === 0,
+              missing_configuration: reference.daemon.config.enabled ? [] : ["research.enabled"], operator_tools: [
+                "research_capabilities_get", "research_campaign_list", "research_campaign_start", "research_campaign_get", "research_frontier_get",
+                "research_budget_get", "research_dashboard_get", "research_budget_update", "research_dag_patch", "research_campaign_pause", "research_campaign_resume",
+                "research_campaign_cancel", "research_campaign_finish", "research_task_get", "research_task_cancel", "research_task_retry", "research_validation_issue_resolve", "research_validation_intake_preparations_list",
+                "research_checkpoint_get", "research_artifact_read", "research_events_read", "research_intake_prepare", "research_intake_request_approval",
+                "research_operation_get"
+              ] } } });
+            return;
+          }
+          if (req.method === "GET" && url.pathname === "/research/v1/campaigns" && reference) {
+            const principal = authenticateOperator(req.headers, reference.daemon.config);
+            const offset = Number(url.searchParams.get("offset") ?? "0");
+            const limit = Number(url.searchParams.get("limit") ?? "50");
+            if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
+              writeJson(res, { status: 400, body: { ok: false, code: "INVALID_CAMPAIGN_PAGE" } }); return;
+            }
+            const commandId = url.searchParams.get("command_id");
+            let campaigns = reference.daemon.runtime.store.listCampaigns();
+            if (commandId !== null) {
+              if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/.test(commandId)) {
+                writeJson(res, { status: 400, body: { ok: false, code: "INVALID_START_COMMAND" } }); return;
+              }
+              const receipt = reference.daemon.runtime.store.get("SELECT principal_id,response_json,status FROM commands WHERE command_id=?", commandId);
+              if (!receipt || receipt.principal_id !== `operator:${principal.id}` || receipt.status !== "committed") campaigns = [];
+              else {
+                try {
+                  const response = JSON.parse(String(receipt.response_json)) as { campaign_id?: unknown };
+                  const campaignId = typeof response.campaign_id === "string" ? response.campaign_id : undefined;
+                  campaigns = campaignId ? campaigns.filter(campaign => campaign.campaign_id === campaignId) : [];
+                } catch { campaigns = []; }
+              }
+            }
+            writeJson(res, { status: 200, body: { campaigns: campaigns.slice(offset, offset + limit), offset, limit, total: campaigns.length } });
+            return;
+          }
+          const campaignStream = /^\/research\/v1\/campaigns\/([^/]+)\/events\/stream$/.exec(url.pathname);
+          if (req.method === "GET" && (url.pathname === "/research/v1/events" || campaignStream) && reference) {
+            authenticateOperator(req.headers, reference.daemon.config);
+            const campaignId = campaignStream ? decodeURIComponent(campaignStream[1]!) : url.searchParams.get("campaign_id") ?? undefined;
+            if (campaignId) reference.daemon.app.frontier(campaignId, { limit: 1 });
+            const header = req.headers["last-event-id"];
+            let cursor = header === undefined ? 0 : Number(Array.isArray(header) ? header[0] : header);
+            if (!Number.isSafeInteger(cursor) || cursor < 0) {
+              writeJson(res, { status: 400, body: { ok: false, code: "INVALID_EVENT_CURSOR", error: "Last-Event-ID must be a nonnegative durable event sequence" } }); return;
+            }
+            const events = reference.daemon.app.events;
+            // Validate both malformed and future cursors before committing HTTP 200.
+            events.readEventsAfter({ ...(campaignId ? { campaign_id: campaignId } : {}), after_seq: cursor, limit: 1 });
+            let draining = false, closed = false, heartbeat: ReturnType<typeof setInterval> | undefined, unsubscribe: (() => void) | undefined;
+            const MAX_SSE_FRAME_BYTES = 240 * 1024;
+            const closeStream = () => {
+              if (closed) return;
+              closed = true; if (heartbeat) clearInterval(heartbeat); unsubscribe?.(); sseClosers.delete(closeStream);
+              res.off("drain", onDrain); if (!res.writableEnded) res.end();
+            };
+            const onDrain = () => { draining = false; write(); };
+            const emit = (frame: string) => {
+              if (Buffer.byteLength(frame, "utf8") > MAX_SSE_FRAME_BYTES) { closeStream(); return false; }
+              if (!res.write(frame)) { draining = true; res.once("drain", onDrain); return false; }
+              return true;
+            };
+            const write = () => {
+              if (closed || res.writableEnded || draining) return;
+              try {
+                for (const event of events.readEventsAfter({ ...(campaignId ? { campaign_id: campaignId } : {}), after_seq: cursor, limit: 200 })) {
+                  const frame = `id: ${event.seq}\nevent: research.event\ndata: ${JSON.stringify(event)}\n\n`;
+                  if (!emit(frame)) return;
+                  cursor = event.seq;
+                }
+              } catch { closeStream(); }
+            };
+            res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+            write();
+            unsubscribe = events.subscribe(write);
+            // Re-read after the subscription is installed: this closes the snapshot/tail race.
+            write();
+            heartbeat = setInterval(() => { if (!closed && !draining) emit(": heartbeat\n\n"); }, 15000);
+            heartbeat.unref();
+            sseClosers.add(closeStream);
+            req.once("close", closeStream);
+            return;
+          }
+          if (req.method !== "GET" && req.method !== "POST") {
+            writeJson(res, { status: 405, body: { ok: false, code: "METHOD_NOT_ALLOWED" } }); return;
+          }
+          const response = await dispatch({ method: req.method === "POST" ? "POST" : "GET", path: req.url ?? "/", body: await readJson(req) });
+          writeJson(res, response);
+        } catch (error) { writeJson(res, lifecycleRouteError(error)); }
       });
 
-      return new Promise((resolve, reject) => {
-        server?.once("error", reject);
-        server?.listen(port, hostname, () => resolve(server as Server));
+      return new Promise<Server>((resolve, reject) => {
+        const onError = (error: Error) => { listening = false; reject(error); };
+        server!.once("error", onError);
+        server!.listen(port, hostname, () => {
+          server!.off("error", onError);
+          reference?.daemon.start(); resolve(server as Server);
+        });
       });
     },
     close() {
-      if (!server?.listening) {
-        return Promise.resolve();
-      }
-      return new Promise((resolve, reject) => {
-        server?.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
-        });
+      if (closing) return closing;
+      closing = Promise.resolve().then(async () => {
+        const errors: unknown[] = [];
+        try { const reference = await starting; await reference?.release(); } catch (error) { errors.push(error); }
+        for (const closeStream of [...sseClosers]) closeStream();
+        try {
+          if (!starting && context.boundRoot) await shutdownLegacyRuntime(context.boundRoot);
+          if (server?.listening) await new Promise<void>((resolve, reject) => {
+            server!.close(error => error ? reject(error) : resolve()); server!.closeAllConnections();
+          });
+        } catch (error) { errors.push(error); }
+        context.memoryDbs.clear();
+        if (errors.length) throw new AggregateError(errors, "Service shutdown reported cleanup errors");
       });
+      return closing;
     }
   };
 }

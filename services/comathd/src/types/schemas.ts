@@ -672,6 +672,15 @@ export const finalReplayManifestV3Schema = z
     replay_id: stableId,
     campaign_id: stableId,
     claim_id: stableId,
+    replay_scope: z
+      .object({
+        candidate_id: stableId,
+        obligation_id: stableId,
+        stage_attempt: z.number().int().positive(),
+        scope_package_sha256: sha256
+      })
+      .strict()
+      .optional(),
     theorem_name: z.string().min(1),
     runner: z.literal("comathd.LeanAuthority"),
     proof_authority: z.literal("lean_kernel_clean_replay"),
@@ -714,6 +723,18 @@ export const finalReplayManifestV3Schema = z
         lake_manifest_sha256: sha256,
         lakefile_path: z.string().min(1),
         lakefile_sha256: sha256,
+        local_imports: z.object({
+          schema_version: z.literal("comath.dependency_lock_local_imports.v2"),
+          source_root_path: z.string().min(1),
+          import_closure: z.array(z.string().min(1)),
+          files: z.array(z.object({
+            module: z.string().min(1),
+            path: z.string().min(1),
+            sha256,
+            imports: z.array(z.string().min(1))
+          }).strict())
+        }).strict(),
+        local_imports_sha256: sha256,
         external_revisions: z.array(z.unknown()).default([]),
         external_revisions_sha256: sha256
       })
@@ -759,6 +780,9 @@ export const stageRunRefSchema = z
     stage: campaignStageSchema,
     status: z.enum(["completed", "blocked", "failed"]),
     artifact_paths: z.array(z.string()).default([]),
+    obligation_id: stableId.optional(),
+    stage_attempt: z.number().int().positive().optional(),
+    scope_package_sha256: sha256.optional(),
     created_at: isoTimestamp
   })
   .strict();
@@ -775,6 +799,8 @@ export const researchCampaignSchema = z
     terminal_state: campaignTerminalStateSchema.optional(),
     stage_runs: z.array(stageRunRefSchema).default([]),
     open_obligations: z.array(proofObligationSchema).default([]),
+    active_obligation_id: stableId.optional(),
+    obligation_cursors: z.record(stableId, z.object({ current_stage: campaignStageSchema, stage_attempt: z.number().int().positive(), blocked_reason: z.string().min(1).optional() }).strict()).optional(),
     accepted_artifacts: z.array(artifactRefSchema).default([]),
     blockers: z.array(z.record(z.string(), z.unknown())).default([]),
     next_actions: z.array(z.string()).default([]),

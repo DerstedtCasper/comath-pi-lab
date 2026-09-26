@@ -18,6 +18,7 @@ import { sha256Buffer, sha256FileSync } from "./lean-project.js";
 import { appendAuditEvent, readAuditEvents } from "../../audit/jsonl-writer.js";
 import { hasLeanRunManifestProvenanceIndexV1, verifyLeanRunManifestV3Evidence } from "./lean-run-manifest-v3.js";
 import { dependencyClosureV2PackagesToExternalRevisions } from "./dependency-closure.js";
+import { allocateProjectId, existsCommittedFile, projectCommitTime, readCommittedFile, stageAuditEvent, writeCommittedFile } from "../../research/project-commit.js";
 
 type HashRef = { sha256: string; size_bytes: number };
 
@@ -143,6 +144,69 @@ function readJsonInsideProject(projectRoot: string, path: string): unknown {
   return JSON.parse(readFileSync(absolute, "utf8"));
 }
 
+function localImportsFromDependencyClosure(
+  projectRoot: string,
+  cleanWorkspacePath: string,
+  dependencyClosurePath: string,
+  localSourceRootPath?: string
+): FinalReplayManifestV3["dependency_lock"]["local_imports"] {
+  const raw = readJsonInsideProject(projectRoot, dependencyClosurePath);
+  if (!raw || typeof raw !== "object") throw new Error("final_replay_dependency_closure_invalid");
+  const report = raw as Record<string, unknown>;
+  const localHashes = report.local_file_hashes;
+  const imports = report.imports;
+  const importClosure = report.import_closure;
+  if (report.schema_version !== "comath.dependency_closure.v2"
+    || !Array.isArray(report.packages)
+    || !localHashes || typeof localHashes !== "object" || Array.isArray(localHashes)
+    || !imports || typeof imports !== "object" || Array.isArray(imports)
+    || !Array.isArray(importClosure) || !importClosure.every(value => typeof value === "string")) {
+    throw new Error("final_replay_dependency_closure_invalid");
+  }
+  const cleanRoot = assertPathAllowed(projectRoot, cleanWorkspacePath, { purpose: "read", resolveRealpath: true });
+  const sourceRootRel = localSourceRootPath === undefined ? "." : normalizedStoredPath(localSourceRootPath);
+  if (localSourceRootPath !== undefined && sourceRootRel !== localSourceRootPath) {
+    throw new Error("final_replay_dependency_closure_local_root_invalid");
+  }
+  const localRoot = sourceRootRel === "."
+    ? cleanRoot
+    : assertPathAllowed(projectRoot, join(cleanRoot, sourceRootRel), { purpose: "read", resolveRealpath: true });
+  const actualSourceRootRel = rel(cleanRoot, localRoot).replace(/\\/g, "/") || ".";
+  if (actualSourceRootRel !== sourceRootRel) throw new Error("final_replay_dependency_closure_local_root_mismatch");
+  const importRecord = imports as Record<string, unknown>;
+  const hashRecord = localHashes as Record<string, unknown>;
+  const files = Object.keys(importRecord).sort((left, right) => left.localeCompare(right)).map(path => {
+    const normalized = normalizedStoredPath(path), rawImports = importRecord[path], expectedHash = hashRecord[path];
+    if (normalized !== path || !path.endsWith(".lean") || !Array.isArray(rawImports) || !rawImports.every(value => typeof value === "string") || !isSha256(expectedHash)) {
+      throw new Error("final_replay_dependency_closure_local_import_map_invalid");
+    }
+    const source = assertPathAllowed(projectRoot, join(localRoot, path), { purpose: "read", resolveRealpath: true });
+    if (normalizedStoredPath(rel(localRoot, source)) !== path || sha256FileSync(source).sha256 !== expectedHash) {
+      throw new Error("final_replay_dependency_closure_local_source_mismatch");
+    }
+    return {
+      module: path.slice(0, -".lean".length).replace(/\\/g, "/").replace(/\//g, "."),
+      path,
+      sha256: expectedHash,
+      imports: rawImports as string[]
+    };
+  });
+  const leanPaths = Object.keys(hashRecord).filter(path => path.endsWith(".lean")).sort((left, right) => left.localeCompare(right));
+  if (leanPaths.length !== files.length || leanPaths.some(path => !Object.hasOwn(importRecord, path))) {
+    throw new Error("final_replay_dependency_closure_local_file_map_incomplete");
+  }
+  const expectedClosure = Array.from(new Set(files.flatMap(file => file.imports))).sort();
+  if (canonicalJson(expectedClosure) !== canonicalJson(importClosure)) {
+    throw new Error("final_replay_dependency_closure_import_closure_mismatch");
+  }
+  return {
+    schema_version: "comath.dependency_lock_local_imports.v2",
+    source_root_path: sourceRootRel,
+    import_closure: expectedClosure,
+    files
+  };
+}
+
 function dependencyLockFileHashVetoes(projectRoot: string, manifest: FinalReplayManifestV3): string[] {
   const checks: Array<[string, string, string, string]> = [
     ["lean_toolchain", "lean-toolchain", manifest.dependency_lock.lean_toolchain_path, manifest.dependency_lock.lean_toolchain_sha256],
@@ -170,6 +234,9 @@ function dependencyLockFileHashVetoes(projectRoot: string, manifest: FinalReplay
   if (sha256Text(canonicalJson(manifest.dependency_lock.external_revisions)) !== manifest.dependency_lock.external_revisions_sha256) {
     vetoes.push("final_replay_dependency_lock_external_revisions_hash_mismatch");
   }
+  if (sha256Text(canonicalJson(manifest.dependency_lock.local_imports)) !== manifest.dependency_lock.local_imports_sha256) {
+    vetoes.push("final_replay_dependency_lock_local_imports_hash_mismatch");
+  }
   return vetoes;
 }
 
@@ -177,11 +244,14 @@ function dependencyClosureV2ExternalRevisionVetoes(projectRoot: string, manifest
   try {
     const report = readJsonInsideProject(projectRoot, manifest.report_paths.dependency_closure);
     if (!report || typeof report !== "object") {
-      return [];
+      return ["final_replay_dependency_closure_unreadable"];
     }
     const record = report as Record<string, unknown>;
     if (record.schema_version !== "comath.dependency_closure.v2" || !Array.isArray(record.packages)) {
-      return [];
+      return ["final_replay_dependency_closure_invalid"];
+    }
+    if (record.result !== "pass") {
+      return ["final_replay_dependency_closure_not_pass"];
     }
     const expectedExternalRevisions = dependencyClosureV2PackagesToExternalRevisions(
       record.packages.filter((pkg): pkg is { name: string } & Record<string, unknown> => (
@@ -197,8 +267,26 @@ function dependencyClosureV2ExternalRevisionVetoes(projectRoot: string, manifest
   }
 }
 
+function dependencyClosureV2LocalImportVetoes(projectRoot: string, manifest: FinalReplayManifestV3): string[] {
+  try {
+    const expected = localImportsFromDependencyClosure(
+      projectRoot,
+      manifest.clean_workspace_path,
+      manifest.report_paths.dependency_closure,
+      manifest.dependency_lock.local_imports.source_root_path
+    );
+    return canonicalJson(expected) === canonicalJson(manifest.dependency_lock.local_imports)
+      ? [] : ["final_replay_dependency_lock_local_imports_mismatch"];
+  } catch {
+    return ["final_replay_dependency_lock_local_imports_unreadable"];
+  }
+}
+
 function dependencyLock(input: {
   projectRoot: string;
+  clean_workspace_path: string;
+  dependency_closure_path: string;
+  local_source_root_path?: string;
   lean_toolchain_path: string;
   lake_manifest_path: string;
   lakefile_path: string;
@@ -213,6 +301,12 @@ function dependencyLock(input: {
     resolveRealpath: true
   });
   const lakefilePath = assertPathAllowed(input.projectRoot, input.lakefile_path, { purpose: "read", resolveRealpath: true });
+  const local_imports = localImportsFromDependencyClosure(
+    input.projectRoot,
+    input.clean_workspace_path,
+    input.dependency_closure_path,
+    input.local_source_root_path
+  );
   return {
     lean_toolchain_path: rel(input.projectRoot, leanToolchainPath),
     lean_toolchain: readFileSync(leanToolchainPath, "utf8").trim(),
@@ -221,6 +315,8 @@ function dependencyLock(input: {
     lake_manifest_sha256: sha256FileSync(lakeManifestPath).sha256,
     lakefile_path: rel(input.projectRoot, lakefilePath),
     lakefile_sha256: sha256FileSync(lakefilePath).sha256,
+    local_imports,
+    local_imports_sha256: sha256Text(canonicalJson(local_imports)),
     external_revisions: input.external_revisions,
     external_revisions_sha256: sha256Text(canonicalJson(input.external_revisions))
   };
@@ -231,6 +327,12 @@ export function createFinalReplayManifestV3(input: {
   replay_id: string;
   campaign_id: string;
   claim_id: string;
+  replay_scope?: {
+    candidate_id: string;
+    obligation_id: string;
+    stage_attempt: number;
+    scope_package_sha256: string;
+  };
   theorem_name: string;
   clean_workspace_path: string;
   command: string[];
@@ -248,6 +350,7 @@ export function createFinalReplayManifestV3(input: {
   };
   lean_run_manifest_paths: string[];
   dependency_lock: {
+    local_source_root_path?: string;
     lean_toolchain_path: string;
     lake_manifest_path: string;
     lakefile_path: string;
@@ -294,6 +397,7 @@ export function createFinalReplayManifestV3(input: {
     replay_id: input.replay_id,
     campaign_id: input.campaign_id,
     claim_id: input.claim_id,
+    ...(input.replay_scope ? { replay_scope: input.replay_scope } : {}),
     theorem_name: input.theorem_name,
     runner: "comathd.LeanAuthority",
     proof_authority: "lean_kernel_clean_replay",
@@ -309,7 +413,8 @@ export function createFinalReplayManifestV3(input: {
     report_paths,
     artifact_hashes,
     lean_run_manifest_paths: input.lean_run_manifest_paths.map((path) => rel(input.projectRoot, path)),
-    dependency_lock: dependencyLock({ projectRoot: input.projectRoot, ...input.dependency_lock }),
+    dependency_lock: dependencyLock({ projectRoot: input.projectRoot, clean_workspace_path: rel(input.projectRoot, cleanRoot),
+      dependency_closure_path: report_paths.dependency_closure, ...input.dependency_lock }),
     network_policy: input.network_policy,
     sandbox_policy: input.sandbox_policy,
     resource_budget: input.resource_budget,
@@ -361,6 +466,34 @@ export function appendFinalReplayRegistryEntryV3(
     });
   }
   return { registry_path, entry_sha256: entrySha256 };
+}
+
+/** The registry line hash is a provenance value; consumers must not substitute another JSON canonicalizer. */
+export function finalReplayRegistryEntrySha256V3(manifest: FinalReplayManifestV3): string {
+  return sha256Text(canonicalJson(manifest));
+}
+
+/** Stages one immutable registry entry and its audit event in the caller's project commit. */
+export function stageFinalReplayRegistryEntryV3(input: {
+  projectRoot: string;
+  manifest: FinalReplayManifestV3;
+  project_id: string;
+  actor: string;
+  source?: string;
+}): { registry_path: string; entry_sha256: string } {
+  const registry_path = join(".comath", "evidence", input.manifest.claim_id, "lean", "final_replay_registry.jsonl").replace(/\\/g, "/");
+  const existing = existsCommittedFile(input.projectRoot, registry_path) ? readCommittedFile(input.projectRoot, registry_path) : "";
+  const entries = existing.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line) as { replay_id?: unknown });
+  if (entries.some(entry => entry.replay_id === input.manifest.replay_id)) throw new Error("final_replay_registry_append_only_violation");
+  const line = canonicalJson(input.manifest), entry_sha256 = finalReplayRegistryEntrySha256V3(input.manifest);
+  writeCommittedFile(input.projectRoot, registry_path, `${existing}${line}\n`);
+  const id = allocateProjectId(input.projectRoot, "AUD", () => `AUD-${entry_sha256.slice(0, 40)}`);
+  stageAuditEvent(input.projectRoot, { id, project_id: input.project_id, event_type: "lean.final_replay_registry_appended", actor: input.actor,
+    target_id: input.manifest.claim_id, payload: { claim_id: input.manifest.claim_id, replay_id: input.manifest.replay_id, registry_path, entry_sha256,
+      manifest_sha256: entry_sha256, runner: input.manifest.runner, proof_authority: input.manifest.proof_authority,
+      source: input.source ?? "comathd.LeanAuthority", service_owned_clean_replay_provenance: true, replay_scope: input.manifest.replay_scope ?? null },
+    created_at: projectCommitTime(input.projectRoot) });
+  return { registry_path, entry_sha256 };
 }
 
 export function hasFinalReplayRegistryProvenanceV3(projectRoot: string, candidate: unknown): boolean {
@@ -496,6 +629,7 @@ export function verifyFinalReplayManifestV3(
   }
   vetoes.push(...dependencyLockFileHashVetoes(projectRoot, manifest));
   vetoes.push(...dependencyClosureV2ExternalRevisionVetoes(projectRoot, manifest));
+  vetoes.push(...dependencyClosureV2LocalImportVetoes(projectRoot, manifest));
 
   const artifactPaths: Record<string, string> = {
     stdout: manifest.stdout_path,
@@ -539,7 +673,8 @@ export function writeThirdPartyReplayPackV3(
     artifact_hashes: manifest.artifact_hashes,
     report_paths: manifest.report_paths,
     dependency_lock: manifest.dependency_lock,
-    lean_run_manifest_paths: manifest.lean_run_manifest_paths
+    lean_run_manifest_paths: manifest.lean_run_manifest_paths,
+    ...(manifest.replay_scope ? { replay_scope: manifest.replay_scope } : {})
   };
   const expectedText = `${JSON.stringify(expectedHashes, null, 2)}\n`;
   writeFileSync(join(packRoot, "FinalReplayManifest.json"), manifestText, "utf8");
@@ -576,4 +711,37 @@ export function writeThirdPartyReplayPackV3(
     expected_hashes_sha256: sha256Text(expectedText),
     manifest_sha256: sha256Text(manifestText)
   };
+}
+
+/** Stages a complete third-party replay pack from the immutable V3 workspace manifest. */
+export function stageThirdPartyReplayPackV3(input: {
+  projectRoot: string;
+  manifest: FinalReplayManifestV3;
+}): { pack_path: string; expected_hashes_sha256: string; manifest_sha256: string } {
+  const pack_path = join(".comath", "evidence", input.manifest.claim_id, "lean", "replay_pack", input.manifest.replay_id).replace(/\\/g, "/");
+  if (["FinalReplayManifest.json", "expected_hashes.json", "README_REPLAY.md"].some(file => existsCommittedFile(input.projectRoot, join(pack_path, file)))) {
+    throw new Error("third_party_replay_pack_append_only_violation");
+  }
+  const manifestText = `${JSON.stringify(input.manifest, null, 2)}\n`;
+  const expectedHashes = {
+    clean_workspace_sha256: input.manifest.clean_workspace_sha256,
+    source_hashes_after: input.manifest.source_hashes_after,
+    artifact_hashes: input.manifest.artifact_hashes,
+    report_paths: input.manifest.report_paths,
+    dependency_lock: input.manifest.dependency_lock,
+    lean_run_manifest_paths: input.manifest.lean_run_manifest_paths,
+    ...(input.manifest.replay_scope ? { replay_scope: input.manifest.replay_scope } : {})
+  };
+  const expectedText = `${JSON.stringify(expectedHashes, null, 2)}\n`;
+  writeCommittedFile(input.projectRoot, join(pack_path, "FinalReplayManifest.json"), manifestText);
+  writeCommittedFile(input.projectRoot, join(pack_path, "expected_hashes.json"), expectedText);
+  writeCommittedFile(input.projectRoot, join(pack_path, "README_REPLAY.md"), [
+    "# CoMath Final Replay Pack", "", `Replay id: ${input.manifest.replay_id}`, `Claim id: ${input.manifest.claim_id}`,
+    `Theorem: ${input.manifest.theorem_name}`, "", "## Replay", "", `Command: ${input.manifest.third_party_replay_command.join(" ")}`,
+    "Network policy: disabled for final proof replay.", "Verify `expected_hashes.json` against the clean workspace before trusting the result.", ""
+  ].join("\n"));
+  for (const relativePath of Object.keys(input.manifest.source_hashes_after)) {
+    writeCommittedFile(input.projectRoot, join(pack_path, "clean", relativePath), readCommittedFile(input.projectRoot, join(input.manifest.clean_workspace_path, relativePath)));
+  }
+  return { pack_path, expected_hashes_sha256: sha256Text(expectedText), manifest_sha256: sha256Text(manifestText) };
 }

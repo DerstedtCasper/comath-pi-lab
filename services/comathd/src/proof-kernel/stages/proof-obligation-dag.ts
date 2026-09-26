@@ -1,7 +1,7 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { ComathError } from "../../errors.js";
 import { assertPathAllowed } from "../../security/path-policy.js";
+import { withTrustedWriter, writeCommittedFile } from "../../research/project-commit.js";
 import type { ProofObligation, ResearchCampaign } from "../../types/schemas.js";
 
 export type ProofPlanningArtifacts = {
@@ -49,6 +49,12 @@ export type ProofObligationDagEdge = {
   relation: "decomposes_to";
 };
 
+export type ProofObligationDependencyEdge = {
+  from_obligation_id: string;
+  to_obligation_id: string;
+  relation: "depends_on";
+};
+
 export type ProofObligationDag = {
   generated_by: "native_stage_gate";
   campaign_id: string;
@@ -57,6 +63,7 @@ export type ProofObligationDag = {
   acyclic: true;
   nodes: ProofObligationDagNode[];
   edges: ProofObligationDagEdge[];
+  dependency_edges: ProofObligationDependencyEdge[];
   leaf_obligation_ids: string[];
   goal_mode_skeleton_blueprint?: GoalModeSkeletonBlueprintPlanningBinding;
   next_gate: "candidate_generation";
@@ -64,8 +71,7 @@ export type ProofObligationDag = {
 
 function writeRuntimeFile(projectRoot: string, rel: string, content: string): string {
   const path = assertPathAllowed(projectRoot, rel, { purpose: "runtime-write" });
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, content, "utf8");
+  writeCommittedFile(projectRoot, path, content);
   return rel.replace(/\\/g, "/");
 }
 
@@ -121,6 +127,9 @@ function buildDag(campaign: ResearchCampaign, obligation: ProofObligation): Proo
     acyclic: true,
     nodes,
     edges,
+    dependency_edges: obligations.flatMap(item => item.dependencies.map(dependency => ({
+      from_obligation_id: item.obligation_id, to_obligation_id: dependency, relation: "depends_on" as const
+    }))),
     leaf_obligation_ids: nodes
       .map((node) => node.obligation_id)
       .filter((obligationId) => !parentIds.has(obligationId)),
@@ -130,7 +139,7 @@ function buildDag(campaign: ResearchCampaign, obligation: ProofObligation): Proo
   return dag;
 }
 
-export function validateProofObligationDag(dag: Pick<ProofObligationDag, "nodes" | "edges">): void {
+export function validateProofObligationDag(dag: Pick<ProofObligationDag, "nodes" | "edges"> & Partial<Pick<ProofObligationDag, "dependency_edges">>): void {
   const nodeIds = new Set<string>();
   for (const node of dag.nodes) {
     if (nodeIds.has(node.obligation_id)) {
@@ -141,46 +150,57 @@ export function validateProofObligationDag(dag: Pick<ProofObligationDag, "nodes"
     nodeIds.add(node.obligation_id);
   }
 
-  const adjacency = new Map<string, string[]>();
-  for (const nodeId of nodeIds) {
-    adjacency.set(nodeId, []);
-  }
-  for (const edge of dag.edges) {
-    if (edge.relation !== "decomposes_to") {
-      throw new ComathError("proof obligation DAG edge has an unsupported relation", {
-        code: "PROOF_OBLIGATION_DAG_INVALID"
-      });
+  // Validate the parent graph and prerequisite graph separately: a reverse
+  // edge across graphs is not a cycle within either graph.
+  const validateEdges = (edges: (ProofObligationDagEdge | ProofObligationDependencyEdge)[], relation: "decomposes_to" | "depends_on") => {
+    const adjacency = new Map<string, string[]>(), seen = new Set<string>();
+    for (const nodeId of nodeIds) {
+      adjacency.set(nodeId, []);
     }
-    if (!nodeIds.has(edge.from_obligation_id) || !nodeIds.has(edge.to_obligation_id)) {
-      throw new ComathError("proof obligation DAG edge references an unknown obligation", {
-        code: "PROOF_OBLIGATION_DAG_INVALID"
-      });
+    for (const edge of edges) {
+      if (edge.relation !== relation) {
+        throw new ComathError("proof obligation DAG edge has an unsupported relation", {
+          code: "PROOF_OBLIGATION_DAG_INVALID"
+        });
+      }
+      if (!nodeIds.has(edge.from_obligation_id) || !nodeIds.has(edge.to_obligation_id)) {
+        throw new ComathError("proof obligation DAG edge references an unknown obligation", {
+          code: "PROOF_OBLIGATION_DAG_INVALID"
+        });
+      }
+      const identity = JSON.stringify([edge.from_obligation_id, edge.to_obligation_id]);
+      if (edge.from_obligation_id === edge.to_obligation_id || seen.has(identity)) {
+        throw new ComathError(`duplicate or self ${relation} edge`, { code: "PROOF_OBLIGATION_DAG_INVALID" });
+      }
+      seen.add(identity);
+      adjacency.get(edge.from_obligation_id)?.push(edge.to_obligation_id);
     }
-    adjacency.get(edge.from_obligation_id)?.push(edge.to_obligation_id);
-  }
 
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const visit = (nodeId: string) => {
-    if (visiting.has(nodeId)) {
-      throw new ComathError(`proof obligation DAG cycle detected at ${nodeId}`, {
-        code: "PROOF_OBLIGATION_DAG_INVALID"
-      });
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const visit = (nodeId: string) => {
+      if (visiting.has(nodeId)) {
+        throw new ComathError(`proof obligation ${relation} cycle detected at ${nodeId}`, {
+          code: "PROOF_OBLIGATION_DAG_INVALID"
+        });
+      }
+      if (visited.has(nodeId)) {
+        return;
+      }
+      visiting.add(nodeId);
+      for (const next of adjacency.get(nodeId) ?? []) {
+        visit(next);
+      }
+      visiting.delete(nodeId);
+      visited.add(nodeId);
+    };
+
+    for (const nodeId of nodeIds) {
+      visit(nodeId);
     }
-    if (visited.has(nodeId)) {
-      return;
-    }
-    visiting.add(nodeId);
-    for (const next of adjacency.get(nodeId) ?? []) {
-      visit(next);
-    }
-    visiting.delete(nodeId);
-    visited.add(nodeId);
   };
-
-  for (const nodeId of nodeIds) {
-    visit(nodeId);
-  }
+  validateEdges(dag.edges, "decomposes_to");
+  validateEdges(dag.dependency_edges ?? [], "depends_on");
 }
 
 function obligationYaml(obligation: ProofObligation): string {
@@ -243,12 +263,23 @@ function skeletonLean(obligations: ProofObligation[]): string {
   ].join("\n");
 }
 
-export function writeProofPlanningArtifacts(input: {
+type ProofPlanningInput = {
   projectRoot: string;
   campaign: ResearchCampaign;
   obligation: ProofObligation;
   goalModePlanning?: GoalModeProofPlanningInput;
-}): ProofPlanningArtifacts {
+  intake_sha256?: string;
+};
+
+export function writeProofPlanningArtifacts(input: ProofPlanningInput): ProofPlanningArtifacts {
+  if (input.intake_sha256 !== undefined && (typeof input.intake_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(input.intake_sha256))) {
+    throw new ComathError("Planning intake digest must be a lowercase SHA-256", { statusCode: 400, code: "PROOF_PLANNING_INTAKE_INVALID" });
+  }
+  return withTrustedWriter(input.projectRoot, "proof.planning-artifacts", input, () => writePlanningArtifacts(input));
+}
+
+function writePlanningArtifacts(input: ProofPlanningInput): ProofPlanningArtifacts {
+  const planningRel = (rel: string) => campaignProofRel(input.campaign, input.intake_sha256 === undefined ? rel : join("plans", input.intake_sha256, rel)).replace(/\\/g, "/");
   const theoremFamily = theoremFamilyId(input.obligation);
   const obligations = input.campaign.open_obligations.length > 0 ? input.campaign.open_obligations : [input.obligation];
   const lemmaDag = buildDag(input.campaign, input.obligation);
@@ -287,9 +318,9 @@ export function writeProofPlanningArtifacts(input: {
     `campaign_id: ${input.campaign.campaign_id}`,
     `root_obligation_id: ${input.obligation.obligation_id}`,
     `theorem_family: ${theoremFamily}`,
-    `lemma_dag: .comath/campaign/${input.campaign.campaign_id}/proof/lemma_dag.json`,
-    `line_map: .comath/campaign/${input.campaign.campaign_id}/proof/line_map.json`,
-    `skeleton_lean: .comath/campaign/${input.campaign.campaign_id}/proof/Skeleton.lean`,
+    `lemma_dag: ${planningRel("lemma_dag.json")}`,
+    `line_map: ${planningRel("line_map.json")}`,
+    `skeleton_lean: ${planningRel("Skeleton.lean")}`,
     ...(input.goalModePlanning
       ? [
           `formalization_hints: ${input.goalModePlanning.formalization_hints.path}`,
@@ -311,7 +342,7 @@ export function writeProofPlanningArtifacts(input: {
   const obligationYamlPaths = obligations.map((item) =>
     writeRuntimeFile(
       input.projectRoot,
-      campaignProofRel(input.campaign, join("obligations", `${item.obligation_id}.yaml`)),
+      planningRel(join("obligations", `${item.obligation_id}.yaml`)),
       obligationYaml(item)
     )
   );
@@ -319,20 +350,20 @@ export function writeProofPlanningArtifacts(input: {
   return {
     lemma_dag_path: writeRuntimeFile(
       input.projectRoot,
-      campaignProofRel(input.campaign, "lemma_dag.json"),
+      planningRel("lemma_dag.json"),
       `${JSON.stringify(lemmaDag, null, 2)}\n`
     ),
     line_map_path: writeRuntimeFile(
       input.projectRoot,
-      campaignProofRel(input.campaign, "line_map.json"),
+      planningRel("line_map.json"),
       `${JSON.stringify(lineMap, null, 2)}\n`
     ),
     obligation_yaml_path: obligationYamlPaths[0] ?? "",
     obligation_yaml_paths: obligationYamlPaths,
-    skeleton_lean_path: writeRuntimeFile(input.projectRoot, campaignProofRel(input.campaign, "Skeleton.lean"), skeletonLean(obligations)),
+    skeleton_lean_path: writeRuntimeFile(input.projectRoot, planningRel("Skeleton.lean"), skeletonLean(obligations)),
     skeleton_report_path: writeRuntimeFile(
       input.projectRoot,
-      campaignProofRel(input.campaign, "skeleton_report.md"),
+      planningRel("skeleton_report.md"),
       skeletonReport
     )
   };

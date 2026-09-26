@@ -22,7 +22,7 @@ corepack pnpm typecheck
 
 Maintainers run private QA, replay, and evaluation suites before a release tag. Those suites are intentionally not shipped in the public product tree.
 
-Use `docs/architecture/ga-release-criteria.md` for release decisions and `docs/architecture/threat-model.md` for security review.
+Use `docs/architecture/durable-research-orchestration.md` for campaign, receipt, and replay ownership changes; use `docs/architecture/ga-release-criteria.md` for release decisions and `docs/architecture/threat-model.md` for security review.
 
 ## Documentation Rules
 

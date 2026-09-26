@@ -3,6 +3,13 @@ import { dirname, join } from "node:path";
 
 const adapters = ["codex-cli-adapter.mjs"];
 const helpers = ["provider-helper-protocol.mjs", "provider-helper-collection-probe.mjs"];
+const runtimeScripts = ["windows-job-wrapper.ps1"];
+for (const script of runtimeScripts) {
+  const source = join(process.cwd(), "src", "agents", "runtime", script);
+  const target = join(process.cwd(), "dist", "agents", "runtime", script);
+  mkdirSync(dirname(target), { recursive: true });
+  copyFileSync(source, target);
+}
 
 for (const adapter of adapters) {
   const source = join(process.cwd(), "src", "agents", "adapters", adapter);
